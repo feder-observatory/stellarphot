@@ -21,14 +21,14 @@ from astropy.tests.pytest_plugins import *
 ## Uncomment the following lines to display the version number of the
 ## package rather than the version number of Astropy in the top line when
 ## running the tests.
-# import os
-#
+import os
+
 ## This is to figure out the affiliated package version, rather than
 ## using Astropy's
-# from . import version
-#
-# try:
-#     packagename = os.path.basename(os.path.dirname(__file__))
-#     TESTED_VERSIONS[packagename] = version.version
-# except NameError:   # Needed to support Astropy <= 1.0.0
-#     pass
+from . import version
+
+try:
+    packagename = os.path.basename(os.path.dirname(__file__))
+    TESTED_VERSIONS[packagename] = version.version
+except NameError:   # Needed to support Astropy <= 1.0.0
+    pass
