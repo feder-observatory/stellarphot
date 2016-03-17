@@ -34,5 +34,5 @@ def source_detection(ccd,fwhm=3.0, sigma=3.0, iters=5, threshold=5.0*std):
     """
     data = ccd.data    
     mean, median, std = sigma_clipped_stats(data, sigma=sigma, iters=iters)    
-    sources = daofind(data - median,fwhm=fwhm, threshold=threshold)
+    sources = daofind(data - median, fwhm=fwhm, threshold=threshold)
     return sources
