@@ -4,7 +4,7 @@ from photutils import daofind
 
 
 
-def source_detection(ccd,fwhm=3.0, sigma=3.0, iters=5, threshold=5.0*std):
+def source_detection(ccd, fwhm=3.0, sigma=3.0, iters=5, threshold=5.0*std):
     """
     Returns an astropy table containing the position of sources within the image.
 
