@@ -4,7 +4,7 @@ import numpy as np
 from ccdproc import CCDData
 from astropy.wcs import WCS
 
-def convert_pixel_wcs(ccd_image, lon_or_ra, lat_or_dec, isPix=True):
+def convert_pixel_wcs(ccd_image, lon_or_ra, lat_or_dec, is_pix=True):
     """
     Takes either pixel or World Coordinate System (RA/Dec)
     coordinates and converts to the other type.
@@ -24,7 +24,7 @@ def convert_pixel_wcs(ccd_image, lon_or_ra, lat_or_dec, isPix=True):
         Represents the lat/dec axis, depending on what is
         passed in.
 
-    isPix: Bool
+    is_pix: Bool
         Used to determine what coordinates are being inputted.
         Assumes pixel coordinates by default.
 
@@ -34,7 +34,7 @@ def convert_pixel_wcs(ccd_image, lon_or_ra, lat_or_dec, isPix=True):
     and the second lat/Dec.
 
     """
-    if isPix:
+    if is_pix:
         return ccd_image.wcs.all_pix2world(lon_or_ra, lat_or_dec, 0)
     else:
         return ccd_image.wcs.all_world2pix(lon_or_ra, lat_or_dec, 0)
