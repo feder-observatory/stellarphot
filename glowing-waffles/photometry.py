@@ -5,7 +5,7 @@ from astropy.stats import mad_std
 from astropy.io import fits
 from astropy.table import Table, join
 from photutils import aperture_photometry, CircularAperture, CircularAnnulus
-from coordinates.py import convert_pixel_wcs
+from coordinates import convert_pixel_wcs
 
 __all__ = ['photutils_stellar_photometry']
 
@@ -36,9 +36,9 @@ def photutils_stellar_photometry(ccd_image, sources, aperture_radius, inner_annu
     Returns
     -------
     phot_table : `~astropy.table.Table`
-        Output of `~photutils.aperture_photometry()` function with
-        additional columns for RA/dec coordinates of center,
-        sky background per pixel, flux, and flux error.
+        Astropy table with columns for flux, x/y coordinates of center,
+        RA/dec coordinates of center, sky background per pixel,
+        net flux, aperture and annulus radii used, and flux error.
     """
 
     #if coord_type is not pixel:
@@ -56,7 +56,7 @@ def photutils_stellar_photometry(ccd_image, sources, aperture_radius, inner_annu
     #annulus objects from coordinates, and peform aperture photometry
     coords = (sources['xcentroid'], sources['ycentroid'])
     apertures = CircularAperture(coords, aperture_radius)
-    annulus = CircularAnnulus(coords, inner_radius, outer_radius)
+    annulus = CircularAnnulus(coords, inner_annulus, outer_annulus)
     phot_table = aperture_photometry(ccd_image, apertures)
     phot_table_1 = aperture_photometry(ccd_image, annulus)
 
@@ -70,8 +70,8 @@ def photutils_stellar_photometry(ccd_image, sources, aperture_radius, inner_annu
 
     #Return a columns with the aperture radius and the inner/outer annulus radii
     phot_table['aperture_radius'] = np.ones(len(phot_table['aperture_sum'])) *  aperture_radius
-    phot_table['inner_radius'] = np.ones(len(phot_table['aperture_sum'])) *  inner_radius
-    phot_table['outer_radius'] = np.ones(len(phot_table['aperture_sum'])) *  outer_radius
+    phot_table['inner_radius'] = np.ones(len(phot_table['aperture_sum'])) *  inner_annulus
+    phot_table['outer_radius'] = np.ones(len(phot_table['aperture_sum'])) *  outer_annulus
 
     #Obtain RA/Dec coordinates and add them to table
     ra, dec = convert_pixel_wcs(ccd_image, coords[0], coords[1], 1)
