@@ -1,8 +1,5 @@
 from __future__ import print_function, division, absolute_import
 import numpy as np
-from astropy import units as u
-from astropy.stats import mad_std
-from astropy.io import fits
 from astropy.table import Table, join
 from photutils import aperture_photometry, CircularAperture, CircularAnnulus
 from .coordinates import convert_pixel_wcs
@@ -87,6 +84,6 @@ def photutils_stellar_photometry(ccd_image, sources, aperture_radius, inner_annu
     # Obtain flux error and add column to return table
     noise = np.sqrt(gain*net_flux + n_pix_ap*(1 + (n_pix_ap/n_pix_ann))
 			 *(gain*(bkgd_pp + N_dark_pp) + (N_R**2)))
-    phot_table['aperture_sum_err'] = np.ones(len(phot_table['aperture_sum'])) * noise
+    phot_table['aperture_sum_err'] = noise
 
     return phot_table
