@@ -7,7 +7,7 @@ from .coordinates import convert_pixel_wcs
 __all__ = ['photutils_stellar_photometry']
 
 def photutils_stellar_photometry(ccd_image, sources, aperture_radius, inner_annulus
-                                 outer_annulus, gain, N_R, N_dark_pp):
+                                 outer_annulus, gain=1.0, N_R=0, N_dark_pp=0):
     """
     Perform aperture photometry on an image, with a few options for estimating
     the local background from an annulus around the aperture.
