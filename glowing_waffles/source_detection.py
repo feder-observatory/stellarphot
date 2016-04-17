@@ -12,21 +12,21 @@ def source_detection(ccd, fwhm=3.0, sigma=3.0, iters=5, threshold=5.0):
     Parameters
     ----------------
 
-    array : `numpy.ndarray`
-        Image array.
+    ccd : numpy.ndarray
+        The CCD Image array.
 
     fwhm : float, optional
         Full-width half-max of stars in the image.
-
-    threshold : float, optional.
-        The absolute image value above which to select sources.
 
     sigma : float, optional.
         The number of standard deviations to use as the lower and upper clipping limit.
 
     iters : int, optional
         The number of iterations to perform sigma clipping
-
+    
+    threshold : float, optional.
+        The absolute image value above which to select sources.
+    
     Returns
     -----------
 
