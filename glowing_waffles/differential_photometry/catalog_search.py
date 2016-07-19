@@ -1,15 +1,25 @@
 from __future__ import print_function, division
 
+import numpy as np
+
 from astroquery.vizier import Vizier
 
 from astropy.coordinates import SkyCoord
+from astropy.table import Table
 import astropy.units as units
 
+from itertools import izip
+
+from ccdproc import CCDData
 __all__ = [
+
     'in_frame',
     'catalog_search',
 ]
-
+def scale_and_downsample(data, downsample=4, min_percent=20, max_percent=99.5):
+    if downsample > 1:
+        scaled_data = block_reduce(scaled_data, block_size=(downsample, downsample))
+    return scaled_data
 
 def in_frame(frame_wcs, coordinates):
     """
