@@ -74,6 +74,10 @@ class Star(object):
         self.id = id_num
 
     @property
+    def airmass(self):
+        return self._table['AIRMASS']
+
+    @property
     def counts(self):
         return self._table['Source-Sky']
 
