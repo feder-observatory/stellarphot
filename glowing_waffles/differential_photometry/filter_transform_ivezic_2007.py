@@ -1,11 +1,14 @@
 from __future__ import print_function, division
 
+__all__ = ['filter_transform']
+
 
 def filter_transform(mag_data, output_filter, R=None, B=None,
                      V=None, I=None, g=None, r=None, i=None):
     '''
+    Transform SDSS magnitudes to BVRI using Ivezic et all (2007).
+
     Description: This function impliments the transforms in 'A Comparison of SDSS Standard
-    Star Catalog for Stripe 82 with Stetson’s Photometric Standards' by Ivezic et all (2007).
     Preconditions: mag_data must be an astropy.table object consisting of numerical values,
     output_filter must be a string 'R', 'B', 'V', or 'I' and for any output filter must be passed a
     corresponding key (arguemnts R, B, V...) to access the necissary filter information from

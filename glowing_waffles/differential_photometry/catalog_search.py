@@ -5,6 +5,11 @@ from astroquery.vizier import Vizier
 from astropy.coordinates import SkyCoord
 import astropy.units as units
 
+__all__ = [
+    'in_frame',
+    'catalog_search',
+]
+
 
 def in_frame(frame_wcs, coordinates):
     """
