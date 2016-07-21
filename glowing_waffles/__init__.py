@@ -14,3 +14,4 @@ from ._astropy_init import *
 if not _ASTROPY_SETUP_:
     from core import *
     from source_detection import *
+    from photometry import photutils_stellar_photometry
