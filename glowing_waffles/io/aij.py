@@ -111,7 +111,10 @@ class Star(object):
 
     @property
     def exposure(self):
-        return self._table['EXPOSURE']
+        try:
+            return self._table['EXPOSURE']
+        except KeyError:
+            return self._table['EXPTIME']
 
     @property
     def magnitude(self):
