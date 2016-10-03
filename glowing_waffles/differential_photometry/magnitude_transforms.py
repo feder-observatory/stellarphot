@@ -7,7 +7,10 @@ import astropy.units as u
 from astropy.table import Table
 from astropy.coordinates import SkyCoord
 
-__all__ = ['filter_transform']
+__all__ = [
+    'filter_transform',
+    'standard_magnitude_transform'
+]
 
 
 def filter_transform(mag_data, output_filter, R=None, B=None,
@@ -128,6 +131,14 @@ def filter_transform(mag_data, output_filter, R=None, B=None,
         raise ValueError('the desired filter must be a string R B V or I')
 
 
+# Define the log-likelihood via the Huber loss function
+def huber_loss(m, b, x, y, dy, c=2):
+    y_fit = m * x + b
+    t = abs((y - y_fit) / dy)
+    flag = t > c
+    return np.sum((~flag) * (0.5 * t ** 2) - (flag) * c * (0.5 * c - t), -1)
+
+
 def standard_magnitude_transform(instrumental,
                                  catalog,
                                  match_radius=0.5 * u.arcsec,
@@ -146,7 +157,7 @@ def standard_magnitude_transform(instrumental,
     instrumental: astropy Table
         Table containing instrumental magnitudes from which transform
         coefficients are to be determined. Each filter should be a column
-        whose name is the filter. In addition there should be a column
+        whose name is the filter. In addition, there should be a column
         called 'RA' and a column called 'Dec'.
     catalog : astropy Table
         Table containing catalog magnitudes from which transform
@@ -158,12 +169,29 @@ def standard_magnitude_transform(instrumental,
         magnitudes to catalog magnitudes. An on-sky separation of
         less than match_radius counts as a match. If no units are provided
         it is assumed the unit is degrees.
+    color_from : str
+        Either 'catalog' or 'instrumental', indicates which catalog should be
+        used for calculating the color in the transform.
+    color_1 : str
+        First filter to use for calculating color.
+    color_2 : str
+        Second color to use for calculating the color.
+    for_filter : str, optional
+        Filter for which to calculate the transform. If ``None``, the default,
+        then every column in the instrumental table is transformed.
     """
+    tables = {
+        'catalog': catalog,
+        'instrumental': instrumental
+    }
+
     i_filters = [name for name in instrumental.colnames
-                 if name not in ['RA', 'Dec']]
+                 if name not in ['RA', 'Dec'] and
+                 not name.startswith('e_')]
 
     c_filters = [name for name in catalog.colnames
-                 if name not in ['RA', 'Dec']]
+                 if name not in ['RA', 'Dec'] and
+                 not name.startswith('e_')]
 
     if not set(i_filters).issubset(set(c_filters)):
         raise ValueError('Some filters in instrumental table not found in '
@@ -173,7 +201,7 @@ def standard_magnitude_transform(instrumental,
     catalog_coords = SkyCoord(ra=catalog['RA'], dec=catalog['Dec'])
 
     catalog_index, d2d, d3d = \
-        catalog_coords.match_to_catalog_sky(instrumental_coords)
+        instrumental_coords.match_to_catalog_sky(catalog_coords)
 
     good_match = d2d < match_radius
 
@@ -181,42 +209,30 @@ def standard_magnitude_transform(instrumental,
         raise ValueError('No matches found between instrumental'
                          ' and catalog tables.')
 
+    color = tables[color_from][color_1] - tables[color_from][color_2]
 
-    # Create empty list for the corrections (slope and intercept)
-    corrections = []
-    # Create empy list for the error in the corrections
-    # loop over all images
-    for idx in range(aij_mags.shape[1]):
-        # create BminusV list
-        BminusV = []
-        # Create Rminusr list
-        Rminusr = []
-        # loop over the apass_index and the placement in the apass_index
-        for aij_star, el in enumerate(apass_index):
-            # check if the aij index corresponds to 18 or 23 (I don't know why)
-            if aij_star in [18, 23]:
-                # Breakes out of the apass_index loop?
-                continue
-            # check if the aij star has a corresponding apass match
-            if good_match[aij_star]:
-                # Make sure the aij stars magnitude in the image isn't friggin
-                # huge
-                if aij_stars[aij_star].magnitude[idx] < 100:
-                    # Add the color of that star (according to apass) to the
-                    # bminusv list
-                    BminusV.append(apass_color[el])
-                    # add the difference between aijs magnitude and apass
-                    # transformed magnitude to the Rminusr list
-                    Rminusr.append(
-                        apass_R_mags[el] - aij_stars[aij_star].magnitude[idx])
-        # findes the slope and the slope intercept (and error in) for a plot of Rminusr vs BminusV for that image
-        # non huber way of getting slope... slope_intercept, cov =
-        # np.polyfit(BminusV, Rminusr, 1, cov=True)
-        dy = np.zeros(len(BminusV)) + 0.01
-        f_huber = lambda beta: huber_loss(beta[0], beta[1], x=np.array(
-            BminusV), y=np.array(Rminusr), dy=dy, c=1)
+    transforms = {}
+    for passband in i_filters:
+        mag_diff = catalog[passband] - instrumental[passband]
+
+        # dy is error...which is simply added in quadrature
+        dy = np.sqrt(catalog['e_' + passband] ** 2 +
+                     catalog['e_' + passband] ** 2)
+
+        def f_huber(beta):
+            return huber_loss(beta[0], beta[1],
+                              x=np.array(color),
+                              y=np.array(mag_diff),
+                              dy=dy,
+                              c=1)
+
         beta0 = (0.1, 20)
-        beta_huber = optimize.fmin(f_huber, beta0)
-        # append corrections data to list
-        corrections.append(beta_huber)
+        beta_huber = optimize.minimize(f_huber, beta0, method='Nelder-Mead')
+        # This grabs the solution the optimizer found, or raises an error
+        # if no solution is found.
+        if beta_huber.success:
+            transforms[passband] = beta_huber.x
+        else:
+            raise RuntimeError('Optimizer did not converge')
 
+    return transforms
