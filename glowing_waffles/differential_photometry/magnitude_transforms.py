@@ -141,11 +141,11 @@ def huber_loss(m, b, x, y, dy, c=2):
 
 def standard_magnitude_transform(instrumental,
                                  catalog,
+                                 for_filter=None,
                                  match_radius=0.5 * u.arcsec,
                                  color_from='catalog',
                                  color_1='B',
-                                 color_2='V',
-                                 for_filter=None):
+                                 color_2='V',):
     """
     Given catalog magnitudes and instrumental magnitudes, calculate transform
     from instrumental to catalog. Colors can be drawn from the catalog or
@@ -164,6 +164,9 @@ def standard_magnitude_transform(instrumental,
         coefficients are to be determined. Each filter should be a column
         whose name is the filter. In addition there should be a column
         called 'RA' and a column called 'Dec'.
+    for_filter : str
+        Filter for which to calculate the transform. Filter name must be a
+        column name in instrumental and catalog.
     match_radius : astropy Quantity  or float
         Determines cutoff for matching coordinates of instrumental
         magnitudes to catalog magnitudes. An on-sky separation of
@@ -176,26 +179,21 @@ def standard_magnitude_transform(instrumental,
         First filter to use for calculating color.
     color_2 : str
         Second color to use for calculating the color.
-    for_filter : str, optional
-        Filter for which to calculate the transform. If ``None``, the default,
-        then every column in the instrumental table is transformed.
+
     """
     tables = {
         'catalog': catalog,
         'instrumental': instrumental
     }
 
-    i_filters = [name for name in instrumental.colnames
-                 if name not in ['RA', 'Dec'] and
-                 not name.startswith('e_')]
+    if not for_filter:
+        raise ValueError('Must provide a value for for_filter.')
 
-    c_filters = [name for name in catalog.colnames
-                 if name not in ['RA', 'Dec'] and
-                 not name.startswith('e_')]
+    for name, table in tables.iteritems():
+        if for_filter not in table.colnames:
+            raise ValueError('Filter {} not found in {} '
+                             'table'.format(for_filter, name))
 
-    if not set(i_filters).issubset(set(c_filters)):
-        raise ValueError('Some filters in instrumental table not found in '
-                         'catalog table.')
     instrumental_coords = SkyCoord(ra=instrumental['RA'],
                                    dec=instrumental['Dec'])
     catalog_coords = SkyCoord(ra=catalog['RA'], dec=catalog['Dec'])
@@ -212,27 +210,27 @@ def standard_magnitude_transform(instrumental,
     color = tables[color_from][color_1] - tables[color_from][color_2]
 
     transforms = {}
-    for passband in i_filters:
-        mag_diff = catalog[passband] - instrumental[passband]
 
-        # dy is error...which is simply added in quadrature
-        dy = np.sqrt(catalog['e_' + passband] ** 2 +
-                     catalog['e_' + passband] ** 2)
+    mag_diff = catalog[for_filter] - instrumental[for_filter]
 
-        def f_huber(beta):
-            return huber_loss(beta[0], beta[1],
-                              x=np.array(color),
-                              y=np.array(mag_diff),
-                              dy=dy,
-                              c=1)
+    # dy is error...which is simply added in quadrature
+    dy = np.sqrt(catalog['e_' + for_filter] ** 2 +
+                 catalog['e_' + for_filter] ** 2)
 
-        beta0 = (0.1, 20)
-        beta_huber = optimize.minimize(f_huber, beta0, method='Nelder-Mead')
-        # This grabs the solution the optimizer found, or raises an error
-        # if no solution is found.
-        if beta_huber.success:
-            transforms[passband] = beta_huber.x
-        else:
-            raise RuntimeError('Optimizer did not converge')
+    def f_huber(beta):
+        return huber_loss(beta[0], beta[1],
+                          x=np.array(color),
+                          y=np.array(mag_diff),
+                          dy=dy,
+                          c=1)
+
+    beta0 = (0.1, 20)
+    beta_huber = optimize.minimize(f_huber, beta0, method='Nelder-Mead')
+    # This grabs the solution the optimizer found, or raises an error
+    # if no solution is found.
+    if beta_huber.success:
+        transforms[for_filter] = beta_huber.x
+    else:
+        raise RuntimeError('Optimizer did not converge')
 
     return transforms

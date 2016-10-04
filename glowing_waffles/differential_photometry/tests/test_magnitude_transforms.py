@@ -42,21 +42,27 @@ def test_no_matches():
     instrumental = Table([RAs, i_Dec, R_mags, e_R])
     catalog = Table([RAs, c_Dec, R_mags, B_cat, V_cat, e_R, e_B_cat, e_V_cat])
 
+    # Test for fail if for_filter is omitted.
     with pytest.raises(ValueError) as e:
         standard_magnitude_transform(instrumental, catalog)
-    assert 'No matches found between instrumental' in str(e)
+    assert 'Must provide a value for for_filter.' in str(e)
 
-    catalog.remove_column('R')
-
+    # Test for appropriate error if filter is present in catalog but
+    # not instrumental.
     with pytest.raises(ValueError) as e:
-        standard_magnitude_transform(instrumental, catalog)
-    assert 'Some filters in instrumental table not ' in str(e)
+        standard_magnitude_transform(instrumental, catalog, for_filter='V')
+    assert 'Filter V not found in instrumental table' in str(e)
 
-    catalog.add_column(R_mags)
+    # Test that an error is raised when catalog has no matches to sources.
+    with pytest.raises(ValueError) as e:
+        standard_magnitude_transform(instrumental, catalog, for_filter='R')
+    assert ('No matches found between instrumental and catalog '
+            'tables.' in str(e))
+
     catalog['Dec'] = instrumental['Dec']
     # Add a 20 maagnitude offset...
     instrumental['R'] -= 20
-    result = standard_magnitude_transform(instrumental, catalog)
+    result = standard_magnitude_transform(instrumental, catalog, 'R')
     assert result
     print('=========>>>>>>', result['R'])
     np.testing.assert_allclose(result['R'][0], [0], atol=3e-5)
