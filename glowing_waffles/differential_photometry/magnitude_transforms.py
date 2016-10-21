@@ -201,21 +201,33 @@ def standard_magnitude_transform(instrumental,
     catalog_index, d2d, d3d = \
         instrumental_coords.match_to_catalog_sky(catalog_coords)
 
-    good_match = d2d < match_radius
+    good_match = np.array(d2d < match_radius)
 
     if not good_match.sum():
         raise ValueError('No matches found between instrumental'
                          ' and catalog tables.')
-
-    color = tables[color_from][color_1] - tables[color_from][color_2]
+    if color_from == 'catalog':
+        indexes = catalog_index[good_match]
+    else:
+        indexes = good_match
+    color = tables[color_from][color_1][indexes] - tables[color_from][color_2][indexes]
 
     transforms = {}
 
-    mag_diff = catalog[for_filter] - instrumental[for_filter]
+    mag_diff = catalog[for_filter][catalog_index[good_match]] - instrumental[for_filter][good_match]
 
-    # dy is error...which is simply added in quadrature
-    dy = np.sqrt(catalog['e_' + for_filter] ** 2 +
-                 catalog['e_' + for_filter] ** 2)
+    # dy is error...which is simply added in quadrature, if present
+    try:
+        catalog_error = catalog['e_' + for_filter]
+    except KeyError:
+        catalog_error = np.zeros_like(good_match)
+
+    try:
+        instrumental_error = instrumental['e_' + for_filter]
+    except KeyError:
+        instrumental_error = np.zeros_like(good_match)
+    dy = np.sqrt(catalog_error[good_match] ** 2 +
+                 instrumental_error[good_match] ** 2)
 
     def f_huber(beta):
         return huber_loss(beta[0], beta[1],
