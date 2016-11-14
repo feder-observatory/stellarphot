@@ -34,8 +34,11 @@ def in_frame(frame_wcs, coordinates):
     return in_x & in_y
 
 
-def catalog_search(frame_wcs, shape, desired_catalog, raheader, decheader,
-                   rad=0.5):
+def catalog_search(frame_wcs, shape, desired_catalog,
+                   ra_column='RAJ2000',
+                   dec_column='DEJ2000',
+                   radius=0.5,
+                   clip_by_frame=True):
     """
     Description: This function takes coordinate data from an image and a
     catalog name and returns the positions of those stars.
@@ -44,7 +47,7 @@ def catalog_search(frame_wcs, shape, desired_catalog, raheader, decheader,
     value.
     Postconditions:
     """
-    rad = rad * units.deg
+    rad = radius * units.deg
     # Find the center of the frame
     center_coord = frame_wcs.all_pix2world([[shape[1] / 2, shape[0] / 2]], 0)
     center = SkyCoord(center_coord, frame='icrs', unit='deg')
@@ -55,7 +58,10 @@ def catalog_search(frame_wcs, shape, desired_catalog, raheader, decheader,
     # Vizier always returns list even if there is only one element. Grab that
     # element.
     cat = cat[0]
-    cat_coords = SkyCoord(ra=cat[raheader], dec=cat[decheader])
-    in_fov = in_frame(frame_wcs, cat_coords)
+    cat_coords = SkyCoord(ra=cat[ra_column], dec=cat[dec_column])
+    if clip_by_frame:
+        in_fov = in_frame(frame_wcs, cat_coords)
+    else:
+        in_fov = np.ones([len(cat_coords)], dtype=np.bool)
     x, y = frame_wcs.all_world2pix(cat_coords.ra, cat_coords.dec, 0)
     return (cat[in_fov], x[in_fov], y[in_fov])
