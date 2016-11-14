@@ -1,5 +1,7 @@
 from __future__ import print_function, division
 
+import re
+
 import numpy as np
 
 from astroquery.vizier import Vizier
@@ -15,11 +17,15 @@ __all__ = [
 
     'in_frame',
     'catalog_search',
+    'catalog_clean',
 ]
+
+
 def scale_and_downsample(data, downsample=4, min_percent=20, max_percent=99.5):
     if downsample > 1:
         scaled_data = block_reduce(scaled_data, block_size=(downsample, downsample))
     return scaled_data
+
 
 def in_frame(frame_wcs, coordinates):
     """
@@ -65,3 +71,53 @@ def catalog_search(frame_wcs, shape, desired_catalog,
         in_fov = np.ones([len(cat_coords)], dtype=np.bool)
     x, y = frame_wcs.all_world2pix(cat_coords.ra, cat_coords.dec, 0)
     return (cat[in_fov], x[in_fov], y[in_fov])
+
+
+def catalog_clean(catalog, remove_rows_with_mask=True,
+                  **other_restrictions):
+    """
+    Return a catalog with only the rows that meet the criteria specified.
+
+    Parameters
+    ----------
+
+    catalog : astropy.Table
+        Table of catalog information. There are no restrictions on the columns.
+    remove_rows_with_mask : bool, optional
+        If ``True``, remove rows in which one or more of the values is masked.
+    other_restrictions: dict, optional
+        Key/value pairs in which the key is the name of a column in the
+        catalog and the value is the criteria that values in that column
+        must satisfy to be kept in the cleaned catalog. The criteria must be
+        simple, beginning with a comparison operator and including a value.
+        See Examples below.
+    """
+
+    comparisons = {
+        '<': np.less,
+        '=': np.equal,
+        '>': np.greater,
+        '<=': np.less_equal,
+        '>=': np.greater_equal,
+        '!=': np.not_equal
+    }
+
+    recognized_comparison_ops = '|'.join(comparisons.keys())
+    keepers = np.ones([len(catalog)], dtype=np.bool)
+
+    if remove_rows_with_mask and catalog.masked:
+        for c in catalog.columns:
+            keepers &= ~catalog[c].mask
+
+    for column, restriction in other_restrictions.iteritems():
+        criteria_re = re.compile(r'({})(.+)'.format(recognized_comparison_ops))
+        results = criteria_re.match(restriction)
+        if not results:
+            raise ValueError("Criteria {}{} not "
+                             "understood.".format(column, restriction))
+        comparison_func = comparisons[results.group(1)]
+        comparison_value = results.group(2)
+        new_keepers = comparison_func(catalog[column], np.float(comparison_value))
+        keepers = keepers & new_keepers
+
+    return catalog[keepers]
