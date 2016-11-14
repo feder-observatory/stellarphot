@@ -9,7 +9,8 @@ from astropy.coordinates import SkyCoord
 
 __all__ = [
     'filter_transform',
-    'standard_magnitude_transform'
+    'standard_magnitude_transform',
+    'calculate_transform_coefficients',
 ]
 
 
@@ -242,6 +243,89 @@ def standard_magnitude_transform(instrumental,
     # if no solution is found.
     if beta_huber.success:
         transforms[for_filter] = beta_huber.x
+    else:
+        raise RuntimeError('Optimizer did not converge')
+
+    return transforms
+
+
+def calculate_transform_coefficients(input_mag, catalog_mag, color,
+                                     input_mag_error=None,
+                                     catalog_mag_error=None):
+    """
+    Calculate linear transform coefficients from input magnitudes to catalog
+    magnitudes.
+
+    Parameters
+    ----------
+
+    input_mag : numpy array or astropy Table column
+        Input magnitudes; for example, instrumental magnitudes.
+    catalog_mag : numpy array or astropy Table column
+        Catalog (or reference) magnitudes; the magnitudes to which the
+        input_mag will eventually be transformed.
+    color : numpy array or astropy Table column
+        Colors to use in determining transform coefficients.
+    input_mag_error : numpy array or astropy Table column, optional
+        Error in input magnitudes. Default is zero.
+    catalog_mag_error : numpy array or astropy Table column, optional
+        Error in catalog magnitudes. Default is zero.
+
+    Returns
+    -------
+
+    zero_point, slope : float
+        Zero point and linear color term in transform equation (see notes
+        below).
+
+    Notes
+    -----
+
+    This function has some pretty serious limitations right now:
+
+    + Errors in the independent variable are ignored.
+    + Outliers are rejected using a modified loss function (Huber loss) that
+      cannot be modified.
+    + No errors are estimated in the calculated transformation coefficients.
+
+    And there is all the stuff that is not listed here...
+    """
+
+    if input_mag_error is None:
+        input_mag_error = np.zeros_like(input_mag)
+    if catalog_mag_error is None:
+        catalog_mag_error = np.zeros_like(catalog_mag)
+
+    # Independent variable is the color, dependent variable is the
+    # difference between the measured (input) magnitude and the catalog
+    # magnitude.
+
+    mag_diff = catalog_mag - input_mag
+
+    # The error that is the errors of those combined in quadrature.
+    combined_error = np.sqrt(input_mag_error**2 + catalog_mag_error**2)
+
+    # If both errors are zero then the error is omitted.
+    if (combined_error == 0).all():
+        dy = None
+    else:
+        dy = combined_error
+
+    def f_huber(beta):
+        return huber_loss(beta[0], beta[1],
+                          x=np.array(color),
+                          y=np.array(mag_diff),
+                          dy=dy,
+                          c=1)
+
+    # Fairly arbitrary initial guess.
+    beta0 = (0.1, 20)
+
+    beta_huber = optimize.minimize(f_huber, beta0, method='Nelder-Mead')
+    # This grabs the solution the optimizer found, or raises an error
+    # if no solution is found.
+    if beta_huber.success:
+        transforms = beta_huber.x
     else:
         raise RuntimeError('Optimizer did not converge')
 
