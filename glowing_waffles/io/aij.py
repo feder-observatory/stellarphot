@@ -121,5 +121,13 @@ class Star(object):
         return -2.5 * np.log10(self.counts) + 2.5 * np.log10(self.exposure)
 
     @property
+    def snr(self):
+        return self.counts / self.error
+
+    @property
+    def magnitude_error(self):
+        return 1.0857 / self.snr
+
+    @property
     def bjd_tdb(self):
         return self._table['BJD_TDB']
