@@ -1,7 +1,9 @@
 from __future__ import print_function
 
-from ipywidgets import Box, HTML
+from IPython.display import IFrame, display
+from ipywidgets import Box, Output
 from ginga.web.pgw import ipg
+from astropy.io.fits import HDUList
 
 __all__ = ['ImageViewer']
 
@@ -9,13 +11,34 @@ __all__ = ['ImageViewer']
 class ImageViewer(Box):
     """
     Basic image viewer Jupyter widget which wraps a ginga widget.
+
+    Set the content of the image viewer via the ``image`` attribute.
+
+    Parameters
+    ----------
+
+    image : str, FITS HDU, or numpy array
+        Content to display in the widget
+
     """
-    def __init__(self, image_file=None, width=600, height=600,
+    _server = ipg.make_server(host='localhost',
+                                       port=9987,
+                                       use_opencv=False)
+    _server_started = False
+    _number_views = 0
+
+    def __init__(self, image=None, width=600, height=600,
                  show_position=False, **kwd):
         super(ImageViewer, self).__init__(**kwd)
-        self._html_display = HTML(value="I will have an image soon")
-        self.children = [self._html_display]
-        self._server = None
+
+        self._image_display = Output(value="I will have an image soon")
+
+
+        self.children = [self._image_display]
+        if not ImageViewer._server_started:
+            ImageViewer._server.start(no_ioloop=True)
+            ImageViewer._server_started = True
+        #self._server = None
         self._viewer = None
         self._width = width
         self._height = height
@@ -25,22 +48,25 @@ class ImageViewer(Box):
         # This call sets both server and viewer
         self._ginga_viewer()
 
-        self._html_display.value = self._viewer_html
-        self.image_file = image_file
+        width, height = self._viewer.get_window_size()
+
+        with self._image_display:
+            display(IFrame(self._viewer.url, width, height))
+
+        self.image = image
 
     def _ginga_viewer(self):
         # Set this to True if you have a non-buggy python OpenCv
         # bindings--it greatly speeds up some operations
         use_opencv = False
-        self._server = ipg.make_server(host='localhost',
-                                       port=9987,
-                                       use_opencv=use_opencv)
-        self._server.start(no_ioloop=True)
+
         if self._show_position:
             viewer_class = ipg.EnhancedCanvasView
         else:
             viewer_class = ipg.BasicCanvasView
-        self._viewer = self._server.get_viewer('v1',
+
+        ImageViewer._number_views += 1
+        self._viewer = self._server.get_viewer(str(ImageViewer._number_views),
                                                width=self._width,
                                                height=self._height,
                                                viewer_class=viewer_class)
@@ -48,20 +74,18 @@ class ImageViewer(Box):
         self._viewer.set_zoomrate(1.01)
 
     @property
-    def _viewer_html(self):
-        base_string = \
-            '<iframe src={viewer_url} height="{height}" width="{width}"></iframe>'
-        width, height = self._viewer.get_window_size()
-        return base_string.format(viewer_url=self._viewer.url,
-                                  width=width,
-                                  height=height)
+    def image(self):
+        return self._image
 
-    @property
-    def image_file(self):
-        return self._image_file
-
-    @image_file.setter
-    def image_file(self, value):
-        self._image_file = value
-        if value:
-            self._viewer.load(value)
+    @image.setter
+    def image(self, value):
+        self._image = value
+        if value is not None:
+            if isinstance(value, str):
+                # Hope this is the name of a FITS file!
+                self._viewer.load_fits(value)
+            elif isinstance(value, HDUList):
+                self._viewer.load_hdu(value)
+            else:
+                # Sure hope this is really numpy data
+                self._viewer.load_data(value)
