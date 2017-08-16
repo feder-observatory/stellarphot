@@ -27,7 +27,7 @@ def scale_and_downsample(data, downsample=4, min_percent=20, max_percent=99.5):
     return scaled_data
 
 
-def in_frame(frame_wcs, coordinates):
+def in_frame(frame_wcs, coordinates, padding=0):
     """
     Description:Check which of a set of coordinates are in the footprint of
     the WCS of an image
@@ -35,8 +35,8 @@ def in_frame(frame_wcs, coordinates):
     Postconditions:
     """
     x, y = frame_wcs.all_world2pix(coordinates.ra, coordinates.dec, 0)
-    in_x = (x >= 0) & (x <= frame_wcs._naxis1)
-    in_y = (y >= 0) & (y <= frame_wcs._naxis2)
+    in_x = (x >= padding) & (x <= frame_wcs._naxis1 - padding)
+    in_y = (y >= padding) & (y <= frame_wcs._naxis2 - padding)
     return in_x & in_y
 
 
@@ -44,7 +44,8 @@ def catalog_search(frame_wcs, shape, desired_catalog,
                    ra_column='RAJ2000',
                    dec_column='DEJ2000',
                    radius=0.5,
-                   clip_by_frame=True):
+                   clip_by_frame=True,
+                   padding=100):
     """
     Description: This function takes coordinate data from an image and a
     catalog name and returns the positions of those stars.
