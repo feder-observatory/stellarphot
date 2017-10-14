@@ -29,10 +29,29 @@ def scale_and_downsample(data, downsample=4, min_percent=20, max_percent=99.5):
 
 def in_frame(frame_wcs, coordinates, padding=0):
     """
-    Description:Check which of a set of coordinates are in the footprint of
-    the WCS of an image
-    Preconditions:
-    Postconditions:
+    Given a WCS and list of coordinates check whether the coordinates
+    are within the frame.
+
+    Parameters
+    ----------
+
+    frame_wcs : astropy WCS object
+        WCS for the image.
+    coordinates : astropy.coordinates.SkyCoord
+        Coordinate(s) whose position will be checked to see if they are in the
+        field of view.
+    padding : int, optional
+        Coordinates need to be at least this many pixels in from the edge
+        of the frame to be considered in the field of view. Default value
+        is 0.
+
+    Returns
+    -------
+
+    numpy.ndarray of bool
+        One value for each input coordinate; values are ``True`` if the
+        coordinate was in the field of view, ``False`` otherwise.
+
     """
     x, y = frame_wcs.all_world2pix(coordinates.ra, coordinates.dec, 0)
     in_x = (x >= padding) & (x <= frame_wcs._naxis1 - padding)
@@ -47,6 +66,17 @@ def catalog_search(frame_wcs, shape, desired_catalog,
                    clip_by_frame=True,
                    padding=100):
     """
+    Return the items from catalog that are within the search radius and
+    (optionally) within the field of view of a frame.
+
+    Parameters
+    ----------
+
+    frame_wcs : astropy.wcs.WCS
+        WCS of the image of interest.
+
+    shape : tuple of int
+
     Description: This function takes coordinate data from an image and a
     catalog name and returns the positions of those stars.
     Preconditions:frame_wcs is a WCS object, shape is tuple, list or array of
@@ -67,7 +97,7 @@ def catalog_search(frame_wcs, shape, desired_catalog,
     cat = cat[0]
     cat_coords = SkyCoord(ra=cat[ra_column], dec=cat[dec_column])
     if clip_by_frame:
-        in_fov = in_frame(frame_wcs, cat_coords)
+        in_fov = in_frame(frame_wcs, cat_coords, padding=padding)
     else:
         in_fov = np.ones([len(cat_coords)], dtype=np.bool)
     x, y = frame_wcs.all_world2pix(cat_coords.ra, cat_coords.dec, 0)
