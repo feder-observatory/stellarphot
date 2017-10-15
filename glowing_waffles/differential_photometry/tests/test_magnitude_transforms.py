@@ -38,7 +38,6 @@ def test_no_matches():
     e_V_cat = Column(name='e_V',
                      data=[0.01, 0.04, 0.05])
 
-
     instrumental = Table([RAs, i_Dec, R_mags, e_R])
     catalog = Table([RAs, c_Dec, R_mags, B_cat, V_cat, e_R, e_B_cat, e_V_cat])
 
