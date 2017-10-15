@@ -139,9 +139,8 @@ def catalog_clean(catalog, remove_rows_with_mask=True,
         for c in catalog.columns:
             keepers &= ~catalog[c].mask
 
-    for column, restriction in other_restrictions.iteritems():
-        criteria_re = re.compile(r'({})(.+)'.format(recognized_comparison_ops))
     for column, restriction in other_restrictions.items():
+        criteria_re = re.compile(r'({})([-+a-zA-Z0-9]+)'.format(recognized_comparison_ops))
         results = criteria_re.match(restriction)
         if not results:
             raise ValueError("Criteria {}{} not "
