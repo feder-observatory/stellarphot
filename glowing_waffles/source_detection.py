@@ -1,5 +1,5 @@
 from astropy.stats import sigma_clipped_stats
-from photutils import daofind
+from photutils import DAOStarFinder
 
 __all__ = ['source_detection']
 
@@ -36,5 +36,6 @@ def source_detection(ccd, fwhm=3.0, sigma=3.0, iters=5, threshold=5.0):
     """
     data = ccd.data
     mean, median, std = sigma_clipped_stats(data, sigma=sigma, iters=iters)
-    sources = daofind(data - median, fwhm=fwhm, threshold=threshold * std)
+    daofind = DAOStarFinder(fwhm=fwhm, threshold=threshold * std)
+    sources = daofind(data - median)
     return sources
