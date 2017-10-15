@@ -141,6 +141,7 @@ def catalog_clean(catalog, remove_rows_with_mask=True,
 
     for column, restriction in other_restrictions.iteritems():
         criteria_re = re.compile(r'({})(.+)'.format(recognized_comparison_ops))
+    for column, restriction in other_restrictions.items():
         results = criteria_re.match(restriction)
         if not results:
             raise ValueError("Criteria {}{} not "

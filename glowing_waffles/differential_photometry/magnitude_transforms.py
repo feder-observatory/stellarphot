@@ -196,7 +196,7 @@ def standard_magnitude_transform(instrumental,
     if not for_filter:
         raise ValueError('Must provide a value for for_filter.')
 
-    for name, table in tables.iteritems():
+    for name, table in tables.items():
         if for_filter not in table.colnames:
             raise ValueError('Filter {} not found in {} '
                              'table'.format(for_filter, name))
