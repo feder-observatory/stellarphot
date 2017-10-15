@@ -1,5 +1,5 @@
 ****************
-Template package
+glowing_waffles
 ****************
 
 This is the documentation for the affiliated package.
