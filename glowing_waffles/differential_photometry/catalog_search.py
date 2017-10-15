@@ -9,6 +9,7 @@ from astroquery.vizier import Vizier
 from astropy.coordinates import SkyCoord
 from astropy.table import Table
 import astropy.units as units
+from astropy.nddata.utils import block_reduce
 
 from itertools import izip
 
@@ -23,7 +24,9 @@ __all__ = [
 
 def scale_and_downsample(data, downsample=4, min_percent=20, max_percent=99.5):
     if downsample > 1:
-        scaled_data = block_reduce(scaled_data, block_size=(downsample, downsample))
+        scaled_data = block_reduce(data, block_size=(downsample, downsample))
+    else:
+        scaled_data = data
     return scaled_data
 
 
@@ -148,7 +151,8 @@ def catalog_clean(catalog, remove_rows_with_mask=True,
                              "understood.".format(column, restriction))
         comparison_func = comparisons[results.group(1)]
         comparison_value = results.group(2)
-        new_keepers = comparison_func(catalog[column], np.float(comparison_value))
+        new_keepers = comparison_func(catalog[column],
+                                      np.float(comparison_value))
         keepers = keepers & new_keepers
 
     return catalog[keepers]

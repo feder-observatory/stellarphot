@@ -6,7 +6,9 @@ from .coordinates import convert_pixel_wcs
 
 __all__ = ['photutils_stellar_photometry']
 
-def photutils_stellar_photometry(ccd_image, sources, aperture_radius, inner_annulus,
+
+def photutils_stellar_photometry(ccd_image, sources,
+                                 aperture_radius, inner_annulus,
                                  outer_annulus, gain=1.0, N_R=0, N_dark_pp=0):
     """
     Perform aperture photometry on an image, with a few options for estimating
@@ -47,11 +49,13 @@ def photutils_stellar_photometry(ccd_image, sources, aperture_radius, inner_annu
         net flux, aperture and annulus radii used, and flux error.
     """
 
-    # check that the outer radius is greater or equal the inner radius for annulus
+    # check that the outer radius is greater or equal the inner radius
+    # for annulus
     if inner_annulus >= outer_annulus:
         raise ValueError("outer_annulus must be greater than inner_annulus")
 
-    # check that the annulus inner radius is greater or equal the aperture radius
+    # check that the annulus inner radius is greater or equal
+    # the aperture radius
     if aperture_radius >= inner_annulus:
         raise ValueError("inner_radius must be greater than aperture_radius")
 
@@ -63,18 +67,23 @@ def photutils_stellar_photometry(ccd_image, sources, aperture_radius, inner_annu
     phot_table = aperture_photometry(ccd_image, apertures)
     phot_table_1 = aperture_photometry(ccd_image, annulus)
 
-    # Obtain the local background/pixel and net flux between the aperture and annulus objects
+    # Obtain the local background/pixel and net flux between the aperture and
+    # annulus objects
     n_pix_ap = np.pi * (aperture_radius**2)
     n_pix_ann = np.pi * ((outer_annulus**2) - (inner_annulus**2))
     bkgd_pp = phot_table_1['aperture_sum'] / n_pix_ann
-    net_flux = phot_table['aperture_sum'] -  (n_pix_ap * bkgd_pp)
+    net_flux = phot_table['aperture_sum'] - (n_pix_ap * bkgd_pp)
     phot_table['background_per_pixel'] = bkgd_pp
     phot_table['net_flux'] = net_flux
 
-    # Return a columns with the aperture radius and the inner/outer annulus radii
-    phot_table['aperture_radius'] = np.ones(len(phot_table['aperture_sum'])) *  aperture_radius
-    phot_table['inner_radius'] = np.ones(len(phot_table['aperture_sum'])) *  inner_annulus
-    phot_table['outer_radius'] = np.ones(len(phot_table['aperture_sum'])) *  outer_annulus
+    # Return a columns with the aperture radius and
+    # the inner/outer annulus radii
+    phot_table['aperture_radius'] = \
+        np.ones(len(phot_table['aperture_sum'])) * aperture_radius
+    phot_table['inner_radius'] = \
+        np.ones(len(phot_table['aperture_sum'])) * inner_annulus
+    phot_table['outer_radius'] = \
+        np.ones(len(phot_table['aperture_sum'])) * outer_annulus
 
     # Obtain RA/Dec coordinates and add them to table
     ra, dec = convert_pixel_wcs(ccd_image, coords[0], coords[1], 1)
@@ -82,8 +91,8 @@ def photutils_stellar_photometry(ccd_image, sources, aperture_radius, inner_annu
     phot_table['Dec_center'] = dec
 
     # Obtain flux error and add column to return table
-    noise = np.sqrt(gain*net_flux + n_pix_ap*(1 + (n_pix_ap/n_pix_ann))
-			 *(gain*(bkgd_pp + N_dark_pp) + (N_R**2)))
+    noise = np.sqrt(gain * net_flux + n_pix_ap * (1 + (n_pix_ap / n_pix_ann)) *
+                    (gain * (bkgd_pp + N_dark_pp) + (N_R**2)))
     phot_table['aperture_sum_err'] = noise
 
     return phot_table

@@ -19,11 +19,14 @@ def filter_transform(mag_data, output_filter, R=None, B=None,
     '''
     Transform SDSS magnitudes to BVRI using Ivezic et all (2007).
 
-    Description: This function impliments the transforms in 'A Comparison of SDSS Standard
-    Preconditions: mag_data must be an astropy.table object consisting of numerical values,
-    output_filter must be a string 'R', 'B', 'V', or 'I' and for any output filter must be passed a
-    corresponding key (arguemnts R, B, V...) to access the necissary filter information from
-    mag_data
+    Description: This function impliments the transforms in
+        'A Comparison of SDSS Standard
+    Preconditions: mag_data must be an astropy.table object
+        consisting of numerical values,
+    output_filter must be a string
+        'R', 'B', 'V', or 'I' and for any output filter must be passed a
+        corresponding key (arguemnts R, B, V...) to access the necissary
+        filter information from mag_data
     Postconditions: returns a
 
     # #Basic filter transforms from Ivezic et all (2007)
@@ -48,7 +51,8 @@ def filter_transform(mag_data, output_filter, R=None, B=None,
             c = r_mags - i_mags
             R_mag = (A * (c**3)) + (B * (c**2)) + (C * c) + D + r_mags
             R_mag.name = 'R_mag'
-            R_mag.description = 'R-band magnitude transformed from r-band and i-band'
+            R_mag.description = ('R-band magnitude transformed '
+                                 'from r-band and i-band')
             return R_mag
         else:
             raise KeyError(
@@ -73,7 +77,8 @@ def filter_transform(mag_data, output_filter, R=None, B=None,
             c = r_mags - i_mags
             I_mag = (A * (c**3)) + (B * (c**2)) + (C * c) + D + r_mags
             I_mag.name = 'I_mag'
-            I_mag.description = 'I-band magnitude transformed from r-band and i-band'
+            I_mag.description = ('I-band magnitude transformed '
+                                 'from r-band and i-band')
             return I_mag
         else:
             raise KeyError(
@@ -98,7 +103,8 @@ def filter_transform(mag_data, output_filter, R=None, B=None,
             c = g_mags - r_mags
             B_mag = (A * (c**3)) + (B * (c**2)) + (C * c) + D + r_mags
             B_mag.name = 'B_mag'
-            B_mag.description = 'B-band magnitude transformed from r-band and g-band'
+            B_mag.description = ('B-band magnitude transformed '
+                                 'from r-band and g-band')
             return B_mag
         else:
             raise KeyError(
@@ -123,7 +129,8 @@ def filter_transform(mag_data, output_filter, R=None, B=None,
             c = g_mags - r_mags
             V_mag = (A * (c**3)) + (B * (c**2)) + (C * c) + D + r_mags
             V_mag.name = 'V_mag'
-            V_mag.description = 'V-band magnitude transformed from r-band and g-band'
+            V_mag.description = ('V-band magnitude transformed '
+                                 'from r-band and g-band')
             return V_mag
         else:
             raise KeyError(
@@ -211,11 +218,13 @@ def standard_magnitude_transform(instrumental,
         indexes = catalog_index[good_match]
     else:
         indexes = good_match
-    color = tables[color_from][color_1][indexes] - tables[color_from][color_2][indexes]
+    color = (tables[color_from][color_1][indexes] -
+             tables[color_from][color_2][indexes])
 
     transforms = {}
 
-    mag_diff = catalog[for_filter][catalog_index[good_match]] - instrumental[for_filter][good_match]
+    mag_diff = (catalog[for_filter][catalog_index[good_match]] -
+                instrumental[for_filter][good_match])
 
     # dy is error...which is simply added in quadrature, if present
     try:

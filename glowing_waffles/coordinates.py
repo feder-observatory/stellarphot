@@ -4,7 +4,9 @@ import numpy as np
 from ccdproc import CCDData
 from astropy.wcs import WCS
 
-def convert_pixel_wcs(ccd_image, lon_or_ra, lat_or_dec, is_pix=True, origin=0):
+
+def convert_pixel_wcs(ccd_image, lon_or_ra,
+                      lat_or_dec, is_pix=True, origin=0):
     """
     Takes either pixel or World Coordinate System (RA/Dec)
     coordinates and converts to the other type.
