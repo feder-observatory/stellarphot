@@ -1,4 +1,3 @@
-from ccdproc import CCDData
 from astropy.stats import sigma_clipped_stats
 from photutils import daofind
 

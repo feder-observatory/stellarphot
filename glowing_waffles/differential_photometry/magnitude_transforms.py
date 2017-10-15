@@ -4,7 +4,6 @@ import numpy as np
 from scipy import optimize
 
 import astropy.units as u
-from astropy.table import Table
 from astropy.coordinates import SkyCoord
 
 __all__ = [

@@ -1,8 +1,4 @@
 from __future__ import print_function, division
-import numpy as np
-
-from ccdproc import CCDData
-from astropy.wcs import WCS
 
 
 def convert_pixel_wcs(ccd_image, lon_or_ra,

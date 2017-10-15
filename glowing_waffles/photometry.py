@@ -1,6 +1,5 @@
 from __future__ import print_function, division, absolute_import
 import numpy as np
-from astropy.table import Table, join
 from photutils import aperture_photometry, CircularAperture, CircularAnnulus
 from .coordinates import convert_pixel_wcs
 

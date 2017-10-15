@@ -7,13 +7,9 @@ import numpy as np
 from astroquery.vizier import Vizier
 
 from astropy.coordinates import SkyCoord
-from astropy.table import Table
 import astropy.units as units
 from astropy.nddata.utils import block_reduce
 
-from itertools import izip
-
-from ccdproc import CCDData
 __all__ = [
 
     'in_frame',
