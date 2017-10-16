@@ -58,8 +58,8 @@ def photutils_stellar_photometry(ccd_image, sources,
     if aperture_radius >= inner_annulus:
         raise ValueError("inner_radius must be greater than aperture_radius")
 
-    # Extract x,y coordinates from sources table, contstruct aperture and
-    # annulus objects from coordinates, and peform aperture photometry
+    # Extract x,y coordinates from sources table, construct aperture and
+    # annulus objects from coordinates, and perform aperture photometry
     coords = (sources['xcentroid'], sources['ycentroid'])
     apertures = CircularAperture(coords, aperture_radius)
     annulus = CircularAnnulus(coords, inner_annulus, outer_annulus)
