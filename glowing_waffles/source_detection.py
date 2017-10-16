@@ -34,7 +34,7 @@ def source_detection(ccd, fwhm=3.0, sigma=3.0, iters=5, threshold=5.0):
     sources
         an astropy table of the positions of sources in the image.
     """
-    data = ccd.data
+    data = ccd
     mean, median, std = sigma_clipped_stats(data, sigma=sigma, iters=iters)
     daofind = DAOStarFinder(fwhm=fwhm, threshold=threshold * std)
     sources = daofind(data - median)
