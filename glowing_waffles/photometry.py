@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 import numpy as np
 from photutils import aperture_photometry, CircularAperture, CircularAnnulus
+from astropy.stats import sigma_clipped_stats
 from .coordinates import convert_pixel_wcs
 
 __all__ = ['photutils_stellar_photometry']
@@ -8,7 +9,8 @@ __all__ = ['photutils_stellar_photometry']
 
 def photutils_stellar_photometry(ccd_image, sources,
                                  aperture_radius, inner_annulus,
-                                 outer_annulus, gain=1.0, N_R=0, N_dark_pp=0):
+                                 outer_annulus, gain=1.0, N_R=0, N_dark_pp=0,
+                                 reject_background_outliers=True):
     """
     Perform aperture photometry on an image, with a few options for estimating
     the local background from an annulus around the aperture.
@@ -40,6 +42,10 @@ def photutils_stellar_photometry(ccd_image, sources,
     N_dark_pp : float
         Number of dark counts per pixel.
 
+    reject_background_outliers : bool, optional
+        If ``True``, sigma clip the pixels in the annulus to reject outlying
+        pixels (e.g. like stars in the annulus)
+
     Returns
     -------
     phot_table : `~astropy.table.Table`
@@ -70,8 +76,21 @@ def photutils_stellar_photometry(ccd_image, sources,
     # annulus objects
     n_pix_ap = apertures.area()
     n_pix_ann = annulus.area()
-    print(n_pix_ap)
-    bkgd_pp = phot_table_1['aperture_sum'] / n_pix_ann
+
+    if reject_background_outliers:
+        annulus_masks = annulus.to_mask()
+        bkgd_pp = []
+        for mask in annulus_masks:
+            annulus_data = mask.cutout(ccd_image)
+            bool_mask = mask.array < 1
+            # Only include whole pixels in the estimate of the background
+            bkgd, _, _ = sigma_clipped_stats(annulus_data * mask,
+                                             mask=bool_mask)
+            bkgd_pp.append(bkgd)
+        bkgd_pp = np.array(bkgd_pp)
+    else:
+        bkgd_pp = phot_table_1['aperture_sum'] / n_pix_ann
+
     net_flux = phot_table['aperture_sum'] - (n_pix_ap * bkgd_pp)
     phot_table['background_per_pixel'] = bkgd_pp
     phot_table['net_flux'] = net_flux
