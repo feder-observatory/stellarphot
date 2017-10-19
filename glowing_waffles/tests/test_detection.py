@@ -6,35 +6,39 @@ from astropy.utils.data import get_pkg_data_filename
 from astropy.table import Table
 from photutils.datasets import make_gaussian_sources, make_noise_image
 from glowing_waffles.source_detection import source_detection
-
-TEST_IMAGE_SHAPE = [400, 500]
-
-
-def get_source_table():
-    data_file = get_pkg_data_filename('data/test_sources.csv')
-    return Table.read(data_file)
+from glowing_waffles.photometry import photutils_stellar_photometry
 
 
-def fake_image():
-    sources = get_source_table()
-    source_image = make_gaussian_sources(TEST_IMAGE_SHAPE,
-                                   sources)
-    noise = make_noise_image(source_image.shape,
-                       mean=sources['amplitude'].max() / 100,
-                       stddev=1)
-    return source_image + noise
+class FakeImage:
+    def __init__(self, noise_dev=1.0):
+        self.image_shape = [400, 500]
+        data_file = get_pkg_data_filename('data/test_sources.csv')
+        self._sources = Table.read(data_file)
+        self.mean_noise = self.sources['amplitude'].max() / 100
+        self.noise_dev = noise_dev
+        self._stars = make_gaussian_sources(self.image_shape,
+                                            self.sources)
+        self._noise = make_noise_image(self._stars.shape,
+                                       mean=self.mean_noise,
+                                       stddev=noise_dev)
+
+    @property
+    def sources(self):
+        return self._sources
+
+    @property
+    def image(self):
+        return self._stars + self._noise
 
 
-test_image = fake_image()
-
-
-def test_detection_number_sources():
+def test_detect_source_number_location():
     """
     Make sure we detect the sources in the input table....
     """
-    sources = get_source_table()
-    found_sources = source_detection(test_image,
-                             fwhm=sources['x_stddev'].mean())
+    fake_image = FakeImage()
+    sources = fake_image.sources
+    found_sources = source_detection(fake_image.image,
+                                     fwhm=sources['x_stddev'].mean())
     print(found_sources.colnames)
     # Sort by flux so we can reliably match them
     sources.sort('amplitude')
@@ -45,5 +49,42 @@ def test_detection_number_sources():
 
     for inp, out in zip(sources, found_sources):
         # Do the positions match?
-        assert np.round(out['xcentroid']) == inp['x_mean']
-        assert np.round(out['ycentroid']) == inp['y_mean']
+        np.testing.assert_allclose(out['xcentroid'], inp['x_mean'],
+                                   rtol=1e-5, atol=0.05)
+        np.testing.assert_allclose(out['ycentroid'], inp['y_mean'],
+                                   rtol=1e-5, atol=0.05)
+
+
+def test_aperture_photometry():
+    fake_image = FakeImage()
+    sources = fake_image.sources
+    aperture = sources['aperture'][0]
+    found_sources = source_detection(fake_image.image,
+                                     fwhm=sources['x_stddev'].mean(),
+                                     threshold=10)
+    phot = photutils_stellar_photometry(fake_image.image,
+                                        found_sources, aperture,
+                                        2 * aperture, 3 * aperture)
+    phot.sort('aperture_sum')
+    sources.sort('amplitude')
+    found_sources.sort('flux')
+    print(found_sources['xcentroid'])
+    print(phot['background_per_pixel', 'aperture_sum_err', 'net_flux', 'aperture_sum'])
+    for inp, out in zip(sources, phot):
+        stdev = inp['x_stddev']
+        expected_flux = (inp['amplitude'] * 2 * np.pi *
+                         stdev**2 *
+                         (1 - np.exp(-aperture**2 / (2 * stdev**2))))
+        # This expected flux is correct IF there were no noise. With noise, the
+        # standard deviation in the sum of the noise within in the aperture is
+        # n_pix_in_aperture times the single-pixel standard deviation.
+        #
+        # We could require that the result be within some reasonable
+        # number of those expected variations or we could count up the
+        # actual number of background counts at each of the source
+        # positions.
+
+        # Here we just check whether any difference is consistent with
+        # less than the expected one sigma deviation.
+        assert (np.abs(expected_flux - out['net_flux']) <
+                np.pi * aperture**2 * fake_image.noise_dev)

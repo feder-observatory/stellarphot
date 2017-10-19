@@ -68,8 +68,9 @@ def photutils_stellar_photometry(ccd_image, sources,
 
     # Obtain the local background/pixel and net flux between the aperture and
     # annulus objects
-    n_pix_ap = np.pi * (aperture_radius**2)
-    n_pix_ann = np.pi * ((outer_annulus**2) - (inner_annulus**2))
+    n_pix_ap = apertures.area()
+    n_pix_ann = annulus.area()
+    print(n_pix_ap)
     bkgd_pp = phot_table_1['aperture_sum'] / n_pix_ann
     net_flux = phot_table['aperture_sum'] - (n_pix_ap * bkgd_pp)
     phot_table['background_per_pixel'] = bkgd_pp
@@ -85,9 +86,12 @@ def photutils_stellar_photometry(ccd_image, sources,
         np.ones(len(phot_table['aperture_sum'])) * outer_annulus
 
     # Obtain RA/Dec coordinates and add them to table
-    ra, dec = convert_pixel_wcs(ccd_image, coords[0], coords[1], 1)
-    phot_table['RA_center'] = ra
-    phot_table['Dec_center'] = dec
+    try:
+        ra, dec = convert_pixel_wcs(ccd_image, coords[0], coords[1], 1)
+        phot_table['RA_center'] = ra
+        phot_table['Dec_center'] = dec
+    except AttributeError:
+        pass
 
     # Obtain flux error and add column to return table
     noise = np.sqrt(gain * net_flux + n_pix_ap * (1 + (n_pix_ap / n_pix_ann)) *
