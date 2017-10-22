@@ -2,11 +2,35 @@ from __future__ import print_function, division
 
 import numpy as np
 
-from ..magnitude_transforms import standard_magnitude_transform
+from ..magnitude_transforms import standard_magnitude_transform, filter_transform
 
 import pytest
 
 from astropy.table import Table, Column
+from astropy.utils.data import get_pkg_data_filename
+
+
+@pytest.mark.parametrize('bad_system', [None, 'monkeys'])
+def test_filter_transform_bad_system(bad_system):
+    fake_data = Table()
+    with pytest.raises(ValueError) as e:
+        filter_transform(fake_data, 'B', transform=bad_system)
+    assert 'Must be one of' in str(e)
+    assert str(bad_system) in str(e)
+
+
+@pytest.mark.parametrize('system', ['ivezic', 'jester'])
+def test_filter_transform(system):
+    data_file = get_pkg_data_filename('data/mag_transform.csv')
+    data = Table.read(data_file)
+    in_system = data['system'] == system
+    data = data[in_system]
+    print(data)
+    for output_filter in ['B', 'V', 'R', 'I']:
+        f = filter_transform(data, output_filter, g='g', r='r', i='i',
+                             transform=system)
+        print(f)
+        np.testing.assert_allclose(f, data[output_filter])
 
 
 def test_no_matches():
