@@ -84,6 +84,13 @@ def filter_transform(mag_data, output_filter,
         transform_poly = np.poly1d(transform_ivezic[output_filter])
         out_mag = transform_poly(c) + \
             mag_data[base_mag_ivezic[output_filter]]
+        # poly1d  ignores masks. Add masks back in here if necessary.
+        try:
+            input_mask = c.mask
+        except AttributeError:
+            pass
+        else:
+            out_mag = np.ma.array(out_mag, mask=input_mask)
     elif transform == 'jester':
         coeff = jester_transforms[output_filter]
         out_mag = (coeff[0] * mag_data[g] + coeff[1] * mag_data[r] +
