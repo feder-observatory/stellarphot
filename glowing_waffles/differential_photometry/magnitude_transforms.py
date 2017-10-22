@@ -13,129 +13,84 @@ __all__ = [
 ]
 
 
-def filter_transform(mag_data, output_filter, R=None, B=None,
-                     V=None, I=None, g=None, r=None, i=None):
+def filter_transform(mag_data, output_filter,
+                     g=None, r=None, i=None,
+                     transform=None):
     '''
-    Transform SDSS magnitudes to BVRI using Ivezic et all (2007).
+    Transform SDSS magnitudes to BVRI.
 
+    Parameters
+    ----------
+
+    mag_data : astropy.table.Table
+        Table containing ``g``, ``r`` and ``i`` magnitudes (or at least)
+        those required to transform to the desired output filter.
+    output_filter : 'B', 'V', 'R' or 'I'
+        Filter for which magnitude should be calculated. Note that
+        *case matters* here.
+    g, r, i : str
+        Name of column in table for that magnitude.
+    transform : 'jester' or 'ivezic'
+        Transform equations to use.
     Description: This function impliments the transforms in
         'A Comparison of SDSS Standard
-    Preconditions: mag_data must be an astropy.table object
-        consisting of numerical values,
-    output_filter must be a string
-        'R', 'B', 'V', or 'I' and for any output filter must be passed a
-        corresponding key (arguemnts R, B, V...) to access the necissary
-        filter information from mag_data
-    Postconditions: returns a
 
-    # #Basic filter transforms from Ivezic et all (2007)
+    Returns
+    -------
 
+    astropy.table.Column
+        Output magnitudes as table column
     '''
-    if output_filter == 'R':
-        if r and i is not None:
-            try:
-                r_mags = mag_data[r]
-            except:
-                raise KeyError('key', str(
-                    r), 'not found in mag data for r mags')
-            try:
-                i_mags = mag_data[i]
-            except:
-                raise KeyError('key', str(
-                    i), 'not found in mag data for i mags')
-            A = -0.0107
-            B = 0.0050
-            C = -0.2689
-            D = -0.1540
-            c = r_mags - i_mags
-            R_mag = (A * (c**3)) + (B * (c**2)) + (C * c) + D + r_mags
-            R_mag.name = 'R_mag'
-            R_mag.description = ('R-band magnitude transformed '
-                                 'from r-band and i-band')
-            return R_mag
-        else:
-            raise KeyError(
-                'arguemnts r and i must be defined to transform to I filter')
+    supported_transforms = ['jester', 'ivezic']
+    if transform not in supported_transforms:
+        raise ValueError('Transform {} is not known. Must be one of '
+                         '{}'.format(transform, supported_transforms))
+    transform_ivezic = {
+        'B': [0.2628, -0.7952, 1.0544, 0.0268],
+        'V': [0.0688, -0.2056, -0.3838, -0.0534],
+        'R': [-0.0107, 0.0050, -0.2689, -0.1540],
+        'I': [-0.0307, 0.1163, -0.3341, -0.3584]
+    }
+    base_mag_ivezic = {
+        'B': g,
+        'V': g,
+        'R': r,
+        'I': i
+    }
+    # For jester, using the transform for "all stars with Rc-Ic < 1.15"
+    # from
+    # http://www.sdss3.org/dr8/algorithms/sdssUBVRITransform.php#Jester2005
+    jester_transforms = {
+        'B': [1.39, -0.39, 0, 0.21],
+        'V': [0.41, 0.59, 0, -0.01],
+        'R': [0.41, -0.5, 1.09, -0.23],
+        'I': [0.41, -1.5, 2.09, -0.44]
+    }
 
-    if output_filter == 'I':
-        if r and i is not None:
-            try:
-                r_mags = mag_data[r]
-            except KeyError:
-                raise KeyError('key', str(
-                    r), 'not found in mag data for r mags')
-            try:
-                i_mags = mag_data[i]
-            except KeyError:
-                raise KeyError('key', str(
-                    i), 'not found in mag data for i mags')
-            A = -0.0307
-            B = 0.1163
-            C = -0.3341
-            D = -0.3584
-            c = r_mags - i_mags
-            I_mag = (A * (c**3)) + (B * (c**2)) + (C * c) + D + r_mags
-            I_mag.name = 'I_mag'
-            I_mag.description = ('I-band magnitude transformed '
-                                 'from r-band and i-band')
-            return I_mag
-        else:
-            raise KeyError(
-                'arguments r and i must be defined to transform to I filter')
-
-    if output_filter == 'B':
-        if r and g is not None:
-            try:
-                r_mags = mag_data[r]
-            except KeyError:
-                raise KeyError('key', str(
-                    r), 'not found in mag data for r mags')
-            try:
-                g_mags = mag_data[g]
-            except KeyError:
-                raise KeyError('key', str(
-                    i), 'not found in mag data for g mags')
-            A = 0.2628
-            B = -0.7952
-            C = 1.0544
-            D = 0.02684
-            c = g_mags - r_mags
-            B_mag = (A * (c**3)) + (B * (c**2)) + (C * c) + D + r_mags
-            B_mag.name = 'B_mag'
-            B_mag.description = ('B-band magnitude transformed '
-                                 'from r-band and g-band')
-            return B_mag
-        else:
-            raise KeyError(
-                'arguemnts r and g must be defined to transform to B filter')
-
-    if output_filter == 'V':
-        if r and g is not None:
-            try:
-                r_mags = mag_data[r]
-            except KeyError:
-                raise KeyError('key', str(
-                    r), 'not found in mag data for r mags')
-            try:
-                g_mags = mag_data[g]
-            except KeyError:
-                raise KeyError('key', str(
-                    i), 'not found in mag data for g mags')
-            A = 0.0688
-            B = -0.2056
-            C = -0.3838
-            D = -0.0534
-            c = g_mags - r_mags
-            V_mag = (A * (c**3)) + (B * (c**2)) + (C * c) + D + r_mags
-            V_mag.name = 'V_mag'
-            V_mag.description = ('V-band magnitude transformed '
-                                 'from r-band and g-band')
-            return V_mag
-        else:
-            raise KeyError(
-                'arguments r and g must be defined to transform to B filter')
-    else:
+    if output_filter not in base_mag_ivezic.keys():
         raise ValueError('the desired filter must be a string R B V or I')
+
+    if transform == 'ivezic':
+        if output_filter == 'R' or output_filter == 'I':
+            # This will throw a KeyError if the column is missing
+            c = mag_data[r] - mag_data[i]
+
+        if output_filter == 'B' or output_filter == 'V':
+            # This will throw a KeyError if the column is missing
+            c = mag_data[g] - mag_data[r]
+
+        transform_poly = np.poly1d(transform_ivezic[output_filter])
+        out_mag = transform_poly(c) + \
+            mag_data[base_mag_ivezic[output_filter]]
+    elif transform == 'jester':
+        coeff = jester_transforms[output_filter]
+        out_mag = (coeff[0] * mag_data[g] + coeff[1] * mag_data[r] +
+                   coeff[2] * mag_data[i] + coeff[3])
+
+    out_mag.name = '{}_mag'.format(output_filter)
+    out_mag.description = ('{}-band magnitude transformed '
+                           'from gri'.format(output_filter))
+    return out_mag
 
 
 # Define the log-likelihood via the Huber loss function
