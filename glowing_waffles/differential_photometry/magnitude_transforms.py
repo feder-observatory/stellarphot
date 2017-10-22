@@ -5,6 +5,8 @@ from scipy import optimize
 
 import astropy.units as u
 from astropy.coordinates import SkyCoord
+from astropy.modeling import models, fitting
+from astropy.stats import sigma_clip
 
 __all__ = [
     'filter_transform',
@@ -91,14 +93,6 @@ def filter_transform(mag_data, output_filter,
     out_mag.description = ('{}-band magnitude transformed '
                            'from gri'.format(output_filter))
     return out_mag
-
-
-# Define the log-likelihood via the Huber loss function
-def huber_loss(m, b, x, y, dy, c=2):
-    y_fit = m * x + b
-    t = abs((y - y_fit) / dy)
-    flag = t > c
-    return np.sum((~flag) * (0.5 * t ** 2) - (flag) * c * (0.5 * c - t), -1)
 
 
 def standard_magnitude_transform(instrumental,
@@ -265,7 +259,7 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
 
     mag_diff = catalog_mag - input_mag
 
-    # The error that is the errors of those combined in quadrature.
+    # The error is the errors of those combined in quadrature.
     combined_error = np.sqrt(input_mag_error**2 + catalog_mag_error**2)
 
     # If both errors are zero then the error is omitted.
@@ -274,22 +268,11 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
     else:
         dy = combined_error
 
-    def f_huber(beta):
-        return huber_loss(beta[0], beta[1],
-                          x=np.array(color),
-                          y=np.array(mag_diff),
-                          dy=dy,
-                          c=1)
+    g_init = models.Polynomial1D(1)
+    fit = fitting.LevMarLSQFitter()
+    or_fit = fitting.FittingWithOutlierRemoval(fit, sigma_clip,
+                                               niter=3, sigma=2.0)
+    # get fitted model and filtered data
+    filtered_data, or_fitted_model = or_fit(g_init, color, mag_diff)
 
-    # Fairly arbitrary initial guess.
-    beta0 = (0.1, 20)
-
-    beta_huber = optimize.minimize(f_huber, beta0, method='Nelder-Mead')
-    # This grabs the solution the optimizer found, or raises an error
-    # if no solution is found.
-    if beta_huber.success:
-        transforms = beta_huber.x
-    else:
-        raise RuntimeError('Optimizer did not converge')
-
-    return transforms
+    return (filtered_data, or_fitted_model)
