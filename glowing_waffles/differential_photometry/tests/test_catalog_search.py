@@ -29,7 +29,7 @@ def test_clean_criteria_none_removed():
                          ['>0', '=1', '!=-1', '>=1'])
 def test_clean_criteria_some_removed(condition):
     """
-    Try a few filters which removes the second row and check that it is
+    Try a few filters which remove the second row and check that it is
     removed.
     """
     inp = a_table()
