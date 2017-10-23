@@ -12,6 +12,6 @@ from ._astropy_init import *
 
 # For egg_info test builds to pass, put package imports here.
 if not _ASTROPY_SETUP_:
-    from core import *
-    from source_detection import *
-    from photometry import photutils_stellar_photometry
+    from .core import *
+    from .source_detection import *
+    from .photometry import photutils_stellar_photometry

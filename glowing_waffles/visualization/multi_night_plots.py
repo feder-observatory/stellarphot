@@ -21,7 +21,7 @@ def plot_magnitudes(mags=None, errors=None, times=None,
     mean = np.nanmean(mags)
     std = np.nanstd(mags)
 
-    working_times = times # - night
+    working_times = times
     plt.errorbar(working_times, mags, yerr=errors, fmt='o', alpha=alpha,
                  label='night: {}'.format(night))
     plt.xlim(working_times.min(), working_times.max())
@@ -39,7 +39,7 @@ def plot_magnitudes(mags=None, errors=None, times=None,
         min_range = 0.1
         ylim = plt.ylim()
         if ylim[1] - ylim[0] < min_range:
-            plt.ylim(mean - min_range/2, mean + min_range/2)
+            plt.ylim(mean - min_range / 2, mean + min_range / 2)
 
     ylim = plt.ylim()
     # Reverse vertical axis so brighter is higher
@@ -80,7 +80,8 @@ def multi_night(sources, unique_nights, night,
             source_median = np.median(source_mags[np.isfinite(source_mags)])
             # Use median absolute deviation to get measure of scatter.
             # Helps avoid extremely points.
-            source_variation = 3 * mad_std(source_mags[np.isfinite(source_mags)])
+            source_variation = \
+                3 * mad_std(source_mags[np.isfinite(source_mags)])
 
             # Ensure y range will be at least 0.2 magnitudes
             if source_variation < 0.1:
@@ -90,7 +91,8 @@ def multi_night(sources, unique_nights, night,
 
             y_range = (source_median - half_range, source_median + half_range)
         else:
-            # Empty if this option wasn't chosen so that automatic limits will be used.
+            # Empty if this option wasn't chosen so that automatic limits
+            # will be used.
             y_range = []
 
         last_axis = None
@@ -98,12 +100,14 @@ def multi_night(sources, unique_nights, night,
             last_axis = plt.subplot(1, number_of_nights + 1, i + 1,
                                     sharey=last_axis)
             night_mask = (night == this_night)
-            night_mean, night_std = plot_magnitudes(mags=mags[source.id - 1][night_mask],
-                                                    errors=mag_err[source.id - 1][night_mask],
-                                                    times=source.bjd_tdb[night_mask],
-                                                    source=source.id, night=this_night,
-                                                    ref_mag=brightest_mag,
-                                                    y_range=y_range)
+            night_mean, night_std = \
+                plot_magnitudes(mags=mags[source.id - 1][night_mask],
+                                errors=mag_err[source.id - 1][night_mask],
+                                times=source.bjd_tdb[night_mask],
+                                source=source.id,
+                                night=this_night,
+                                ref_mag=brightest_mag,
+                                y_range=y_range)
             night_means.append(night_mean)
             night_stds.append(night_std)
             night_bins.append(this_night)
@@ -152,6 +156,6 @@ def multi_night(sources, unique_nights, night,
         plt.legend()
 
         # Add dot for magnitude of star.
-        size = 10000./np.abs(10**((source_median - brightest_mag)/2.5))
+        size = 10000. / np.abs(10**((source_median - brightest_mag) / 2.5))
         plt.scatter([0.8], [0.2], c='red', marker='o', s=size)
         plt.ylim(0, 1)
