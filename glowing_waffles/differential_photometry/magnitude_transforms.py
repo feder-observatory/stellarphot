@@ -215,7 +215,8 @@ def standard_magnitude_transform(instrumental,
 
 def calculate_transform_coefficients(input_mag, catalog_mag, color,
                                      input_mag_error=None,
-                                     catalog_mag_error=None):
+                                     catalog_mag_error=None,
+                                     order=1):
     """
     Calculate linear transform coefficients from input magnitudes to catalog
     magnitudes.
@@ -234,6 +235,8 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
         Error in input magnitudes. Default is zero.
     catalog_mag_error : numpy array or astropy Table column, optional
         Error in catalog magnitudes. Default is zero.
+    order : int, optional
+        Order of the polynomial fit to use in correcting for color.
 
     Returns
     -------
@@ -275,8 +278,8 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
     else:
         dy = combined_error
 
-    g_init = models.Polynomial1D(1)
-    fit = fitting.LevMarLSQFitter()
+    g_init = models.Polynomial1D(order)
+    fit = fitting.LinearLSQFitter()
     or_fit = fitting.FittingWithOutlierRemoval(fit, sigma_clip,
                                                niter=3, sigma=2.0)
     # get fitted model and filtered data
