@@ -5,6 +5,7 @@ import pytest
 
 from astropy.utils.data import get_pkg_data_filename
 from astropy.table import Table
+from astropy.stats import gaussian_sigma_to_fwhm
 from photutils.datasets import make_gaussian_sources, make_noise_image
 from glowing_waffles.source_detection import source_detection
 from glowing_waffles.photometry import photutils_stellar_photometry
@@ -56,6 +57,9 @@ def test_detect_source_number_location():
                                    rtol=1e-5, atol=0.05)
         np.testing.assert_allclose(out['ycentroid'], inp['y_mean'],
                                    rtol=1e-5, atol=0.05)
+        np.testing.assert_allclose(gaussian_sigma_to_fwhm * inp['x_stddev'],
+                                   out['FWHM'],
+                                   rtol=1e-5, atol=0.005)
 
 
 def test_aperture_photometry_no_outlier_rejection():
