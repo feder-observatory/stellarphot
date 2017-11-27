@@ -15,7 +15,8 @@ def filter_transform(mag_data, output_filter,
                      g=None, r=None, i=None,
                      transform=None):
     '''
-    Transform SDSS magnitudes to BVRI.
+    Transform SDSS magnitudes to BVRI using either the transforms from
+    Jester et al or Ivezic et al.
 
     Parameters
     ----------
@@ -37,7 +38,20 @@ def filter_transform(mag_data, output_filter,
     -------
 
     astropy.table.Column
-        Output magnitudes as table column
+        Output transformed magnitudes as a table column
+
+    Notes
+    -----
+
+    The transforms implemented in this function are taken from:
+
+    Jester, et al, *The Sloan Digital Sky Survey View of the Palomar-Green Bright Quasar Survey*, AJ 130, p. 873 (2005)
+    http://iopscience.iop.org/article/10.1086/432466/meta
+
+    Ivezić et al, *A Comparison of SDSS Standard Star Catalog for Stripe 82 with Stetson's Photometric Standards*,
+    The Future Of Photometric, Spectrophotometric And Polarimetric Standardization, ASP Conference Series 364, p. 165 (2007)
+    http://aspbooks.org/custom/publications/paper/364-0165.html
+
     '''
     supported_transforms = ['jester', 'ivezic']
     if transform not in supported_transforms:
@@ -126,9 +140,16 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
     Returns
     -------
 
-    zero_point, slope : float
-        Zero point and linear color term in transform equation (see notes
-        below).
+    filtered_data : `~numpy.ma.core.MaskedArray`
+        The data, with the mask set ``True`` for the data that was *omitted*
+        from the fit.
+
+    model : `astropy.modeling.FittableModel`
+        Entries in the model are the coefficients in the fit made to the
+        data. Since the model is always a polynomial, these are terms in
+        a polynomial in the order of ascending power. In other words, the
+        coefficient ``ci`` is the coefficient of the term ``x**i``.
+
 
     Notes
     -----
