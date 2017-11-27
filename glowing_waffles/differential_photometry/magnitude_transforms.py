@@ -1,16 +1,12 @@
 from __future__ import print_function, division
 
 import numpy as np
-from scipy import optimize
 
-import astropy.units as u
-from astropy.coordinates import SkyCoord
 from astropy.modeling import models, fitting
 from astropy.stats import sigma_clip
 
 __all__ = [
     'filter_transform',
-    'standard_magnitude_transform',
     'calculate_transform_coefficients',
 ]
 
@@ -100,117 +96,6 @@ def filter_transform(mag_data, output_filter,
     out_mag.description = ('{}-band magnitude transformed '
                            'from gri'.format(output_filter))
     return out_mag
-
-
-def standard_magnitude_transform(instrumental,
-                                 catalog,
-                                 for_filter=None,
-                                 match_radius=0.5 * u.arcsec,
-                                 color_from='catalog',
-                                 color_1='B',
-                                 color_2='V',):
-    """
-    Given catalog magnitudes and instrumental magnitudes, calculate transform
-    from instrumental to catalog. Colors can be drawn from the catalog or
-    from instrumental magnitudes.
-
-    Parameters
-    ----------
-
-    instrumental: astropy Table
-        Table containing instrumental magnitudes from which transform
-        coefficients are to be determined. Each filter should be a column
-        whose name is the filter. In addition, there should be a column
-        called 'RA' and a column called 'Dec'.
-    catalog : astropy Table
-        Table containing catalog magnitudes from which transform
-        coefficients are to be determined. Each filter should be a column
-        whose name is the filter. In addition there should be a column
-        called 'RA' and a column called 'Dec'.
-    for_filter : str
-        Filter for which to calculate the transform. Filter name must be a
-        column name in instrumental and catalog.
-    match_radius : astropy Quantity  or float
-        Determines cutoff for matching coordinates of instrumental
-        magnitudes to catalog magnitudes. An on-sky separation of
-        less than match_radius counts as a match. If no units are provided
-        it is assumed the unit is degrees.
-    color_from : str
-        Either 'catalog' or 'instrumental', indicates which catalog should be
-        used for calculating the color in the transform.
-    color_1 : str
-        First filter to use for calculating color.
-    color_2 : str
-        Second color to use for calculating the color.
-
-    """
-    tables = {
-        'catalog': catalog,
-        'instrumental': instrumental
-    }
-
-    if not for_filter:
-        raise ValueError('Must provide a value for for_filter.')
-
-    for name, table in tables.items():
-        if for_filter not in table.colnames:
-            raise ValueError('Filter {} not found in {} '
-                             'table'.format(for_filter, name))
-
-    instrumental_coords = SkyCoord(ra=instrumental['RA'],
-                                   dec=instrumental['Dec'])
-    catalog_coords = SkyCoord(ra=catalog['RA'], dec=catalog['Dec'])
-
-    catalog_index, d2d, d3d = \
-        instrumental_coords.match_to_catalog_sky(catalog_coords)
-
-    good_match = np.array(d2d < match_radius)
-
-    if not good_match.sum():
-        raise ValueError('No matches found between instrumental'
-                         ' and catalog tables.')
-    if color_from == 'catalog':
-        indexes = catalog_index[good_match]
-    else:
-        indexes = good_match
-    color = (tables[color_from][color_1][indexes] -
-             tables[color_from][color_2][indexes])
-
-    transforms = {}
-
-    mag_diff = (catalog[for_filter][catalog_index[good_match]] -
-                instrumental[for_filter][good_match])
-
-    # dy is error...which is simply added in quadrature, if present
-    try:
-        catalog_error = catalog['e_' + for_filter]
-    except KeyError:
-        catalog_error = np.zeros_like(good_match)
-
-    try:
-        instrumental_error = instrumental['e_' + for_filter]
-    except KeyError:
-        instrumental_error = np.zeros_like(good_match)
-    dy = np.sqrt(catalog_error[good_match] ** 2 +
-                 instrumental_error[good_match] ** 2)
-
-    def f_huber(beta):
-        return huber_loss(beta[0], beta[1],
-                          x=np.array(color),
-                          y=np.array(mag_diff),
-                          dy=dy,
-                          c=1)
-
-    beta0 = (0.1, 20)
-    beta_huber = optimize.minimize(f_huber, beta0, method='Nelder-Mead')
-    # This grabs the solution the optimizer found, or raises an error
-    # if no solution is found.
-    if beta_huber.success:
-        transforms[for_filter] = beta_huber.x
-    else:
-        raise RuntimeError('Optimizer did not converge')
-
-    return transforms
 
 
 def calculate_transform_coefficients(input_mag, catalog_mag, color,
