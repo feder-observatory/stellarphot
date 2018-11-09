@@ -115,7 +115,9 @@ def filter_transform(mag_data, output_filter,
 def calculate_transform_coefficients(input_mag, catalog_mag, color,
                                      input_mag_error=None,
                                      catalog_mag_error=None,
-                                     order=1):
+                                     faintest_mag=None,
+                                     order=1,
+                                     sigma=2.0):
     """
     Calculate linear transform coefficients from input magnitudes to catalog
     magnitudes.
@@ -187,8 +189,24 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
     g_init = models.Polynomial1D(order)
     fit = fitting.LinearLSQFitter()
     or_fit = fitting.FittingWithOutlierRemoval(fit, sigma_clip,
-                                               niter=3, sigma=2.0)
-    # get fitted model and filtered data
-    filtered_data, or_fitted_model = or_fit(g_init, color, mag_diff)
+                                               niter=3, sigma=sigma)
 
-    return (filtered_data, or_fitted_model)
+    if faintest_mag is not None:
+        bright = catalog_mag < faintest_mag
+    else:
+        bright = np.ones_like(mag_diff, dtype='bool')
+
+    bright_index = np.nonzero(bright)
+    # Maybe use numpy.nonzero to get back the filtered data???
+    print(bright.sum())
+    # get fitted model and filtered data
+    filtered_data, or_fitted_model = or_fit(g_init, color[bright], mag_diff[bright])
+
+    restored_mask = np.zeros_like(mag_diff, dtype='bool')
+    restored_mask[bright_index] = filtered_data.mask
+    restored_mask[~bright] = True
+
+    restored_filtered = mag_diff.copy()
+    restored_filtered.mask = restored_mask
+
+    return (restored_filtered, or_fitted_model)
