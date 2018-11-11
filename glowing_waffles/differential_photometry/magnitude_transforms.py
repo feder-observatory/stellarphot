@@ -4,10 +4,13 @@ import numpy as np
 
 from astropy.modeling import models, fitting
 from astropy.stats import sigma_clip
+from astropy.coordinates import SkyCoord, match_coordinates_sky
+from astropy import units as u
 
 __all__ = [
     'filter_transform',
     'calculate_transform_coefficients',
+    'transform_magnitudes'
 ]
 
 
@@ -228,3 +231,107 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
     restored_filtered.mask = restored_mask
 
     return (restored_filtered, or_fitted_model)
+
+
+def transform_magnitudes(input_mags, catalog,
+                         transform_catalog,
+                         input_mag_colum='mag_inst_r',
+                         catalog_mag_column='r_mag',
+                         catalog_color_column='B-V',
+                         faintest_mag_for_transform=14,
+                         sigma=2,
+                         order=1,
+                         gain=None):
+    """
+    Calculate catalog magnitudes and transform coefficients
+    from instrumental magnitudes.
+
+    Parameters
+    ----------
+
+    input_mags : astropy Table
+        Table which contains a column with instrumental magnitudes, i.e.
+        -2.5 * log10(net_counts / exposure_time).
+
+    catalog : astropy Table
+        Table containing reference catalog of magnitudes and colors.
+
+    input_mag_column : str, optional
+        Name of the column in ``input_mags`` with the magnitudes to be
+        transformed.
+
+    catalog_mag_column : str, optional
+        Name of the column in ``catalog`` with the reference magnitude.
+
+    catalog_color_column : str, optional
+        Name of the column in ``catalog`` with color for each star in the
+        catalog.
+
+    faintest_mag_for_transform : float, optional
+        If this is not ``None``, the magnitude of the faintest catalog stars
+        to use in computing transform coefficients.
+
+    sigma : float, optional
+        Number of standard deviations to use in rejecting outliers when fitting
+        using sigma clipping.
+
+    order : int, optional
+        Order of the polynomial to use in fitting magnitude difference/color
+        relationship.
+
+    gain : float, optional
+        If not ``None``, adjust the instrumental magnitude by
+        -2.5 * log10(gain), i.e. gain correct the magnitude.
+    """
+    catalog_all_coords = SkyCoord(catalog['RAJ2000'],
+                                  catalog['DEJ2000'],
+                                  unit='deg')
+
+    transform_catalog_coords = SkyCoord(transform_catalog['RAJ2000'],
+                                        transform_catalog['DEJ2000'],
+                                        unit='deg')
+    input_coords = SkyCoord(input_mags['RA'], input_mags['Dec'])
+
+    transform_catalog_index, d2d, _ = \
+        match_coordinates_sky(input_coords, transform_catalog_coords)
+
+    # create a boolean of all of the matches that have a discrepancy of less
+    # than 5 arcseconds
+    good_match_for_transform = d2d < 5 * u.arcsecond
+
+    catalog_index, d2d, _ = match_coordinates_sky(input_coords,
+                                                  catalog_all_coords)
+
+    good_match_all = d2d < 5 * u.arcsecond
+    catalog_all_indexes = catalog_index[good_match_all]
+
+    input_match_mags = input_mags[input_mag_colum][good_match_for_transform]
+
+    catalog_match_indexes = transform_catalog_index[good_match_for_transform]
+
+    catalog_match_mags = \
+        transform_catalog[catalog_mag_column][catalog_match_indexes]
+    catalog_match_color = \
+        transform_catalog[catalog_color_column][catalog_match_indexes]
+
+    good_mags = ~np.isnan(input_match_mags)
+
+    input_match_mags = input_match_mags[good_mags]
+    catalog_match_mags = catalog_match_mags[good_mags]
+    catalog_match_color = catalog_match_color[good_mags]
+
+    matched_data, transforms = \
+        calculate_transform_coefficients(input_match_mags,
+                                         catalog_match_mags,
+                                         catalog_match_color,
+                                         sigma=sigma,
+                                         faintest_mag=faintest_mag_for_transform,
+                                         order=order,
+                                         gain=gain)
+
+    our_cat_mags = (input_mags[input_mag_colum][good_match_all] +
+                    (catalog[catalog_color_column][catalog_all_indexes] *
+                     transforms.parameters[1]) +
+                    transforms.parameters[0])
+
+    return our_cat_mags, good_match_all, transforms
