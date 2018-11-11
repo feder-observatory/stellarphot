@@ -137,8 +137,17 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
         Error in input magnitudes. Default is zero.
     catalog_mag_error : numpy array or astropy Table column, optional
         Error in catalog magnitudes. Default is zero.
+    faintest_mag_for_transform : float, optional
+        If this is not ``None``, the magnitude of the faintest catalog stars
+        to use in computing transform coefficients.
     order : int, optional
         Order of the polynomial fit to use in correcting for color.
+    sigma : float, optional
+        Value of sigma to use to reject outliers while fitting using
+        sigma clipping.
+    gain : float, optional
+        If not ``None``, adjust the instrumental magnitude by
+        -2.5 * log10(gain), i.e. gain correct the magnitude.
 
     Returns
     -------
