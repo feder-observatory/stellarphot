@@ -11,10 +11,12 @@ import astropy.units as units
 from astropy.nddata.utils import block_reduce
 
 __all__ = [
-
     'in_frame',
     'catalog_search',
     'catalog_clean',
+    'find_apass_stars',
+    'find_known_variables',
+    'filter_catalog'
 ]
 
 
@@ -152,3 +154,52 @@ def catalog_clean(catalog, remove_rows_with_mask=True,
         keepers = keepers & new_keepers
 
     return catalog[keepers]
+
+
+def find_apass_stars(image,
+                     max_mag_error=0.05,
+                     max_color_error=0.1):
+    # use the catalog_search function to find the apass stars in the frame of the image read above
+    apass, apass_x, apass_y = catalog_search(
+        image.wcs, image.shape, 'II/336/apass9', 'RAJ2000', 'DEJ2000', 1, False)
+
+    # Creates a boolean array of the apass stars that have well defined magnitudes and color
+    apass_bright = (apass['e_r_mag'] < max_mag_error) & (
+        apass['e_B-V'] < max_color_error)  # & (apass['u_e_r_mag'] == 0)
+
+    # create new lists of apass stars and x y pixel coordinates using boolean array
+    apass_in_bright, in_apass_x, in_apass_y = apass[
+        apass_bright], apass_x[apass_bright], apass_y[apass_bright]
+
+    return apass, apass_x, apass_y, apass_in_bright, in_apass_x, in_apass_y
+
+
+def find_known_variables(image):
+    # Get any known variable stars from a new catalog search of VSX
+    vsx, vsx_x, vsx_y = catalog_search(
+        image.wcs, image.shape, 'B/vsx/vsx', 'RAJ2000', 'DEJ2000')
+    vsx_names = vsx['Name']  # Get the names of the variables
+    return vsx, vsx_x, vsx_y, vsx_names
+
+
+def filter_catalog(catalog, **kwd):
+    """
+    Filter catalog by key/value pairs in arguments and return bool
+    area ``True`` where values in catalog meet the criteria.
+
+    Parameters
+    ----------
+
+    catalog : astropy Table
+        Table whose values are to be filtered.
+
+    kwd : key/value pairs, e.g. ``e_r_mag=0.1``
+        The key must be the name of a column and the value the
+        *upper limit* on the acceptable values.
+    """
+    good_ones = np.ones(len(catalog), dtype='bool')
+
+    for key, value in kwd.items():
+        good_ones |= (catalog[key] <= value)
+
+    return good_ones
