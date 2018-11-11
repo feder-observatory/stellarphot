@@ -196,16 +196,21 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
                                                niter=3, sigma=sigma)
 
     if faintest_mag is not None:
-        bright = catalog_mag < faintest_mag
+        bright = (catalog_mag < faintest_mag).filled(False)
     else:
         bright = np.ones_like(mag_diff, dtype='bool')
 
     bright_index = np.nonzero(bright)
-    # Maybe use numpy.nonzero to get back the filtered data???
-    print(bright.sum())
-    # get fitted model and filtered data
-    filtered_data, or_fitted_model = or_fit(g_init, color[bright], mag_diff[bright])
 
+    # get fitted model and filtered data
+    filtered_data, or_fitted_model = or_fit(g_init,
+                                            color[bright],
+                                            mag_diff[bright])
+
+    # Restore the filtered_data to the same size as the input
+    # magnitudes. Unmasked values were included in the fit,
+    # masked were not, either because they were too faint
+    # or because they were sigma clipped out.
     restored_mask = np.zeros_like(mag_diff, dtype='bool')
     restored_mask[bright_index] = filtered_data.mask
     restored_mask[~bright] = True
