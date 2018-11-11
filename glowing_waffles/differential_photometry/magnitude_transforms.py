@@ -117,7 +117,8 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
                                      catalog_mag_error=None,
                                      faintest_mag=None,
                                      order=1,
-                                     sigma=2.0):
+                                     sigma=2.0,
+                                     gain=None):
     """
     Calculate linear transform coefficients from input magnitudes to catalog
     magnitudes.
@@ -171,11 +172,14 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
     if catalog_mag_error is None:
         catalog_mag_error = np.zeros_like(catalog_mag)
 
+    if gain is None:
+        gain = 1.0
+
     # Independent variable is the color, dependent variable is the
     # difference between the measured (input) magnitude and the catalog
     # magnitude.
 
-    mag_diff = catalog_mag - input_mag
+    mag_diff = catalog_mag - (input_mag - 2.5 * np.log10(gain))
 
     # The error is the errors of those combined in quadrature.
     combined_error = np.sqrt(input_mag_error**2 + catalog_mag_error**2)
