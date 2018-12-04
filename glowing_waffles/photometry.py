@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 from photutils import aperture_photometry, CircularAperture, CircularAnnulus
 from astropy.stats import sigma_clipped_stats
+from astropy.nddata import NoOverlapError
 from .coordinates import convert_pixel_wcs
 
 __all__ = ['photutils_stellar_photometry',
@@ -307,8 +308,12 @@ def photometry_on_directory(directory_with_images, object_of_interest,
         xs_in = xs[in_bounds]
         ys_in = ys[in_bounds]
         print('    ...finding centroids')
-        xcen, ycen = centroid_sources(a_ccd.data, xs_in, ys_in,
-                                      box_size=2 * aperture_rad + 1)
+        try:
+            xcen, ycen = centroid_sources(a_ccd.data, xs_in, ys_in,
+                                          box_size=2 * aperture_rad + 1)
+        except NoOverlapError:
+            print('    ....SKIPPING THIS IMAGE, CENTROID FAILED')
+            continue
 
         # Calculate offset between centroid in this image and the positions
         # based on input RA/Dec. Later we will set the magnitude of those with
@@ -358,6 +363,10 @@ def photometry_on_directory(directory_with_images, object_of_interest,
     all_phot.add_index('star_id')
     if actually_bad:
         bad_rows = all_phot.loc_indices[actually_bad]
+        try:
+            bad_rows = list(bad_rows)
+        except TypeError:
+            bad_rows = [bad_rows]
         all_phot.remove_indices('star_id')
         all_phot.remove_rows(sorted(bad_rows))
 
