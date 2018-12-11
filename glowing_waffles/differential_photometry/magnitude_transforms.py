@@ -1,5 +1,7 @@
 from __future__ import print_function, division
 
+from collections import namedtuple
+
 import numpy as np
 
 from astropy.modeling import models, fitting
@@ -320,14 +322,18 @@ def transform_magnitudes(input_mags, catalog,
     catalog_match_mags = catalog_match_mags[good_mags]
     catalog_match_color = catalog_match_color[good_mags]
 
-    matched_data, transforms = \
-        calculate_transform_coefficients(input_match_mags,
-                                         catalog_match_mags,
-                                         catalog_match_color,
-                                         sigma=sigma,
-                                         faintest_mag=faintest_mag_for_transform,
-                                         order=order,
-                                         gain=gain)
+    try:
+        matched_data, transforms = \
+            calculate_transform_coefficients(input_match_mags,
+                                             catalog_match_mags,
+                                             catalog_match_color,
+                                             sigma=sigma,
+                                             faintest_mag=faintest_mag_for_transform,
+                                             order=order,
+                                             gain=gain)
+    except np.linalg.LinAlgError:
+        Transform = namedtuple('Transform', ['parameters'])
+        transforms = Transform(parameters=(np.nan, np.nan))
 
     our_cat_mags = (input_mags[input_mag_colum][good_match_all] +
                     (catalog[catalog_color_column][catalog_all_indexes] *
