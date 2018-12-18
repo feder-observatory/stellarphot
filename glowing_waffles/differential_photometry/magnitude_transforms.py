@@ -207,7 +207,7 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
     g_init = models.Polynomial1D(order)
     fit = fitting.LinearLSQFitter()
     or_fit = fitting.FittingWithOutlierRemoval(fit, sigma_clip,
-                                               niter=3, sigma=sigma)
+                                               niter=2, sigma=sigma)
 
     if faintest_mag is not None:
         bright = (catalog_mag < faintest_mag).filled(False)
@@ -299,7 +299,7 @@ def transform_magnitudes(input_mags, catalog,
 
     # create a boolean of all of the matches that have a discrepancy of less
     # than 5 arcseconds
-    good_match_for_transform = d2d < 5 * u.arcsecond
+    good_match_for_transform = d2d < 2 * u.arcsecond
 
     catalog_index, d2d, _ = match_coordinates_sky(input_coords,
                                                   catalog_all_coords)
