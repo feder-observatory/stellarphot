@@ -3,6 +3,7 @@ from __future__ import print_function, division
 from collections import namedtuple
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 from astropy.modeling import models, fitting
 from astropy.stats import sigma_clip
@@ -232,7 +233,9 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
     restored_filtered = mag_diff.copy()
     restored_filtered.mask = restored_mask
 
-    return (restored_filtered, or_fitted_model)
+    return (restored_filtered, or_fitted_model,
+            (color[bright], mag_diff[bright]),
+            (color[bright][~filtered_data.mask], mag_diff[bright][~filtered_data.mask]))
 
 
 def transform_magnitudes(input_mags, catalog,
@@ -243,7 +246,9 @@ def transform_magnitudes(input_mags, catalog,
                          faintest_mag_for_transform=14,
                          sigma=2,
                          order=1,
-                         gain=None):
+                         gain=None,
+                         plot_label='',
+                         make_plots=False):
     """
     Calculate catalog magnitudes and transform coefficients
     from instrumental magnitudes.
@@ -323,7 +328,7 @@ def transform_magnitudes(input_mags, catalog,
     catalog_match_color = catalog_match_color[good_mags]
 
     try:
-        matched_data, transforms = \
+        matched_data, transforms, brights, filtered_data = \
             calculate_transform_coefficients(input_match_mags,
                                              catalog_match_mags,
                                              catalog_match_color,
@@ -331,9 +336,28 @@ def transform_magnitudes(input_mags, catalog,
                                              faintest_mag=faintest_mag_for_transform,
                                              order=order,
                                              gain=gain)
-    except np.linalg.LinAlgError:
+    except np.linalg.LinAlgError as e:
+        print('Danger! LinAlgError: {}'.format(str(e)))
         Transform = namedtuple('Transform', ['parameters'])
         transforms = Transform(parameters=(np.nan, np.nan))
+    else:
+        if make_plots:
+            print(matched_data[:10])
+            plt.figure()
+            plt.plot(catalog_match_color, catalog_match_mags - input_match_mags, 'gv',
+                     alpha=0.3, label='All potential matches')
+            plt.plot(catalog_match_color, matched_data, 'rs',
+                     label='Actually matched')
+            plt.plot(brights[0], brights[1], 'bo', alpha=0.4, label='Bright stars')
+            sc = np.array(plt.xlim())
+            plt.plot(sc, transforms.parameters[1] * sc + transforms.parameters[0])
+            plt.plot(filtered_data[0], filtered_data[1], 'ks',
+                     alpha=0.4, markerfacecolor='none', label='Raw filtered')
+            plt.legend()
+            plt.grid()
+            plt.title('{} -- zero: {} color: {}'.format(plot_label,
+                                                        transforms.parameters[0],
+                                                  transforms.parameters[1]))
 
     our_cat_mags = (input_mags[input_mag_colum][good_match_all] +
                     (catalog[catalog_color_column][catalog_all_indexes] *
