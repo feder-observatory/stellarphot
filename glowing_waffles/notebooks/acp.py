@@ -78,11 +78,11 @@ class ObserveACP:
         self.repeats = num
         
     
-    def write(self):
+    def write(self, title):
     
         scalar = len(self.filters)
         
-        f = open(self.date, 'w')
+        f = open(title, 'w')
     
         f.write("#waituntil 1, " +  str(self.startTime) + '\n')
         f.write("#repeat " + str(self.repeats) + '\n')
