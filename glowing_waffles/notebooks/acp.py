@@ -7,18 +7,22 @@ class ObserveACP:
         import datetime
     
         self.name = name
+        self.start_time = str(datetime.datetime.today()).split()[1][:8]
         self.filters = []
+        self.im_count = 1
         self.binning = 1
         
-        self.ra = SkyCoord.from_name(name).ra.deg
-        self.dec = SkyCoord.from_name(name).dec.deg
+        coords = SkyCoord.from_name(name)
+
+        self.ra = coords.ra.deg
+        self.dec = coords.dec.deg
         
         #self.date = str(datetime.datetime.today()).split()[0]
         self.date = date
         
         
     def wait_until(self, time):
-        self.startTime = time
+        self.start_time = time
         
         
     def add_filter(self, filt):
@@ -30,7 +34,7 @@ class ObserveACP:
             # do the string thing
             self.filters.append(filt)
         
-        elif isinstance(filt, str) == False:
+        elif not isinstance(filt, str):
             try:
                 # loop over elements in filt
                 for i in filt:
@@ -52,7 +56,7 @@ class ObserveACP:
         elif isinstance(filt, str):
             self.filters.remove(filt)
             
-        elif isinstance(filt, str) == False:
+        elif not isinstance(filt, str):
             try:
                 for i in filt:
                     if i in self.filters:
@@ -71,7 +75,7 @@ class ObserveACP:
         
         
     def count(self, num):
-        self.imCount = num
+        self.im_count = num
         
     
     def repeat(self, num):
