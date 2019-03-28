@@ -124,7 +124,9 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
                                      faintest_mag=None,
                                      order=1,
                                      sigma=2.0,
-                                     gain=None):
+                                     gain=None,
+                                     verbose=False,
+                                     extended_output=False):
     """
     Calculate linear transform coefficients from input magnitudes to catalog
     magnitudes.
@@ -154,6 +156,10 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
     gain : float, optional
         If not ``None``, adjust the instrumental magnitude by
         -2.5 * log10(gain), i.e. gain correct the magnitude.
+    verbose : bool, optional
+        If ``True``, print some diagnostic information.
+    extended_output : bool, optional
+        If ``True``, return additional information.
 
     Returns
     -------
@@ -168,6 +174,16 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
         a polynomial in the order of ascending power. In other words, the
         coefficient ``ci`` is the coefficient of the term ``x**i``.
 
+    If ``extended_output=True``, then also return:
+
+    fit_input : tuple
+        A tuple of color, magnitude for only the stars brighter than
+        ``faintest_mag_for_transform``. These are input to the sigma-clipping
+        fitter.
+
+    used_in_fit : tuple
+        A tuple of color, magnitude for only the stars brighter than
+        ``faintest_mag_for_transform`` that were not sigma-cliped out.
 
     Notes
     -----
@@ -217,25 +233,32 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
 
     bright_index = np.nonzero(bright)
 
+    if verbose:
+        print(color[bright].max())
     # get fitted model and filtered data
-    filtered_data, or_fitted_model = or_fit(g_init,
-                                            color[bright],
-                                            mag_diff[bright])
+    or_fitted_model, filtered_data_mask = or_fit(g_init,
+                                                 color[bright],
+                                                 mag_diff[bright])
 
     # Restore the filtered_data to the same size as the input
     # magnitudes. Unmasked values were included in the fit,
     # masked were not, either because they were too faint
     # or because they were sigma clipped out.
     restored_mask = np.zeros_like(mag_diff, dtype='bool')
-    restored_mask[bright_index] = filtered_data.mask
+    restored_mask[bright_index] = filtered_data_mask
     restored_mask[~bright] = True
 
     restored_filtered = mag_diff.copy()
     restored_filtered.mask = restored_mask
 
-    return (restored_filtered, or_fitted_model,
-            (color[bright], mag_diff[bright]),
-            (color[bright][~filtered_data.mask], mag_diff[bright][~filtered_data.mask]))
+    if extended_output:
+        return (restored_filtered,
+                or_fitted_model,
+                (color[bright], mag_diff[bright]),
+                (color[bright][~filtered_data_mask],
+                 mag_diff[bright][~filtered_data_mask]))
+    else:
+        return (restored_filtered, or_fitted_model)
 
 
 def transform_magnitudes(input_mags, catalog,
@@ -248,7 +271,8 @@ def transform_magnitudes(input_mags, catalog,
                          order=1,
                          gain=None,
                          plot_label='',
-                         make_plots=False):
+                         make_plots=False,
+                         verbose=False):
     """
     Calculate catalog magnitudes and transform coefficients
     from instrumental magnitudes.
@@ -289,6 +313,17 @@ def transform_magnitudes(input_mags, catalog,
     gain : float, optional
         If not ``None``, adjust the instrumental magnitude by
         -2.5 * log10(gain), i.e. gain correct the magnitude.
+
+    plot_label : str, optional
+        String to use in the title of plots. Only used if ``make_plots`` is
+        ``True``.
+
+    make_plots : bool, optional
+        If ``True``, then plot input colors/magnitudes and fits to those,
+        intended for diagnostics.
+
+    verbose : bool, optional
+        If ``True``, output
     """
     catalog_all_coords = SkyCoord(catalog['RAJ2000'],
                                   catalog['DEJ2000'],
@@ -310,6 +345,7 @@ def transform_magnitudes(input_mags, catalog,
                                                   catalog_all_coords)
 
     good_match_all = d2d < 5 * u.arcsecond
+
     catalog_all_indexes = catalog_index[good_match_all]
 
     input_match_mags = input_mags[input_mag_colum][good_match_for_transform]
@@ -335,14 +371,18 @@ def transform_magnitudes(input_mags, catalog,
                                              sigma=sigma,
                                              faintest_mag=faintest_mag_for_transform,
                                              order=order,
-                                             gain=gain)
+                                             gain=gain,
+                                             verbose=verbose,
+                                             extended_output=True)
     except np.linalg.LinAlgError as e:
         print('Danger! LinAlgError: {}'.format(str(e)))
         Transform = namedtuple('Transform', ['parameters'])
         transforms = Transform(parameters=(np.nan, np.nan))
     else:
         if make_plots:
-            print(matched_data[:10])
+            if verbose:
+                print(matched_data[:10])
+
             plt.figure()
             plt.plot(catalog_match_color, catalog_match_mags - input_match_mags, 'gv',
                      alpha=0.3, label='All potential matches')
