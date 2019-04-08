@@ -43,11 +43,15 @@ class ObserveACP:
         self.repeat = 1
         self.binning = 1
         
-        if (ra == None) and (dec == None):
+        
+        if (ra is None) and (dec is None):
 
             coords = SkyCoord.from_name(self.name)
             self.ra = coords.ra.deg
-            self.dec = coords.dec.deg            
+            self.dec = coords.dec.deg  
+            
+        elif (ra is None) or (dec is None):
+                raise ValueError("Must give both RA and DEC")
 
         else:
             
