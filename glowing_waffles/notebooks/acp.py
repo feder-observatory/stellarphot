@@ -1,6 +1,6 @@
 class ObserveACP:
     
-    def __init__(self, name, date):
+    def __init__(self, name, ra=None, dec=None):
         '''
         imports Skycoord, astropy.time, and datetime
         
@@ -13,15 +13,16 @@ class ObserveACP:
         filters: list including the names of filters to be used in observation. case sensitive.
         exposure: exposure time in integer seconds.
         im_count: the number of images taken in each filter as an int
+        repeat: how many times the observation is repeated
         binning: the binning of the CCD. should be kept 1.
         ra: the Right Ascension of the object in decimal degrees
         dec: the Declination of the object in decimal degrees
-        date: the date of observation. Currently not used.
         
         Parameters
         ----------
         name: the name of the observed object. must be a string
-        date: the date of the observation, currently not used.
+        ra: the right ascension of the aobject
+        dec: the declination of the object
         
         Returns
         -------
@@ -39,16 +40,24 @@ class ObserveACP:
         self.filters = []
         self.exposure = 1
         self.im_count = 1
+        self.repeat = 1
         self.binning = 1
         
-        coords = SkyCoord.from_name(name)
+        
+        if (ra is None) and (dec is None):
 
-        self.ra = coords.ra.deg
-        self.dec = coords.dec.deg
-        
-        #self.date = str(datetime.datetime.today()).split()[0]
-        self.date = date
-        
+            coords = SkyCoord.from_name(self.name)
+            self.ra = coords.ra.deg
+            self.dec = coords.dec.deg  
+            
+        elif (ra is None) or (dec is None):
+                raise ValueError("Must give both RA and DEC")
+
+        else:
+            
+            self.ra = ra
+            self.dec = dec 
+            
         
     def wait_until(self, time):
         '''
@@ -151,7 +160,7 @@ class ObserveACP:
         -------
         Does not return, None
         '''
-        self.repeats = num
+        self.repeat = num
         
     
     def write(self, title):
@@ -173,10 +182,10 @@ class ObserveACP:
         
         f = open(title, 'w')
     
-        f.write("#waituntil 1, " +  str(self.startTime) + '\n')
-        f.write("#repeat " + str(self.repeats) + '\n')
+        f.write("#waituntil 1, " +  str(self.start_time) + '\n')
+        f.write("#repeat " + str(self.repeat) + '\n')
         
-        count = scalar * (str(self.imCount) + ',')
+        count = scalar * (str(self.im_count) + ',')
         f.write("#count " + count + '\n')
         
         f.write("#filter ")
