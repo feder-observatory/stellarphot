@@ -300,8 +300,8 @@ def photometry_on_directory(directory_with_images, object_of_interest,
 
         # Remove anything that is too close to the edges/out of frame
         padding = 3 * aperture_rad
-        out_of_bounds = ((xs < padding) | (xs > (a_ccd.shape[0] - padding)) |
-                         (ys < padding) | (ys > (a_ccd.shape[1] - padding)))
+        out_of_bounds = ((xs < padding) | (xs > (a_ccd.shape[1] - padding)) |
+                         (ys < padding) | (ys > (a_ccd.shape[0] - padding)))
         in_bounds = ~out_of_bounds
 
         # Find centroids of each region around star that is in_bounds
