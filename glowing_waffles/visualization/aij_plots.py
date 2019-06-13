@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 
 __all__ = ['seeing_plot']
 
-def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM, plot_title=''):
+def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM, plot_title = '', file_name = ''):
     """
     Show a seeing plot for data from an image w/ radius on the x axis and counts (ADU) on the y axis
 
@@ -25,6 +25,9 @@ def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM, plot
 
     plot_title: optional string
         title of plot
+
+    file_name: optional string
+        if entered, file will save as png with this name
     """
     radius = HWHM * 4
     plt.figure(figsize=(20,10))
@@ -47,3 +50,5 @@ def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM, plot
     plt.annotate(f"<Back {radius + 13}", (radius + 12 ,-0.25), fontsize = 15, color = 'red')
     title_string = [f"{plot_title}", f"FWHM:{HWHM*2} pixels"]
     plt.title('\n'.join(title_string))
+    if file_name:
+        plt.savefig('file_name.png')
