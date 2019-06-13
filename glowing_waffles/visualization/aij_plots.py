@@ -1,9 +1,31 @@
 import matplotlib.pyplot as plt
 
-
 __all__ = ['seeing_plot']
 
 def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM, plot_title=''):
+    """
+    Show a seeing plot for data from an image w/ radius on the x axis and counts (ADU) on the y axis
+
+    Parameters
+    ----------
+    raw_radius: array
+        the distance of each pixel from the object of interest
+
+    raw_counts: array
+        the counts (ADU) of each pixel
+
+    binned_radius: array
+        pixels grouped by distance from object of interest
+
+    binned_counts: array
+        avergae counts of each group of pixels
+
+    HWHM: number
+        half width half max, 1/2 * FWHM
+
+    plot_title: optional string
+        title of plot
+    """
     radius = HWHM * 4
     plt.figure(figsize=(20,10))
     plt.plot(raw_radius, raw_counts, linestyle='none', marker="s", markerfacecolor='none', color='blue')
