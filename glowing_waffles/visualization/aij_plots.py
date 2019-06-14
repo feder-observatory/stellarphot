@@ -2,53 +2,79 @@ import matplotlib.pyplot as plt
 
 __all__ = ['seeing_plot']
 
-def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM, plot_title = '', file_name = ''):
+def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM,
+                plot_title='', file_name='', gap=6, annulus_width=13):
     """
-    Show a seeing plot for data from an image w/ radius on the x axis and counts (ADU) on the y axis
+    Show a seeing plot for data from an image with radius on the x axis and counts (ADU) on the y axis.
 
     Parameters
     ----------
-    raw_radius: array
+    raw_radius : array
         the distance of each pixel from the object of interest
 
-    raw_counts: array
-        the counts (ADU) of each pixel
+    raw_counts : array
+        the counts of each pixel
 
-    binned_radius: array
+    binned_radius : array
         pixels grouped by distance from object of interest
 
-    binned_counts: array
-        avergae counts of each group of pixels
+    binned_counts : array
+        average counts of each group of pixels
 
-    HWHM: number
+    HWHM : number
         half width half max, 1/2 * FWHM
 
-    plot_title: optional string
+    plot_title : optional, string
         title of plot
 
-    file_name: optional string
+    file_name : optional, string
         if entered, file will save as png with this name
+    gap : number
+        the distance between the aperture and the inner annulus
+    annulus_width : number
+        the distance between the inner and outer annulus
     """
     radius = HWHM * 4
     plt.figure(figsize=(20,10))
+    plt.grid(True)
+    inner_annulus = radius + gap
+    outer_annulus = radius + annulus_width
+
+
+    # plot the raw radius and raw counts
     plt.plot(raw_radius, raw_counts, linestyle='none', marker="s", markerfacecolor='none', color='blue')
+
+    # plot the binned radius and binned counts
     plt.plot(binned_radius, binned_counts, color = 'magenta',linewidth = '4.0')
+
+    # draw vertical line at HWHM and label it
     plt.vlines(HWHM,-0.2,1.2, linestyle = (0, (5, 10)), color = '#00cc00')
     plt.annotate(f"HWHM {HWHM}", (HWHM - 1 ,-0.25), fontsize = 15, color = '#00cc00')
-    plt.grid(True)
+    
+    # label axis
     plt.xlabel('Radius (pixels)', fontsize = 20)
     plt.ylabel('ADU', fontsize = 20)
+
+    # draw vertical line at the radius and label it
     plt.vlines(radius,-0.2, binned_counts[0], color = 'red')
     plt.annotate(f"Radius {radius}", (radius - 1 ,-0.25), fontsize = 15, color = 'red')
     plt.hlines(binned_counts[0], binned_counts[0], radius, color = 'red')
+
+    # label the source
     plt.annotate('SOURCE', (radius - 2, binned_counts[0] + 0.02), fontsize = 15, color = 'red')
-    plt.vlines(radius + 6,-0.2, binned_counts[0], color = 'red')
-    plt.vlines(radius + 13,-0.2, binned_counts[0], color = 'red')
-    plt.hlines(binned_counts[0], radius + 6, radius + 13, color = 'red')
-    plt.annotate('BACKGROUND', (radius +6, binned_counts[0] + 0.02), fontsize = 15, color = 'red')
-    plt.annotate(f"Back> {radius + 6}", (radius + 5 ,-0.25), fontsize = 15, color = 'red')
-    plt.annotate(f"<Back {radius + 13}", (radius + 12 ,-0.25), fontsize = 15, color = 'red')
+
+    #draw vertical lines at the background and label it
+    plt.vlines(inner_annulus, -0.2, binned_counts[0], color = 'red')
+    plt.vlines(outer_annulus, -0.2, binned_counts[0], color = 'red')
+    plt.hlines(binned_counts[0], inner_annulus, outer_annulus, color = 'red')
+    plt.annotate('BACKGROUND', (inner_annulus, binned_counts[0] + 0.02), fontsize = 15, color = 'red')
+    plt.annotate(f"Back> {inner_annulus}", (inner_annulus-1, -0.25), fontsize = 15, color = 'red')
+    plt.annotate(f"<Back {outer_annulus}", (outer_annulus-1, -0.25), fontsize = 15, color = 'red')
+
+    #title the plot
     title_string = [f"{plot_title}", f"FWHM:{HWHM*2} pixels"]
     plt.title('\n'.join(title_string))
+
+    #save plot as png
     if file_name:
-        plt.savefig('file_name.png')
+        plt.savefig(f"{file_name}.png")
