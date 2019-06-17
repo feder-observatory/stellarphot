@@ -90,11 +90,12 @@ def predict_ingress_egress(ingress_time, egress_time):
         the end of an exoplanet transit
     """
     ymin,ymax = plt.ylim()
+    end_line = ymin - 0.08
 
     #create a vertical line at the ingress time and label it
-    plt.vlines(ingress_time,ymin - 0.08, ymax, linestyle = (0, (5, 10)), color = 'red')
+    plt.vlines(ingress_time, end_line, ymax, linestyle = (0, (5, 10)), color = 'red')
     plt.annotate("Predicted Ingress", (ingress_time - 0.009, ymin - 0.1), fontsize = 10, color = 'red')
 
     #create a vertical line at the egress time and label it
-    plt.vlines(egress_time, ymin - 0.08, ymax, linestyle = (0, (5, 10)), color = 'red')
+    plt.vlines(egress_time, end_line, ymax, linestyle = (0, (5, 10)), color = 'red')
     plt.annotate("Predicted Egress", (egress_time - 0.009, ymin - 0.1), fontsize = 10, color = 'red')
