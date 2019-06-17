@@ -79,7 +79,8 @@ def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM,
     if file_name:
         plt.savefig(f"{file_name}.png")
 
-def predict_ingress_egress(ingress_time, egress_time):
+def plot_predict_ingress_egress(ingress_time, egress_time, end_line=1,
+                            ingress_x_pos=1, egress_x_pos=1, labels_y_pos=1 ):
     """
     Parameters
     ----------
@@ -88,14 +89,22 @@ def predict_ingress_egress(ingress_time, egress_time):
 
     egress_time : number
         the end of an exoplanet transit
+
+    ingress_x_pos : number
+        offset to center ingress label
+
+    egress_x_pos : number
+        offset to center egress label
+
+    labels_y_pos : number
+        offset to move ingress and egress labels
     """
     ymin,ymax = plt.ylim()
-    end_line = ymin - 0.08
 
     #create a vertical line at the ingress time and label it
-    plt.vlines(ingress_time, end_line, ymax, linestyle = (0, (5, 10)), color = 'red')
-    plt.annotate("Predicted Ingress", (ingress_time - 0.009, ymin - 0.1), fontsize = 10, color = 'red')
+    plt.vlines(ingress_time, ymin-end_line, ymax, linestyle = (0, (5, 10)), color = 'red')
+    plt.annotate("Predicted Ingress", (ingress_time - ingress_x_pos, ymin - labels_y_pos), fontsize = 10, color = 'red')
 
     #create a vertical line at the egress time and label it
-    plt.vlines(egress_time, end_line, ymax, linestyle = (0, (5, 10)), color = 'red')
-    plt.annotate("Predicted Egress", (egress_time - 0.009, ymin - 0.1), fontsize = 10, color = 'red')
+    plt.vlines(egress_time, ymin-end_line, ymax, linestyle = (0, (5, 10)), color = 'red')
+    plt.annotate("Predicted Egress", (egress_time - egress_x_pos, ymin - labels_y_pos), fontsize = 10, color = 'red')
