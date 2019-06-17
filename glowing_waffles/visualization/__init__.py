@@ -2,3 +2,4 @@
 
 from .multi_night_plots import *
 from .astro_widgets import *
+from .aij_plots import *
