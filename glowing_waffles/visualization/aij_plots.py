@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 
-__all__ = ['seeing_plot']
+__all__ = ['seeing_plot', 'plot_predict_ingress_egress']
 
 def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM,
                 plot_title='', file_name='', gap=6, annulus_width=13):
