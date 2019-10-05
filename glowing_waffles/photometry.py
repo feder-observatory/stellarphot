@@ -78,15 +78,15 @@ def photutils_stellar_photometry(ccd_image, sources,
 
     # Obtain the local background/pixel and net flux between the aperture and
     # annulus objects
-    n_pix_ap = apertures.area()
-    n_pix_ann = annulus.area()
+    n_pix_ap = apertures.area
+    n_pix_ann = annulus.area
 
     if reject_background_outliers:
         annulus_masks = annulus.to_mask()
         bkgd_pp = []
         for mask in annulus_masks:
             annulus_data = mask.cutout(ccd_image)
-            bool_mask = mask.array < 1
+            bool_mask = mask.data < 1
             # Only include whole pixels in the estimate of the background
             bkgd, _, _ = sigma_clipped_stats(annulus_data * mask,
                                              mask=bool_mask)
@@ -252,10 +252,10 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
     phot['sky_per_pix_med'] = med_sky_per_pix
     phot['sky_per_pix_std'] = std_sky_per_pix
     phot['aperture'] = apertures.r * u.pixel
-    phot['aperture_area'] = apertures.area()  # * u.pixel * u.pixel
+    phot['aperture_area'] = apertures.area  # * u.pixel * u.pixel
     phot['annulus_inner'] = annulus.r_in * u.pixel
     phot['annulus_outer'] = annulus.r_out * u.pixel
-    phot['annulus_area'] = annulus.area()  # * u.pixel * u.pixel
+    phot['annulus_area'] = annulus.area  # * u.pixel * u.pixel
     phot['exposure'] = [ccd.header['exposure']] * len(phot) * u.second
     phot['date-obs'] = [ccd.header['DATE-OBS']] * len(phot)
     night = Time(ccd.header['DATE-OBS'], scale='utc')
