@@ -75,39 +75,32 @@ matrix:
     fast_finish: true
 
     include:
+        # INITIAL TESTS
+        # -------------
+
         # Make sure that egg_info works without dependencies
         - stage: Initial tests
           env: PYTHON_VERSION=3.7 SETUP_CMD='egg_info'
-
-        # Try MacOS X, usually enough only to run from cron as hardly there are
-        # issues that are not picked up by a linux worker
-        - os: osx
-          stage: Cron tests
-          env: SETUP_CMD='test' EVENT_TYPE='cron'
 
         # Do a coverage test.
         - os: linux
           stage: Initial tests
           env: SETUP_CMD='test --coverage'
 
+        # Do a PEP8 test with flake8
+        - os: linux
+          stage: Initial tests
+          env: MAIN_CMD='flake8 glowing_waffles --count --show-source --statistics $FLAKE8_OPT' SETUP_CMD=''
+
+
+        # COMPREHENSIVE TESTS
+        # -------------------
+
         # Check for sphinx doc build warnings - we do this first because it
         # may run for a long time
         - os: linux
           env: SETUP_CMD='build_docs -w'
                CONDA_DEPENDENCIES=$CONDA_DEPENDENCIES_DOC
-
-        # Add a job that runs from cron only and tests against astropy dev and
-        # numpy dev to give a change for early discovery of issues and feedback
-        # for both developer teams.
-        - os: linux
-          stage: Cron tests
-          env: ASTROPY_VERSION=development NUMPY_VERSION=development
-               EVENT_TYPE='cron'
-
-        # Try on Windows.
-        - os: windows
-          stage: Slow tests
-          env: SETUP_CMD='test'
 
         # Try all python versions and Numpy versions. Since we can assume that
         # the Numpy developers have taken care of testing Numpy with different
@@ -116,10 +109,30 @@ matrix:
         - os: linux
           env: NUMPY_VERSION=1.16
 
-        # Do a PEP8 test with flake8
+        # SLOW TESTS
+        # ----------
+
+        # Try on Windows.
+        - os: windows
+          stage: Slow tests
+          env: SETUP_CMD='test'
+
+        # CRON-ONLY TESTS
+        # ---------------
+
+        # Try MacOS X, usually enough only to run from cron as hardly there are
+        # issues that are not picked up by a linux worker
+        - os: osx
+          stage: Cron tests
+          env: SETUP_CMD='test' EVENT_TYPE='cron'
+
+        # Add a job that runs from cron only and tests against astropy dev and
+        # numpy dev to give a change for early discovery of issues and feedback
+        # for both developer teams.
         - os: linux
-          stage: Initial tests
-          env: MAIN_CMD='flake8 glowing_waffles --count --show-source --statistics $FLAKE8_OPT' SETUP_CMD=''
+          stage: Cron tests
+          env: ASTROPY_VERSION=development NUMPY_VERSION=development
+               EVENT_TYPE='cron'
 
     allow_failures:
         # Do a PEP8 test with flake8
