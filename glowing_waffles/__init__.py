@@ -25,5 +25,6 @@ if LooseVersion(sys.version) < LooseVersion(__minimum_python_version__):
                                  .format(__minimum_python_version__))
 
 if not _ASTROPY_SETUP_:   # noqa
-    # For egg_info test builds to pass, put package imports here.
-    pass
+    from .core import *
+    from .source_detection import *
+    from .photometry import photutils_stellar_photometry
