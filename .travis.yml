@@ -100,7 +100,7 @@ matrix:
         # may run for a long time
         - os: linux
           env: SETUP_CMD='build_docs -w'
-               CONDA_DEPENDENCIES='$CONDA_DEPENDENCIES_DOC $CONDA_DEPENDENCIES'
+               CONDA_DEPENDENCIES="$CONDA_DEPENDENCIES_DOC $CONDA_DEPENDENCIES"
 
         # Try all python versions and Numpy versions. Since we can assume that
         # the Numpy developers have taken care of testing Numpy with different
