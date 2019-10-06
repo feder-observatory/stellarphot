@@ -46,7 +46,7 @@ env:
 
         # List runtime dependencies for the package that are available as conda
         # packages here.
-        - CONDA_DEPENDENCIES='astroquery ccdproc ginga ipywidgets bottleneck'
+        - CONDA_DEPENDENCIES='astroquery ccdproc ginga ipywidgets bottleneck photutils'
         - CONDA_DEPENDENCIES_DOC='sphinx-astropy'
 
         # List other runtime dependencies for the package that are available as
