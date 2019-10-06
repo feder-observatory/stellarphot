@@ -59,7 +59,7 @@ def test_detect_source_number_location():
                                    rtol=1e-5, atol=0.05)
         np.testing.assert_allclose(gaussian_sigma_to_fwhm * inp['x_stddev'],
                                    out['FWHM'],
-                                   rtol=1e-5, atol=0.005)
+                                   rtol=1e-5, atol=0.05)
 
 
 def test_aperture_photometry_no_outlier_rejection():
