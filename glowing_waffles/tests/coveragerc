@@ -11,6 +11,8 @@ omit =
    {packagename}/*/tests/*
    {packagename}/*/*/tests/*
    {packagename}/version*
+   {packagename}/*/__init__.py
+   {packagename}/__init__.py
 
 [report]
 exclude_lines =

@@ -5,6 +5,9 @@ A package for performing stellar photometry.
     :target: http://www.astropy.org
     :alt: Powered by Astropy Badge
 
+.. image:: https://travis-ci.com/glowing-waffle/glowing-waffles.svg?branch=master
+    :target: https://travis-ci.com/glowing-waffle/glowing-waffles
+
 This is a package for doing stellar photometry that relies on astropy.
 
 
