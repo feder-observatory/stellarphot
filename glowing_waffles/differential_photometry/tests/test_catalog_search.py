@@ -1,5 +1,3 @@
-from __future__ import print_function, division
-
 import numpy as np
 import pytest
 
@@ -90,4 +88,4 @@ def test_clean_bad_criteria(criteria, error_msg):
 
     with pytest.raises(ValueError) as e:
         catalog_clean(inp, **criteria)
-    assert error_msg in str(e)
+    assert error_msg in str(e.value)

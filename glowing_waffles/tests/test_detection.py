@@ -6,7 +6,7 @@ import pytest
 from astropy.utils.data import get_pkg_data_filename
 from astropy.table import Table
 from astropy.stats import gaussian_sigma_to_fwhm
-from photutils.datasets import make_gaussian_sources, make_noise_image
+from photutils.datasets import make_gaussian_sources_image, make_noise_image
 from glowing_waffles.source_detection import source_detection
 from glowing_waffles.photometry import photutils_stellar_photometry
 
@@ -18,8 +18,8 @@ class FakeImage:
         self._sources = Table.read(data_file)
         self.mean_noise = self.sources['amplitude'].max() / 100
         self.noise_dev = noise_dev
-        self._stars = make_gaussian_sources(self.image_shape,
-                                            self.sources)
+        self._stars = make_gaussian_sources_image(self.image_shape,
+                                                  self.sources)
         self._noise = make_noise_image(self._stars.shape,
                                        mean=self.mean_noise,
                                        stddev=noise_dev)
