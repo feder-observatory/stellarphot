@@ -118,7 +118,7 @@ matrix:
         # versions of Python, we can vary Python and Numpy versions at the same
         # time.
         - os: linux
-          env: NUMPY_VERSION=1.15
+          env: NUMPY_VERSION=1.16
 
         # Do a PEP8 test with flake8
         - os: linux
