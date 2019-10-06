@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 
 __all__ = ['seeing_plot', 'plot_predict_ingress_egress']
 
+
 def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM,
                 plot_title='', file_name='', gap=6, annulus_width=13):
     """
@@ -35,52 +36,59 @@ def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM,
         the distance between the inner and outer annulus
     """
     radius = HWHM * 4
-    plt.figure(figsize=(20,10))
+    plt.figure(figsize=(20, 10))
     plt.grid(True)
     inner_annulus = radius + gap
     outer_annulus = radius + annulus_width
 
-
     # plot the raw radius and raw counts
-    plt.plot(raw_radius, raw_counts, linestyle='none', marker="s", markerfacecolor='none', color='blue')
+    plt.plot(raw_radius, raw_counts, linestyle='none',
+             marker="s", markerfacecolor='none', color='blue')
 
     # plot the binned radius and binned counts
-    plt.plot(binned_radius, binned_counts, color = 'magenta',linewidth = '4.0')
+    plt.plot(binned_radius, binned_counts, color='magenta', linewidth='4.0')
 
     # draw vertical line at HWHM and label it
-    plt.vlines(HWHM,-0.2,1.2, linestyle = (0, (5, 10)), color = '#00cc00')
-    plt.annotate(f"HWHM {HWHM}", (HWHM - 1 ,-0.25), fontsize = 15, color = '#00cc00')
-    
+    plt.vlines(HWHM, -0.2, 1.2, linestyle=(0, (5, 10)), color='#00cc00')
+    plt.annotate(f"HWHM {HWHM}", (HWHM - 1, -0.25),
+                 fontsize=15, color='#00cc00')
+
     # label axis
-    plt.xlabel('Radius (pixels)', fontsize = 20)
-    plt.ylabel('ADU', fontsize = 20)
+    plt.xlabel('Radius (pixels)', fontsize=20)
+    plt.ylabel('ADU', fontsize=20)
 
     # draw vertical line at the radius and label it
-    plt.vlines(radius,-0.2, binned_counts[0], color = 'red')
-    plt.annotate(f"Radius {radius}", (radius - 1 ,-0.25), fontsize = 15, color = 'red')
-    plt.hlines(binned_counts[0], binned_counts[0], radius, color = 'red')
+    plt.vlines(radius, -0.2, binned_counts[0], color='red')
+    plt.annotate(f"Radius {radius}", (radius - 1, -0.25),
+                 fontsize=15, color='red')
+    plt.hlines(binned_counts[0], binned_counts[0], radius, color='red')
 
     # label the source
-    plt.annotate('SOURCE', (radius - 2, binned_counts[0] + 0.02), fontsize = 15, color = 'red')
+    plt.annotate(
+        'SOURCE', (radius - 2, binned_counts[0] + 0.02), fontsize=15, color='red')
 
-    #draw vertical lines at the background and label it
-    plt.vlines(inner_annulus, -0.2, binned_counts[0], color = 'red')
-    plt.vlines(outer_annulus, -0.2, binned_counts[0], color = 'red')
-    plt.hlines(binned_counts[0], inner_annulus, outer_annulus, color = 'red')
-    plt.annotate('BACKGROUND', (inner_annulus, binned_counts[0] + 0.02), fontsize = 15, color = 'red')
-    plt.annotate(f"Back> {inner_annulus}", (inner_annulus-1, -0.25), fontsize = 15, color = 'red')
-    plt.annotate(f"<Back {outer_annulus}", (outer_annulus-1, -0.25), fontsize = 15, color = 'red')
+    # draw vertical lines at the background and label it
+    plt.vlines(inner_annulus, -0.2, binned_counts[0], color='red')
+    plt.vlines(outer_annulus, -0.2, binned_counts[0], color='red')
+    plt.hlines(binned_counts[0], inner_annulus, outer_annulus, color='red')
+    plt.annotate('BACKGROUND', (inner_annulus,
+                                binned_counts[0] + 0.02), fontsize=15, color='red')
+    plt.annotate(f"Back> {inner_annulus}",
+                 (inner_annulus - 1, -0.25), fontsize=15, color='red')
+    plt.annotate(f"<Back {outer_annulus}",
+                 (outer_annulus - 1, -0.25), fontsize=15, color='red')
 
-    #title the plot
+    # title the plot
     title_string = [f"{plot_title}", f"FWHM:{HWHM*2} pixels"]
     plt.title('\n'.join(title_string))
 
-    #save plot as png
+    # save plot as png
     if file_name:
         plt.savefig(f"{file_name}.png")
 
+
 def plot_predict_ingress_egress(ingress_time, egress_time, end_line=1,
-                            ingress_x_pos=1, egress_x_pos=1, labels_y_pos=1 ):
+                                ingress_x_pos=1, egress_x_pos=1, labels_y_pos=1):
     """
     Parameters
     ----------
@@ -99,12 +107,16 @@ def plot_predict_ingress_egress(ingress_time, egress_time, end_line=1,
     labels_y_pos : number
         offset to move ingress and egress labels
     """
-    ymin,ymax = plt.ylim()
+    ymin, ymax = plt.ylim()
 
-    #create a vertical line at the ingress time and label it
-    plt.vlines(ingress_time, ymin-end_line, ymax, linestyle = (0, (5, 10)), color = 'red')
-    plt.annotate("Predicted Ingress", (ingress_time - ingress_x_pos, ymin - labels_y_pos), fontsize = 10, color = 'red')
+    # create a vertical line at the ingress time and label it
+    plt.vlines(ingress_time, ymin - end_line, ymax,
+               linestyle=(0, (5, 10)), color='red')
+    plt.annotate("Predicted Ingress", (ingress_time - ingress_x_pos,
+                                       ymin - labels_y_pos), fontsize=10, color='red')
 
-    #create a vertical line at the egress time and label it
-    plt.vlines(egress_time, ymin-end_line, ymax, linestyle = (0, (5, 10)), color = 'red')
-    plt.annotate("Predicted Egress", (egress_time - egress_x_pos, ymin - labels_y_pos), fontsize = 10, color = 'red')
+    # create a vertical line at the egress time and label it
+    plt.vlines(egress_time, ymin - end_line, ymax,
+               linestyle=(0, (5, 10)), color='red')
+    plt.annotate("Predicted Egress", (egress_time - egress_x_pos,
+                                      ymin - labels_y_pos), fontsize=10, color='red')

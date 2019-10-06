@@ -1,8 +1,8 @@
-****************
-glowing_waffles
-****************
+*****************************
+glowing-waffles Documentation
+*****************************
 
-This is the documentation for the affiliated package.
+This is the documentation for glowing-waffles.
 
 Reference/API
 =============
