@@ -31,5 +31,5 @@ def calcVmag(var_stars, star_data, comp_stars):
     for item in vmag:
         tot+= item
     avg = tot/ len(vmag)
-    
+
     return avg
