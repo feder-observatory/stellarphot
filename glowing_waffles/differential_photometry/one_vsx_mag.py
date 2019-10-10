@@ -1,6 +1,8 @@
 from astropy.table import Table
 from astropy.coordinates import SkyCoord
 from astropy import units as u
+
+
 def calc_vmag(var_stars, star_data, comp_stars):
     var_coords = var_stars['coords']
     star_data_coords = SkyCoord(ra=star_data['RA'], dec=star_data['Dec'])
@@ -17,8 +19,8 @@ def calc_vmag(var_stars, star_data, comp_stars):
     a_index, a_d2d, _ = comp_coords.match_to_catalog_sky(comp_coords)
     good_a_index = a_index[good]
     accepted_comp = comp_stars[good_a_index]['mag']
-    vmag = ([])
     new_mag = vmag_image - comp_star_mag + accepted_comp
     avg = new_mag.mean()
+    stdev = new_mag.std()
 
-    return avg
+    return avg, stdev
