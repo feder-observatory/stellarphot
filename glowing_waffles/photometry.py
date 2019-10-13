@@ -1,4 +1,3 @@
-from __future__ import print_function, division, absolute_import
 import numpy as np
 from photutils import aperture_photometry, CircularAperture, CircularAnnulus
 from astropy.stats import sigma_clipped_stats

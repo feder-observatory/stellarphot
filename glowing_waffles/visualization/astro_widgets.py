@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 from IPython.display import IFrame, display
 from ipywidgets import Box, Output
 from ginga.web.pgw import ipg

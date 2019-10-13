@@ -1,6 +1,3 @@
-from __future__ import print_function, division
-
-
 def convert_pixel_wcs(ccd_image, lon_or_ra,
                       lat_or_dec, is_pix=True, origin=0):
     """
