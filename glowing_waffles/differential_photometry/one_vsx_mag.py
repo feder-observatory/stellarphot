@@ -4,6 +4,28 @@ from astropy import units as u
 
 
 def calc_vmag(var_stars, star_data, comp_stars):
+    """
+    Calculate the average magnitude and standard deviation of a variable star in field. 
+
+    Parameters
+    ----------
+    var_stars : '~astropy.table.Table'
+        Table of variable stars known in field
+
+    star_data : '~astropy.table.Table'
+        Table of star data from observation image
+
+    comp_stars : '~astropy.table.Table'
+        Table of known comparison stars in the field, given by AAVSO
+
+    Returns
+    -------
+    avg : float
+        Average magnitude for the variable star
+
+    stdev : float
+        Standard deviation for variable star values
+    """
     var_coords = var_stars['coords']
     star_data_coords = SkyCoord(ra=star_data['RA'], dec=star_data['Dec'])
     v_index, v_d2d, _ = var_coords.match_to_catalog_sky(star_data_coords)
