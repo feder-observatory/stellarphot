@@ -1,9 +1,9 @@
-from astropy.table import Table
+from astropy.table import Table, vstack
 from astropy.coordinates import SkyCoord
 from astropy import units as u
 from astropy.utils.data import get_pkg_data_filename
 import numpy as np
-from ..one_vsx_mag import calc_vmag
+from ..vsx_mags import calc_multi_vmag, calc_vmag
 
 def test_one_vmag():
     find_var_data = get_pkg_data_filename('data/variables.fits')
@@ -16,3 +16,20 @@ def test_one_vmag():
 
     np.testing.assert_almost_equal(vmag, 11.07127, decimal = 5)
     np.testing.assert_almost_equal(error, 1.47238, decimal = 5)
+
+
+def test_multi_vmag():
+    find_var_data = get_pkg_data_filename('data/variables.fits')
+    var_stars = Table.read(find_var_data)
+    find_star_data = get_pkg_data_filename('data/2014-12-29-ey-uma-9.fits')
+    star_data = Table.read(find_star_data)
+    find_comp_data = get_pkg_data_filename('data/comp_stars.fits')
+    comp_stars = Table.read(find_comp_data)
+    vmag, error = calc_vmag(var_stars, star_data, comp_stars)
+    del var_stars['coords']
+    v_data = vstack([var_stars, var_stars])
+    v_data['coords'] = SkyCoord(ra=v_data['RAJ2000'], dec=v_data['DEJ2000'], unit='degree')
+    v_table = calc_multi_vmag(v_data, star_data, comp_stars)
+
+    assert v_table['Mag'][0] == v_table['Mag'][1]
+    assert v_table['StDev'][0] == v_table['StDev'][1]
