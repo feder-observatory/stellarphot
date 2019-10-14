@@ -1,9 +1,19 @@
 import numpy as np
 import pytest
 
-from ..catalog_search import catalog_clean
-
 from astropy.table import Table
+from astropy.coordinates import SkyCoord
+from astropy.utils.data import get_pkg_data_filename
+from astropy.io import fits
+from astropy.wcs import WCS
+from astropy.nddata import CCDData
+
+from ..catalog_search import catalog_clean, in_frame, \
+                             catalog_search, find_known_variables, \
+                             find_apass_stars
+from ...tests.make_wcs import make_wcs
+
+CCD_SHAPE = [2048, 3073]
 
 
 def a_table(masked=False):
@@ -89,3 +99,83 @@ def test_clean_bad_criteria(criteria, error_msg):
     with pytest.raises(ValueError) as e:
         catalog_clean(inp, **criteria)
     assert error_msg in str(e.value)
+
+
+def test_in_frame():
+    # This wcs has the identity matrix as the coordinate transform
+    wcs = make_wcs()
+    # Make the image 10 x 10 pixels
+    wcs._naxis1 = 10
+    wcs._naxis2 = 10
+    print(wcs.wcs.crval, wcs._naxis1)
+    coordinates_all_out = SkyCoord(ra=[50, 50], dec=[0, 0], unit='degree')
+    should_all_be_out = in_frame(wcs, coordinates_all_out)
+    assert not all(should_all_be_out)
+
+    ra_cen, dec_cen = wcs.wcs.crval
+    coordinates_all_in = SkyCoord(ra=[ra_cen, ra_cen + 1],
+                                  dec=[dec_cen, dec_cen + 1],
+                                  unit='degree')
+    should_be_all_in = in_frame(wcs, coordinates_all_in)
+    assert all(should_be_all_in)
+
+    some_in_some_out = SkyCoord(ra=[50, ra_cen + 1],
+                                dec=[0, dec_cen + 1],
+                                unit='degree')
+
+    in_out = in_frame(wcs, some_in_some_out)
+    assert not in_out[0]
+    assert in_out[1]
+
+
+@pytest.mark.parametrize('clip, data_file',
+                         [(True, 'data/clipped_ey_uma_vsx.fits'),
+                          (False, 'data/unclipped_ey_uma_vsx.fits')])
+def test_catalog_search(clip, data_file):
+    # Check that a catalog search of VSX gives us what we expect.
+    # I suppose this really isn't future-proof, since more variables
+    # could be discovered in the future....
+    data = get_pkg_data_filename(data_file)
+    expected = Table.read(data)
+    wcs_file = get_pkg_data_filename('data/sample_wcs_ey_uma.fits')
+    wcs = WCS(fits.open(wcs_file)[0].header)
+    wcs.pixel_shape = list(reversed(CCD_SHAPE))
+    actual, _, _ = catalog_search(wcs, CCD_SHAPE, 'B/vsx/vsx',
+                                  clip_by_frame=clip)
+    assert all(actual['OID'] == expected['OID'])
+
+
+def test_find_known_variables():
+    # Under the hood this calls catalog search on the VSX
+    # catalog and clips to the frame.
+    data_file = 'data/clipped_ey_uma_vsx.fits'
+    data = get_pkg_data_filename(data_file)
+    expected = Table.read(data)
+    wcs_file = get_pkg_data_filename('data/sample_wcs_ey_uma.fits')
+    wcs = WCS(fits.open(wcs_file)[0].header)
+    wcs.pixel_shape = list(reversed(CCD_SHAPE))
+    ccd = CCDData(data=np.zeros(CCD_SHAPE), wcs=wcs, unit='adu')
+    vsx, _, _, _ = find_known_variables(ccd)
+    assert expected['OID'] == vsx['OID']
+
+
+def test_find_apass():
+    # This is really checking from APASS DR9 on Vizier, or at least that
+    # is where the "expected" data is drawn from.
+    expected_all = Table.read(get_pkg_data_filename('data/all_apass_ey_uma_sorted_ra_first_20.fits'))
+    expected_low_error = Table.read(get_pkg_data_filename('data/low_error_apass_ey_uma_sorted_ra_first_20.fits'))
+    wcs_file = get_pkg_data_filename('data/sample_wcs_ey_uma.fits')
+    wcs = WCS(fits.open(wcs_file)[0].header)
+    wcs.pixel_shape = list(reversed(CCD_SHAPE))
+    ccd = CCDData(data=np.zeros(CCD_SHAPE), wcs=wcs, unit='adu')
+    all_apass, _, _, apass_low_error, _, _ = find_apass_stars(ccd)
+    print(all_apass)
+    # REference data was sorted by RA, first 20 entries kept
+    all_apass.sort('RAJ2000')
+    all_apass = all_apass[:20]
+    apass_low_error.sort('RAJ2000')
+    apass_low_error = apass_low_error[:20]
+    # It is hard to imagine the RAs matching and other entries not matching,
+    # so just check the RAs.
+    assert all(all_apass['RAJ2000'] == expected_all['RAJ2000'])
+    assert all(apass_low_error['RAJ2000'] == expected_low_error['RAJ2000'])

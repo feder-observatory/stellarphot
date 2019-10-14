@@ -1,18 +1,13 @@
 import numpy as np
 
-from astropy.wcs import WCS
 from astropy.nddata import CCDData
 
 from ..coordinates import convert_pixel_wcs
+from .make_wcs import make_wcs
 
 
 def test_coord_conversion():
-    wcs = WCS(naxis=2)
-    # Numbering of pixels for crpix starts at 1....
-    wcs.wcs.crpix = [5., 5.]
-    wcs.wcs.cdelt = [1, 1]
-    wcs.wcs.crval = [10, 5]
-    wcs.wcs.ctype = ["RA---TAN", "DEC--TAN"]
+    wcs = make_wcs()
     ccd = CCDData(np.ones([10, 10]), wcs=wcs, unit='adu')
     # Pixel values below should give back ra, dec values for crval
     ra, dec = convert_pixel_wcs(ccd, 4, 4)
