@@ -18,14 +18,6 @@ __all__ = [
 ]
 
 
-def scale_and_downsample(data, downsample=4, min_percent=20, max_percent=99.5):
-    if downsample > 1:
-        scaled_data = block_reduce(data, block_size=(downsample, downsample))
-    else:
-        scaled_data = data
-    return scaled_data
-
-
 def in_frame(frame_wcs, coordinates, padding=0):
     """
     Given a WCS and list of coordinates check whether the coordinates
