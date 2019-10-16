@@ -1,14 +1,12 @@
-from astropy.table import Table, vstack
+from astropy.table import Table
 from astropy.coordinates import SkyCoord
 from astropy import units as u
-from astropy.utils.data import get_pkg_data_filename
-import numpy as np
-from .one_vsx_mag import calc_vmag
+
 
 def calc_multi_vmag(var_stars, star_data, comp_stars):
     """
-    Calculate the average magnitude and standard deviation of multiple variable 
-    stars in a field. 
+    Calculate the average magnitude and standard deviation of multiple variable
+    stars in a field.
 
     Parameters
     ----------
@@ -41,7 +39,7 @@ def calc_multi_vmag(var_stars, star_data, comp_stars):
 
 def calc_vmag(var_stars, star_data, comp_stars):
     """
-    Calculate the average magnitude and standard deviation of a variable star in field. 
+    Calculate the average magnitude and standard deviation of a variable star in field.
 
     Parameters
     ----------
