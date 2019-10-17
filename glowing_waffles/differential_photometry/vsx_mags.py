@@ -2,6 +2,8 @@ from astropy.table import Table
 from astropy.coordinates import SkyCoord
 from astropy import units as u
 
+__all__ = ['calc_multi_vmag', 'calc_vmag']
+
 
 def calc_multi_vmag(var_stars, star_data, comp_stars):
     """
