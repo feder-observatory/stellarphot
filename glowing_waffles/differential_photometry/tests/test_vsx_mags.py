@@ -3,7 +3,7 @@ from astropy.coordinates import SkyCoord
 from astropy import units as u
 from astropy.utils.data import get_pkg_data_filename
 import numpy as np
-from ..vsx_mags import calc_multi_vmag, calc_vmag
+from .. import calc_multi_vmag, calc_vmag
 
 
 def test_one_vmag():
