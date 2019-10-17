@@ -1,10 +1,3 @@
-
-# coding: utf-8
-
-# In[1]:
-
-from __future__ import print_function, division
-
 import numpy as np
 
 from astropy.visualization import scale_image

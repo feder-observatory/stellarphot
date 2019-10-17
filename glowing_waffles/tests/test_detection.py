@@ -1,5 +1,3 @@
-from math import erf
-
 import numpy as np
 import pytest
 

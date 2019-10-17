@@ -1,5 +1,3 @@
-from __future__ import print_function, division
-
 import re
 
 import numpy as np
@@ -18,14 +16,6 @@ __all__ = [
     'find_known_variables',
     'filter_catalog'
 ]
-
-
-def scale_and_downsample(data, downsample=4, min_percent=20, max_percent=99.5):
-    if downsample > 1:
-        scaled_data = block_reduce(data, block_size=(downsample, downsample))
-    else:
-        scaled_data = data
-    return scaled_data
 
 
 def in_frame(frame_wcs, coordinates, padding=0):
