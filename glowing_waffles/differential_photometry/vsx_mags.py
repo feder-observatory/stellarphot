@@ -76,7 +76,7 @@ def calc_vmag(var_stars, star_data, comp_stars):
     comp_star_mag = star_data[good_index]['mag_inst_R']
     a_index, a_d2d, _ = comp_coords.match_to_catalog_sky(comp_coords)
     good_a_index = a_index[good]
-    accepted_comp = comp_stars[good_a_index]['mag']
+    accepted_comp = rcomps[good_a_index]['mag']
     new_mag = vmag_image - comp_star_mag + accepted_comp
     avg = new_mag.mean()
     stdev = new_mag.std()

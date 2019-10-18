@@ -15,8 +15,8 @@ def test_one_vmag():
     comp_stars = Table.read(find_comp_data)
     vmag, error = calc_vmag(var_stars, star_data, comp_stars)
 
-    np.testing.assert_almost_equal(vmag, 11.07127, decimal=5)
-    np.testing.assert_almost_equal(error, 1.47238, decimal=5)
+    np.testing.assert_almost_equal(vmag, 14.54827, decimal=5)
+    np.testing.assert_almost_equal(error, 0.028685, decimal=5)
 
 
 def test_multi_vmag():
