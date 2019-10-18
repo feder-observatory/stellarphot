@@ -1,7 +1,18 @@
+import bottleneck as bn
 import numpy as np
-from photutils import aperture_photometry, CircularAperture, CircularAnnulus
+from photutils import (DAOStarFinder, aperture_photometry, CircularAperture,
+                       CircularAnnulus, centroid_sources)
+
+from astropy.coordinates import SkyCoord
+from astropy.table import vstack
+from astropy import units as u
+from astropy.time import Time
+
+from ccdproc import ImageFileCollection
+
 from astropy.stats import sigma_clipped_stats
 from astropy.nddata import NoOverlapError
+
 from .coordinates import convert_pixel_wcs
 
 __all__ = ['photutils_stellar_photometry',
@@ -123,33 +134,35 @@ def photutils_stellar_photometry(ccd_image, sources,
     return phot_table
 
 
-
-# coding: utf-8
-
-# In[1]:
-
-
-import numpy as np
-import bottleneck as bn
-
-from astropy.coordinates import SkyCoord
-from astropy.table import vstack
-from astropy import units as u
-from astropy.time import Time
-
-from ccdproc import ImageFileCollection
-
-from photutils import (DAOStarFinder, CircularAperture, CircularAnnulus,
-                       aperture_photometry, centroid_sources)
-
-
-np.seterr(all='ignore')
-
-# In[11]:
-
-
 def faster_sigma_clip_stats(data, sigma=5, iters=5, axis=None):
+    """
+    Calculate sigma clipped stats quickly using NaNs instead of masking
+    and using bottleneck where possible.
 
+    Parameters
+    ----------
+
+    data : numpy array
+        The data to be clipped. *The data should have had masked values
+        replaced with NaN prior to calling this function.
+
+    sigma : float, optional
+        Number of standard deviations (estimated with the MAD) a point must
+        be from the central value (median) to be rejected.
+
+    iters : int, optional
+        Number of sigma clipping iterations to perform. Fewer iterations than
+        this may be performed because iterations stop when no new data is
+        being clipped.
+
+    axis : int, optional
+        axis along which to perform the median.
+
+    Returns
+    -------
+    mean, median, std : float or numpy array
+        Clipped statistics; shape depends on the shape of the input.
+    """
     data = data.copy()
     for _ in range(iters):
         central = bn.nanmedian(data, axis=axis)
@@ -169,31 +182,62 @@ def faster_sigma_clip_stats(data, sigma=5, iters=5, axis=None):
             bn.nanstd(data, axis=axis))
 
 
-def detect_sources(ccd, fwhm, thresh):
+def detect_sources(ccd, fwhm=8, thresh=10):
+    """
+    Detect sources in an image using the DAOStarFinder from photutils.
 
+    Parameters
+    ----------
+
+    ccd : `astropy.nddata.CCDData`
+        The CCD image in which to detect sources.
+
+    fwhm : float, optional
+        Full-width half-max of the sources, in pixels.
+
+    thresh : float, optional
+        Threshold above which a source must be to count as a source. This
+        argument is multiplied by the sigma-clipped standard deviation of
+        the data.
+    """
     men, med, std = faster_sigma_clip_stats(ccd.data, sigma=5)
-
-
-    # This sets up the source detection. The FWHM turns out to be key...making it too small results in a single star being detected as two separate sources.
+    # This sets up the source detection. The FWHM turns out to be key...making
+    # it too small results in a single star being detected as two separate
+    # sources.
     #
-    # Stars must be brighter than the threshold to count as sources. Making the number higher gives you fewer detected sources, lower gives you more. There is no "magic" number.
-
-    # In[13]:
-
-
-    dao = DAOStarFinder(threshold=10 * std, fwhm=8, exclude_border=True)
-
-
-    # Actually detect the stars...
-
-    # In[14]:
-
-
+    # Stars must be brighter than the threshold to count as sources. Making
+    # the number higher gives you fewer detected sources, lower gives you more.
+    # There is no "magic" number.
+    dao = DAOStarFinder(threshold=thresh * std, fwhm=fwhm, exclude_border=True)
     stars = dao(ccd - med)
     return stars
 
 
-def find_too_close(star_locs, aperture_rad):
+def find_too_close(star_locs, aperture_rad, pixel_scale=0.563):
+    """
+    Identify sources that are closer together than twice the aperture radius.
+
+    Parameters
+    ----------
+
+    star_locs : tuple of numpy array
+        The first entry in the tuple should be the right ascension of the
+        sources, in degrees. The second should be the declination of
+        the sources, in degrees.
+
+    aperture_rad : int
+        Radius of the aperture, in pixels.
+
+    pixel_scale : float, optional
+        Pixel scale of the image in arcsec/pixel
+
+    Returns
+    -------
+
+    numpy array of bool
+        Array the same length as the RA/Dec that is ``True`` where the sources
+        are closer than two aperture radii, ``False`` otherwise.
+    """
     star_coords = SkyCoord(ra=star_locs[0], dec=star_locs[1],
                            frame='icrs', unit='degree')
     idxc, d2d, d3d = star_coords.match_to_catalog_sky(star_coords,
@@ -202,6 +246,26 @@ def find_too_close(star_locs, aperture_rad):
 
 
 def clipped_sky_per_pix_stats(data, annulus, sigma=5, iters=5):
+    """
+    Calculate sigma-clipped statistics on an annulus.
+
+    Parameters
+    ----------
+
+    data : `astropy.nddata.CCDData`
+        CCD image on which the annuli are defined.
+
+    annulus : photutils annulus
+        One or more annulus (of any shape) from photutils.
+
+    sigma : float, optional
+        Number of standard deviations from the central value a
+        pixel must be to reject it.
+
+    iters : int, optional
+        Maximum number of sigma clip iterations to perform. Iterations stop
+        automatically if no pixels are rejected.
+    """
     # Get a list of masks from the annuli
     # Use the 'center' method because then pixels are either in or out. To use
     # 'partial' or 'exact' we would need to do a weighted sigma clip and
@@ -228,13 +292,37 @@ def clipped_sky_per_pix_stats(data, annulus, sigma=5, iters=5):
             std_sky_per_pix * data.unit)
 
 
-# ### Add more columns to the data table
-
-# In[27]:
-
-
 def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
-                            star_ids=None, gain=None):
+                            star_ids=None, gain=1.5):
+    """
+    Calculate several columns for photometry table.
+
+    Parameters
+    ----------
+
+    phot : astropy.table.Table
+        An astropy Table with raw photometry data in it (generated by
+        `photutils.aperture_photometry).
+
+    ccd : astropy.nddata.CCDData
+        Image on which photometry is being done.
+
+    annulus : photutils annulus
+        One or more annulus (of any shape) from photutils.
+
+    apertures : photutils apertures
+        One or more apertures (of any shape) from photutils.
+
+    fname : str, optional
+        Name of the image file on which photometry is being performed.
+
+    star_ids : str or int, optional
+        ID for each of the sources.
+
+    gain : float, optional
+        Gain, in electrons/ADU, of the camera that took the image. The gain
+        is used in calculating the instrumental magnitude.
+    """
     phot.rename_column('aperture_sum_0', 'aperture_sum')
     phot['aperture_sum'].unit = u.adu
     phot.rename_column('aperture_sum_1', 'annulus_sum')
@@ -283,6 +371,56 @@ def photometry_on_directory(directory_with_images, object_of_interest,
                             inner_annulus, outer_annulus,
                             max_adu, star_ids,
                             gain, read_noise, dark_current):
+    """
+    Perform aperture photometry on a directory of images.
+
+    Parameters
+    ----------
+
+    directory_with_images : str
+        Folder containing the images on which to do photometry. Photometry
+        will only be done on images that contain the ``object_of_interest``.
+
+    object_of_interest : str
+        Name of the object of interest. The only files on which photometry
+        will be done are those whose header contains the keyword ``OBJECT``
+        whose value is ``object_of_interest``.
+
+    star_locs : tuple of numpy array
+        The first entry in the tuple should be the right ascension of the
+        sources, in degrees. The second should be the declination of
+        the sources, in degrees.
+
+    aperture_rad : int
+        Radius of the aperture to use when performing photometry.
+
+    inner_annulus : int
+        Inner radius of annulus to use in for performing local sky
+        subtraction.
+
+    outer_annulus : int
+        Outer radius of annulus to use in for performing local sky
+        subtraction.
+
+    max_adu : int
+        Maximum allowed pixel value before a source is considered
+        saturated.
+
+    star_ids : array-like
+        Unique identifier for each source in ``star_locs``.
+
+    gain : float
+        Gain, in electrons/ADU, of the camera that took the image. The gain
+        is used in calculating the instrumental magnitude.
+
+    read_noise : float
+        Read noise of the camera in electrons. Used in the CCD equation
+        to calculate error.
+
+    dark_current : float
+        Dark current, in electron/sec. Used in the CCD equation
+        to calculate error.
+    """
     ifc = ImageFileCollection(directory_with_images)
     phots = []
     missing_stars = []
