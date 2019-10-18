@@ -1,7 +1,18 @@
+import bottleneck as bn
 import numpy as np
-from photutils import aperture_photometry, CircularAperture, CircularAnnulus
+from photutils import (DAOStarFinder, aperture_photometry, CircularAperture,
+                       CircularAnnulus, centroid_sources)
+
+from astropy.coordinates import SkyCoord
+from astropy.table import vstack
+from astropy import units as u
+from astropy.time import Time
+
+from ccdproc import ImageFileCollection
+
 from astropy.stats import sigma_clipped_stats
 from astropy.nddata import NoOverlapError
+
 from .coordinates import convert_pixel_wcs
 
 __all__ = ['photutils_stellar_photometry',
@@ -123,29 +134,7 @@ def photutils_stellar_photometry(ccd_image, sources,
     return phot_table
 
 
-
-# coding: utf-8
-
-# In[1]:
-
-
-import numpy as np
-import bottleneck as bn
-
-from astropy.coordinates import SkyCoord
-from astropy.table import vstack
-from astropy import units as u
-from astropy.time import Time
-
-from ccdproc import ImageFileCollection
-
-from photutils import (DAOStarFinder, CircularAperture, CircularAnnulus,
-                       aperture_photometry, centroid_sources)
-
-
 np.seterr(all='ignore')
-
-# In[11]:
 
 
 def faster_sigma_clip_stats(data, sigma=5, iters=5, axis=None):
