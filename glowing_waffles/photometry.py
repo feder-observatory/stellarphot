@@ -134,9 +134,6 @@ def photutils_stellar_photometry(ccd_image, sources,
     return phot_table
 
 
-np.seterr(all='ignore')
-
-
 def faster_sigma_clip_stats(data, sigma=5, iters=5, axis=None):
     """
     Calculate sigma clipped stats quickly using NaNs instead of masking
