@@ -159,25 +159,11 @@ def faster_sigma_clip_stats(data, sigma=5, iters=5, axis=None):
 
 
 def detect_sources(ccd, fwhm, thresh):
-
     men, med, std = faster_sigma_clip_stats(ccd.data, sigma=5)
-
-
     # This sets up the source detection. The FWHM turns out to be key...making it too small results in a single star being detected as two separate sources.
     #
     # Stars must be brighter than the threshold to count as sources. Making the number higher gives you fewer detected sources, lower gives you more. There is no "magic" number.
-
-    # In[13]:
-
-
     dao = DAOStarFinder(threshold=10 * std, fwhm=8, exclude_border=True)
-
-
-    # Actually detect the stars...
-
-    # In[14]:
-
-
     stars = dao(ccd - med)
     return stars
 
@@ -215,11 +201,6 @@ def clipped_sky_per_pix_stats(data, annulus, sigma=5, iters=5):
 
     return (avg_sky_per_pix * data.unit, med_sky_per_pix * data.unit,
             std_sky_per_pix * data.unit)
-
-
-# ### Add more columns to the data table
-
-# In[27]:
 
 
 def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
