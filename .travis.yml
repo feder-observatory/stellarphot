@@ -36,6 +36,9 @@ env:
         # The following versions are the 'default' for tests, unless
         # overridden underneath. They are defined here in order to save having
         # to repeat them for all configurations.
+        - TOXENV=''
+        - TOXARGS=''
+        - TOXPOSARGS=''
         - PYTHON_VERSION=3.7
         - NUMPY_VERSION=stable
         - ASTROPY_VERSION=stable
@@ -78,19 +81,15 @@ matrix:
         # INITIAL TESTS
         # -------------
 
-        # Make sure that egg_info works without dependencies
-        - stage: Initial tests
-          env: PYTHON_VERSION=3.7 SETUP_CMD='egg_info'
-
         # Do a coverage test.
         - os: linux
           stage: Initial tests
-          env: SETUP_CMD='test --coverage'
+          env: TOXENV='coverage'
 
         # Do a PEP8 test with flake8
         - os: linux
           stage: Initial tests
-          env: MAIN_CMD='flake8 glowing_waffles --count --show-source --statistics $FLAKE8_OPT' SETUP_CMD=''
+          env: TOXENV='pycodestyle'
 
 
         # COMPREHENSIVE TESTS
@@ -99,15 +98,14 @@ matrix:
         # Check for sphinx doc build warnings - we do this first because it
         # may run for a long time
         - os: linux
-          env: SETUP_CMD='build_docs -w'
-               CONDA_DEPENDENCIES="$CONDA_DEPENDENCIES_DOC $CONDA_DEPENDENCIES"
+          env: TOXENV='build_docs'
 
         # Try all python versions and Numpy versions. Since we can assume that
         # the Numpy developers have taken care of testing Numpy with different
         # versions of Python, we can vary Python and Numpy versions at the same
         # time.
         - os: linux
-          env: NUMPY_VERSION=1.16
+          env: TOXENV='test-numpy116'
 
         # SLOW TESTS
         # ----------
@@ -121,20 +119,22 @@ matrix:
         # issues that are not picked up by a linux worker
         - os: osx
           stage: Cron tests
-          env: SETUP_CMD='test' EVENT_TYPE='cron'
+          env: TOXENV='test'
+               EVENT_TYPE='cron'
 
-        # Add a job that runs from cron only and tests against astropy dev and
-        # numpy dev to give a change for early discovery of issues and feedback
+        # Add a job that runs from cron only and tests against astropy dev
+        # to give a change for early discovery of issues and feedback
         # for both developer teams.
         - os: linux
           stage: Cron tests
-          env: ASTROPY_VERSION=development NUMPY_VERSION=development
+          env: TOXENV='test-dev'
                EVENT_TYPE='cron'
 
         # Try on Windows.
         - os: windows
           stage: Cron tests
-          env: SETUP_CMD='test' EVENT_TYPE='cron'
+          env: TOXENV='test'
+               EVENT_TYPE='cron'
 
     allow_failures:
         # Do a PEP8 test with flake8
@@ -142,6 +142,10 @@ matrix:
         # - os: linux
         #   stage: Initial tests
         #   env: MAIN_CMD='flake8 glowing_waffles --count --show-source --statistics $FLAKE8_OPT' SETUP_CMD=''
+
+before_install:
+    - git fetch --unshallow .
+    - git fetch --depth=1000000
 
 install:
 
@@ -167,9 +171,9 @@ install:
     # well as at the start of the install section or in the before_install
     # section if they are needed before setting up conda) to install any
     # other dependencies.
-
+    - conda install tox
 script:
-   - $MAIN_CMD $SETUP_CMD
+   - tox -e $TOXENV $TOXARGS -- $TOXPOSARGS
 
 after_success:
     # If coveralls.io is set up for this package, uncomment the line below.
