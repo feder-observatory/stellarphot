@@ -24,7 +24,6 @@ if LooseVersion(sys.version) < LooseVersion(__minimum_python_version__):
     raise UnsupportedPythonError("glowing_waffles does not support Python < {}"
                                  .format(__minimum_python_version__))
 
-if not _ASTROPY_SETUP_:   # noqa
-    from .core import *
-    from .source_detection import *
-    from .photometry import photutils_stellar_photometry
+from .core import *
+from .source_detection import *
+from .photometry import photutils_stellar_photometry
