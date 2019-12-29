@@ -179,3 +179,5 @@ after_success:
     # If coveralls.io is set up for this package, uncomment the line below.
     # The coveragerc file may be customized as needed for your package.
     # - if [[ $SETUP_CMD == *coverage* ]]; then coveralls --rcfile='glowing_waffles/tests/coveragerc'; fi
+    - pip install codecov
+    - codecov
