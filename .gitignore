@@ -15,6 +15,7 @@ htmlcov
 .coverage
 MANIFEST
 .ipynb_checkpoints
+pip-wheel-metadata
 
 # Sphinx
 docs/api
