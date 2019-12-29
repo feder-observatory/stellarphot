@@ -1,7 +1,4 @@
-# We set the language to c because python isn't supported on the MacOS X nodes
-# on Travis. However, the language ends up being irrelevant anyway, since we
-# install Python ourselves using conda.
-language: c
+language: python
 
 os:
     - linux
@@ -54,11 +51,13 @@ matrix:
         # Do a coverage test.
         - os: linux
           stage: Initial tests
+          python: 3.7
           env: TOXENV='coverage'
 
         # Do a PEP8 test with flake8
         - os: linux
           stage: Initial tests
+          python: 3.7
           env: TOXENV='pycodestyle'
 
 
@@ -68,6 +67,7 @@ matrix:
         # Check for sphinx doc build warnings - we do this first because it
         # may run for a long time
         - os: linux
+          python: 3.7
           env: TOXENV='build_docs'
 
         # Try all python versions and Numpy versions. Since we can assume that
@@ -75,6 +75,7 @@ matrix:
         # versions of Python, we can vary Python and Numpy versions at the same
         # time.
         - os: linux
+          python: 3.7
           env: TOXENV='test-numpy116'
 
         # SLOW TESTS
@@ -89,6 +90,7 @@ matrix:
         # issues that are not picked up by a linux worker
         - os: osx
           stage: Cron tests
+          python: 3.7
           env: TOXENV='test'
                EVENT_TYPE='cron'
 
@@ -97,12 +99,14 @@ matrix:
         # for both developer teams.
         - os: linux
           stage: Cron tests
+          python: 3.7
           env: TOXENV='test-dev'
                EVENT_TYPE='cron'
 
         # Try on Windows.
         - os: windows
           stage: Cron tests
+          python: 3.7
           env: TOXENV='test'
                EVENT_TYPE='cron'
 
