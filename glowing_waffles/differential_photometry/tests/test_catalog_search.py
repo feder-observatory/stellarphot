@@ -105,9 +105,7 @@ def test_in_frame():
     # This wcs has the identity matrix as the coordinate transform
     wcs = make_wcs()
     # Make the image 10 x 10 pixels
-    wcs._naxis1 = 10
-    wcs._naxis2 = 10
-    print(wcs.wcs.crval, wcs._naxis1)
+    wcs.pixel_shape = (10, 10)
     coordinates_all_out = SkyCoord(ra=[50, 50], dec=[0, 0], unit='degree')
     should_all_be_out = in_frame(wcs, coordinates_all_out)
     assert not all(should_all_be_out)

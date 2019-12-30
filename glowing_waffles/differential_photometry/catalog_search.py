@@ -45,8 +45,8 @@ def in_frame(frame_wcs, coordinates, padding=0):
 
     """
     x, y = frame_wcs.all_world2pix(coordinates.ra, coordinates.dec, 0)
-    in_x = (x >= padding) & (x <= frame_wcs._naxis1 - padding)
-    in_y = (y >= padding) & (y <= frame_wcs._naxis2 - padding)
+    in_x = (x >= padding) & (x <= frame_wcs.pixel_shape[0] - padding)
+    in_y = (y >= padding) & (y <= frame_wcs.pixel_shape[1] - padding)
     return in_x & in_y
 
 
