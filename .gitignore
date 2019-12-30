@@ -16,6 +16,8 @@ htmlcov
 MANIFEST
 .ipynb_checkpoints
 pip-wheel-metadata
+.pytest_cache
+.tmp
 
 # Sphinx
 docs/api
