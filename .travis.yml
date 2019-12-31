@@ -89,8 +89,9 @@ matrix:
         # Try MacOS X, usually enough only to run from cron as hardly there are
         # issues that are not picked up by a linux worker
         - os: osx
-          stage: Cron tests
-          python: 3.7
+          language: shell
+          #stage: Cron tests
+          python: shell
           env: TOXENV='test'
                EVENT_TYPE='cron'
 
@@ -105,10 +106,11 @@ matrix:
 
         # Try on Windows.
         - os: windows
-          stage: Cron tests
-          python: 3.7
+          language: shell
+          #stage: Cron tests
           env: TOXENV='test'
                EVENT_TYPE='cron'
+               PATH=/c/Python37:/c/Python37/Scripts:$PATH
 
     allow_failures:
         # Do a PEP8 test with flake8
@@ -118,6 +120,8 @@ matrix:
         #   env: MAIN_CMD='flake8 glowing_waffles --count --show-source --statistics $FLAKE8_OPT' SETUP_CMD=''
 
 before_install:
+    - if [[ $TRAVIS_OS_NAME == windows ]] then; choco install python --version 3.7; python -m pip install --upgrade pip; fi
+    - if [[ $TRAVFIS_OS_NAME == osx ]] then; wget https://repo.continuum.io/miniconda/Miniconda3-4.7.10-MacOSX-x86_64.sh -O miniconda.sh; bash miniconda.sh -b -p $HOME/miniconda; $HOME/miniconda/bin/conda init bash; source ~/.bash_profile; conda activate base; conda create -n test python=$PYTHON_VERSION; conda activate test; fi
     - git fetch --unshallow .
     - git fetch --depth=1000000
 
