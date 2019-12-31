@@ -91,7 +91,6 @@ matrix:
         - os: osx
           language: shell
           #stage: Cron tests
-          python: shell
           env: TOXENV='test'
                EVENT_TYPE='cron'
 
