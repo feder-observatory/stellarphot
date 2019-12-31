@@ -8,6 +8,9 @@ A package for performing stellar photometry.
 .. image:: https://travis-ci.com/glowing-waffle/glowing-waffles.svg?branch=master
     :target: https://travis-ci.com/glowing-waffle/glowing-waffles
 
+.. image:: https://codecov.io/gh/glowing-waffle/glowing-waffles/branch/master/graph/badge.svg
+    :target: https://codecov.io/gh/glowing-waffle/glowing-waffles
+
 This is a package for doing stellar photometry that relies on astropy.
 
 
