@@ -90,7 +90,7 @@ matrix:
         # issues that are not picked up by a linux worker
         - os: osx
           language: shell
-          #stage: Cron tests
+          stage: Cron tests
           env: TOXENV='test'
                EVENT_TYPE='cron'
 
@@ -106,7 +106,7 @@ matrix:
         # Try on Windows.
         - os: windows
           language: shell
-          #stage: Cron tests
+          stage: Cron tests
           env: TOXENV='test'
                EVENT_TYPE='cron'
                PATH=/c/Python37:/c/Python37/Scripts:$PATH
