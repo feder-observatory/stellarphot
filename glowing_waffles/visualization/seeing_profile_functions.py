@@ -1,5 +1,4 @@
 import numpy as np
-from astrowidgets import ImageWidget
 from photutils import centroid_com
 import ipywidgets as ipw
 from astropy.stats import sigma_clipped_stats
@@ -10,16 +9,17 @@ out = ipw.Output()
 out2 = ipw.Output()
 out3 = ipw.Output()
 
+
 def build(imagewidget):
 
     bind_map = imagewidget._viewer.get_bindmap()
     # Displays the event map...
-    #bind_map.eventmap
+    # bind_map.eventmap
     bind_map.clear_event_map()
     bind_map.map_event(None, (), 'ms_left', 'pan')
     bind_map.map_event(None, (), 'pa_pan', 'zoom')
 
-    #bind_map.map_event(None, (), 'ms_left', 'cursor')
+    # bind_map.map_event(None, (), 'ms_left', 'cursor')
     # contrast with right mouse
     bind_map.map_event(None, (), 'ms_right', 'contrast')
 
@@ -41,6 +41,7 @@ def build(imagewidget):
     bind_map.map_event(None, (), 'kp_up', 'pan_down')
     bind_map.map_event(None, (), 'kp_down', 'pan_up')
 
+
 def make_show_event(iw):
     def show_event(viewer, event, datax, datay):
 
@@ -50,21 +51,21 @@ def make_show_event(iw):
         x = int(np.floor(event.data_x))
         y = int(np.floor(event.data_y))
         cnt = 0
-        sub_data = data[y - pad:y + pad, x - pad:x + pad] #- med
+        sub_data = data[y - pad:y + pad, x - pad:x + pad]  # - med
         _, sub_med, _ = sigma_clipped_stats(sub_data)
-        #sub_med = 0
+        # sub_med = 0
         foo, moo = centroid_com(sub_data - sub_med)
         cenx = foo + x - pad
         ceny = moo + y - pad
         cen = np.array([foo + x - pad, moo + y - pad])
         ceno = np.array([-100, -100])
-        while cnt <= 10 and (np.abs(np.array([foo, moo]) - pad).max() >3 or np.abs(cen - ceno).max() > 0.1):
+        while cnt <= 10 and (np.abs(np.array([foo, moo]) - pad).max() > 3 or np.abs(cen - ceno).max() > 0.1):
            # print(cnt, foo, moo)
             x = int(np.floor(foo)) + x - pad
             y = int(np.floor(moo)) + y - pad
-            sub_data = data[y - pad:y + pad, x - pad:x + pad] #- med
+            sub_data = data[y - pad:y + pad, x - pad:x + pad]  # - med
             _, sub_med, _ = sigma_clipped_stats(sub_data)
-            #sub_med = 0
+            # sub_med = 0
             mask = (sub_data - sub_med) < 0
             foo, moo = centroid_com(sub_data - sub_med, mask=mask)
             ceno = cen
@@ -74,7 +75,7 @@ def make_show_event(iw):
             cnt += 1
 
         iw.add_markers(Table(data=[[cen[0]], [cen[1]]], names=['x', 'y']))
-        #print(foo, moo)
+        # print(foo, moo)
         yd, xd = np.indices((sub_data.shape))
         r = np.sqrt((xd - foo)**2 + (yd - moo)**2)
         r_exact = r.copy()
@@ -89,18 +90,18 @@ def make_show_event(iw):
         scaled_exact_counts = (sub_data - sub_med) / adjust_max
         out.clear_output(wait=True)
         with out:
-           # print(dir(event))
-            #print(event.data_x, event.data_y)
+            # print(dir(event))
+            # print(event.data_x, event.data_y)
             plt.clf()
-            #sub_med += med
+            # sub_med += med
             seeing_plot(r_exact, scaled_exact_counts, ravg, scaled_profile, 5,
-                    'Some Image Name', file_name='some_name', gap=6, annulus_width=13)
+                        'Some Image Name', file_name='some_name', gap=6, annulus_width=13)
             plt.show()
         out2.clear_output(wait=True)
         with out2:
             tbin2 = np.bincount(r.ravel(), (sub_data - sub_med).ravel())
             counts = np.cumsum(tbin2)
-            mag_diff = -2.5 * np.log10(counts/counts.max())
+            mag_diff = -2.5 * np.log10(counts / counts.max())
             plt.plot(range(len(radialprofile)), counts)
             plt.xlim(0, 20)
             #plt.ylim(0.2, 0)
@@ -108,7 +109,8 @@ def make_show_event(iw):
             sub_blot = sub_data.copy()
             sub_blot[10:30, 10:30] = np.nan
             sub_std = np.nanstd(sub_blot)
-            plt.title('Net counts in aperture std {:.2f} med {:.2f}'.format(sub_std, sub_med))
+            plt.title('Net counts in aperture std {:.2f} med {:.2f}'.format(
+                sub_std, sub_med))
             sub_pois = (sub_data - sub_med)
             e_sky = np.sqrt(sub_med)
             rn = 10
@@ -119,17 +121,19 @@ def make_show_event(iw):
         out3.clear_output(wait=True)
         with out3:
             poisson = np.sqrt(np.cumsum(tbin2))
-            error = np.sqrt(poisson ** 2 + np.cumsum(nr) * (e_sky ** 2 + rn ** 2))
+            error = np.sqrt(poisson ** 2 + np.cumsum(nr)
+                            * (e_sky ** 2 + rn ** 2))
             snr = np.cumsum(tbin2) / error
             snr_max = snr[:20].max()
             plt.plot(range(len(radialprofile)), snr)
             plt.title('Signal to noise ratio {}'.format(snr.max()))
             plt.xlim(0, 20)
-            #plt.ylim(0, 2)
+            # plt.ylim(0, 2)
             plt.xlabel('Aperture radius')
             plt.grid()
             plt.show()
     return show_event
+
 
 def box(imagewidget):
     big_box = ipw.HBox()
@@ -149,4 +153,3 @@ def box(imagewidget):
     big_box.layout.justify_content = 'space-between'
 
     return big_box
-
