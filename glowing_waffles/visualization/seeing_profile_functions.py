@@ -13,9 +13,24 @@ out2 = ipw.Output()
 out3 = ipw.Output()
 
 
-def build(imagewidget):
+def set_keybindings(image_widget):
+    """
+    Set image widget keyboard bindings. The bindings are:
 
-    bind_map = imagewidget._viewer.get_bindmap()
+    + Pan by click-and-drag or with arrow keys.
+    + Zoom by scrolling or using the ``+``/``-`` keys.
+    + Adjust contrast by Ctrl-left click and drag; reset with
+      shift-right-click.
+
+    Any existing key bindings are removed.
+
+    Parameters
+    ----------
+
+    image_widget : astrowidgets.ImageWidget
+        Image widget on which to set the key bindings.
+    """
+    bind_map = image_widget._viewer.get_bindmap()
     # Displays the event map...
     # bind_map.eventmap
     bind_map.clear_event_map()
