@@ -8,6 +8,9 @@ from glowing_waffles.differential_photometry import *
 from glowing_waffles.photometry import *
 import numpy as np
 
+__all__ = ['read_file', 'set_up', 'match', 'mag_scale',
+           'in_field', 'make_markers', 'wrap']
+
 
 def read_file(radec_file):
     df = pandas.read_csv(radec_file, names=['RA', 'Dec', 'a', 'b', 'Mag'])

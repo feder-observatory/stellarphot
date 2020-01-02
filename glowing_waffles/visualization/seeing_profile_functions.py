@@ -5,6 +5,9 @@ from astropy.stats import sigma_clipped_stats
 from astropy.table import Table
 import matplotlib.pyplot as plt
 from glowing_waffles.visualization import seeing_plot
+
+__all__ = ['set_keybindings', 'box', 'make_show_event']
+
 out = ipw.Output()
 out2 = ipw.Output()
 out3 = ipw.Output()
