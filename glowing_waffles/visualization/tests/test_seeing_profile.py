@@ -90,3 +90,18 @@ def test_find_center_no_star():
                              mean=1000, stddev=5)
     cen = spf.find_center(image + noise, [50, 200], max_iters=10)
     assert (np.abs(cen[0] - 50) > 1) and (np.abs(cen[1] - 200) > 1)
+
+
+def test_radial_profile():
+    image = make_gaussian_sources_image(SHAPE, STARS)
+    for row in STARS:
+        cen = spf.find_center(image, (row['x_mean'], row['y_mean']),
+                              max_iters=10)
+        print(row)
+        r_ex, r_a, radprof = spf.radial_profile(image, cen)
+        r_exs, r_as, radprofs = spf.radial_profile(image, cen,
+                                                   return_scaled=False)
+
+        # Numerical value below is integral of input 2D gaussian, 2pi A sigma^2
+        expected_integral = 2 * np.pi * row['amplitude'] * row['x_stddev']**2
+        np.testing.assert_allclose(radprofs.sum(), expected_integral, atol=50)

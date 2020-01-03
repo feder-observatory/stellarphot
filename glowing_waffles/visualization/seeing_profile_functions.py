@@ -1,8 +1,11 @@
 import numpy as np
 from photutils import centroid_com
 import ipywidgets as ipw
+
 from astropy.stats import sigma_clipped_stats
 from astropy.table import Table
+from astropy.nddata import Cutout2D
+
 import matplotlib.pyplot as plt
 from glowing_waffles.visualization import seeing_plot
 
@@ -126,13 +129,68 @@ def find_center(image, center_guess, cutout_size=30, max_iters=10):
     return cen
 
 
+def radial_profile(data, center, size=30, return_scaled=True):
+    """
+    Construct a radial profile of a chunk of width ``size`` centered
+    at ``center`` from image ``data`.
+
+    Parameters
+    ----------
+
+    data : numpy array or CCDData
+        Image data
+    center : list-like
+        x, y position of the center in pixel coordinates, i.e. horizontal
+        coordinate then vertical.
+    size : int, optional
+        Width of the rectangular cutout to use in constructing the profile.
+    return_scaled : bool, optional
+        If ``True``, return an average radius and profile, otherwise
+        it is cumulative. Not at all clear what a "cumulative" radius
+        means, tbh.
+
+    Returns
+    -------
+
+    r_exact : numpy array
+        Exact radius of center of each pixels from profile center.
+    ravg : numpy array
+        Average radius of pixels in each bin.
+    radialprofile : numpy array
+        Radial profile.
+    """
+    yd, xd = np.indices((size, size))
+
+    sub_image = Cutout2D(data, center, size, mode='strict')
+    sub_center = sub_image.center_cutout
+
+    r = np.sqrt((xd - sub_center[0])**2 + (yd - sub_center[1])**2)
+    r_exact = r.copy()
+    r = r.astype(np.int)
+    print('ARF', r.ravel().min())
+
+    sub_data = sub_image.data
+
+    tbin = np.bincount(r.ravel(), sub_data.ravel())
+    rbin = np.bincount(r.ravel(), r_exact.ravel())
+    nr = np.bincount(r.ravel())
+    if return_scaled:
+        radialprofile = tbin / nr
+        ravg = rbin / nr
+    else:
+        radialprofile = tbin
+        ravg = rbin
+
+    return r_exact, ravg, radialprofile
+
+
 def make_show_event(iw):
     def show_event(viewer, event, datax, datay):
 
         i = iw._viewer.get_image()
         data = i.get_data()
 
-        # Location of click in original image
+        # Rough location of click in original image
         x = int(np.floor(event.data_x))
         y = int(np.floor(event.data_y))
 
@@ -140,18 +198,15 @@ def make_show_event(iw):
 
         # ADD MARKER WHERE CLICKED
         iw.add_markers(Table(data=[[cen[0]], [cen[1]]], names=['x', 'y']))
-        # print(foo, moo)
+        # print(cen[0], cen[1])
+
+        # ----> MOVE PROFILE CONSTRUCTION INTO FUNCTION <----
 
         # CONSTRUCT RADIAL PROFILE OF PATCH AROUND STAR
-        yd, xd = np.indices((sub_data.shape))
-        r = np.sqrt((xd - foo)**2 + (yd - moo)**2)
-        r_exact = r.copy()
-        r = r.astype(np.int)
-        tbin = np.bincount(r.ravel(), sub_data.ravel())
-        rbin = np.bincount(r.ravel(), r_exact.ravel())
-        nr = np.bincount(r.ravel())
-        radialprofile = tbin / nr
-        ravg = rbin / nr
+        profile_size = 40
+        r_exact, ravg, radialprofile = radial_profile(data, cen, size=profile_size)
+        sub_data = Cutout2D(data, cen, size=profile_size).data
+        sub_med = np.median(sub_data)
         adjust_max = radialprofile.max() - sub_med
         scaled_profile = (radialprofile - sub_med) / adjust_max
         scaled_exact_counts = (sub_data - sub_med) / adjust_max
@@ -170,9 +225,12 @@ def make_show_event(iw):
         # CALCULATE AND DISPLAY NET COUNTS INSIDE RADIUS
         out2.clear_output(wait=True)
         with out2:
-            tbin2 = np.bincount(r.ravel(), (sub_data - sub_med).ravel())
+            r_exact, ravg, tbin2 = radial_profile(data - sub_med, cen,
+                                                  size=profile_size,
+                                                  return_scaled=False)
+            #tbin2 = np.bincount(r.ravel(), (sub_data - sub_med).ravel())
             counts = np.cumsum(tbin2)
-            mag_diff = -2.5 * np.log10(counts / counts.max())
+
             plt.plot(range(len(radialprofile)), counts)
             plt.xlim(0, 20)
             #plt.ylim(0.2, 0)
@@ -182,22 +240,20 @@ def make_show_event(iw):
             sub_std = np.nanstd(sub_blot)
             plt.title('Net counts in aperture std {:.2f} med {:.2f}'.format(
                 sub_std, sub_med))
-            sub_pois = (sub_data - sub_med)
             e_sky = np.sqrt(sub_med)
-            rn = 10
-            sub_noise_sq = np.sqrt(sub_pois ** 2 + sub_std ** 2) ** 2
-            nbin = np.sqrt(np.bincount(r.ravel(), (sub_noise_sq).ravel()))
             plt.xlabel('Aperture radius')
             plt.show()
 
         # CALCULATE And DISPLAY SNR AS A FUNCTION OF RADIUS
         out3.clear_output(wait=True)
         with out3:
+            rn = 10
             poisson = np.sqrt(np.cumsum(tbin2))
+            nr = tbin2 / radialprofile
             error = np.sqrt(poisson ** 2 + np.cumsum(nr)
                             * (e_sky ** 2 + rn ** 2))
             snr = np.cumsum(tbin2) / error
-            snr_max = snr[:20].max()
+            # snr_max = snr[:20].max()
             plt.plot(range(len(radialprofile)), snr)
             plt.title('Signal to noise ratio {}'.format(snr.max()))
             plt.xlim(0, 20)
