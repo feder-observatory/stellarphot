@@ -1,6 +1,23 @@
+import numpy as np
+
+import pytest
+
+from photutils.datasets import make_gaussian_sources_image, make_noise_image
+from astropy.table import Table
 from astrowidgets import ImageWidget
 
 from glowing_waffles.visualization import seeing_profile_functions as spf
+
+# Make a few round stars
+STARS = Table(dict(amplitude=[1000, 200, 300],
+                   x_mean=[30, 100, 150],
+                   y_mean=[40, 110, 160],
+                   x_stddev=[4, 4, 4],
+                   y_stddev=[4, 4, 4],
+                   theta=[0, 0, 0]
+                   )
+)
+SHAPE = (300, 300)
 
 
 def test_keybindings():
@@ -31,3 +48,45 @@ def test_keybindings():
     assert 'Nonekp_+' in bound_keys
     # Yes, the line below is correct...
     assert new_bindings[bound_keys['Nonekp_left']]['name'] == 'pan_right'
+
+
+def test_find_center_no_noise_good_guess():
+    image = make_gaussian_sources_image(SHAPE, STARS)
+    # Good initial guess, no noise, should converge in one try
+    cen1 = spf.find_center(image, (31, 41), max_iters=1)
+    np.testing.assert_allclose(cen1, [30, 40])
+
+
+def test_find_center_noise_bad_guess():
+    image = make_gaussian_sources_image(SHAPE, STARS)
+    noise = make_noise_image(SHAPE, distribution='gaussian', mean=0, stddev=5)
+    cen2 = spf.find_center(image + noise, [40, 50], max_iters=1)
+    # Bad initial guess, noise, should take more than one try...
+    with pytest.raises(AssertionError):
+        np.testing.assert_allclose(cen2, [30, 40])
+
+
+def test_find_center_noise_good_guess():
+    image = make_gaussian_sources_image(SHAPE, STARS)
+    noise = make_noise_image(SHAPE, distribution='gaussian', mean=0, stddev=5)
+    # Trying again with several iterations should work
+    cen3 = spf.find_center(image + noise, [31, 41], max_iters=10)
+    # Tolerance chosen based on some trial and error
+    np.testing.assert_allclose(cen3, [30, 40], atol=0.02)
+
+
+def test_find_center_no_noise_star_at_edge():
+    # Trying to put the star at the edge of the initial guess
+    image = make_gaussian_sources_image(SHAPE, STARS)
+    cen = spf.find_center(image, [45, 65], max_iters=10)
+    np.testing.assert_allclose(cen, [30, 40])
+
+
+def test_find_center_no_star():
+    # No star anywhere near the original guess
+    image = make_gaussian_sources_image(SHAPE, STARS)
+    # Offset the mean from zero to avoid nan center
+    noise = make_noise_image(SHAPE, distribution='gaussian',
+                             mean=1000, stddev=5)
+    cen = spf.find_center(image + noise, [50, 200], max_iters=10)
+    assert (np.abs(cen[0] - 50) > 1) and (np.abs(cen[1] - 200) > 1)
