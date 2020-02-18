@@ -3,9 +3,9 @@ include CHANGES.rst
 include pyproject.toml
 
 include setup.cfg
-include glowing_waffles/tests/coveragerc
+include stellarphot/tests/coveragerc
 
-recursive-include glowing_waffles *.pyx *.c *.pxd
+recursive-include stellarphot *.pyx *.c *.pxd
 recursive-include docs *
 recursive-include licenses *
 recursive-include cextern *
