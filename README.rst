@@ -5,11 +5,11 @@ A package for performing stellar photometry.
     :target: http://www.astropy.org
     :alt: Powered by Astropy Badge
 
-.. image:: https://travis-ci.com/glowing-waffle/glowing-waffles.svg?branch=master
-    :target: https://travis-ci.com/glowing-waffle/glowing-waffles
+.. image:: https://travis-ci.com/stellarphot/stellarphot.svg?branch=master
+    :target: https://travis-ci.com/stellarphot/stellarphot
 
-.. image:: https://codecov.io/gh/glowing-waffle/glowing-waffles/branch/master/graph/badge.svg
-    :target: https://codecov.io/gh/glowing-waffle/glowing-waffles
+.. image:: https://codecov.io/gh/stellarphot/stellarphot/branch/master/graph/badge.svg
+    :target: https://codecov.io/gh/stellarphot/stellarphot
 
 This is a package for doing stellar photometry that relies on astropy.
 
@@ -27,7 +27,7 @@ more information.
 Contributing
 ------------
 
-We love contributions! glowing-waffles is open source,
+We love contributions! stellarphot is open source,
 built on open source, and we'd love to have you hang out in our community.
 
 **Imposter syndrome disclaimer**: We want your help. No, really.
@@ -53,5 +53,5 @@ the errors and assumptions that seasoned contributors have glossed over.
 Note: This disclaimer was originally written by
 `Adrienne Lowe <https://github.com/adriennefriend>`_ for a
 `PyCon talk <https://www.youtube.com/watch?v=6Uj746j9Heo>`_, and was adapted by
-glowing-waffles based on its use in the README file for the
+stellarphot based on its use in the README file for the
 `MetPy project <https://github.com/Unidata/MetPy>`_.
