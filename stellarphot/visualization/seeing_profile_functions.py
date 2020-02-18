@@ -7,7 +7,7 @@ from astropy.table import Table
 from astropy.nddata import Cutout2D
 
 import matplotlib.pyplot as plt
-from glowing_waffles.visualization import seeing_plot
+from stellarphot.visualization import seeing_plot
 
 __all__ = ['set_keybindings', 'box', 'make_show_event']
 

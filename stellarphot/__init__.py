@@ -21,7 +21,7 @@ class UnsupportedPythonError(Exception):
 
 
 if LooseVersion(sys.version) < LooseVersion(__minimum_python_version__):
-    raise UnsupportedPythonError("glowing_waffles does not support Python < {}"
+    raise UnsupportedPythonError("stellarphot does not support Python < {}"
                                  .format(__minimum_python_version__))
 
 from .core import *

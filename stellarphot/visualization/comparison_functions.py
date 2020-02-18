@@ -4,8 +4,8 @@ from astropy.coordinates import SkyCoord
 from astropy import units as u
 from astropy.nddata import CCDData
 from pathlib import Path
-from glowing_waffles.differential_photometry import *
-from glowing_waffles.photometry import *
+from stellarphot.differential_photometry import *
+from stellarphot.photometry import *
 import numpy as np
 
 __all__ = ['read_file', 'set_up', 'match', 'mag_scale',
