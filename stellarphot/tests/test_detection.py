@@ -5,8 +5,8 @@ from astropy.utils.data import get_pkg_data_filename
 from astropy.table import Table
 from astropy.stats import gaussian_sigma_to_fwhm
 from photutils.datasets import make_gaussian_sources_image, make_noise_image
-from glowing_waffles.source_detection import source_detection
-from glowing_waffles.photometry import photutils_stellar_photometry
+from stellarphot.source_detection import source_detection
+from stellarphot.photometry import photutils_stellar_photometry
 
 
 class FakeImage:
