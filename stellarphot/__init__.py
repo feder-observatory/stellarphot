@@ -26,4 +26,4 @@ if LooseVersion(sys.version) < LooseVersion(__minimum_python_version__):
 
 from .core import *
 from .source_detection import *
-from .photometry import photutils_stellar_photometry
+from .photometry import *
