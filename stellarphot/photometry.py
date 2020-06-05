@@ -478,7 +478,7 @@ def photometry_on_directory(directory_with_images, object_of_interest,
         print('    ...adding extra columns')
         add_to_photometry_table(pho, a_ccd, anuls, aps,
                                 fname=fname, star_ids=star_ids[in_bounds],
-                                gain=1.47)
+                                gain=gain)
         # And add the final table to the list of tables
         phots.append(pho)
 
