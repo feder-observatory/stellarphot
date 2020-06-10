@@ -187,6 +187,7 @@ def filter_catalog(catalog, **kwd):
     good_ones = np.ones(len(catalog), dtype='bool')
 
     for key, value in kwd.items():
-        good_ones |= (catalog[key] <= value)
+        print(key, value, catalog[key] <= value)
+        good_ones &= (catalog[key] <= value)
 
     return good_ones

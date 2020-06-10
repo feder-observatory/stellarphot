@@ -10,7 +10,7 @@ from astropy.nddata import CCDData
 
 from ..catalog_search import catalog_clean, in_frame, \
                              catalog_search, find_known_variables, \
-                             find_apass_stars
+                             find_apass_stars, filter_catalog
 from ...tests.make_wcs import make_wcs
 
 CCD_SHAPE = [2048, 3073]
@@ -178,3 +178,12 @@ def test_find_apass():
     # so just check the RAs.
     assert all(all_apass['RAJ2000'] == expected_all['RAJ2000'])
     assert all(apass_low_error['RAJ2000'] == expected_low_error['RAJ2000'])
+
+
+def test_filter_catalog():
+    # Check basic functionality of table filtering.
+    table = a_table()
+    print(table)
+    output = filter_catalog(table, a=1.5)
+    assert output[0]
+    assert not output[1]
