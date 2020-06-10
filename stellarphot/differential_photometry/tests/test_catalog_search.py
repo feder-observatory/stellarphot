@@ -138,8 +138,8 @@ def test_catalog_search(clip, data_file):
     wcs_file = get_pkg_data_filename('data/sample_wcs_ey_uma.fits')
     wcs = WCS(fits.open(wcs_file)[0].header)
     wcs.pixel_shape = list(reversed(CCD_SHAPE))
-    actual, _, _ = catalog_search(wcs, CCD_SHAPE, 'B/vsx/vsx',
-                                  clip_by_frame=clip)
+    actual = catalog_search(wcs, CCD_SHAPE, 'B/vsx/vsx',
+                            clip_by_frame=clip)
     assert all(actual['OID'] == expected['OID'])
 
 
@@ -153,8 +153,9 @@ def test_find_known_variables():
     wcs = WCS(fits.open(wcs_file)[0].header)
     wcs.pixel_shape = list(reversed(CCD_SHAPE))
     ccd = CCDData(data=np.zeros(CCD_SHAPE), wcs=wcs, unit='adu')
-    vsx, _, _, _ = find_known_variables(ccd)
+    vsx = find_known_variables(ccd)
     assert expected['OID'] == vsx['OID']
+    assert expected['Name'] == vsx['Name']
 
 
 def test_find_apass():
@@ -166,8 +167,8 @@ def test_find_apass():
     wcs = WCS(fits.open(wcs_file)[0].header)
     wcs.pixel_shape = list(reversed(CCD_SHAPE))
     ccd = CCDData(data=np.zeros(CCD_SHAPE), wcs=wcs, unit='adu')
-    all_apass, _, _, apass_low_error, _, _ = find_apass_stars(ccd)
-    print(all_apass)
+    all_apass, apass_low_error = find_apass_stars(ccd)
+    # print(all_apass)
     # REference data was sorted by RA, first 20 entries kept
     all_apass.sort('RAJ2000')
     all_apass = all_apass[:20]

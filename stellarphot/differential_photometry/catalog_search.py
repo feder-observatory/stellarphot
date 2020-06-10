@@ -91,8 +91,7 @@ def catalog_search(frame_wcs, shape, desired_catalog,
         in_fov = in_frame(frame_wcs, cat_coords, padding=padding)
     else:
         in_fov = np.ones([len(cat_coords)], dtype=np.bool)
-    x, y = frame_wcs.all_world2pix(cat_coords.ra, cat_coords.dec, 0)
-    return (cat[in_fov], x[in_fov], y[in_fov])
+    return cat[in_fov]
 
 
 def catalog_clean(catalog, remove_rows_with_mask=True,
@@ -150,26 +149,24 @@ def find_apass_stars(image,
                      max_mag_error=0.05,
                      max_color_error=0.1):
     # use the catalog_search function to find the apass stars in the frame of the image read above
-    apass, apass_x, apass_y = catalog_search(
-        image.wcs, image.shape, 'II/336/apass9', 'RAJ2000', 'DEJ2000', 1, False)
+    apass = catalog_search(image.wcs, image.shape, 'II/336/apass9',
+                           'RAJ2000', 'DEJ2000', 1, False)
 
     # Creates a boolean array of the apass stars that have well defined magnitudes and color
     apass_bright = (apass['e_r_mag'] < max_mag_error) & (
         apass['e_B-V'] < max_color_error)  # & (apass['u_e_r_mag'] == 0)
 
     # create new lists of apass stars and x y pixel coordinates using boolean array
-    apass_in_bright, in_apass_x, in_apass_y = apass[
-        apass_bright], apass_x[apass_bright], apass_y[apass_bright]
+    apass_in_bright = apass[apass_bright]
 
-    return apass, apass_x, apass_y, apass_in_bright, in_apass_x, in_apass_y
+    return apass, apass_in_bright
 
 
 def find_known_variables(image):
     # Get any known variable stars from a new catalog search of VSX
-    vsx, vsx_x, vsx_y = catalog_search(
-        image.wcs, image.shape, 'B/vsx/vsx', 'RAJ2000', 'DEJ2000')
-    vsx_names = vsx['Name']  # Get the names of the variables
-    return vsx, vsx_x, vsx_y, vsx_names
+    vsx = catalog_search(image.wcs, image.shape, 'B/vsx/vsx',
+                         ra_column='RAJ2000', dec_column='DEJ2000')
+    return vsx
 
 
 def filter_catalog(catalog, **kwd):
