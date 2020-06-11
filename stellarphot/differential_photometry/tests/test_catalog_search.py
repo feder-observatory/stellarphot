@@ -10,7 +10,7 @@ from astropy.nddata import CCDData
 
 from ..catalog_search import catalog_clean, in_frame, \
                              catalog_search, find_known_variables, \
-                             find_apass_stars
+                             find_apass_stars, filter_catalog
 from ...tests.make_wcs import make_wcs
 
 CCD_SHAPE = [2048, 3073]
@@ -138,8 +138,8 @@ def test_catalog_search(clip, data_file):
     wcs_file = get_pkg_data_filename('data/sample_wcs_ey_uma.fits')
     wcs = WCS(fits.open(wcs_file)[0].header)
     wcs.pixel_shape = list(reversed(CCD_SHAPE))
-    actual, _, _ = catalog_search(wcs, CCD_SHAPE, 'B/vsx/vsx',
-                                  clip_by_frame=clip)
+    actual = catalog_search(wcs, CCD_SHAPE, 'B/vsx/vsx',
+                            clip_by_frame=clip)
     assert all(actual['OID'] == expected['OID'])
 
 
@@ -153,8 +153,9 @@ def test_find_known_variables():
     wcs = WCS(fits.open(wcs_file)[0].header)
     wcs.pixel_shape = list(reversed(CCD_SHAPE))
     ccd = CCDData(data=np.zeros(CCD_SHAPE), wcs=wcs, unit='adu')
-    vsx, _, _, _ = find_known_variables(ccd)
+    vsx = find_known_variables(ccd)
     assert expected['OID'] == vsx['OID']
+    assert expected['Name'] == vsx['Name']
 
 
 def test_find_apass():
@@ -166,8 +167,8 @@ def test_find_apass():
     wcs = WCS(fits.open(wcs_file)[0].header)
     wcs.pixel_shape = list(reversed(CCD_SHAPE))
     ccd = CCDData(data=np.zeros(CCD_SHAPE), wcs=wcs, unit='adu')
-    all_apass, _, _, apass_low_error, _, _ = find_apass_stars(ccd)
-    print(all_apass)
+    all_apass, apass_low_error = find_apass_stars(ccd)
+    # print(all_apass)
     # REference data was sorted by RA, first 20 entries kept
     all_apass.sort('RAJ2000')
     all_apass = all_apass[:20]
@@ -177,3 +178,12 @@ def test_find_apass():
     # so just check the RAs.
     assert all(all_apass['RAJ2000'] == expected_all['RAJ2000'])
     assert all(apass_low_error['RAJ2000'] == expected_low_error['RAJ2000'])
+
+
+def test_filter_catalog():
+    # Check basic functionality of table filtering.
+    table = a_table()
+    print(table)
+    output = filter_catalog(table, a=1.5)
+    assert output[0]
+    assert not output[1]

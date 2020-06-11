@@ -18,7 +18,7 @@ STARS = Table(dict(amplitude=[1000, 200, 300],
                    )
 )
 SHAPE = (300, 300)
-
+RANDOM_SEED = 1230971
 
 def test_keybindings():
     def simple_bindmap(bindmap):
@@ -59,7 +59,8 @@ def test_find_center_no_noise_good_guess():
 
 def test_find_center_noise_bad_guess():
     image = make_gaussian_sources_image(SHAPE, STARS)
-    noise = make_noise_image(SHAPE, distribution='gaussian', mean=0, stddev=5)
+    noise = make_noise_image(SHAPE, distribution='gaussian', mean=0, stddev=5,
+                             random_state=RANDOM_SEED)
     cen2 = spf.find_center(image + noise, [40, 50], max_iters=1)
     # Bad initial guess, noise, should take more than one try...
     with pytest.raises(AssertionError):
@@ -68,7 +69,8 @@ def test_find_center_noise_bad_guess():
 
 def test_find_center_noise_good_guess():
     image = make_gaussian_sources_image(SHAPE, STARS)
-    noise = make_noise_image(SHAPE, distribution='gaussian', mean=0, stddev=5)
+    noise = make_noise_image(SHAPE, distribution='gaussian', mean=0, stddev=5,
+                             random_state=RANDOM_SEED)
     # Trying again with several iterations should work
     cen3 = spf.find_center(image + noise, [31, 41], max_iters=10)
     # Tolerance chosen based on some trial and error
@@ -87,7 +89,7 @@ def test_find_center_no_star():
     image = make_gaussian_sources_image(SHAPE, STARS)
     # Offset the mean from zero to avoid nan center
     noise = make_noise_image(SHAPE, distribution='gaussian',
-                             mean=1000, stddev=5)
+                             mean=1000, stddev=5, random_state=RANDOM_SEED)
     cen = spf.find_center(image + noise, [50, 200], max_iters=10)
     assert (np.abs(cen[0] - 50) > 1) and (np.abs(cen[1] - 200) > 1)
 
@@ -104,4 +106,5 @@ def test_radial_profile():
 
         # Numerical value below is integral of input 2D gaussian, 2pi A sigma^2
         expected_integral = 2 * np.pi * row['amplitude'] * row['x_stddev']**2
+        print(expected_integral, radprofs.sum())
         np.testing.assert_allclose(radprofs.sum(), expected_integral, atol=50)

@@ -31,6 +31,12 @@ def test_filter_transform(system):
         np.testing.assert_allclose(f, data[output_filter])
 
 
+def test_filter_transform_bad_filter():
+    with pytest.raises(ValueError) as e:
+        filter_transform([], 'not a filter', transform='jester')
+    assert 'the desired filter must be a string R B V or I' in str(e)
+
+
 # def test_no_matches():
 #     RAs = Column(name='RA',
 #                  data=[1, 2, 3],
