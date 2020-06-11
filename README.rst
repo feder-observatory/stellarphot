@@ -5,8 +5,8 @@ A package for performing stellar photometry.
     :target: http://www.astropy.org
     :alt: Powered by Astropy Badge
 
-.. image:: https://travis-ci.com/stellarphot/stellarphot.svg?branch=master
-    :target: https://travis-ci.com/stellarphot/stellarphot
+.. image:: https://github.com/feder-observatory/stellarphot/workflows/Test/badge.svg?branch=master
+    :target: https://github.com/feder-observatory/stellarphot/actions?query=workflow%3ATest
 
 .. image:: https://codecov.io/gh/stellarphot/stellarphot/branch/master/graph/badge.svg
     :target: https://codecov.io/gh/stellarphot/stellarphot
