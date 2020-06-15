@@ -376,26 +376,6 @@ def transform_magnitudes(input_mags, catalog,
         print('Danger! LinAlgError: {}'.format(str(e)))
         Transform = namedtuple('Transform', ['parameters'])
         transforms = Transform(parameters=(np.nan, np.nan))
-    else:
-        if make_plots:
-            if verbose:
-                print(matched_data[:10])
-
-            plt.figure()
-            plt.plot(catalog_match_color, catalog_match_mags - input_match_mags, 'gv',
-                     alpha=0.3, label='All potential matches')
-            plt.plot(catalog_match_color, matched_data, 'rs',
-                     label='Actually matched')
-            plt.plot(brights[0], brights[1], 'bo', alpha=0.4, label='Bright stars')
-            sc = np.array(plt.xlim())
-            plt.plot(sc, transforms.parameters[1] * sc + transforms.parameters[0])
-            plt.plot(filtered_data[0], filtered_data[1], 'ks',
-                     alpha=0.4, markerfacecolor='none', label='Raw filtered')
-            plt.legend()
-            plt.grid()
-            plt.title('{} -- zero: {} color: {}'.format(plot_label,
-                                                        transforms.parameters[0],
-                                                  transforms.parameters[1]))
 
     our_cat_mags = (input_mags[input_mag_colum][good_match_all] +
                     (catalog[catalog_color_column][catalog_all_indexes] *
