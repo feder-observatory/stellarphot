@@ -1,10 +1,10 @@
 from collections import namedtuple
 
 import numpy as np
-import matplotlib.pyplot as plt
 
 from astropy.modeling import models, fitting
 from astropy.stats import sigma_clip
+from astropy.table import MaskedColumn
 from astropy.coordinates import SkyCoord, match_coordinates_sky
 from astropy import units as u
 
@@ -123,8 +123,7 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
                                      order=1,
                                      sigma=2.0,
                                      gain=None,
-                                     verbose=False,
-                                     extended_output=False):
+                                     ):
     """
     Calculate linear transform coefficients from input magnitudes to catalog
     magnitudes.
@@ -225,14 +224,17 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
                                                niter=2, sigma=sigma)
 
     if faintest_mag is not None:
-        bright = (catalog_mag < faintest_mag).filled(False)
+        bright = catalog_mag < faintest_mag
+        try:
+            bright = bright.filled(False)
+        except AttributeError:
+            # Might not have had a masked array...
+            pass
     else:
         bright = np.ones_like(mag_diff, dtype='bool')
 
     bright_index = np.nonzero(bright)
 
-    if verbose:
-        print(color[bright].max())
     # get fitted model and filtered data
     or_fitted_model, filtered_data_mask = or_fit(g_init,
                                                  color[bright],
@@ -246,17 +248,10 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
     restored_mask[bright_index] = filtered_data_mask
     restored_mask[~bright] = True
 
-    restored_filtered = mag_diff.copy()
+    restored_filtered = MaskedColumn(mag_diff.copy())
     restored_filtered.mask = restored_mask
 
-    if extended_output:
-        return (restored_filtered,
-                or_fitted_model,
-                (color[bright], mag_diff[bright]),
-                (color[bright][~filtered_data_mask],
-                 mag_diff[bright][~filtered_data_mask]))
-    else:
-        return (restored_filtered, or_fitted_model)
+    return (restored_filtered, or_fitted_model)
 
 
 def transform_magnitudes(input_mags, catalog,
@@ -267,10 +262,7 @@ def transform_magnitudes(input_mags, catalog,
                          faintest_mag_for_transform=14,
                          sigma=2,
                          order=1,
-                         gain=None,
-                         plot_label='',
-                         make_plots=False,
-                         verbose=False):
+                         gain=None):
     """
     Calculate catalog magnitudes and transform coefficients
     from instrumental magnitudes.
@@ -311,17 +303,6 @@ def transform_magnitudes(input_mags, catalog,
     gain : float, optional
         If not ``None``, adjust the instrumental magnitude by
         -2.5 * log10(gain), i.e. gain correct the magnitude.
-
-    plot_label : str, optional
-        String to use in the title of plots. Only used if ``make_plots`` is
-        ``True``.
-
-    make_plots : bool, optional
-        If ``True``, then plot input colors/magnitudes and fits to those,
-        intended for diagnostics.
-
-    verbose : bool, optional
-        If ``True``, output
     """
     catalog_all_coords = SkyCoord(catalog['RAJ2000'],
                                   catalog['DEJ2000'],
@@ -362,44 +343,20 @@ def transform_magnitudes(input_mags, catalog,
     catalog_match_color = catalog_match_color[good_mags]
 
     try:
-        matched_data, transforms, brights, filtered_data = \
+        matched_data, transforms = \
             calculate_transform_coefficients(input_match_mags,
                                              catalog_match_mags,
                                              catalog_match_color,
                                              sigma=sigma,
                                              faintest_mag=faintest_mag_for_transform,
                                              order=order,
-                                             gain=gain,
-                                             verbose=verbose,
-                                             extended_output=True)
+                                             gain=gain)
     except np.linalg.LinAlgError as e:
         print('Danger! LinAlgError: {}'.format(str(e)))
         Transform = namedtuple('Transform', ['parameters'])
-        transforms = Transform(parameters=(np.nan, np.nan))
-    else:
-        if make_plots:
-            if verbose:
-                print(matched_data[:10])
-
-            plt.figure()
-            plt.plot(catalog_match_color, catalog_match_mags - input_match_mags, 'gv',
-                     alpha=0.3, label='All potential matches')
-            plt.plot(catalog_match_color, matched_data, 'rs',
-                     label='Actually matched')
-            plt.plot(brights[0], brights[1], 'bo', alpha=0.4, label='Bright stars')
-            sc = np.array(plt.xlim())
-            plt.plot(sc, transforms.parameters[1] * sc + transforms.parameters[0])
-            plt.plot(filtered_data[0], filtered_data[1], 'ks',
-                     alpha=0.4, markerfacecolor='none', label='Raw filtered')
-            plt.legend()
-            plt.grid()
-            plt.title('{} -- zero: {} color: {}'.format(plot_label,
-                                                        transforms.parameters[0],
-                                                  transforms.parameters[1]))
+        transforms = Transform(parameters=(np.nan,) * (order + 1))
 
     our_cat_mags = (input_mags[input_mag_colum][good_match_all] +
-                    (catalog[catalog_color_column][catalog_all_indexes] *
-                     transforms.parameters[1]) +
-                    transforms.parameters[0])
+                    transforms(catalog[catalog_color_column][catalog_all_indexes]))
 
     return our_cat_mags, good_match_all, transforms

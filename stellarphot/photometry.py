@@ -293,7 +293,7 @@ def clipped_sky_per_pix_stats(data, annulus, sigma=5, iters=5):
 
 
 def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
-                            star_ids=None, gain=1.5):
+                            star_ids=None, camera=None):
     """
     Calculate several columns for photometry table.
 
@@ -352,9 +352,9 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
                                  (phot['aperture_area'] *
                                   phot['sky_per_pix_avg']))
 
-    if gain is not None:
+    if camera is not None:
         phot['mag_inst_{}'.format(ccd.header['filter'])] = \
-            (-2.5 * np.log10(gain * phot['aperture_net_flux'].value /
+            (-2.5 * np.log10(camera.gain * phot['aperture_net_flux'].value /
                              phot['exposure'].value))
 
     metadata_to_add = ['AIRMASS', 'FILTER']
@@ -370,7 +370,7 @@ def photometry_on_directory(directory_with_images, object_of_interest,
                             star_locs, aperture_rad,
                             inner_annulus, outer_annulus,
                             max_adu, star_ids,
-                            gain, read_noise, dark_current):
+                            camera):
     """
     Perform aperture photometry on a directory of images.
 
@@ -408,6 +408,9 @@ def photometry_on_directory(directory_with_images, object_of_interest,
 
     star_ids : array-like
         Unique identifier for each source in ``star_locs``.
+
+    camera : `stellarphot.Camera` object
+        Camera object which has gain, read noise and dark current set.
 
     gain : float
         Gain, in electrons/ADU, of the camera that took the image. The gain
@@ -478,7 +481,7 @@ def photometry_on_directory(directory_with_images, object_of_interest,
         print('    ...adding extra columns')
         add_to_photometry_table(pho, a_ccd, anuls, aps,
                                 fname=fname, star_ids=star_ids[in_bounds],
-                                gain=gain)
+                                camera=camera)
         # And add the final table to the list of tables
         phots.append(pho)
 
@@ -509,13 +512,15 @@ def photometry_on_directory(directory_with_images, object_of_interest,
 
     all_phot.remove_indices('star_id')
 
+    gain = camera.gain
+
     snr = (gain * all_phot['aperture_net_flux'] /
            np.sqrt(gain * all_phot['aperture_net_flux'].value +
                    all_phot['aperture_area'] *
                    (1 + all_phot['aperture_area'] / all_phot['annulus_area']) *
                    (gain * all_phot['sky_per_pix_avg'].value +
-                    gain * dark_current * all_phot['exposure'].value +
-                    read_noise**2
+                    gain * camera.dark_current * all_phot['exposure'].value +
+                    camera.read_noise**2
                    )
                   ))
 
