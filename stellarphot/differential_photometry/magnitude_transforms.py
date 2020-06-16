@@ -1,10 +1,10 @@
 from collections import namedtuple
 
 import numpy as np
-import matplotlib.pyplot as plt
 
 from astropy.modeling import models, fitting
 from astropy.stats import sigma_clip
+from astropy.table import MaskedColumn
 from astropy.coordinates import SkyCoord, match_coordinates_sky
 from astropy import units as u
 
@@ -123,8 +123,7 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
                                      order=1,
                                      sigma=2.0,
                                      gain=None,
-                                     verbose=False,
-                                     extended_output=False):
+                                     ):
     """
     Calculate linear transform coefficients from input magnitudes to catalog
     magnitudes.
@@ -225,14 +224,17 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
                                                niter=2, sigma=sigma)
 
     if faintest_mag is not None:
-        bright = (catalog_mag < faintest_mag).filled(False)
+        bright = catalog_mag < faintest_mag
+        try:
+            bright = bright.filled(False)
+        except AttributeError:
+            # Might not have had a masked array...
+            pass
     else:
         bright = np.ones_like(mag_diff, dtype='bool')
 
     bright_index = np.nonzero(bright)
 
-    if verbose:
-        print(color[bright].max())
     # get fitted model and filtered data
     or_fitted_model, filtered_data_mask = or_fit(g_init,
                                                  color[bright],
@@ -246,17 +248,10 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
     restored_mask[bright_index] = filtered_data_mask
     restored_mask[~bright] = True
 
-    restored_filtered = mag_diff.copy()
+    restored_filtered = MaskedColumn(mag_diff.copy())
     restored_filtered.mask = restored_mask
 
-    if extended_output:
-        return (restored_filtered,
-                or_fitted_model,
-                (color[bright], mag_diff[bright]),
-                (color[bright][~filtered_data_mask],
-                 mag_diff[bright][~filtered_data_mask]))
-    else:
-        return (restored_filtered, or_fitted_model)
+    return (restored_filtered, or_fitted_model)
 
 
 def transform_magnitudes(input_mags, catalog,
