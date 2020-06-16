@@ -343,7 +343,7 @@ def transform_magnitudes(input_mags, catalog,
     catalog_match_color = catalog_match_color[good_mags]
 
     try:
-        matched_data, transforms, brights, filtered_data = \
+        matched_data, transforms = \
             calculate_transform_coefficients(input_match_mags,
                                              catalog_match_mags,
                                              catalog_match_color,
@@ -354,11 +354,9 @@ def transform_magnitudes(input_mags, catalog,
     except np.linalg.LinAlgError as e:
         print('Danger! LinAlgError: {}'.format(str(e)))
         Transform = namedtuple('Transform', ['parameters'])
-        transforms = Transform(parameters=(np.nan, np.nan))
+        transforms = Transform(parameters=(np.nan,) * (order + 1))
 
     our_cat_mags = (input_mags[input_mag_colum][good_match_all] +
-                    (catalog[catalog_color_column][catalog_all_indexes] *
-                     transforms.parameters[1]) +
-                    transforms.parameters[0])
+                    transforms(catalog[catalog_color_column][catalog_all_indexes]))
 
     return our_cat_mags, good_match_all, transforms
