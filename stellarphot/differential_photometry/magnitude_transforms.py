@@ -262,10 +262,7 @@ def transform_magnitudes(input_mags, catalog,
                          faintest_mag_for_transform=14,
                          sigma=2,
                          order=1,
-                         gain=None,
-                         plot_label='',
-                         make_plots=False,
-                         verbose=False):
+                         gain=None):
     """
     Calculate catalog magnitudes and transform coefficients
     from instrumental magnitudes.
@@ -306,17 +303,6 @@ def transform_magnitudes(input_mags, catalog,
     gain : float, optional
         If not ``None``, adjust the instrumental magnitude by
         -2.5 * log10(gain), i.e. gain correct the magnitude.
-
-    plot_label : str, optional
-        String to use in the title of plots. Only used if ``make_plots`` is
-        ``True``.
-
-    make_plots : bool, optional
-        If ``True``, then plot input colors/magnitudes and fits to those,
-        intended for diagnostics.
-
-    verbose : bool, optional
-        If ``True``, output
     """
     catalog_all_coords = SkyCoord(catalog['RAJ2000'],
                                   catalog['DEJ2000'],
@@ -364,9 +350,7 @@ def transform_magnitudes(input_mags, catalog,
                                              sigma=sigma,
                                              faintest_mag=faintest_mag_for_transform,
                                              order=order,
-                                             gain=gain,
-                                             verbose=verbose,
-                                             extended_output=True)
+                                             gain=gain)
     except np.linalg.LinAlgError as e:
         print('Danger! LinAlgError: {}'.format(str(e)))
         Transform = namedtuple('Transform', ['parameters'])
