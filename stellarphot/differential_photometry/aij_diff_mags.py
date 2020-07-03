@@ -1,9 +1,10 @@
 import numpy as np
 
 from astropy.coordinates import SkyCoord
+import astropy.units as u
 
 
-def calc_aij_mags(star_data, comp_stars, in_place=True):
+def calc_aij_mags(star_data, comp_stars, in_place=True, index_column=None):
     """
     Calculate AstroImageJ-style flux ratios.
 
@@ -11,7 +12,8 @@ def calc_aij_mags(star_data, comp_stars, in_place=True):
     ----------
 
     star_data : '~astropy.table.Table'
-        Table of star data from observation image
+        Table of star data from a SINGLE observation image BECAUSE
+        MATCHIGN BY RA/DEC WON't work otherwise
 
     comp_stars : '~astropy.table.Table'
         Table of known comparison stars in the field, given by AAVSO
@@ -19,6 +21,10 @@ def calc_aij_mags(star_data, comp_stars, in_place=True):
     in_place : ``bool``, optional
         If ``True``, add new columns to input table. Otherwise, return
         new table with those columns added.
+
+    index_column : ``str``, optional
+        If provided, use this column as the unique identifier for the star.
+        If not provided, a temporary one is generated.
 
     Returns
     -------
@@ -32,9 +38,9 @@ def calc_aij_mags(star_data, comp_stars, in_place=True):
     # Match comparison star list to instrumental magnitude information
     star_data_coords = SkyCoord(ra=star_data['RA'], dec=star_data['Dec'])
 
-    comp_coords = SkyCoord(ra=comp_stars['ra'], dec=comp_stars['dec'])
+    comp_coords = SkyCoord(ra=comp_stars['RA'], dec=comp_stars['Dec'])
 
-    index, d2d, _ = comp_coords.match_to_catalog_sky(star_data_coords)
+    index, d2d, _ = star_data_coords.match_to_catalog_sky(comp_coords)
 
     # Not sure this is really close enough for a good match...
     good = d2d < 1 * u.arcsec
@@ -47,13 +53,26 @@ def calc_aij_mags(star_data, comp_stars, in_place=True):
     # Make a small table with just counts and time for all of the comparison
     # stars.
 
-    comp_fluxes = star_data['date-obs', flux_column_name][good_index]
+    comp_fluxes = star_data['date-obs', flux_column_name][good]
+    # print(comp_fluxes)
+
     comp_fluxes = comp_fluxes.group_by('date-obs')
     comp_totals = comp_fluxes.groups.aggregate(np.add)[flux_column_name]
+    # print(comp_totals)
 
     # Calculate relative flux for every star
-    relative_flux = star_data[flux_column_name] / comp_totals
 
+    # Have to remove the flux of the star if the star is a comparison
+    # star.
+    is_comp = np.zeros_like(star_data[flux_column_name])
+    is_comp[good] = 1
+    flux_offset = -star_data[flux_column_name] * is_comp
+
+    # FIX THIS 👇👇👇👇👇👇👇👇👇👇👇 the computer totals aren't matched to the dates
+    # right.
+    relative_flux = star_data[flux_column_name] / (comp_totals[:, np.newaxis] + flux_offset)
+    relative_flux = relative_flux.flatten()
+    print(relative_flux.flatten())
     # Calculate relative flux error and SNR for each target
 
     return relative_flux
