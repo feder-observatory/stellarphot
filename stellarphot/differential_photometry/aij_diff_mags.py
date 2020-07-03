@@ -44,8 +44,6 @@ def calc_aij_mags(star_data, comp_stars, in_place=True, index_column=None):
 
     # Not sure this is really close enough for a good match...
     good = d2d < 1 * u.arcsec
-    good_index = index[good]
-
 
     flux_column_name = 'aperture_net_flux'
     # Calculate comp star counts for each time
@@ -58,6 +56,8 @@ def calc_aij_mags(star_data, comp_stars, in_place=True, index_column=None):
 
     comp_fluxes = comp_fluxes.group_by('date-obs')
     comp_totals = comp_fluxes.groups.aggregate(np.add)[flux_column_name]
+
+    comp_total_vector = np.ones_like(star_data[flux_column_name])
     # print(comp_totals)
 
     # Calculate relative flux for every star
@@ -68,11 +68,13 @@ def calc_aij_mags(star_data, comp_stars, in_place=True, index_column=None):
     is_comp[good] = 1
     flux_offset = -star_data[flux_column_name] * is_comp
 
-    # FIX THIS 👇👇👇👇👇👇👇👇👇👇👇 the computer totals aren't matched to the dates
-    # right.
-    relative_flux = star_data[flux_column_name] / (comp_totals[:, np.newaxis] + flux_offset)
+    # This seems a little hacky; there must be a better way
+    for date_obs, comp_total in zip(comp_fluxes.groups.keys, comp_totals):
+        this_time = star_data['date-obs'] == date_obs[0]
+        comp_total_vector[this_time] *= comp_total
+
+    relative_flux = star_data[flux_column_name] / (comp_total_vector + flux_offset)
     relative_flux = relative_flux.flatten()
-    print(relative_flux.flatten())
     # Calculate relative flux error and SNR for each target
 
     return relative_flux
