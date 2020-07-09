@@ -6,7 +6,7 @@ from astropy.table import Table
 from astropy.time import Time
 import astropy.units as u
 
-from stellarphot.differential_photometry.aij_diff_mags import calc_aij_relative_flux
+from stellarphot.differential_photometry.aij_rel_fluxes import calc_aij_relative_flux
 
 
 def _repeat(array, count):
