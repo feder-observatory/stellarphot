@@ -11,7 +11,8 @@ def _add_in_quadrature(array):
     return np.sqrt((array**2).sum())
 
 
-def calc_aij_mags(star_data, comp_stars, in_place=True, index_column=None):
+def calc_aij_relative_flux(star_data, comp_stars,
+                           in_place=True, index_column=None):
     """
     Calculate AstroImageJ-style flux ratios.
 
@@ -92,6 +93,13 @@ def calc_aij_mags(star_data, comp_stars, in_place=True, index_column=None):
                               (comp_error_vector / comp_total_vector)**2
                               )
                      )
-    # Calculate relative flux error and SNR for each target
 
-    return relative_flux, rel_flux_error
+    # Add these columns to table
+    if not in_place:
+        star_data = star_data.copy()
+
+    star_data['relative_flux'] = relative_flux
+    star_data['relative_flux_error'] = rel_flux_error
+    star_data['comparison counts'] = comp_total_vector + flux_offset
+
+    return star_data

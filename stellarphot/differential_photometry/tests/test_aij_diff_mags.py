@@ -1,11 +1,12 @@
 import numpy as np
 
+import pytest
+
 from astropy.table import Table
-from astropy.coordinates import SkyCoord
 from astropy.time import Time
 import astropy.units as u
 
-from stellarphot.differential_photometry.aij_diff_mags import calc_aij_mags
+from stellarphot.differential_photometry.aij_diff_mags import calc_aij_relative_flux
 
 
 def _repeat(array, count):
@@ -52,7 +53,8 @@ def _raw_photometry_table():
     return expected_flux_ratios, expected_flux_error, raw_table, raw_table[1:4]
 
 
-def test_relative_flux_calculation():
+@pytest.mark.parametrize('in_place', [True, False])
+def test_relative_flux_calculation(in_place):
     expected_flux, expected_error, input_table, comp_star = _raw_photometry_table()
     # print(input_table)
 
@@ -67,7 +69,14 @@ def test_relative_flux_calculation():
     all_expected_flux = _repeat(expected_flux, n_times)
     all_expected_error = _repeat(expected_error, n_times)
 
-    output_flux, output_error = calc_aij_mags(input_table, comp_star)
+    output_table = calc_aij_relative_flux(input_table, comp_star,
+                                          in_place=in_place)
+    output_flux = output_table['relative_flux']
+    output_error = output_table['relative_flux_error']
     print(all_expected_flux - output_flux)
     np.testing.assert_allclose(output_flux, all_expected_flux)
     np.testing.assert_allclose(output_error, all_expected_error)
+    if in_place:
+        assert 'relative_flux' in input_table.colnames
+    else:
+        assert 'relative_flux' not in input_table.colnames
