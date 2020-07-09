@@ -4,6 +4,13 @@ from astropy.coordinates import SkyCoord
 import astropy.units as u
 
 
+def _add_in_quadrature(array):
+    """
+    Add an array of numbers in quadrature.
+    """
+    return np.sqrt((array**2).sum())
+
+
 def calc_aij_mags(star_data, comp_stars, in_place=True, index_column=None):
     """
     Calculate AstroImageJ-style flux ratios.
@@ -12,8 +19,7 @@ def calc_aij_mags(star_data, comp_stars, in_place=True, index_column=None):
     ----------
 
     star_data : '~astropy.table.Table'
-        Table of star data from a SINGLE observation image BECAUSE
-        MATCHIGN BY RA/DEC WON't work otherwise
+        Table of star data from one or more images.
 
     comp_stars : '~astropy.table.Table'
         Table of known comparison stars in the field, given by AAVSO
@@ -46,18 +52,21 @@ def calc_aij_mags(star_data, comp_stars, in_place=True, index_column=None):
     good = d2d < 1 * u.arcsec
 
     flux_column_name = 'aperture_net_flux'
+    error_column_name = 'noise-aij'
     # Calculate comp star counts for each time
 
-    # Make a small table with just counts and time for all of the comparison
+    # Make a small table with just counts, errors and time for all of the comparison
     # stars.
 
-    comp_fluxes = star_data['date-obs', flux_column_name][good]
+    comp_fluxes = star_data['date-obs', flux_column_name, error_column_name][good]
     # print(comp_fluxes)
 
     comp_fluxes = comp_fluxes.group_by('date-obs')
     comp_totals = comp_fluxes.groups.aggregate(np.add)[flux_column_name]
+    comp_errors = comp_fluxes.groups.aggregate(_add_in_quadrature)[error_column_name]
 
     comp_total_vector = np.ones_like(star_data[flux_column_name])
+    comp_error_vector = np.ones_like(star_data[flux_column_name])
     # print(comp_totals)
 
     # Calculate relative flux for every star
@@ -69,12 +78,20 @@ def calc_aij_mags(star_data, comp_stars, in_place=True, index_column=None):
     flux_offset = -star_data[flux_column_name] * is_comp
 
     # This seems a little hacky; there must be a better way
-    for date_obs, comp_total in zip(comp_fluxes.groups.keys, comp_totals):
+    for date_obs, comp_total, comp_error in zip(comp_fluxes.groups.keys,
+                                                comp_totals, comp_errors):
         this_time = star_data['date-obs'] == date_obs[0]
         comp_total_vector[this_time] *= comp_total
+        comp_error_vector[this_time] = comp_error
 
     relative_flux = star_data[flux_column_name] / (comp_total_vector + flux_offset)
     relative_flux = relative_flux.flatten()
+
+    rel_flux_error = (star_data[flux_column_name] / comp_total_vector *
+                      np.sqrt((star_data[error_column_name] / star_data[flux_column_name])**2 +
+                              (comp_error_vector / comp_total_vector)**2
+                              )
+                     )
     # Calculate relative flux error and SNR for each target
 
-    return relative_flux
+    return relative_flux, rel_flux_error

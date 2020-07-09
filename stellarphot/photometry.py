@@ -514,16 +514,47 @@ def photometry_on_directory(directory_with_images, object_of_interest,
 
     gain = camera.gain
 
-    snr = (gain * all_phot['aperture_net_flux'] /
-           np.sqrt(gain * all_phot['aperture_net_flux'].value +
-                   all_phot['aperture_area'] *
-                   (1 + all_phot['aperture_area'] / all_phot['annulus_area']) *
-                   (gain * all_phot['sky_per_pix_avg'].value +
-                    gain * camera.dark_current * all_phot['exposure'].value +
-                    camera.read_noise**2
-                   )
-                  ))
+    noise = calculate_noise(gain=camera.gain, read_noise=camera.read_noise,
+                            dark_current_per_sec=camera.dark_current,
+                            flux=all_phot['aperture_net_flux'],
+                            sky_per_pix=all_phot['sky_per_pix_avg'].value,
+                            aperture_area=all_phot['aperture_area'],
+                            annulus_area=all_phot['annulus_area'],
+                            exposure=all_phot['exposure'].value,
+                            include_digitization=False)
+
+    snr = gain * all_phot['aperture_net_flux'] / noise
 
     all_phot['mag_error'] = 1.085736205 / snr
+    all_phot['noise'] = noise
+    # AstroImageJ includes a factor of gain in the noise. IMHO it is part of the
+    # flux but, for convenience, here it is
+    all_phot['noise-aij'] = noise / gain
+    all_phot['snr'] = snr
 
     return all_phot
+
+
+def calculate_noise(gain=1.0, read_noise=0.0, dark_current_per_sec=0.0,
+                    flux=0.0, sky_per_pix=0.0,
+                    aperture_area=0, annulus_area=0,
+                    exposure=0,
+                    include_digitization=False):
+
+    if annulus_area == 0:
+        area_ratio = aperture_area
+    else:
+        area_ratio = aperture_area * (1 + aperture_area / annulus_area)
+
+    poisson_source = gain * flux
+
+    sky = area_ratio * gain * sky_per_pix
+    dark = area_ratio * dark_current_per_sec * exposure
+    rn_error = area_ratio * read_noise ** 2
+
+    digitization = 0.0
+
+    if include_digitization:
+        digitization = area_ratio * (gain * 0.289) ** 2
+
+    return np.sqrt(poisson_source + sky + dark + rn_error + digitization)

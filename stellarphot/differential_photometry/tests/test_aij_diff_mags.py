@@ -29,6 +29,7 @@ def _raw_photometry_table():
     star_ra = 250.0 * u.degree + np.arange(n_stars) * 10 * u.arcmin
     star_dec = np.array([45.0] * n_stars) * u.degree
     fluxes = np.array([10000., 20000, 30000, 40000])
+    errors = np.sqrt(fluxes) + 50
 
     # Stars 2, 3 and 4 will be the comparison stars
     comp_stars = np.array([0, 1, 1, 1])
@@ -37,17 +38,23 @@ def _raw_photometry_table():
     comp_flux_offset = - comp_stars * fluxes
     expected_flux_ratios = fluxes / (expected_comp_fluxes + comp_flux_offset)
 
-    raw_table = Table(data=[np.sort(_repeat(times, n_stars)), _repeat(star_ra,  n_times),
-                            _repeat(star_dec, n_times), _repeat(fluxes, n_times)],
-                      names=['date-obs', 'RA', 'Dec', 'aperture_net_flux'])
+    comp_error_total = np.sqrt((errors[1:]**2).sum())
 
-    return expected_flux_ratios, raw_table, raw_table[1:4]
+    expected_flux_error = (fluxes / expected_comp_fluxes *
+                           np.sqrt(errors**2 / fluxes**2 +
+                                   comp_error_total**2 / expected_comp_fluxes**2))
+
+    raw_table = Table(data=[np.sort(_repeat(times, n_stars)), _repeat(star_ra,  n_times),
+                            _repeat(star_dec, n_times), _repeat(fluxes, n_times),
+                            _repeat(errors, n_times)],
+                      names=['date-obs', 'RA', 'Dec', 'aperture_net_flux', 'noise-aij'])
+
+    return expected_flux_ratios, expected_flux_error, raw_table, raw_table[1:4]
 
 
 def test_relative_flux_calculation():
-    expected_flux, input_table, comp_star = _raw_photometry_table()
+    expected_flux, expected_error, input_table, comp_star = _raw_photometry_table()
     # print(input_table)
-    grouped_input = input_table.group_by('date-obs')
 
     # Try running the fluxes one exposure at a time
     # for one_time in grouped_input.groups:
@@ -58,7 +65,9 @@ def test_relative_flux_calculation():
     # Try doing it all at once
     n_times = len(np.unique(input_table['date-obs']))
     all_expected_flux = _repeat(expected_flux, n_times)
+    all_expected_error = _repeat(expected_error, n_times)
 
-    output = calc_aij_mags(input_table, comp_star)
-    print(all_expected_flux - output)
-    np.testing.assert_allclose(output, all_expected_flux)
+    output_flux, output_error = calc_aij_mags(input_table, comp_star)
+    print(all_expected_flux - output_flux)
+    np.testing.assert_allclose(output_flux, all_expected_flux)
+    np.testing.assert_allclose(output_error, all_expected_error)
