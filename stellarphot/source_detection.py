@@ -7,8 +7,8 @@ from astropy.stats import gaussian_sigma_to_fwhm
 __all__ = ['source_detection']
 
 
-def source_detection(ccd, fwhm=3.0, sigma=3.0, iters=5,
-                     threshold=5.0, find_fwhm=True):
+def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
+                     threshold=10.0, find_fwhm=True):
     """
     Returns an astropy table containing the position of sources
     within the image.

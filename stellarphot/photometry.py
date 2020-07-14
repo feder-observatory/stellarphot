@@ -16,7 +16,7 @@ from astropy.nddata import NoOverlapError
 from .coordinates import convert_pixel_wcs
 
 __all__ = ['photutils_stellar_photometry',
-           'detect_sources', 'faster_sigma_clip_stats',
+           'faster_sigma_clip_stats',
            'find_too_close', 'clipped_sky_per_pix_stats',
            'add_to_photometry_table', 'photometry_on_directory']
 
@@ -180,37 +180,6 @@ def faster_sigma_clip_stats(data, sigma=5, iters=5, axis=None):
         data[clips] = np.nan
     return (bn.nanmean(data, axis=axis), bn.nanmedian(data, axis=axis),
             bn.nanstd(data, axis=axis))
-
-
-def detect_sources(ccd, fwhm=8, thresh=10):
-    """
-    Detect sources in an image using the DAOStarFinder from photutils.
-
-    Parameters
-    ----------
-
-    ccd : `astropy.nddata.CCDData`
-        The CCD image in which to detect sources.
-
-    fwhm : float, optional
-        Full-width half-max of the sources, in pixels.
-
-    thresh : float, optional
-        Threshold above which a source must be to count as a source. This
-        argument is multiplied by the sigma-clipped standard deviation of
-        the data.
-    """
-    men, med, std = faster_sigma_clip_stats(ccd.data, sigma=5)
-    # This sets up the source detection. The FWHM turns out to be key...making
-    # it too small results in a single star being detected as two separate
-    # sources.
-    #
-    # Stars must be brighter than the threshold to count as sources. Making
-    # the number higher gives you fewer detected sources, lower gives you more.
-    # There is no "magic" number.
-    dao = DAOStarFinder(threshold=thresh * std, fwhm=fwhm, exclude_border=True)
-    stars = dao(ccd - med)
-    return stars
 
 
 def find_too_close(star_locs, aperture_rad, pixel_scale=0.563):
