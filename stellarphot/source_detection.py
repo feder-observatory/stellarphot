@@ -1,10 +1,26 @@
+import numpy as np
+
 from astropy.stats import sigma_clipped_stats
 from photutils import DAOStarFinder
 from photutils import fit_2dgaussian
 from astropy.nddata.utils import Cutout2D
 from astropy.stats import gaussian_sigma_to_fwhm
 
-__all__ = ['source_detection']
+__all__ = ['source_detection', 'compute_fwhm']
+
+
+def compute_fwhm(ccd, sources, fwhm_estimate=5,
+                 x_column='xcentroid', y_column='ycentroid'):
+    fwhm_x = []
+    fwhm_y = []
+    for source in sources:
+        x = source[x_column]
+        y = source[y_column]
+        cutout = Cutout2D(ccd, (x, y), 5 * fwhm_estimate)
+        fit = fit_2dgaussian(cutout.data)
+        fwhm_x.append(gaussian_sigma_to_fwhm * fit.x_stddev)
+        fwhm_y.append(gaussian_sigma_to_fwhm * fit.y_stddev)
+    return np.array(fwhm_x), np.array(fwhm_y)
 
 
 def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
@@ -43,17 +59,10 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
         an astropy table of the positions of sources in the image.
         If `find_fwhm` is ``True``, includes a column called ``FWHM``.
     """
-    data = ccd
-    mean, median, std = sigma_clipped_stats(data, sigma=sigma, maxiters=iters)
+    mean, median, std = sigma_clipped_stats(ccd, sigma=sigma, maxiters=iters)
     daofind = DAOStarFinder(fwhm=fwhm, threshold=threshold * std)
-    sources = daofind(data - median)
+    sources = daofind(ccd - median)
     if find_fwhm:
-        fwhm_fit = []
-        for source in sources:
-            x = source['xcentroid']
-            y = source['ycentroid']
-            cutout = Cutout2D(data, (x, y), 5 * fwhm)
-            fit = fit_2dgaussian(cutout.data)
-            fwhm_fit.append(gaussian_sigma_to_fwhm * (fit.x_stddev + fit.y_stddev) / 2)
-        sources['FWHM'] = fwhm_fit
+        x, y = compute_fwhm(ccd, sources, fwhm_estimate=fwhm)
+        sources['FWHM'] = (x + y) / 2
     return sources
