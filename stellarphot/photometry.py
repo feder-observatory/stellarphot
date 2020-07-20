@@ -1,7 +1,7 @@
 import bottleneck as bn
 import numpy as np
 from photutils import (DAOStarFinder, aperture_photometry, CircularAperture,
-                       CircularAnnulus, centroid_sources)
+                       CircularAnnulus, centroid_sources, extract_stars)
 
 from astropy.coordinates import SkyCoord
 from astropy.table import vstack
@@ -14,6 +14,7 @@ from astropy.stats import sigma_clipped_stats
 from astropy.nddata import NoOverlapError
 
 from .coordinates import convert_pixel_wcs
+from .source_detection import compute_fwhm
 
 __all__ = ['photutils_stellar_photometry',
            'faster_sigma_clip_stats',
@@ -304,6 +305,12 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
     avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
         clipped_sky_per_pix_stats(ccd, annulus)
     print('        ...DONE calculating clipp sky stats')
+    # Add width x/y:
+    # Make small table with renamed columns
+    fwhm_x, fwhm_y = compute_fwhm(ccd, phot)
+    phot['fwhm_x'] = fwhm_x
+    phot['fwhm_y'] = fwhm_y
+    phot['width'] = (fwhm_x + fwhm_y) / 2
     phot['sky_per_pix_avg'] = avg_sky_per_pix
     phot['sky_per_pix_med'] = med_sky_per_pix
     phot['sky_per_pix_std'] = std_sky_per_pix
