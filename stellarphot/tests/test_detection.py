@@ -55,7 +55,7 @@ def test_detect_source_number_location():
                                    rtol=1e-5, atol=0.05)
         np.testing.assert_allclose(out['ycentroid'], inp['y_mean'],
                                    rtol=1e-5, atol=0.05)
-        np.testing.assert_allclose(gaussian_sigma_to_fwhm * inp['x_stddev'],
+        np.testing.assert_allclose(gaussian_sigma_to_fwhm * (inp['x_stddev'] + inp['y_stddev']) / 2,
                                    out['FWHM'],
                                    rtol=1e-5, atol=0.05)
 
