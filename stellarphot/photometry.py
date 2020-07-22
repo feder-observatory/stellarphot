@@ -533,5 +533,4 @@ def calculate_noise(gain=1.0, read_noise=0.0, dark_current_per_sec=0.0,
     if include_digitization:
         digitization = area_ratio * (gain * 0.289) ** 2
 
-    
     return np.sqrt(poisson_source + sky + dark + rn_error + digitization)
