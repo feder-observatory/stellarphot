@@ -15,8 +15,17 @@ def compute_fwhm(ccd, sources, fwhm_estimate=5,
     fwhm_x = []
     fwhm_y = []
     for source in sources:
-        x = source[x_column] / u.pixel
-        y = source[y_column] / u.pixel
+        x = source[x_column]
+        y = source[y_column]
+
+        # Cutout2D needs no units on the center position, so remove unit
+        # if it is present.
+        try:
+            x = x.value
+            y = y.value
+        except AttributeError:
+            pass
+
         cutout = Cutout2D(ccd, (x, y), 5 * fwhm_estimate)
         fit = fit_2dgaussian(cutout.data)
         fwhm_x.append(gaussian_sigma_to_fwhm * fit.x_stddev)
@@ -63,7 +72,9 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
     mean, median, std = sigma_clipped_stats(ccd, sigma=sigma, maxiters=iters)
     daofind = DAOStarFinder(fwhm=fwhm, threshold=threshold * std)
     sources = daofind(ccd - median)
+    print(sources)
     if find_fwhm:
-        x, y = compute_fwhm(ccd, sources, fwhm_estimate=fwhm)
+        x, y = compute_fwhm(ccd, sources, fwhm_estimate=fwhm,
+                            x_column='xcentroid', y_column='ycentroid')
         sources['FWHM'] = (x + y) / 2
     return sources

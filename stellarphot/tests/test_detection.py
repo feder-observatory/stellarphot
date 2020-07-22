@@ -4,8 +4,11 @@ import pytest
 from astropy.utils.data import get_pkg_data_filename
 from astropy.table import Table
 from astropy.stats import gaussian_sigma_to_fwhm
+from astropy import units as u
+
 from photutils.datasets import make_gaussian_sources_image, make_noise_image
-from stellarphot.source_detection import source_detection
+
+from stellarphot.source_detection import source_detection, compute_fwhm
 from stellarphot.photometry import photutils_stellar_photometry
 
 
@@ -31,6 +34,23 @@ class FakeImage:
         return self._stars + self._noise
 
 
+@pytest.mark.parametrize('units', [u.pixel, None])
+def test_compute_fwhm(units):
+    fake_image = FakeImage()
+    sources = fake_image.sources
+    if units is not None:
+        # It turns out having a unit on a column is not the same as
+        # things in the column having units. The construct below ensures
+        # that the source table values have units.
+        # Do not try: sources['x_mean'] = sources['x_mean'] * units
+        # Turns out individual values do NOT have units in that case.
+        sources['x_mean'] = [v * units for v in sources['x_mean']]
+        sources['y_mean'] = [v * units for v in sources['y_mean']]
+
+    fwhm_x, fwhm_y = compute_fwhm(fake_image.image, sources,
+                                  x_column='x_mean', y_column='y_mean')
+
+
 def test_detect_source_number_location():
     """
     Make sure we detect the sources in the input table....
@@ -40,12 +60,10 @@ def test_detect_source_number_location():
     found_sources = source_detection(fake_image.image,
                                      fwhm=2 * sources['x_stddev'].mean(),
                                      threshold=10)
-    print(found_sources.colnames)
     # Sort by flux so we can reliably match them
     sources.sort('amplitude')
     found_sources.sort('flux')
 
-    print(found_sources)
     # Do we have the right number of sources?
     assert len(sources) == len(found_sources)
 
@@ -74,8 +92,7 @@ def test_aperture_photometry_no_outlier_rejection():
     phot.sort('aperture_sum')
     sources.sort('amplitude')
     found_sources.sort('flux')
-    print(found_sources['xcentroid'])
-    print(phot['background_per_pixel', 'aperture_sum_err', 'net_flux', 'aperture_sum'])
+
     for inp, out in zip(sources, phot):
         stdev = inp['x_stddev']
         expected_flux = (inp['amplitude'] * 2 * np.pi *
@@ -131,8 +148,7 @@ def test_aperture_photometry_with_outlier_rejection(reject):
     phot.sort('aperture_sum')
     sources.sort('amplitude')
     found_sources.sort('flux')
-    print(found_sources['xcentroid'])
-    print(phot['background_per_pixel', 'aperture_sum_err', 'net_flux', 'aperture_sum'])
+
     for inp, out in zip(sources, phot):
         stdev = inp['x_stddev']
         expected_flux = (inp['amplitude'] * 2 * np.pi *
