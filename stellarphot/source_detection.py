@@ -5,17 +5,18 @@ from photutils import DAOStarFinder
 from photutils import fit_2dgaussian
 from astropy.nddata.utils import Cutout2D
 from astropy.stats import gaussian_sigma_to_fwhm
+from astropy import units as u
 
 __all__ = ['source_detection', 'compute_fwhm']
 
 
 def compute_fwhm(ccd, sources, fwhm_estimate=5,
-                 x_column='xcentroid', y_column='ycentroid'):
+                 x_column='xcenter', y_column='ycenter'):
     fwhm_x = []
     fwhm_y = []
     for source in sources:
-        x = source[x_column]
-        y = source[y_column]
+        x = source[x_column] / u.pixel
+        y = source[y_column] / u.pixel
         cutout = Cutout2D(ccd, (x, y), 5 * fwhm_estimate)
         fit = fit_2dgaussian(cutout.data)
         fwhm_x.append(gaussian_sigma_to_fwhm * fit.x_stddev)

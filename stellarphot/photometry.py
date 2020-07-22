@@ -517,12 +517,12 @@ def calculate_noise(gain=1.0, read_noise=0.0, dark_current_per_sec=0.0,
                     exposure=0,
                     include_digitization=False):
 
-    if annulus_area == 0:
+    if annulus_area.all() == 0:
         area_ratio = aperture_area
     else:
         area_ratio = aperture_area * (1 + aperture_area / annulus_area)
 
-    poisson_source = gain * flux
+    poisson_source = gain * flux / u.adu
 
     sky = area_ratio * gain * sky_per_pix
     dark = area_ratio * dark_current_per_sec * exposure
@@ -533,4 +533,5 @@ def calculate_noise(gain=1.0, read_noise=0.0, dark_current_per_sec=0.0,
     if include_digitization:
         digitization = area_ratio * (gain * 0.289) ** 2
 
+    
     return np.sqrt(poisson_source + sky + dark + rn_error + digitization)
