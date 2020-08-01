@@ -1,3 +1,4 @@
+from pathlib import Path
 import re
 
 import astropy.units as u
@@ -5,7 +6,64 @@ from astropy.table import Table
 
 import numpy as np
 
-__all__ = ['parse_aij_table']
+__all__ = ['parse_aij_table', 'ApertureFileAIJ']
+
+
+class ApertureAIJ:
+    def __init__(self):
+        # Outer annulus radius
+        self.rback2 = 41.0
+
+        # Inner annulus radius
+        self.rback1 = 27.0
+
+        # Aperture radius
+        self.radius = 15.0
+
+        # Defaults for this match the defaults for stellarphot.
+        self.removebackstars = True
+
+        # Not sure what this does but stellarphot doesn't use it.
+        self.backplane = False
+
+
+class MultiApertureAIJ:
+    def __init__(self):
+        # Default values for these chosen to match AIJ defaults
+        # They are not used by stellarphot
+        self.naperturesmax = 1000
+        self.apfwhmfactor = 1.4
+        self.usevarsizeap = False
+
+        # Each attribute below should be list-like, all of the same length
+        self.isrefstar = None
+        self.centroidstar = None
+        self.isalignstar = None
+
+        self.xapertures = None
+        self.yapertures = None
+
+        self.absmagapertures = None
+
+        self.raapertures = None
+        self.decapertures = None
+
+
+class ApertureFileAIJ:
+    def __init__(self):
+        self.aperture = ApertureAIJ()
+        self.multaperture = MultiApertureAIJ()
+
+    def write(self, file):
+        attribs = vars(self)
+
+
+def create_aij_apertures(aperture_locations,
+                         aperture, inner_radius, outer_radius,
+                         remove_backstars=True,
+                         ):
+    p = Path(file)
+
 
 
 def parse_aij_table(table_name):
