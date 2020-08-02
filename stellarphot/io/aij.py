@@ -36,34 +36,117 @@ class MultiApertureAIJ:
         self.usevarsizeap = False
 
         # Each attribute below should be list-like, all of the same length
-        self.isrefstar = None
-        self.centroidstar = None
-        self.isalignstar = None
+        self.isrefstar = []
+        self.centroidstar = []
+        self.isalignstar = []
 
-        self.xapertures = None
-        self.yapertures = None
+        self.xapertures = []
+        self.yapertures = []
 
-        self.absmagapertures = None
+        self.absmagapertures = []
 
-        self.raapertures = None
-        self.decapertures = None
+        self.raapertures = []
+        self.decapertures = []
 
 
 class ApertureFileAIJ:
     def __init__(self):
         self.aperture = ApertureAIJ()
-        self.multaperture = MultiApertureAIJ()
+        self.multiaperture = MultiApertureAIJ()
+
+    def __str__(self):
+        lines = []
+
+        top_level_attrib = vars(self)
+        for name, attrib in top_level_attrib.items():
+            base_attrib = vars(attrib)
+            for bname, battrib in base_attrib.items():
+                try:
+                    value = ','.join([str(v).lower() for v in battrib])
+                except TypeError:
+                    value = battrib
+
+                if value is True:
+                    value = 'true'
+                elif value is False:
+                    value = 'false'
+
+                lines.append(f'.{name}.{bname}={value}')
+
+        # Add a trailing blank line
+        return '\n'.join(lines) + '\n'
 
     def write(self, file):
-        attribs = vars(self)
+        p = Path(file)
+        p.write_text(str(self))
 
+    @classmethod
+    def from_table(cls, aperture_table,
+                   aperture_rad=None, inner_annulus=None, outer_annulus=None,
+                   default_absmag=99.999, default_isalign=True,
+                   default_centroidstar=True):
+        """
+        Create an `stellarphot.io.ApertureFileAIJ` from a stellarphot aperture
+        table and in about the aperture sizes.
 
-def create_aij_apertures(aperture_locations,
-                         aperture, inner_radius, outer_radius,
-                         remove_backstars=True,
-                         ):
-    p = Path(file)
+        Parameters
+        ----------
 
+        aperture_table : `astropy.table.Table`
+            Table of aperture information.
+
+        aperture_rad : number
+            Radius of aperture.
+
+        inner_annulus : number
+            Inner radius of annulus.
+
+        outer_annulus : number
+            Outer radius of annulus.
+        """
+        # Create the instance
+        apAIJ = cls()
+
+        # Populate aperture properties
+        apAIJ.aperture.rback2 = outer_annulus
+        apAIJ.aperture.rback1 = inner_annulus
+        apAIJ.aperture.radius = aperture_rad
+
+        # Remaining properties of apAIJ.aperture default to the
+        # correct values for stellarphot
+
+        # Populate multiaperture properties
+        n_apertures = len(aperture_table)
+        columns = aperture_table.colnames
+
+        # A boolean column for this would be better, but this will do
+        # for now.
+        apAIJ.multiaperture.isrefstar = [('comparison' in name.lower())
+                           for name in aperture_table['marker name']]
+
+        # These are not currently in the table but that could change...
+        if 'centroidstar' not in columns:
+            apAIJ.multiaperture.centroidstar = [default_centroidstar] * n_apertures
+        else:
+            apAIJ.multiaperture.centroidstar = aperture_table['centroidstar']
+
+        if 'isalign' not in columns:
+            apAIJ.multiaperture.isalignstar = [default_isalign] * n_apertures
+        else:
+            apAIJ.multiaperture.isalignstar = aperture_table['isalign']
+
+        apAIJ.multiaperture.xapertures = aperture_table['x']
+        apAIJ.multiaperture.yapertures = aperture_table['y']
+
+        if 'absmag' not in columns:
+            apAIJ.multiaperture.absmagapertures = [default_absmag] * n_apertures
+        else:
+            apAIJ.multiaperture.absmagapertures = aperture_table['absmag']
+
+        apAIJ.multiaperture.raapertures = aperture_table['coord'].ra.degree
+        apAIJ.multiaperture.decapertures = aperture_table['coord'].dec.degree
+
+        return apAIJ
 
 
 def parse_aij_table(table_name):
