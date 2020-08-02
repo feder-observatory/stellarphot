@@ -10,6 +10,9 @@ __all__ = ['parse_aij_table', 'ApertureFileAIJ']
 
 
 class ApertureAIJ:
+    """
+    Represent the aperture information AstroImageJ saves.
+    """
     def __init__(self):
         # Outer annulus radius
         self.rback2 = 41.0
@@ -28,6 +31,9 @@ class ApertureAIJ:
 
 
 class MultiApertureAIJ:
+    """
+    Represent the multi-aperture information that AstroImageJ saves
+    """
     def __init__(self):
         # Default values for these chosen to match AIJ defaults
         # They are not used by stellarphot
@@ -50,6 +56,9 @@ class MultiApertureAIJ:
 
 
 class ApertureFileAIJ:
+    """
+    Represent AstroImageJ aperture file.
+    """
     def __init__(self):
         self.aperture = ApertureAIJ()
         self.multiaperture = MultiApertureAIJ()
@@ -87,7 +96,7 @@ class ApertureFileAIJ:
                    default_centroidstar=True):
         """
         Create an `stellarphot.io.ApertureFileAIJ` from a stellarphot aperture
-        table and in about the aperture sizes.
+        table and info about the aperture sizes.
 
         Parameters
         ----------
