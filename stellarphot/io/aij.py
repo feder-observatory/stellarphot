@@ -168,7 +168,7 @@ def generate_aij_table(table_name, comparison_table):
     info_columns = {
         'date-obs': 'DATE_OBS',
         'airmass': 'AIRMASS',
-        # 'BJD': 'BJD_MOBS',
+        'BJD': 'BJD_MOBS',
         'exposure': 'EXPOSURE',
         'filter': 'FILTER',
         'aperture': 'Source_Radius',
@@ -187,9 +187,11 @@ def generate_aij_table(table_name, comparison_table):
         'fwhm_x': 'X-Width',
         'fwhm_y': 'Y-Width',
         'width': 'Width',
-        #'relative flux': 'rel_flux',
-        #'flux error': 'rel_flux_err',
-        #'comparison counts': 'tot_C_cnts',
+        'relative_flux': 'rel_flux',
+        'relative_flux_error': 'rel_flux_err',
+        'rel_flux_SNR': 'rel_flux_SNR',
+        'comparison counts': 'tot_C_cnts',
+        'tot_C_err': 'tot_C_err'
     }
     by_star = table_name.group_by('star_id')
     base_table = by_star.groups[0][list(info_columns.keys())]
@@ -208,6 +210,8 @@ def generate_aij_table(table_name, comparison_table):
             new_column_name = new_col + f'_{char}{star_id[0]}'
             new_table.rename_column(old_col, new_column_name)
         base_table = hstack([base_table, new_table])
+    for old_col, new_col in info_columns.items():
+        base_table.rename_column(old_col, new_col)
 
     return base_table
 
