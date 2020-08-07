@@ -2,7 +2,8 @@ from pathlib import Path
 import re
 
 import astropy.units as u
-from astropy.table import Table
+from astropy.coordinates import SkyCoord
+from astropy.table import Table, hstack
 
 import numpy as np
 
@@ -157,6 +158,58 @@ class ApertureFileAIJ:
 
         return apAIJ
 
+
+def _is_comp(star_coord, comp_table):
+    idx, d2d, _ = star_coord.match_to_catalog_sky(comp_table['coord'])
+    return 'comparison' in comp_table['marker name'][idx]
+
+
+def generate_aij_table(table_name, comparison_table):
+    info_columns = {
+        'date-obs': 'DATE_OBS',
+        'airmass': 'AIRMASS',
+        # 'BJD': 'BJD_MOBS',
+        'exposure': 'EXPOSURE',
+        'filter': 'FILTER',
+        'aperture': 'Source_Radius',
+        'annulus_inner': 'Sky_Rad(min)',
+        'annulus_outer': 'Sky_Rad(max)'
+    }
+    by_source_columns = {
+        'xcenter': 'X(IJ)',
+        'ycenter': 'Y(IJ)',
+        'aperture_net_flux': 'Source-Sky',
+        'aperture_area': 'N_Src_Pixels',
+        'noise-aij': 'Source_Error',
+        'snr': 'Source_SNR',
+        'sky_per_pix_avg': 'Sky/Pixel',
+        'annulus_area': 'N_Sky_Pixels',
+        'fwhm_x': 'X-Width',
+        'fwhm_y': 'Y-Width',
+        'width': 'Width',
+        #'relative flux': 'rel_flux',
+        #'flux error': 'rel_flux_err',
+        #'comparison counts': 'tot_C_cnts',
+    }
+    by_star = table_name.group_by('star_id')
+    base_table = by_star.groups[0][list(info_columns.keys())]
+    for star_id, sub_table in zip(by_star.groups.keys, by_star.groups):
+        star_co = SkyCoord(ra=sub_table['RA'][0], dec=sub_table['Dec'][0],
+                           unit='degree')
+
+        if _is_comp(star_co, comparison_table):
+            char = 'C'
+        else:
+            char = 'T'
+
+        new_table = sub_table[list(by_source_columns.keys())] #  + ['BJD']
+
+        for old_col, new_col in by_source_columns.items():
+            new_column_name = new_col + f'_{char}{star_id[0]}'
+            new_table.rename_column(old_col, new_column_name)
+        base_table = hstack([base_table, new_table])
+
+    return base_table
 
 def parse_aij_table(table_name):
     """
