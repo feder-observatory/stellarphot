@@ -308,9 +308,15 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
     # Add width x/y:
     # Make small table with renamed columns
     fwhm_x, fwhm_y = compute_fwhm(ccd, phot)
+    # Set bad values to NaN now
+    bad_fwhm = (fwhm_x < 0) | (fwhm_y < 0)
+    fwhm_x[bad_fwhm] = np.nan
+    fwhm_y[bad_fwhm] = np.nan
+
     phot['fwhm_x'] = fwhm_x
     phot['fwhm_y'] = fwhm_y
     phot['width'] = (fwhm_x + fwhm_y) / 2
+
     phot['sky_per_pix_avg'] = avg_sky_per_pix
     phot['sky_per_pix_med'] = med_sky_per_pix
     phot['sky_per_pix_std'] = std_sky_per_pix
@@ -327,6 +333,13 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
     phot['aperture_net_flux'] = (phot['aperture_sum'] -
                                  (phot['aperture_area'] *
                                   phot['sky_per_pix_avg']))
+
+    # This can happen, for example, when the object is faint
+    # and centroiding is bad.
+    bad_flux = phot['aperture_net_flux'] < 0
+    all_bads = bad_flux | bad_fwhm
+
+    phot['aperture_net_flux'][all_bads] = np.nan
 
     if camera is not None:
         phot['mag_inst_{}'.format(ccd.header['filter'])] = \

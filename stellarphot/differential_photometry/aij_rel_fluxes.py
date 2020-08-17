@@ -100,6 +100,11 @@ def calc_aij_relative_flux(star_data, comp_stars,
 
     star_data['relative_flux'] = relative_flux
     star_data['relative_flux_error'] = rel_flux_error
-    star_data['comparison counts'] = comp_total_vector + flux_offset
+    star_data['relative_flux_snr'] = relative_flux / rel_flux_error
+
+    # AIJ records the total comparison counts even though that total is used
+    # only for the targets, not the comparison.
+    star_data['comparison counts'] = comp_total_vector # + flux_offset
+    star_data['comparison error'] = comp_error_vector
 
     return star_data
