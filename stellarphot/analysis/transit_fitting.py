@@ -76,6 +76,7 @@ class TransitModelFit:
         self._width = None
         self._fitter = VariableArgsFitter()
         self._model = None
+        self._batman_mod_for_fit = None
 
     def _check_consistent_lengths(self, proposed_value):
         """
@@ -89,7 +90,6 @@ class TransitModelFit:
         new_length = len(proposed_value)
         for independent_var in [self._times, self._airmass,
                                 self._spp, self._width]:
-            print(new_length, independent_var)
             if independent_var is None:
                 continue
             elif len(independent_var) != new_length:
@@ -108,6 +108,12 @@ class TransitModelFit:
             raise ValueError('Length of times not consistent with '
                              'other independent variables.')
         self._times = value
+
+        try:
+            if self._batman_mod_for_fit is None:
+                self._set_up_batman_model_for_fitting()
+        except ValueError:
+            pass
 
     @property
     def airmass(self):
@@ -141,6 +147,21 @@ class TransitModelFit:
             raise ValueError('Length of spp not consistent with '
                              'other independent variables.')
         self._spp = value
+
+    @property
+    def data(self):
+        return self._data
+
+    @data.setter
+    def data(self, value):
+        if not self._check_consistent_lengths(value):
+            raise ValueError('Length of data not consistent with '
+                             'independent variables.')
+        self._data = value
+
+    @property
+    def model(self):
+        return self._model
 
     def _set_default_batman_params(self):
         """
@@ -204,12 +225,14 @@ class TransitModelFit:
             self._batman_params.u = [limb_u1, limb_u2]
 
             flux = self._batman_mod_for_fit.light_curve(self._batman_params)
-            flux += airmass_trend * airmass
+            flux += airmass_trend * (airmass)
             flux += width_trend * width
             flux += spp_trend * sky_per_pix
             return flux
 
-        self._model = custom_model(transit_model_with_trends)
+        ModelClass = custom_model(transit_model_with_trends)
+
+        self._model = ModelClass()
 
         # Set up some defaults for what is fixed
         self._model.period.fixed = True
@@ -221,7 +244,10 @@ class TransitModelFit:
         self._model.inclination.bounds = (80, 90)
 
     def setup_model(self, t0=0, depth=0, duration=0,
-                    period=1, inclination=90):
+                    period=1, inclination=90,
+                    airmass_trend=0.0,
+                    width_trend=0.0,
+                    spp_trend=0.0):
         """
         Configure a transit model for fitting. The ``duration`` and ``depth``
         are used to estimate underlying fit parameters; they are not
@@ -250,7 +276,7 @@ class TransitModelFit:
         self._setup_transit_model()
 
         # rp is related to depth in a straighforward way
-        self._model.rp = np.sqrt(depth / 1000)
+        self._model.rp.value = self._batman_params.rp = np.sqrt(depth / 1000)
 
         # The estimate below assumes a circular orbit and inclination of
         # 90 degrees (edge on). This should be fine as a starting point
@@ -258,11 +284,21 @@ class TransitModelFit:
         #
         # See Kipping, eq. 16 at
         # https://doi.org/10.1111/j.1365-2966.2010.16894.x
-        self._model.a = 1 / np.sin(duration * np.pi / period)
+        estimated_a = 1 / np.sin(duration * np.pi / period)
+        self._model.a.value = self._batman_params.a = estimated_a
 
-        self._model.period = period
-        self._model.inclination = inclination
-        self._model.t0 = t0
+        self._model.period.value = self._batman_params.per = period
+        self._model.inclination.value = self._batman_params.inc = inclination
+        self._model.t0.value = self._batman_params.t0 = t0
+        self._model.airmass_trend.value = airmass_trend
+        self._model.width_trend.value = width_trend
+        self._model.spp_trend.value = spp_trend
+
+        try:
+            if self._batman_mod_for_fit is None:
+                self._set_up_batman_model_for_fitting()
+        except ValueError:
+            pass
 
     def fit(self):
         """
@@ -275,25 +311,27 @@ class TransitModelFit:
         if self._model is None:
             raise ValueError('Run setup_model() before trying to fit.')
 
+        if self._batman_mod_for_fit is None:
+            self._set_up_batman_model_for_fitting()
         # Definitely check whether any data bits are None and fix those
         # parameters.
         if self.spp is None:
-            self.model.spp_trend = 0
+            self.model.spp_trend.value = 0
             self.model.spp_trend.fixed = True
             spp = np.zeros_like(self.times)
         else:
             spp = self.spp
 
         if self.airmass is None:
-            self.model.airmass_trend = 0
+            self.model.airmass_trend.value = 0
             self.model.airmass_trend.fixed = True
             airmass = np.zeros_like(self.times)
         else:
             airmass = self.airmass
 
         if self.width is None:
-            self.model.width = 0
-            self.model.width.fixed = True
+            self.model.width_trend = 0
+            self.model.width_trend.fixed = True
             width = np.zeros_like(self.times)
         else:
             width = self.width
@@ -304,16 +342,39 @@ class TransitModelFit:
                                  self.times,
                                  airmass,
                                  width,
-                                 spp)
+                                 spp,
+                                 self.data)
 
         # Update the model (might not be necessary but can't hurt)
         self._model = new_model
 
-    def data_light_curve(data=None, detrend_by=['airmass', 'width']):
+    def data_light_curve(self, data=None, detrend_by=['airmass', 'width']):
         pass
 
-    def model_light_curve(at_times=None, detrend_by=None):
-        pass
+    def model_light_curve(self, at_times=None, detrend_by=None):
+        """
+        Calculate the light curve corresponding to the model, optionally
+        detrended by one or more parameters.
+        """
+
+        zeros = np.zeros_like(self.times)
+        airmass = self.airmass if self.airmass is not None else zeros
+        width = self.width if self.width is not None else zeros
+        spp = self.spp if self.spp is not None else zeros
+
+        if at_times is not None:
+            # temporarily reset the batman model to the new times,
+            # then restore it.
+            original_model = self._batman_mod_for_fit
+
+            self._batman_mod_for_fit = batman.TransitModel(self._batman_params,
+                                                           at_times)
+            model = self.model(at_times, airmass, width, spp)
+            self._batman_mod_for_fit = original_model
+        else:
+            model = self.model(self.times, airmass, width, spp)
+
+        return model
 
 
 # example use
