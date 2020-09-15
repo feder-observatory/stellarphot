@@ -77,6 +77,7 @@ class TransitModelFit:
         self._fitter = VariableArgsFitter()
         self._model = None
         self._batman_mod_for_fit = None
+        self.weights = None
 
     def _check_consistent_lengths(self, proposed_value):
         """
