@@ -243,6 +243,9 @@ class TransitModelFit:
         # Set some default bounds for inclination, in degrees.
         self._model.inclination.bounds = (80, 90)
 
+        # Planet radius cannot be too small or too big
+        self._model.rp.bounds = (0.01, 0.5)
+
     def setup_model(self, t0=0, depth=0, duration=0,
                     period=1, inclination=90,
                     airmass_trend=0.0,
@@ -343,7 +346,8 @@ class TransitModelFit:
                                  airmass,
                                  width,
                                  spp,
-                                 self.data)
+                                 self.data,
+                                 weights=self.weights)
 
         # Update the model (might not be necessary but can't hurt)
         self._model = new_model
