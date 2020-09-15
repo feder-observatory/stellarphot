@@ -20,7 +20,6 @@ def _create_data_from_model_with_trends(transit_model, noise_dev=0.01):
     # data with a touch of noise.
 
     # Make our own batman model and data from it
-    print(transit_model._batman_params.a, transit_model._batman_params.rp)
     model = batman.TransitModel(transit_model._batman_params,
                                 transit_model.times
                                 )
@@ -194,3 +193,24 @@ def test_transit_fit_all_parameters():
 
     expected_rp = np.sqrt(DEFAULT_TESTING_PARAMS['depth'] / 1000)
     assert np.abs(tmod.model.rp - expected_rp) < 1e-4
+
+
+def test_transit_fit_parameters_unfreeze_as_expected():
+    tmod = _make_transit_model_with_data(noise_dev=1e-5,
+                                         with_airmass=False,
+                                         with_width=False,
+                                         with_spp=False)
+
+    # None of these are fixed by default
+    assert not tmod.model.airmass_trend.fixed
+    assert not tmod.model.width_trend.fixed
+    assert not tmod.model.spp_trend.fixed
+
+    tmod.fit()
+
+    # They should return to their original state after the
+    # fit even though they are temporarily fixed during the
+    # fit.
+    assert not tmod.model.airmass_trend.fixed
+    assert not tmod.model.width_trend.fixed
+    assert not tmod.model.spp_trend.fixed

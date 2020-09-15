@@ -316,23 +316,32 @@ class TransitModelFit:
 
         if self._batman_mod_for_fit is None:
             self._set_up_batman_model_for_fitting()
-        # Definitely check whether any data bits are None and fix those
+
+        # Check whether any data bits are None and fix those
         # parameters.
+        original_values = {}
+
         if self.spp is None:
-            self.model.spp_trend.value = 0
+            original_values['spp_trend'] = \
+                self.model.spp_trend.fixed
+            self.model.spp_trend = 0
             self.model.spp_trend.fixed = True
             spp = np.zeros_like(self.times)
         else:
             spp = self.spp
 
         if self.airmass is None:
-            self.model.airmass_trend.value = 0
+            original_values['airmass_trend'] = \
+                self.model.airmass_trend.fixed
+            self.model.airmass_trend = 0
             self.model.airmass_trend.fixed = True
             airmass = np.zeros_like(self.times)
         else:
             airmass = self.airmass
 
         if self.width is None:
+            original_values['width_trend'] = \
+                self.model.width_trend.fixed
             self.model.width_trend = 0
             self.model.width_trend.fixed = True
             width = np.zeros_like(self.times)
@@ -351,6 +360,11 @@ class TransitModelFit:
 
         # Update the model (might not be necessary but can't hurt)
         self._model = new_model
+
+        # reset parameters to their original values
+        for k, v in original_values.items():
+            param = getattr(self.model, k)
+            param.fixed = v
 
     def data_light_curve(self, data=None, detrend_by=['airmass', 'width']):
         pass
