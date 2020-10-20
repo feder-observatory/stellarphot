@@ -279,6 +279,7 @@ def make_show_event(iw):
 
 def box(imagewidget):
     big_box = ipw.HBox()
+    big_box = ipw.GridspecLayout(1, 2)
     layout = ipw.Layout(width='20ch')
     hb = ipw.HBox()
     ap_t = ipw.IntText(description='Aperture', value=5, layout=layout)
@@ -288,7 +289,9 @@ def box(imagewidget):
 
     lil_box = ipw.VBox()
     lil_box.children = [out, out2, out3]
-    big_box.children = [imagewidget, lil_box]
+    # big_box.children = [imagewidget, lil_box]
+    big_box[0, 0] = imagewidget
+    big_box[0, 1] = lil_box
     big_box.layout.width = '100%'
     # Line below puts space between the image and the plots so the plots
     # don't jump around as the image value changes.
