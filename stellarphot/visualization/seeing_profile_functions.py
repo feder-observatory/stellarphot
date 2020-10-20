@@ -183,6 +183,19 @@ def radial_profile(data, center, size=30, return_scaled=True):
     return r_exact, ravg, radialprofile
 
 
+def find_hwhm(r, intensity):
+    """
+    Estimate HWHM from normalized, angle-averaged intensity profile.
+    """
+    # Make the bold assumption that intensity decreases monotonically
+    # so that we just need to find the first place where intensity is
+    # less than 0.5 to estimate the HWHM.
+    less_than_half = intensity < 0.5
+    half_index = np.arange(len(less_than_half))[less_than_half][0]
+    before_half = half_index - 1
+    return (r[before_half] + r[half_index]) / 2
+
+
 def make_show_event(iw):
     def show_event(viewer, event, datax, datay):
 
@@ -217,7 +230,8 @@ def make_show_event(iw):
             # print(event.data_x, event.data_y)
             plt.clf()
             # sub_med += med
-            seeing_plot(r_exact, scaled_exact_counts, ravg, scaled_profile, 5,
+            HWHM = find_hwhm(ravg, scaled_profile)
+            seeing_plot(r_exact, scaled_exact_counts, ravg, scaled_profile, HWHM,
                         'Some Image Name', file_name='some_name', gap=6, annulus_width=13)
             plt.show()
 
