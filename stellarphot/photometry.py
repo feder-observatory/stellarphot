@@ -263,7 +263,8 @@ def clipped_sky_per_pix_stats(data, annulus, sigma=5, iters=5):
 
 
 def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
-                            star_ids=None, camera=None):
+                            star_ids=None, camera=None,
+                            bjd_coords=None, observatory_location=None):
     """
     Calculate several columns for photometry table.
 
@@ -359,7 +360,9 @@ def photometry_on_directory(directory_with_images, object_of_interest,
                             star_locs, aperture_rad,
                             inner_annulus, outer_annulus,
                             max_adu, star_ids,
-                            camera):
+                            camera,
+                            bjd_coords=None,
+                            observatory_location=None):
     """
     Perform aperture photometry on a directory of images.
 
@@ -470,7 +473,9 @@ def photometry_on_directory(directory_with_images, object_of_interest,
         print('    ...adding extra columns')
         add_to_photometry_table(pho, a_ccd, anuls, aps,
                                 fname=fname, star_ids=star_ids[in_bounds],
-                                camera=camera)
+                                camera=camera, bjd_coords=bjd_coords,
+                                observatory_location=observatory_location)
+
         # And add the final table to the list of tables
         phots.append(pho)
 
@@ -558,3 +563,99 @@ def calculate_noise(gain=1.0, read_noise=0.0, dark_current_per_sec=0.0,
         digitization = area_ratio * (gain * 0.289) ** 2
 
     return np.sqrt(poisson_source + sky + dark + rn_error + digitization)
+
+
+    def find_times(phot_column, exposure, ra=331.1170417, dec=81.5659444, latitude=46.86678, longitude=263.54672):
+        """
+        Returns a numpy array of barycentric julien date times
+
+        Parameters
+        ----------
+
+        phot_column : astropy Table column or numpy array
+            numpy array or column of observation dates from the photometry table
+
+        exposure : float; optional
+            exposure time in seconds
+
+        RA : float; optional
+            Right ascension in degree format, default is for TIC-470127886
+
+        Dec : float; optional
+            Declination  in degree format, default is for TIC-470127886
+
+        latitude : float; optional
+            latitude of the observatory, default is for Paul P. Feder Observatory
+
+        longitude : float; optional
+            longitude of the observatory, default is for Paul P. Feder Observatory
+
+
+        Returns
+        -------
+
+        new_time : numpy array
+            array of barycentric times by julien date
+
+        """
+        location = EarthLocation(lat=latitude, lon=longitude)
+
+        times = Time(phot_column, scale='utc', format='isot', location=location)
+        ip_peg = SkyCoord(ra=[ra], dec=[dec], unit='degree')
+        ltt_bary = times.light_travel_time(ip_peg)
+        times_tdb = times.tdb
+        time_barycenter = times_tdb + ltt_bary
+
+        #adjust to midpoint of exposure
+        bary_time = time_barycenter + exposure * u.second / 2
+
+
+        new_time = bary_time.jd
+
+
+        return new_time
+
+
+# ra=331.1170417, dec=81.5659444, latitude=46.86678, longitude=263.54672
+def find_bjd_mid_exposure(utc_times, exposure=0,
+                          coords=None, location=None):
+    """
+    Returns a numpy array of barycentric Julian date times
+
+    Parameters
+    ----------
+
+    phot_column : `astropy.table.Column` of `astropy.times.Time`  or numpy array
+        numpy array or column of observation dates/times.
+
+    exposure : float; optional
+        exposure time in seconds
+
+    coords : `astropy.coordinates.SkyCoord`
+        Ra/Dec of the object to be used for the light travel time
+        calculation.
+
+    location: `astropy.coordinates.EarthLocation`
+        Location of the observatory.
+
+    Returns
+    -------
+
+    new_time : numpy array
+        array of barycentric times by Julian date
+
+    """
+    location = EarthLocation(lat=latitude, lon=longitude)
+    ip_peg = SkyCoord(ra=[ra], dec=[dec], unit='degree')
+
+    if coords is None or observatory_location is None:
+        raise ValueError
+    times = Time(phot_column, scale='utc', format='isot', location=location)
+    ltt_bary = times.light_travel_time(coords)
+    times_tdb = times.tdb
+    time_barycenter = times_tdb + ltt_bary
+
+    # adjust to midpoint of exposure
+    bary_time = time_barycenter + exposure * u.second / 2
+
+    return bary_time.jd
