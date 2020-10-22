@@ -193,7 +193,19 @@ def find_hwhm(r, intensity):
     less_than_half = intensity < 0.5
     half_index = np.arange(len(less_than_half))[less_than_half][0]
     before_half = half_index - 1
-    return (r[before_half] + r[half_index]) / 2
+
+    # Do linear interpolation to find the radius at which the intensity
+    # is 0.5.
+    r_more = r[before_half]
+    r_less = r[half_index]
+    I_more = intensity[before_half]
+    I_less = intensity[half_index]
+
+    I_half = 0.5
+
+    r_half = r_less - (I_less - I_half) / (I_less - I_more) * (r_less - r_more)
+
+    return r_half
 
 
 def make_show_event(iw):
