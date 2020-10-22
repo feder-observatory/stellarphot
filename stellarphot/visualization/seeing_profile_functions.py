@@ -16,7 +16,7 @@ out2 = ipw.Output()
 out3 = ipw.Output()
 
 
-def set_keybindings(image_widget):
+def set_keybindings(image_widget, scroll_zoom=False):
     """
     Set image widget keyboard bindings. The bindings are:
 
@@ -38,7 +38,8 @@ def set_keybindings(image_widget):
     # bind_map.eventmap
     bind_map.clear_event_map()
     bind_map.map_event(None, (), 'ms_left', 'pan')
-    bind_map.map_event(None, (), 'pa_pan', 'zoom')
+    if scroll_zoom:
+        bind_map.map_event(None, (), 'pa_pan', 'zoom')
 
     # bind_map.map_event(None, (), 'ms_left', 'cursor')
     # contrast with right mouse
@@ -193,7 +194,19 @@ def find_hwhm(r, intensity):
     less_than_half = intensity < 0.5
     half_index = np.arange(len(less_than_half))[less_than_half][0]
     before_half = half_index - 1
-    return (r[before_half] + r[half_index]) / 2
+
+    # Do linear interpolation to find the radius at which the intensity
+    # is 0.5.
+    r_more = r[before_half]
+    r_less = r[half_index]
+    I_more = intensity[before_half]
+    I_less = intensity[half_index]
+
+    I_half = 0.5
+
+    r_half = r_less - (I_less - I_half) / (I_less - I_more) * (r_less - r_more)
+
+    return r_half
 
 
 def make_show_event(iw):
@@ -246,8 +259,8 @@ def make_show_event(iw):
 
             plt.plot(range(len(radialprofile)), counts)
             plt.xlim(0, 20)
-            #plt.ylim(0.2, 0)
             plt.grid()
+
             sub_blot = sub_data.copy()
             sub_blot[10:30, 10:30] = np.nan
             sub_std = np.nanstd(sub_blot)

@@ -46,11 +46,11 @@ def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM,
              marker="s", markerfacecolor='none', color='blue')
 
     # plot the binned radius and binned counts
-    plt.plot(binned_radius, binned_counts, color='magenta', linewidth='4.0')
+    plt.plot(binned_radius, binned_counts, color='magenta', linewidth='1.0')
 
     # draw vertical line at HWHM and label it
     plt.vlines(HWHM, -0.2, 1.2, linestyle=(0, (5, 10)), color='#00cc00')
-    plt.annotate(f"HWHM {HWHM}", (HWHM - 1, -0.25),
+    plt.annotate(f"HWHM {HWHM:2.1f}", (HWHM - 1, -0.25),
                  fontsize=15, color='#00cc00')
 
     # label axis
@@ -59,7 +59,7 @@ def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM,
 
     # draw vertical line at the radius and label it
     plt.vlines(radius, -0.2, binned_counts[0], color='red')
-    plt.annotate(f"Radius {radius}", (radius - 1, -0.25),
+    plt.annotate(f"Radius {radius:2.1f}", (radius - 1, -0.25),
                  fontsize=15, color='red')
     plt.hlines(binned_counts[0], binned_counts[0], radius, color='red')
 
@@ -73,9 +73,9 @@ def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM,
     plt.hlines(binned_counts[0], inner_annulus, outer_annulus, color='red')
     plt.annotate('BACKGROUND', (inner_annulus,
                                 binned_counts[0] + 0.02), fontsize=15, color='red')
-    plt.annotate(f"Back> {inner_annulus}",
+    plt.annotate(f"Back> {inner_annulus:2.1f}",
                  (inner_annulus - 1, -0.25), fontsize=15, color='red')
-    plt.annotate(f"<Back {outer_annulus}",
+    plt.annotate(f"<Back {outer_annulus:2.1f}",
                  (outer_annulus - 1, -0.25), fontsize=15, color='red')
 
     # title the plot
