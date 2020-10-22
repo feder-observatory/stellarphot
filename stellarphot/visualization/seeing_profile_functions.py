@@ -16,7 +16,7 @@ out2 = ipw.Output()
 out3 = ipw.Output()
 
 
-def set_keybindings(image_widget):
+def set_keybindings(image_widget, scroll_zoom=False):
     """
     Set image widget keyboard bindings. The bindings are:
 
@@ -38,7 +38,8 @@ def set_keybindings(image_widget):
     # bind_map.eventmap
     bind_map.clear_event_map()
     bind_map.map_event(None, (), 'ms_left', 'pan')
-    bind_map.map_event(None, (), 'pa_pan', 'zoom')
+    if scroll_zoom:
+        bind_map.map_event(None, (), 'pa_pan', 'zoom')
 
     # bind_map.map_event(None, (), 'ms_left', 'cursor')
     # contrast with right mouse
@@ -258,8 +259,8 @@ def make_show_event(iw):
 
             plt.plot(range(len(radialprofile)), counts)
             plt.xlim(0, 20)
-            #plt.ylim(0.2, 0)
             plt.grid()
+
             sub_blot = sub_data.copy()
             sub_blot[10:30, 10:30] = np.nan
             sub_std = np.nanstd(sub_blot)
