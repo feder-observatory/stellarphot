@@ -37,11 +37,15 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pytest pytest-astropy wheel
+        pip install pytest pytest-astropy wheel cython
 
     - name: Install stellarphot
       run: |
         pip install .
+
+    - name: Install batman
+      run: |
+        pip install batman-package
 
     - name: Run tests
       run: |
