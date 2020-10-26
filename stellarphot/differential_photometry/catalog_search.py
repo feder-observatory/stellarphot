@@ -149,17 +149,18 @@ def find_apass_stars(image,
                      max_mag_error=0.05,
                      max_color_error=0.1):
     # use the catalog_search function to find the apass stars in the frame of the image read above
-    apass = catalog_search(image.wcs, image.shape, 'II/336/apass9',
-                           'RAJ2000', 'DEJ2000', 1, False)
+    all_apass = catalog_search(image.wcs, image.shape, 'II/336/apass9',
+                               'RAJ2000', 'DEJ2000', 1, False)
 
-    # Creates a boolean array of the apass stars that have well defined magnitudes and color
-    apass_bright = (apass['e_r_mag'] < max_mag_error) & (
-        apass['e_B-V'] < max_color_error)  # & (apass['u_e_r_mag'] == 0)
+    # Creates a boolean array of the apass stars that have well defined
+    # magnitudes and color.
+    apass_lower_error = (all_apass['e_r_mag'] < max_mag_error) & (
+        all_apass['e_B-V'] < max_color_error)
 
-    # create new lists of apass stars and x y pixel coordinates using boolean array
-    apass_in_bright = apass[apass_bright]
+    # create new table  of apass stars that meet error restrictions
+    apass_lower_error = all_apass[apass_lower_error]
 
-    return apass, apass_in_bright
+    return all_apass, apass_lower_error
 
 
 def find_known_variables(image):
