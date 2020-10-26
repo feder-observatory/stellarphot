@@ -29,16 +29,16 @@ def set_up(object_name, directory_with_images, sample_image_for_finding_stars):
     else:
         path = Path(directory_with_images) / sample_image_for_finding_stars
     ccd = CCDData.read(path)
-    vsx, vsx_x, vsx_y, vsx_names = find_known_variables(ccd)
+    vsx = find_known_variables(ccd)
     ra = vsx['RAJ2000']
     dec = vsx['DEJ2000']
     vsx['coords'] = SkyCoord(ra=ra, dec=dec, unit=(u.hour, u.degree))
     ccdx, ccdy = ccd.shape
-    return ccd, ccdx, ccdy, vsx, ra, dec, vsx['coords'], vsx_names
+    return ccd, ccdx, ccdy, vsx, ra, dec, vsx['coords'], vsx['Name']
 
 
 def match(CCD, RD, vsx):
-    apass, apass_x, apass_y, apass_in_bright, in_apass_x, in_apass_y = find_apass_stars(
+    apass, apass_in_bright = find_apass_stars(
         CCD)
     ra = apass['RAJ2000']
     dec = apass['DEJ2000']
@@ -52,9 +52,9 @@ def match(CCD, RD, vsx):
     return apass, v_angle, RD_angle
 
 
-def mag_scale(cmag, apass, v_angle, RD_angle):
-    high_mag = apass['r_mag'] < cmag + 0.75
-    low_mag = apass['r_mag'] > cmag - 0.44
+def mag_scale(cmag, apass, v_angle, RD_angle, brighter_dmag=0.44, dimmer_dmag=0.75):
+    high_mag = apass['r_mag'] < cmag + dimmer_dmag
+    low_mag = apass['r_mag'] > cmag - brighter_dmag
     good_v_angle = v_angle > 1.0 * u.arcsec
     good_RD_angle = RD_angle > 1.0 * u.arcsec
     good_stars = high_mag & low_mag & good_RD_angle & good_v_angle
