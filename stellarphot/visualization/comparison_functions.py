@@ -85,12 +85,18 @@ def match(CCD, RD, vsx):
     ra = apass['RAJ2000']
     dec = apass['DEJ2000']
     apass['coords'] = SkyCoord(ra=ra, dec=dec, unit=(u.hour, u.degree))
-    vsx_coord = vsx['coords']
-    RD_coord = RD['coords']
     apass_coord = apass['coords']
-    v_index, v_angle, v_dist = apass_coord.match_to_catalog_sky(vsx['coords'])
-    RD_index, RD_angle, RD_dist = apass_coord.match_to_catalog_sky(
-        RD['coords'])
+
+    if vsx:
+        v_index, v_angle, v_dist = \
+            apass_coord.match_to_catalog_sky(vsx['coords'])
+    else:
+        v_angle = []
+    if RD:
+        RD_index, RD_angle, RD_dist = \
+            apass_coord.match_to_catalog_sky(RD['coords'])
+    else:
+        RD_angle = []
     return apass, v_angle, RD_angle
 
 
@@ -104,8 +110,16 @@ def mag_scale(cmag, apass, v_angle, RD_angle,
     """
     high_mag = apass['r_mag'] < cmag + dimmer_dmag
     low_mag = apass['r_mag'] > cmag - brighter_dmag
-    good_v_angle = v_angle > 1.0 * u.arcsec
-    good_RD_angle = RD_angle > 1.0 * u.arcsec
+    if v_angle:
+        good_v_angle = v_angle > 1.0 * u.arcsec
+    else:
+        good_v_angle = True
+
+    if RD_angle:
+        good_RD_angle = RD_angle > 1.0 * u.arcsec
+    else:
+        good_RD_angle = True
+
     good_stars = high_mag & low_mag & good_RD_angle & good_v_angle
     good_apass = apass[good_stars]
     apass_good_coord = good_apass['coords']
@@ -133,20 +147,23 @@ def make_markers(iw, ccd, RD, vsx, ent,
                  name_or_coord=None):
     """
     Add markers for APASS, TESS targets, VSX.
+    Also center on object/coordinate.
     """
     iw.load_nddata(ccd)
     iw.zoom_level = 'fit'
     iw.reset_markers()
 
-    iw.marker = {'type': 'circle', 'color': 'green', 'radius': 10}
-    iw.add_markers(RD, skycoord_colname='coords',
-                   use_skycoord=True, marker_name='TESS Targets')
+    if RD:
+        iw.marker = {'type': 'circle', 'color': 'green', 'radius': 10}
+        iw.add_markers(RD, skycoord_colname='coords',
+                       use_skycoord=True, marker_name='TESS Targets')
 
     if name_or_coord is not None:
         if isinstance(name_or_coord, str):
             iw.center_on(SkyCoord.from_name(name_or_coord))
         else:
             iw.center_on(name_or_coord)
+
     iw.marker = {'type': 'circle', 'color': 'blue', 'radius': 10}
     iw.add_markers(vsx, skycoord_colname='coords',
                    use_skycoord=True, marker_name='VSX')
