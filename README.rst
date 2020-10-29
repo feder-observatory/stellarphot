@@ -12,7 +12,7 @@ A package for performing stellar photometry.
     :target: https://codecov.io/gh/stellarphot/stellarphot
 
 This is a package for doing stellar photometry that relies on astropy.
-
+jhadsfjhdsf
 
 License
 -------
