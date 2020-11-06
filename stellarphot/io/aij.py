@@ -191,7 +191,7 @@ def generate_aij_table(table_name, comparison_table):
         'relative_flux_error': 'rel_flux_err',
         'relative_flux_snr': 'rel_flux_SNR',
         'comparison counts': 'tot_C_cnts',
-        'tot_C_err': 'tot_C_err'
+        'comparison error': 'tot_C_err'
     }
     by_star = table_name.group_by('star_id')
     base_table = by_star.groups[0][list(info_columns.keys())]
