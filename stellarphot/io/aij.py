@@ -193,7 +193,7 @@ def generate_aij_table(table_name, comparison_table):
         'comparison counts': 'tot_C_cnts',
         'comparison error': 'tot_C_err'
     }
-    by_star = table_name.group_by('star_id')
+    by_star = table_name.group_by('id')
     base_table = by_star.groups[0][list(info_columns.keys())]
     for star_id, sub_table in zip(by_star.groups.keys, by_star.groups):
         star_co = SkyCoord(ra=sub_table['RA'][0], dec=sub_table['Dec'][0],
