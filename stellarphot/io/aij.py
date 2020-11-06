@@ -189,7 +189,7 @@ def generate_aij_table(table_name, comparison_table):
         'width': 'Width',
         'relative_flux': 'rel_flux',
         'relative_flux_error': 'rel_flux_err',
-        'relative_flux_SNR': 'rel_flux_SNR',
+        'relative_flux_snr': 'rel_flux_SNR',
         'comparison counts': 'tot_C_cnts',
         'tot_C_err': 'tot_C_err'
     }
