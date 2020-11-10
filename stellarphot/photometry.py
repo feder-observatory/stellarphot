@@ -264,7 +264,8 @@ def clipped_sky_per_pix_stats(data, annulus, sigma=5, iters=5):
 
 def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
                             star_ids=None, camera=None,
-                            bjd_coords=None, observatory_location=None):
+                            bjd_coords=None, observatory_location=None,
+                            fwhm_by_fit=True):
     """
     Calculate several columns for photometry table.
 
@@ -306,9 +307,14 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
     avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
         clipped_sky_per_pix_stats(ccd, annulus)
     print('        ...DONE calculating clipped sky stats')
+
+    phot['sky_per_pix_avg'] = avg_sky_per_pix
+    phot['sky_per_pix_med'] = med_sky_per_pix
+    phot['sky_per_pix_std'] = std_sky_per_pix
     # Add width x/y:
     # Make small table with renamed columns
-    fwhm_x, fwhm_y = compute_fwhm(ccd, phot)
+    fwhm_x, fwhm_y = compute_fwhm(ccd, phot, fit=fwhm_by_fit)
+
     # Set bad values to NaN now
     bad_fwhm = (fwhm_x < 0) | (fwhm_y < 0)
     fwhm_x[bad_fwhm] = np.nan
@@ -318,9 +324,6 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
     phot['fwhm_y'] = fwhm_y
     phot['width'] = (fwhm_x + fwhm_y) / 2
 
-    phot['sky_per_pix_avg'] = avg_sky_per_pix
-    phot['sky_per_pix_med'] = med_sky_per_pix
-    phot['sky_per_pix_std'] = std_sky_per_pix
     phot['aperture'] = apertures.r * u.pixel
     phot['aperture_area'] = apertures.area  # * u.pixel * u.pixel
     phot['annulus_inner'] = annulus.r_in * u.pixel
@@ -366,7 +369,8 @@ def photometry_on_directory(directory_with_images, object_of_interest,
                             max_adu, star_ids,
                             camera,
                             bjd_coords=None,
-                            observatory_location=None):
+                            observatory_location=None,
+                            fwhm_by_fit=True):
     """
     Perform aperture photometry on a directory of images.
 
@@ -478,7 +482,8 @@ def photometry_on_directory(directory_with_images, object_of_interest,
         add_to_photometry_table(pho, a_ccd, anuls, aps,
                                 fname=fname, star_ids=star_ids[in_bounds],
                                 camera=camera, bjd_coords=bjd_coords,
-                                observatory_location=observatory_location)
+                                observatory_location=observatory_location,
+                                fwhm_by_fit=fwhm_by_fit)
 
         # And add the final table to the list of tables
         phots.append(pho)
