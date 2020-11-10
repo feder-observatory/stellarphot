@@ -343,7 +343,7 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
     phot['aperture_net_flux'][all_bads] = np.nan
 
     if observatory_location.lower() == 'feder':
-        phot['BJD'] = find_times(phot_column['date-obs'], phot['exposure'],
+        phot['BJD'] = find_times(phot['date-obs'], phot['exposure'],
                                  ra=bjd_coords.ra, dec=bjd_coords.dec)
 
     if camera is not None:
