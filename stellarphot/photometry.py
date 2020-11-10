@@ -3,7 +3,7 @@ import numpy as np
 from photutils import (DAOStarFinder, aperture_photometry, CircularAperture,
                        CircularAnnulus, centroid_sources, extract_stars)
 
-from astropy.coordinates import SkyCoord
+from astropy.coordinates import SkyCoord, EarthLocation
 from astropy.table import vstack
 from astropy import units as u
 from astropy.time import Time
