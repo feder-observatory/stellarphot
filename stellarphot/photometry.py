@@ -305,7 +305,7 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
     print('        ...calculating clipped sky stats')
     avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
         clipped_sky_per_pix_stats(ccd, annulus)
-    print('        ...DONE calculating clipp sky stats')
+    print('        ...DONE calculating clipped sky stats')
     # Add width x/y:
     # Make small table with renamed columns
     fwhm_x, fwhm_y = compute_fwhm(ccd, phot)
@@ -343,7 +343,7 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
     phot['aperture_net_flux'][all_bads] = np.nan
 
     if observatory_location.lower() == 'feder':
-        phot['BJD'] = find_times(phot['date-obs'], phot['exposure'],
+        phot['BJD'] = find_times(phot['date-obs'][0], phot['exposure'][0],
                                  ra=bjd_coords.ra, dec=bjd_coords.dec)
 
     if camera is not None:
@@ -607,7 +607,7 @@ def find_times(phot_column, exposure,
     location = EarthLocation(lat=latitude, lon=longitude)
 
     times = Time(phot_column, scale='utc', format='isot', location=location)
-    ip_peg = SkyCoord(ra=[ra], dec=[dec], unit='degree')
+    ip_peg = SkyCoord(ra=ra, dec=dec, unit='degree')
     ltt_bary = times.light_travel_time(ip_peg)
     times_tdb = times.tdb
     time_barycenter = times_tdb + ltt_bary
