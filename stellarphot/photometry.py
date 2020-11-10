@@ -613,11 +613,9 @@ def find_times(phot_column, exposure,
     time_barycenter = times_tdb + ltt_bary
 
     #adjust to midpoint of exposure
-    bary_time = time_barycenter + exposure * u.second / 2
-
+    bary_time = time_barycenter + exposure / 2
 
     new_time = bary_time.jd
-
 
     return new_time
 
