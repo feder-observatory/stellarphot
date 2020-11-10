@@ -342,6 +342,10 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
 
     phot['aperture_net_flux'][all_bads] = np.nan
 
+    if observatory.lower() == 'feder':
+        phot['BJD'] = find_times(phot_column['date-obs'], phot['exposure'],
+                                 ra=bjd_coords.ra, dec=bjd_coords.dec)
+
     if camera is not None:
         phot['mag_inst_{}'.format(ccd.header['filter'])] = \
             (-2.5 * np.log10(camera.gain * phot['aperture_net_flux'].value /
@@ -565,55 +569,57 @@ def calculate_noise(gain=1.0, read_noise=0.0, dark_current_per_sec=0.0,
     return np.sqrt(poisson_source + sky + dark + rn_error + digitization)
 
 
-    def find_times(phot_column, exposure, ra=331.1170417, dec=81.5659444, latitude=46.86678, longitude=263.54672):
-        """
-        Returns a numpy array of barycentric julien date times
+def find_times(phot_column, exposure,
+               ra=331.1170417, dec=81.5659444,
+               latitude=46.86678, longitude=263.54672):
+    """
+    Returns a numpy array of barycentric julien date times
 
-        Parameters
-        ----------
+    Parameters
+    ----------
 
-        phot_column : astropy Table column or numpy array
-            numpy array or column of observation dates from the photometry table
+    phot_column : astropy Table column or numpy array
+        numpy array or column of observation dates from the photometry table
 
-        exposure : float; optional
-            exposure time in seconds
+    exposure : float; optional
+        exposure time in seconds
 
-        RA : float; optional
-            Right ascension in degree format, default is for TIC-470127886
+    RA : float; optional
+        Right ascension in degree format, default is for TIC-470127886
 
-        Dec : float; optional
-            Declination  in degree format, default is for TIC-470127886
+    Dec : float; optional
+        Declination  in degree format, default is for TIC-470127886
 
-        latitude : float; optional
-            latitude of the observatory, default is for Paul P. Feder Observatory
+    latitude : float; optional
+        latitude of the observatory, default is for Paul P. Feder Observatory
 
-        longitude : float; optional
-            longitude of the observatory, default is for Paul P. Feder Observatory
-
-
-        Returns
-        -------
-
-        new_time : numpy array
-            array of barycentric times by julien date
-
-        """
-        location = EarthLocation(lat=latitude, lon=longitude)
-
-        times = Time(phot_column, scale='utc', format='isot', location=location)
-        ip_peg = SkyCoord(ra=[ra], dec=[dec], unit='degree')
-        ltt_bary = times.light_travel_time(ip_peg)
-        times_tdb = times.tdb
-        time_barycenter = times_tdb + ltt_bary
-
-        #adjust to midpoint of exposure
-        bary_time = time_barycenter + exposure * u.second / 2
+    longitude : float; optional
+        longitude of the observatory, default is for Paul P. Feder Observatory
 
 
-        new_time = bary_time.jd
+    Returns
+    -------
+
+    new_time : numpy array
+        array of barycentric times by julien date
+
+    """
+    location = EarthLocation(lat=latitude, lon=longitude)
+
+    times = Time(phot_column, scale='utc', format='isot', location=location)
+    ip_peg = SkyCoord(ra=[ra], dec=[dec], unit='degree')
+    ltt_bary = times.light_travel_time(ip_peg)
+    times_tdb = times.tdb
+    time_barycenter = times_tdb + ltt_bary
+
+    #adjust to midpoint of exposure
+    bary_time = time_barycenter + exposure * u.second / 2
 
 
-        return new_time
+    new_time = bary_time.jd
+
+
+    return new_time
 
 
 # ra=331.1170417, dec=81.5659444, latitude=46.86678, longitude=263.54672
