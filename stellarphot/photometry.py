@@ -304,8 +304,13 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
     phot['RA'] = star_coords.ra
     phot['Dec'] = star_coords.dec
     print('        ...calculating clipped sky stats')
-    avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
-        clipped_sky_per_pix_stats(ccd, annulus)
+    try:
+        avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
+            clipped_sky_per_pix_stats(ccd, annulus)
+    except AttributeError:
+        print('BAD ANNULUS!')
+        avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
+            np.nan, np.nan, np.nan
     print('        ...DONE calculating clipped sky stats')
 
     phot['sky_per_pix_avg'] = avg_sky_per_pix
