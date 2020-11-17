@@ -465,6 +465,13 @@ def photometry_on_directory(directory_with_images, object_of_interest,
         # large differences to an invalid value (maybe).
         center_diff = np.sqrt((xs_in - xcen)**2 + (ys_in - ycen)**2)
 
+        # FWHM is typically 5-6 pixels. The center really shouldn't move
+        # by more than that.
+        too_much_shift = center_diff > 6
+
+        xcen[too_much_shift] = xs_in[too_much_shift]
+        ycen[too_much_shift] = ys_in[too_much_shift]
+
         # Set up apertures and annuli based on the centroids in this image.
         aps = CircularAperture((xcen, ycen), r=aperture_rad)
         anuls = CircularAnnulus((xcen, ycen), inner_annulus, outer_annulus)
