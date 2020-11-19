@@ -12,7 +12,8 @@ def _add_in_quadrature(array):
 
 
 def calc_aij_relative_flux(star_data, comp_stars,
-                           in_place=True, index_column=None):
+                           in_place=True, index_column=None,
+                           coord_column=None):
     """
     Calculate AstroImageJ-style flux ratios.
 
@@ -45,7 +46,10 @@ def calc_aij_relative_flux(star_data, comp_stars,
     # Match comparison star list to instrumental magnitude information
     star_data_coords = SkyCoord(ra=star_data['RA'], dec=star_data['Dec'])
 
-    comp_coords = SkyCoord(ra=comp_stars['RA'], dec=comp_stars['Dec'])
+    if coord_column is not None:
+        comp_coords = comp_stars[coord_column]
+    else:
+        comp_coords = SkyCoord(ra=comp_stars['RA'], dec=comp_stars['Dec'])
 
     index, d2d, _ = star_data_coords.match_to_catalog_sky(comp_coords)
 
@@ -60,7 +64,9 @@ def calc_aij_relative_flux(star_data, comp_stars,
     # stars.
 
     comp_fluxes = star_data['date-obs', flux_column_name, error_column_name][good]
-    # print(comp_fluxes)
+    # print(np.isnan(comp_fluxes[flux_column_name]).sum(),
+    #       np.isnan(comp_fluxes[error_column_name]).sum())
+    # print(star_data[good][flux_column_name][np.isnan(comp_fluxes[flux_column_name])])
 
     comp_fluxes = comp_fluxes.group_by('date-obs')
     comp_totals = comp_fluxes.groups.aggregate(np.add)[flux_column_name]
@@ -104,7 +110,7 @@ def calc_aij_relative_flux(star_data, comp_stars,
 
     # AIJ records the total comparison counts even though that total is used
     # only for the targets, not the comparison.
-    star_data['comparison counts'] = comp_total_vector # + flux_offset
+    star_data['comparison counts'] = comp_total_vector  # + flux_offset
     star_data['comparison error'] = comp_error_vector
 
     return star_data
