@@ -78,6 +78,8 @@ class TransitModelFit:
         self._model = None
         self._batman_mod_for_fit = None
         self.weights = None
+        self._detrend_parameters = set()
+        self._all_detrend_params = ['airmass', 'width', 'spp']
 
     def _check_consistent_lengths(self, proposed_value):
         """
@@ -127,6 +129,11 @@ class TransitModelFit:
                              'other independent variables.')
         self._airmass = value
 
+        if value is not None:
+            self._detrend_parameters.add('airmass')
+        else:
+            self._detrend_parameters.discard('airmass')
+
     @property
     def width(self):
         return self._width
@@ -138,6 +145,11 @@ class TransitModelFit:
                              'other independent variables.')
         self._width = value
 
+        if value is not None:
+            self._detrend_parameters.add('width')
+        else:
+            self._detrend_parameters.discard('width')
+
     @property
     def spp(self):
         return self._spp
@@ -148,6 +160,11 @@ class TransitModelFit:
             raise ValueError('Length of spp not consistent with '
                              'other independent variables.')
         self._spp = value
+
+        if value is not None:
+            self._detrend_parameters.add('spp')
+        else:
+            self._detrend_parameters.discard('spp')
 
     @property
     def data(self):
@@ -367,15 +384,33 @@ class TransitModelFit:
             param = getattr(self.model, k)
             param.fixed = v
 
-    def data_light_curve(self, data=None, detrend_by=['airmass', 'width']):
-        pass
+    def _detrend(self, model, detrend_by):
+        if detrend_by == 'all':
+            detrend_by = [p for p in self._all_detrend_params
+                          if p in self._detrend_parameters]
+        elif isinstance(detrend_by, str):
+            detrend_by = [detrend_by]
+
+        detrended = model.copy()
+        for trend in detrend_by:
+            detrended = detrended - (getattr(self.model, f'{trend}_trend')
+                                     * getattr(self, trend))
+
+        return detrended
+
+    def data_light_curve(self, data=None, detrend_by=None):
+        data = data if data is not None else self.data
+
+        if detrend_by is not None:
+            data = self._detrend(data, detrend_by)
+
+        return data
 
     def model_light_curve(self, at_times=None, detrend_by=None):
         """
         Calculate the light curve corresponding to the model, optionally
         detrended by one or more parameters.
         """
-
         zeros = np.zeros_like(self.times)
         airmass = self.airmass if self.airmass is not None else zeros
         width = self.width if self.width is not None else zeros
@@ -392,6 +427,9 @@ class TransitModelFit:
             self._batman_mod_for_fit = original_model
         else:
             model = self.model(self.times, airmass, width, spp)
+
+        if detrend_by is not None:
+            model = self._detrend(model, detrend_by)
 
         return model
 
