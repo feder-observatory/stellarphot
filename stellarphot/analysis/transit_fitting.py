@@ -378,6 +378,7 @@ class TransitModelFit:
 
         # Update the model (might not be necessary but can't hurt)
         self._model = new_model
+        self._actual_fixed_params = self._model.fixed
 
         # reset parameters to their original values
         for k, v in original_values.items():
@@ -433,6 +434,16 @@ class TransitModelFit:
 
         return model
 
+    @property
+    def n_fit_parameters(self):
+        return sum(not v for k, v in self._actual_fixed_params.items())
+
+    @property
+    def BIC(self):
+        residual = self.data - self.model_light_curve()
+        chi_sq = ((residual * self.weights)**2).sum()
+        BIC = chi_sq + self.n_fit_parameters * np.log(len(self.data))
+        return BIC
 
 # example use
 
