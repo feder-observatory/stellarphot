@@ -34,11 +34,12 @@ def _create_data_from_model_with_trends(transit_model, noise_dev=0.01):
     if transit_model.spp is not None:
         data += transit_model.model.spp_trend * transit_model.spp
 
-    # Make some noise
-    generator = np.random.default_rng(432132)
-    noise = generator.normal(scale=noise_dev, size=len(data))
+    if noise_dev > 0:
+        # Make some noise
+        generator = np.random.default_rng(432132)
+        noise = generator.normal(scale=noise_dev, size=len(data))
 
-    data += noise
+        data += noise
 
     return data
 
@@ -73,6 +74,21 @@ def test_transit_fit_value_length_check():
     with pytest.raises(ValueError) as e:
         tmod.data = list(range(3))
     assert 'Length of data not consistent' in str(e.value)
+
+
+@pytest.mark.parametrize('detrend_by', ['airmass', 'spp', 'width'])
+def test_setting_unsetting_parameters_updates_detrend(detrend_by):
+    tmod = TransitModelFit()
+
+    dummy_values = np.array(list(range(5)))
+    # Should work, all others are None
+    tmod.times = dummy_values
+
+    setattr(tmod, detrend_by, dummy_values)
+    assert detrend_by in tmod._detrend_parameters
+
+    setattr(tmod, detrend_by, None)
+    assert detrend_by not in tmod._detrend_parameters
 
 
 def test_transit_fit_setting_independent_vars():
@@ -193,6 +209,59 @@ def test_transit_fit_all_parameters():
 
     expected_rp = np.sqrt(DEFAULT_TESTING_PARAMS['depth'] / 1000)
     assert np.abs(tmod.model.rp - expected_rp) < 1e-4
+
+    assert 'airmass' in tmod._detrend_parameters
+    assert 'width' in tmod._detrend_parameters
+    assert 'spp' in tmod._detrend_parameters
+
+
+def test_transit_model_detrend():
+    tmod = _make_transit_model_with_data(noise_dev=0,
+                                         with_airmass=True,
+                                         with_width=True,
+                                         with_spp=True)
+
+    no_trends = _make_transit_model_with_data(noise_dev=0,
+                                              with_airmass=False,
+                                              with_width=False,
+                                              with_spp=False)
+    full_model = tmod.model_light_curve()
+
+    np.testing.assert_allclose(full_model - no_trends.model_light_curve(),
+                               tmod.model.airmass_trend * tmod.airmass +
+                               tmod.model.width_trend * tmod.width +
+                               tmod.model.spp_trend * tmod.spp)
+
+    for trend in tmod._all_detrend_params:
+        detrended_model = tmod.model_light_curve(detrend_by=trend)
+        trend_param = getattr(tmod.model, f'{trend}_trend')
+        trend_data = getattr(tmod, trend)
+        assert trend_param != 0
+        assert trend_data is not None
+        np.testing.assert_allclose(full_model - detrended_model,
+                                   trend_param * trend_data)
+
+    detrended_model = tmod.model_light_curve(detrend_by='all')
+    np.testing.assert_allclose(detrended_model, no_trends.model_light_curve())
+
+
+def test_transit_data_detrend():
+    tmod = _make_transit_model_with_data(noise_dev=0,
+                                         with_airmass=True,
+                                         with_width=True,
+                                         with_spp=True)
+
+    no_trends = _make_transit_model_with_data(noise_dev=0,
+                                              with_airmass=False,
+                                              with_width=False,
+                                              with_spp=False)
+
+    np.testing.assert_allclose(tmod.data_light_curve(detrend_by='all'),
+                               no_trends.data)
+    np.testing.assert_allclose(tmod.data - no_trends.data,
+                               tmod.model.airmass_trend * tmod.airmass +
+                               tmod.model.width_trend * tmod.width +
+                               tmod.model.spp_trend * tmod.spp)
 
 
 def test_transit_fit_parameters_unfreeze_as_expected():
