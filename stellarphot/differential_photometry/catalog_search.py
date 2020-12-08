@@ -50,7 +50,7 @@ def in_frame(frame_wcs, coordinates, padding=0):
     return in_x & in_y
 
 
-def catalog_search(frame_wcs, shape, desired_catalog,
+def catalog_search(frame_wcs_or_center, shape, desired_catalog,
                    ra_column='RAJ2000',
                    dec_column='DEJ2000',
                    radius=0.5,
@@ -76,9 +76,13 @@ def catalog_search(frame_wcs, shape, desired_catalog,
     Postconditions:
     """
     rad = radius * units.deg
-    # Find the center of the frame
-    center_coord = frame_wcs.all_pix2world([[shape[1] / 2, shape[0] / 2]], 0)
-    center = SkyCoord(center_coord, frame='icrs', unit='deg')
+    if isinstance(frame_wcs_or_center, SkyCoord):
+        # Center was passed in, just use it.
+        center = frame_wcs_or_center
+    else:
+        # Find the center of the frame
+        center_coord = frame_wcs.all_pix2world([[shape[1] / 2, shape[0] / 2]], 0)
+        center = SkyCoord(center_coord, frame='icrs', unit='deg')
 
     # Get catalog via cone search
     Vizier.ROW_LIMIT = -1  # Set row_limit to have no limit
