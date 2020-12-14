@@ -81,7 +81,8 @@ def catalog_search(frame_wcs_or_center, shape, desired_catalog,
         center = frame_wcs_or_center
     else:
         # Find the center of the frame
-        center_coord = frame_wcs.all_pix2world([[shape[1] / 2, shape[0] / 2]], 0)
+        center_coord = frame_wcs_or_center.all_pix2world([[shape[1] / 2,
+                                                         shape[0] / 2]], 0)
         center = SkyCoord(center_coord, frame='icrs', unit='deg')
 
     # Get catalog via cone search
@@ -92,7 +93,7 @@ def catalog_search(frame_wcs_or_center, shape, desired_catalog,
     cat = cat[0]
     cat_coords = SkyCoord(ra=cat[ra_column], dec=cat[dec_column])
     if clip_by_frame:
-        in_fov = in_frame(frame_wcs, cat_coords, padding=padding)
+        in_fov = in_frame(frame_wcs_or_center, cat_coords, padding=padding)
     else:
         in_fov = np.ones([len(cat_coords)], dtype=np.bool)
     return cat[in_fov]
