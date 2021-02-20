@@ -24,6 +24,7 @@ class FakeImage:
         self._noise = make_noise_image(self._stars.shape,
                                        mean=self.mean_noise,
                                        stddev=noise_dev)
+        self._sources['sky_per_pix_avg'] = noise_dev
 
     @property
     def sources(self):
@@ -57,9 +58,11 @@ def test_detect_source_number_location():
     """
     fake_image = FakeImage()
     sources = fake_image.sources
+    print(sources)
     found_sources = source_detection(fake_image.image,
                                      fwhm=2 * sources['x_stddev'].mean(),
-                                     threshold=10)
+                                     threshold=10,
+                                     sky_per_pix_avg=sources['sky_per_pix_avg'])
     # Sort by flux so we can reliably match them
     sources.sort('amplitude')
     found_sources.sort('flux')

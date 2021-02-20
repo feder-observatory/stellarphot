@@ -13,13 +13,14 @@ __all__ = ['source_detection', 'compute_fwhm']
 
 def compute_fwhm(ccd, sources, fwhm_estimate=5,
                  x_column='xcenter', y_column='ycenter',
-                 fit=True):
+                 fit=True,
+                 sky_per_pix_avg=0):
     fwhm_x = []
     fwhm_y = []
     for source in sources:
         x = source[x_column]
         y = source[y_column]
-        sky = source['sky_per_pix_avg']
+        sky = sky_per_pix_avg
         # Cutout2D needs no units on the center position, so remove unit
         # if it is present.
         try:
@@ -52,7 +53,8 @@ def compute_fwhm(ccd, sources, fwhm_estimate=5,
 
 
 def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
-                     threshold=10.0, find_fwhm=True):
+                     threshold=10.0, find_fwhm=True,
+                     sky_per_pix_avg=None):
     """
     Returns an astropy table containing the position of sources
     within the image.
@@ -80,6 +82,9 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
         If ``True``, estimate the FWHM of each source by fitting a 2D Gaussian
         to it.
 
+    sky_per_pix_avg : float or array-like of float
+        Sky background to subtract before centroiding.
+
     Returns
     -----------
 
@@ -93,6 +98,7 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
     print(sources)
     if find_fwhm:
         x, y = compute_fwhm(ccd, sources, fwhm_estimate=fwhm,
-                            x_column='xcentroid', y_column='ycentroid')
+                            x_column='xcentroid', y_column='ycentroid',
+                            sky_per_pix_avg=sky_per_pix_avg)
         sources['FWHM'] = (x + y) / 2
     return sources
