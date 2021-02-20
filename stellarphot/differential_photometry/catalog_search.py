@@ -79,11 +79,13 @@ def catalog_search(frame_wcs_or_center, shape, desired_catalog,
     if isinstance(frame_wcs_or_center, SkyCoord):
         # Center was passed in, just use it.
         center = frame_wcs_or_center
+        if clip_by_frame:
+            raise ValueError('To clip entries by frame you must use '
+                             'a WCS as the first argument.')
     else:
         # Find the center of the frame
-        center_coord = frame_wcs_or_center.all_pix2world([[shape[1] / 2,
-                                                         shape[0] / 2]], 0)
-        center = SkyCoord(center_coord, frame='icrs', unit='deg')
+        center = frame_wcs_or_center.pixel_to_world(shape[1] / 2,
+                                                    shape[0] / 2)
 
     # Get catalog via cone search
     Vizier.ROW_LIMIT = -1  # Set row_limit to have no limit

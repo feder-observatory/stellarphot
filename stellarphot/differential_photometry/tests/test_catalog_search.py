@@ -158,6 +158,38 @@ def test_find_known_variables():
     assert expected['Name'] == vsx['Name']
 
 
+def test_catalog_search_from_wcs_or_coord():
+    data_file = 'data/sample_wcs_ey_uma.fits'
+    data = get_pkg_data_filename(data_file)
+    wcs = WCS(fits.open(data)[0].header)
+    wcs.pixel_shape = (4096, 4096)
+    # Try the search using the WCS alone
+    vsx_vars = catalog_search(wcs, [4096, 4096], 'B/vsx/vsx',
+                              clip_by_frame=False)
+    # And try it using a coordinate instead
+    cen_coord = wcs.pixel_to_world(4096 / 2, 4096 / 2)
+    # But right now clipping by frame doesn't work without the WCS
+    # so don't do that
+    vsx_vars2 = catalog_search(cen_coord, [4096, 4096], 'B/vsx/vsx',
+                               clip_by_frame=False)
+    assert len(vsx_vars) > 0
+    assert len(vsx_vars) == len(vsx_vars2)
+
+
+def test_catalog_search_with_coord_and_frame_clip_fails():
+    # Check that calling catalog_search with a coordinate instead
+    # of WCS and with clip_by_frame = True generates an appropriate
+    # error.
+    data_file = 'data/sample_wcs_ey_uma.fits'
+    data = get_pkg_data_filename(data_file)
+    wcs = WCS(fits.open(data)[0].header)
+    cen_coord = wcs.pixel_to_world(4096 / 2, 4096 / 2)
+    with pytest.raises(ValueError) as e:
+        _ = catalog_search(cen_coord, [4096, 4096], 'B/vsx/vsx',
+                           clip_by_frame=True)
+    assert 'To clip entries by frame' in str(e.value)
+
+
 def test_find_apass():
     # This is really checking from APASS DR9 on Vizier, or at least that
     # is where the "expected" data is drawn from.
