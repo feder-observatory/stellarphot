@@ -81,7 +81,7 @@ def photutils_stellar_photometry(ccd_image, sources,
 
     # Extract x,y coordinates from sources table, construct aperture and
     # annulus objects from coordinates, and perform aperture photometry
-    coords = (sources['xcentroid'], sources['ycentroid'])
+    coords = np.array([sources['xcentroid'], sources['ycentroid']]).T
     apertures = CircularAperture(coords, aperture_radius)
     annulus = CircularAnnulus(coords, inner_annulus, outer_annulus)
     phot_table = aperture_photometry(ccd_image, apertures)
