@@ -473,8 +473,10 @@ def photometry_on_directory(directory_with_images, object_of_interest,
         ycen[too_much_shift] = ys_in[too_much_shift]
 
         # Set up apertures and annuli based on the centroids in this image.
-        aps = CircularAperture((xcen, ycen), r=aperture_rad)
-        anuls = CircularAnnulus((xcen, ycen), inner_annulus, outer_annulus)
+        ap_locs = np.array([xcen, ycen]).T
+        aps = CircularAperture(ap_locs, r=aperture_rad)
+
+        anuls = CircularAnnulus(ap_locs, inner_annulus, outer_annulus)
 
         # Set any clearly bad values to NaN
         a_ccd.data[a_ccd.data > max_adu] = np.nan
