@@ -1,14 +1,41 @@
 import numpy as np
 
 from astropy.stats import sigma_clipped_stats
+from astropy.modeling import Const2D, Gaussian2D, LevMarLSQFitter
 from photutils import DAOStarFinder
-from photutils import fit_2dgaussian
 from photutils.utils._moments import _moments_central, _moments
 from astropy.nddata.utils import Cutout2D
 from astropy.stats import gaussian_sigma_to_fwhm
 from astropy import units as u
 
 __all__ = ['source_detection', 'compute_fwhm']
+
+
+def _fit_2dgaussian(data):
+    """
+    Fit a 2d Gaussian to data.
+
+    Written as a replace for functionality that was removed from
+    photutils.
+    """
+    props = data_properties(data - np.min(data), mask=mask)
+
+    init_const = 0.  # subtracted data minimum above
+    init_amplitude = np.ptp(data)
+
+    g_init = (Const2D(init_const)
+                  + Gaussian2D(amplitude=init_amplitude,
+                               x_mean=props.xcentroid,
+                               y_mean=props.ycentroid,
+                               x_stddev=props.semimajor_sigma.value,
+                               y_stddev=props.semiminor_sigma.value,
+                               theta=props.orientation.value))
+
+    fitter = LevMarLSQFitter()
+    y, x = np.indices(data.shape)
+    gfit = fitter(g_init, x, y, data)
+
+    return gfit
 
 
 def compute_fwhm(ccd, sources, fwhm_estimate=5,
