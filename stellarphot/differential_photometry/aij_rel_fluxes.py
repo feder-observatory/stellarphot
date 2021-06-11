@@ -12,8 +12,8 @@ def _add_in_quadrature(array):
 
 
 def calc_aij_relative_flux(star_data, comp_stars,
-                           in_place=True, index_column=None,
-                           coord_column=None, flux_column_name='aperture_net_flux'):
+                           in_place=True, coord_column=None, 
+                           flux_column_name='aperture_net_flux'):
     """
     Calculate AstroImageJ-style flux ratios.
 
@@ -29,10 +29,14 @@ def calc_aij_relative_flux(star_data, comp_stars,
     in_place : ``bool``, optional
         If ``True``, add new columns to input table. Otherwise, return
         new table with those columns added.
-
-    index_column : ``str``, optional
-        If provided, use this column as the unique identifier for the star.
-        If not provided, a temporary one is generated.
+        
+    coord_column : ``str``, optional
+        If provided, use this column to match comparison stars to coordinates.
+        If not provided, the coordinates are generated with SkyCoord.
+        
+    flux_column_name : ``str``, optional
+        If provided, use this column to find flux.  
+        If not provided, the column 'aperture_net_flux' is used. 
 
     Returns
     -------
@@ -56,8 +60,6 @@ def calc_aij_relative_flux(star_data, comp_stars,
     # Not sure this is really close enough for a good match...
     good = d2d < 1 * u.arcsec
     
-    #👇👇👇 uncomment to reverse changes
-    #flux_column_name = 'aperture_net_flux'
     
     error_column_name = 'noise-aij'
     # Calculate comp star counts for each time
