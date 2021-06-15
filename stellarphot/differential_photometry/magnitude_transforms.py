@@ -277,6 +277,12 @@ def transform_magnitudes(input_mags, catalog,
     catalog : astropy Table
         Table containing reference catalog of magnitudes and colors.
 
+
+    transform_catalog : astropy Table
+        Table containing the reference catalog of magnitudes and colors
+        to use in determining the transform coefficients. Can be the
+        same table as ``catalog`` if desired.
+
     input_mag_column : str, optional
         Name of the column in ``input_mags`` with the magnitudes to be
         transformed.

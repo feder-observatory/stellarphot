@@ -1,14 +1,49 @@
 import numpy as np
 
 from astropy.stats import sigma_clipped_stats
+from astropy.modeling.models import Const2D, Gaussian2D
+from astropy.modeling.fitting import LevMarLSQFitter
+
 from photutils import DAOStarFinder
-from photutils import fit_2dgaussian
 from photutils.utils._moments import _moments_central, _moments
+from photutils.morphology import data_properties
 from astropy.nddata.utils import Cutout2D
 from astropy.stats import gaussian_sigma_to_fwhm
 from astropy import units as u
 
 __all__ = ['source_detection', 'compute_fwhm']
+
+
+def _fit_2dgaussian(data):
+    """
+    Fit a 2d Gaussian to data.
+
+    Written as a replace for functionality that was removed from
+    photutils.
+
+    Keep this private so we don't have to support it....
+
+    Copy/pasted from
+    https://github.com/astropy/photutils/pull/1064/files#diff-9e64908ff7ac552845b4831870a749f397d73c681d218267bd9087c7757e6dd4R285
+    """
+    props = data_properties(data - np.min(data))
+
+    init_const = 0.  # subtracted data minimum above
+    init_amplitude = np.ptp(data)
+
+    g_init = (Const2D(init_const)
+                  + Gaussian2D(amplitude=init_amplitude,
+                               x_mean=props.xcentroid,
+                               y_mean=props.ycentroid,
+                               x_stddev=props.semimajor_sigma.value,
+                               y_stddev=props.semiminor_sigma.value,
+                               theta=props.orientation.value))
+
+    fitter = LevMarLSQFitter()
+    y, x = np.indices(data.shape)
+    gfit = fitter(g_init, x, y, data)
+
+    return gfit
 
 
 def compute_fwhm(ccd, sources, fwhm_estimate=5,
@@ -32,9 +67,9 @@ def compute_fwhm(ccd, sources, fwhm_estimate=5,
 
         cutout = Cutout2D(ccd, (x, y), 5 * fwhm_estimate)
         if fit:
-            fit = fit_2dgaussian(cutout.data)
-            fwhm_x.append(gaussian_sigma_to_fwhm * fit.x_stddev)
-            fwhm_y.append(gaussian_sigma_to_fwhm * fit.y_stddev)
+            fit = _fit_2dgaussian(cutout.data)
+            fwhm_x.append(gaussian_sigma_to_fwhm * fit.x_stddev_1)
+            fwhm_y.append(gaussian_sigma_to_fwhm * fit.y_stddev_1)
             print('Still fitting!!')
         else:
             dat = np.where(cutout.data - sky > 0, cutout.data - sky, 0)
