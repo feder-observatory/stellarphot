@@ -60,7 +60,6 @@ def calc_aij_relative_flux(star_data, comp_stars,
     # Not sure this is really close enough for a good match...
     good = d2d < 1 * u.arcsec
     
-    
     error_column_name = 'noise-aij'
     # Calculate comp star counts for each time
 
@@ -72,8 +71,11 @@ def calc_aij_relative_flux(star_data, comp_stars,
     #       np.isnan(comp_fluxes[error_column_name]).sum())
     # print(star_data[good][flux_column_name][np.isnan(comp_fluxes[flux_column_name])])
 
+    # Check whether any of the columns are masked, but with no masked values,
+    # and convert to regular column...eventually
+
     comp_fluxes = comp_fluxes.group_by('date-obs')
-    comp_totals = comp_fluxes.groups.aggregate(np.add)[flux_column_name]
+    comp_totals = comp_fluxes.groups.aggregate(np.sum)[flux_column_name]
     comp_errors = comp_fluxes.groups.aggregate(_add_in_quadrature)[error_column_name]
 
     comp_total_vector = np.ones_like(star_data[flux_column_name])
