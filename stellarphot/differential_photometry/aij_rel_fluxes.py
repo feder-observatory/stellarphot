@@ -58,8 +58,8 @@ def calc_aij_relative_flux(star_data, comp_stars,
     index, d2d, _ = star_data_coords.match_to_catalog_sky(comp_coords)
 
     # Not sure this is really close enough for a good match...
-    good = d2d < 1 * u.arcsec
-    
+    good = d2d < 1.2 * u.arcsec
+
     error_column_name = 'noise-aij'
     # Calculate comp star counts for each time
 
@@ -76,11 +76,14 @@ def calc_aij_relative_flux(star_data, comp_stars,
 
     comp_fluxes = comp_fluxes.group_by('date-obs')
     comp_totals = comp_fluxes.groups.aggregate(np.sum)[flux_column_name]
+    comp_num_stars = comp_fluxes.groups.aggregate(np.count_nonzero)[flux_column_name]
     comp_errors = comp_fluxes.groups.aggregate(_add_in_quadrature)[error_column_name]
 
     comp_total_vector = np.ones_like(star_data[flux_column_name])
     comp_error_vector = np.ones_like(star_data[flux_column_name])
-    # print(comp_totals)
+
+    if len(set(comp_num_stars)) > 1:
+        raise RuntimeError('Different number of stars in comparison sets')
 
     # Calculate relative flux for every star
 
