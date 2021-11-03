@@ -2,7 +2,7 @@
 stellarphot Documentation
 *************************
 
-This is the documentation for glowing-waffles.
+This is the documentation for stellarphot.
 
 Reference/API
 =============
