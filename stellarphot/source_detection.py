@@ -65,22 +65,27 @@ def compute_fwhm(ccd, sources, fwhm_estimate=5,
         except AttributeError:
             pass
 
-        cutout = Cutout2D(ccd, (x, y), 5 * fwhm_estimate)
+        cutout = Cutout2D(ccd.data, (x, y), 5 * fwhm_estimate)
         if fit:
             fit = _fit_2dgaussian(cutout.data)
             fwhm_x.append(gaussian_sigma_to_fwhm * fit.x_stddev_1)
             fwhm_y.append(gaussian_sigma_to_fwhm * fit.y_stddev_1)
             print('Still fitting!!')
         else:
-            dat = np.where(cutout.data - sky > 0, cutout.data - sky, 0)
-            mom1 = _moments(dat, order=1)
-            xc = mom1[0, 1] / mom1[0, 0]
-            yc = mom1[1, 0] / mom1[0, 0]
-            moments = _moments_central(dat,
-                                       center=(xc, yc), order=2)
-            mom_scale = (moments / mom1[0, 0])
-            fwhm_xm = 2 * np.sqrt(np.log(2) * mom_scale[0, 2])
-            fwhm_ym = 2 * np.sqrt(np.log(2) * mom_scale[2, 0])
+            sc = data_properties(cutout.data - sky)
+
+            # dat = np.where(cutout.data - sky > 0, cutout.data - sky, 0)
+            # mom1 = _moments(dat, order=1)
+            # xc = mom1[0, 1] / mom1[0, 0]
+            # yc = mom1[1, 0] / mom1[0, 0]
+            # moments = _moments_central(dat,
+            #                            center=(xc, yc), order=2)
+            # mom_scale = (moments / mom1[0, 0])
+            # fwhm_xm = 2 * np.sqrt(np.log(2) * mom_scale[0, 2])
+            # fwhm_ym = 2 * np.sqrt(np.log(2) * mom_scale[2, 0])
+
+            fwhm_xm = sc.fwhm.value
+            fwhm_ym = fwhm_xm
             fwhm_x.append(fwhm_xm)
             fwhm_y.append(fwhm_ym)
 

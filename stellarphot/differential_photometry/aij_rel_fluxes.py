@@ -3,8 +3,9 @@ import numpy as np
 from astropy.coordinates import SkyCoord
 import astropy.units as u
 
+__all__ = ['add_in_quadrature', 'calc_aij_relative_flux']
 
-def _add_in_quadrature(array):
+def add_in_quadrature(array):
     """
     Add an array of numbers in quadrature.
     """
@@ -77,7 +78,7 @@ def calc_aij_relative_flux(star_data, comp_stars,
     comp_fluxes = comp_fluxes.group_by('date-obs')
     comp_totals = comp_fluxes.groups.aggregate(np.sum)[flux_column_name]
     comp_num_stars = comp_fluxes.groups.aggregate(np.count_nonzero)[flux_column_name]
-    comp_errors = comp_fluxes.groups.aggregate(_add_in_quadrature)[error_column_name]
+    comp_errors = comp_fluxes.groups.aggregate(add_in_quadrature)[error_column_name]
 
     comp_total_vector = np.ones_like(star_data[flux_column_name])
     comp_error_vector = np.ones_like(star_data[flux_column_name])
