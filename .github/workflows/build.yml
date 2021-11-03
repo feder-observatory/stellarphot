@@ -49,5 +49,5 @@ jobs:
 
     - name: Run tests
       run: |
-        pytest -v stellarphot
+        pytest -v -p no:faulthandler stellarphot
 
