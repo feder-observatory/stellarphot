@@ -1,5 +1,6 @@
-import pytest
+import sys
 
+import pytest
 import numpy as np
 
 batman = pytest.importorskip('batman')
@@ -14,6 +15,9 @@ DEFAULT_TESTING_PARAMS = dict(
     width_trend=0.01,
     spp_trend=0.002
 )
+
+pytestmark = pytest.mark.skipif(sys.platform.startswith('win'),
+                    reason="Intermittent hard crash on windows")
 
 
 def _create_data_from_model_with_trends(transit_model, noise_dev=0.01):
