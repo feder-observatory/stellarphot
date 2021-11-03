@@ -1,7 +1,8 @@
 import pytest
 
 import numpy as np
-import batman
+
+batman = pytest.importorskip('batman')
 
 from stellarphot.analysis.transit_fitting import TransitModelFit
 
