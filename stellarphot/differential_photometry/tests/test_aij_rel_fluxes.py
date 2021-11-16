@@ -2,6 +2,7 @@ import numpy as np
 
 import pytest
 
+from astropy.coordinates import SkyCoord
 from astropy.table import Table
 from astropy.time import Time
 import astropy.units as u
@@ -76,3 +77,22 @@ def test_relative_flux_calculation(in_place):
         assert 'relative_flux' in input_table.colnames
     else:
         assert 'relative_flux' not in input_table.colnames
+
+
+def test_mislocated_comp_star():
+    expected_flux, expected_error, input_table, comp_star = \
+        _raw_photometry_table()
+    # "Jiggle" one of the stars by moving it by a few arcsec in one image.
+    # We'll do it in the last image.
+
+    # First, let's sort so the row we want to modify is the last one
+    input_table.sort(['date-obs', 'star_id'])
+    last_one = input_table[-1]
+    coord_inp = SkyCoord(ra=last_one['RA'], dec=last_one['Dec'], unit=u.degree)
+    coord_bad_ra = coord_inp.ra + 3 * u.arcsecond
+    input_table['RA'][-1] = coord_bad_ra.degree
+
+    output_table = calc_aij_relative_flux(input_table, comp_star,
+                                          in_place=False)
+
+    assert (output_table['relative_flux'][-4:] != expected_flux).all()
