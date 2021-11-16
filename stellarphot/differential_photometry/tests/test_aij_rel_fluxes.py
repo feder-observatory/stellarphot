@@ -31,6 +31,7 @@ def _raw_photometry_table():
     star_dec = np.array([45.0] * n_stars) * u.degree
     fluxes = np.array([10000., 20000, 30000, 40000])
     errors = np.sqrt(fluxes) + 50
+    star_ids = np.arange(1, 5, dtype='int')
 
     # Stars 2, 3 and 4 will be the comparison stars
     comp_stars = np.array([0, 1, 1, 1])
@@ -47,8 +48,10 @@ def _raw_photometry_table():
 
     raw_table = Table(data=[np.sort(_repeat(times, n_stars)), _repeat(star_ra,  n_times),
                             _repeat(star_dec, n_times), _repeat(fluxes, n_times),
-                            _repeat(errors, n_times)],
-                      names=['date-obs', 'RA', 'Dec', 'aperture_net_flux', 'noise-aij'])
+                            _repeat(errors, n_times),
+                            _repeat(star_ids, n_times)],
+                      names=['date-obs', 'RA', 'Dec', 'aperture_net_flux',
+                             'noise-aij', 'star_id'])
 
     return expected_flux_ratios, expected_flux_error, raw_table, raw_table[1:4]
 
