@@ -14,6 +14,7 @@ def add_in_quadrature(array):
 
 def calc_aij_relative_flux(star_data, comp_stars,
                            in_place=True, coord_column=None, 
+                           star_id_column='star_id',
                            flux_column_name='aperture_net_flux'):
     """
     Calculate AstroImageJ-style flux ratios.
@@ -56,6 +57,8 @@ def calc_aij_relative_flux(star_data, comp_stars,
     else:
         comp_coords = SkyCoord(ra=comp_stars['RA'], dec=comp_stars['Dec'])
 
+    # 👉 MAKE A TABLE GROUPED BY ID COLUMN THEN CHECK WHICH IDs HAVE
+    # 👉 *ANY* BAD D2D AND DROP AS COMPARISON
     index, d2d, _ = star_data_coords.match_to_catalog_sky(comp_coords)
 
     # Not sure this is really close enough for a good match...
