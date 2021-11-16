@@ -59,13 +59,6 @@ def _raw_photometry_table():
 @pytest.mark.parametrize('in_place', [True, False])
 def test_relative_flux_calculation(in_place):
     expected_flux, expected_error, input_table, comp_star = _raw_photometry_table()
-    # print(input_table)
-
-    # Try running the fluxes one exposure at a time
-    # for one_time in grouped_input.groups:
-    #     output = calc_aij_mags(one_time, comp_star)
-    #     #print(one_time, comp_star, output)
-    #     np.testing.assert_allclose(output, expected_flux)
 
     # Try doing it all at once
     n_times = len(np.unique(input_table['date-obs']))
