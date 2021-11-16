@@ -95,4 +95,17 @@ def test_mislocated_comp_star():
     output_table = calc_aij_relative_flux(input_table, comp_star,
                                           in_place=False)
 
-    assert (output_table['relative_flux'][-4:] != expected_flux).all()
+    old_total_flux = comp_star['aperture_net_flux'].sum()
+    new_flux = old_total_flux - last_one['aperture_net_flux']
+    # This works for target stars, i.e. those never in comparison set
+    new_expected_flux = old_total_flux / new_flux * expected_flux
+
+    # Oh wow, this is terrible....
+    # Need to manually calculate for the only two that are still in comparison
+    new_expected_flux[1] = (comp_star['aperture_net_flux'][0] /
+                            comp_star['aperture_net_flux'][1])
+    new_expected_flux[2] = (comp_star['aperture_net_flux'][1] /
+                            comp_star['aperture_net_flux'][0])
+    new_expected_flux[3] = expected_flux[3]
+
+    np.testing.assert_allclose(new_expected_flux, output_table['relative_flux'][-4:])
