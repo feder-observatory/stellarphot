@@ -1,6 +1,7 @@
 import numpy as np
 
 from astropy.coordinates import SkyCoord
+from astropy.table import Table
 import astropy.units as u
 
 __all__ = ['add_in_quadrature', 'calc_aij_relative_flux']
@@ -14,6 +15,7 @@ def add_in_quadrature(array):
 
 def calc_aij_relative_flux(star_data, comp_stars,
                            in_place=True, coord_column=None, 
+                           star_id_column='star_id',
                            flux_column_name='aperture_net_flux'):
     """
     Calculate AstroImageJ-style flux ratios.
@@ -30,14 +32,18 @@ def calc_aij_relative_flux(star_data, comp_stars,
     in_place : ``bool``, optional
         If ``True``, add new columns to input table. Otherwise, return
         new table with those columns added.
-        
+
     coord_column : ``str``, optional
         If provided, use this column to match comparison stars to coordinates.
         If not provided, the coordinates are generated with SkyCoord.
-        
+
     flux_column_name : ``str``, optional
-        If provided, use this column to find flux.  
-        If not provided, the column 'aperture_net_flux' is used. 
+        If provided, use this column to find flux.
+        If not provided, the column 'aperture_net_flux' is used.
+
+    star_id_column : ``str``, optional
+        Name of the column that provides a unique identifier for each
+        comparison star.
 
     Returns
     -------
@@ -60,6 +66,17 @@ def calc_aij_relative_flux(star_data, comp_stars,
 
     # Not sure this is really close enough for a good match...
     good = d2d < 1.2 * u.arcsec
+
+    check_for_bad = Table(data=[star_data[star_id_column].data, good],
+                          names=['star_id', 'good'])
+    check_for_bad = check_for_bad.group_by('star_id')
+    is_all_good = check_for_bad.groups.aggregate(np.all)
+
+    bad_comps = is_all_good['star_id'][~is_all_good['good']]
+
+    for comp in bad_comps:
+        this_comp = star_data[star_id_column] == comp
+        good[this_comp] = False
 
     error_column_name = 'noise-aij'
     # Calculate comp star counts for each time

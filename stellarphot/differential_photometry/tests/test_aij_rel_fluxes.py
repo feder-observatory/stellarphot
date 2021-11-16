@@ -2,6 +2,7 @@ import numpy as np
 
 import pytest
 
+from astropy.coordinates import SkyCoord
 from astropy.table import Table
 from astropy.time import Time
 import astropy.units as u
@@ -31,6 +32,7 @@ def _raw_photometry_table():
     star_dec = np.array([45.0] * n_stars) * u.degree
     fluxes = np.array([10000., 20000, 30000, 40000])
     errors = np.sqrt(fluxes) + 50
+    star_ids = np.arange(1, 5, dtype='int')
 
     # Stars 2, 3 and 4 will be the comparison stars
     comp_stars = np.array([0, 1, 1, 1])
@@ -47,8 +49,10 @@ def _raw_photometry_table():
 
     raw_table = Table(data=[np.sort(_repeat(times, n_stars)), _repeat(star_ra,  n_times),
                             _repeat(star_dec, n_times), _repeat(fluxes, n_times),
-                            _repeat(errors, n_times)],
-                      names=['date-obs', 'RA', 'Dec', 'aperture_net_flux', 'noise-aij'])
+                            _repeat(errors, n_times),
+                            _repeat(star_ids, n_times)],
+                      names=['date-obs', 'RA', 'Dec', 'aperture_net_flux',
+                             'noise-aij', 'star_id'])
 
     return expected_flux_ratios, expected_flux_error, raw_table, raw_table[1:4]
 
@@ -56,13 +60,6 @@ def _raw_photometry_table():
 @pytest.mark.parametrize('in_place', [True, False])
 def test_relative_flux_calculation(in_place):
     expected_flux, expected_error, input_table, comp_star = _raw_photometry_table()
-    # print(input_table)
-
-    # Try running the fluxes one exposure at a time
-    # for one_time in grouped_input.groups:
-    #     output = calc_aij_mags(one_time, comp_star)
-    #     #print(one_time, comp_star, output)
-    #     np.testing.assert_allclose(output, expected_flux)
 
     # Try doing it all at once
     n_times = len(np.unique(input_table['date-obs']))
@@ -80,3 +77,35 @@ def test_relative_flux_calculation(in_place):
         assert 'relative_flux' in input_table.colnames
     else:
         assert 'relative_flux' not in input_table.colnames
+
+
+def test_mislocated_comp_star():
+    expected_flux, expected_error, input_table, comp_star = \
+        _raw_photometry_table()
+    # "Jiggle" one of the stars by moving it by a few arcsec in one image.
+    # We'll do it in the last image.
+
+    # First, let's sort so the row we want to modify is the last one
+    input_table.sort(['date-obs', 'star_id'])
+    last_one = input_table[-1]
+    coord_inp = SkyCoord(ra=last_one['RA'], dec=last_one['Dec'], unit=u.degree)
+    coord_bad_ra = coord_inp.ra + 3 * u.arcsecond
+    input_table['RA'][-1] = coord_bad_ra.degree
+
+    output_table = calc_aij_relative_flux(input_table, comp_star,
+                                          in_place=False)
+
+    old_total_flux = comp_star['aperture_net_flux'].sum()
+    new_flux = old_total_flux - last_one['aperture_net_flux']
+    # This works for target stars, i.e. those never in comparison set
+    new_expected_flux = old_total_flux / new_flux * expected_flux
+
+    # Oh wow, this is terrible....
+    # Need to manually calculate for the only two that are still in comparison
+    new_expected_flux[1] = (comp_star['aperture_net_flux'][0] /
+                            comp_star['aperture_net_flux'][1])
+    new_expected_flux[2] = (comp_star['aperture_net_flux'][1] /
+                            comp_star['aperture_net_flux'][0])
+    new_expected_flux[3] = expected_flux[3]
+
+    np.testing.assert_allclose(new_expected_flux, output_table['relative_flux'][-4:])
