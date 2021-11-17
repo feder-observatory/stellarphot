@@ -57,14 +57,26 @@ def _raw_photometry_table():
     return expected_flux_ratios, expected_flux_error, raw_table, raw_table[1:4]
 
 
+@pytest.mark.parametrize('comp_ra_dec_have_units', [True, False])
+@pytest.mark.parametrize('star_ra_dec_have_units', [True, False])
 @pytest.mark.parametrize('in_place', [True, False])
-def test_relative_flux_calculation(in_place):
+def test_relative_flux_calculation(in_place,
+                                   star_ra_dec_have_units,
+                                   comp_ra_dec_have_units):
     expected_flux, expected_error, input_table, comp_star = _raw_photometry_table()
 
     # Try doing it all at once
     n_times = len(np.unique(input_table['date-obs']))
     all_expected_flux = _repeat(expected_flux, n_times)
     all_expected_error = _repeat(expected_error, n_times)
+
+    if not star_ra_dec_have_units:
+        input_table['RA'] = input_table['RA'].data
+        input_table['Dec'] = input_table['Dec'].data
+
+    if not comp_ra_dec_have_units:
+        comp_star['RA'] = comp_star['RA'].data
+        comp_star['Dec'] = comp_star['Dec'].data
 
     output_table = calc_aij_relative_flux(input_table, comp_star,
                                           in_place=in_place)
