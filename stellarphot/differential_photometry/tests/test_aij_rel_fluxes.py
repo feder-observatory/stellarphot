@@ -91,18 +91,27 @@ def test_relative_flux_calculation(in_place,
         assert 'relative_flux' not in input_table.colnames
 
 
-def test_mislocated_comp_star():
+@pytest.mark.parametrize('bad_thing', ['RA', 'NaN'])
+def test_bad_comp_star(bad_thing):
     expected_flux, expected_error, input_table, comp_star = \
         _raw_photometry_table()
-    # "Jiggle" one of the stars by moving it by a few arcsec in one image.
-    # We'll do it in the last image.
+    # We'll do modify the "bad" property for the last star in the last
+    # image.
 
     # First, let's sort so the row we want to modify is the last one
     input_table.sort(['date-obs', 'star_id'])
-    last_one = input_table[-1]
-    coord_inp = SkyCoord(ra=last_one['RA'], dec=last_one['Dec'], unit=u.degree)
-    coord_bad_ra = coord_inp.ra + 3 * u.arcsecond
-    input_table['RA'][-1] = coord_bad_ra.degree
+
+    # Force a copy of this row so we have access to the original values
+    last_one = Table(input_table[-1])
+
+    if bad_thing == 'RA':
+        # "Jiggle" one of the stars by moving it by a few arcsec in one image.
+        coord_inp = SkyCoord(ra=last_one['RA'], dec=last_one['Dec'],
+                             unit=u.degree)
+        coord_bad_ra = coord_inp.ra + 3 * u.arcsecond
+        input_table['RA'][-1] = coord_bad_ra.degree
+    elif bad_thing == 'NaN':
+        input_table['aperture_net_flux'][-1] = np.nan
 
     output_table = calc_aij_relative_flux(input_table, comp_star,
                                           in_place=False)
@@ -118,6 +127,9 @@ def test_mislocated_comp_star():
                             comp_star['aperture_net_flux'][1])
     new_expected_flux[2] = (comp_star['aperture_net_flux'][1] /
                             comp_star['aperture_net_flux'][0])
+
     new_expected_flux[3] = expected_flux[3]
+    if bad_thing == 'NaN':
+        new_expected_flux[3] = np.nan
 
     np.testing.assert_allclose(new_expected_flux, output_table['relative_flux'][-4:])
