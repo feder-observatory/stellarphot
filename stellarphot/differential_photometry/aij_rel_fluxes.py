@@ -55,13 +55,31 @@ def calc_aij_relative_flux(star_data, comp_stars,
     """
 
     # Match comparison star list to instrumental magnitude information
-    star_data_coords = SkyCoord(ra=star_data['RA'], dec=star_data['Dec'])
+    if star_data['RA'].unit is None:
+        unit = 'degree'
+    else:
+        # Pulled this from the source code -- None is ok but need
+        # to match the number of coordinates.
+        unit = [None, None]
+
+    star_data_coords = SkyCoord(ra=star_data['RA'], dec=star_data['Dec'],
+                                unit=unit)
 
     if coord_column is not None:
         comp_coords = comp_stars[coord_column]
     else:
-        comp_coords = SkyCoord(ra=comp_stars['RA'], dec=comp_stars['Dec'])
+        if comp_stars['RA'].unit is None:
+            unit = 'degree'
+        else:
+            # Pulled this from the source code -- None is ok but need
+            # to match the number of coordinates.
+            unit = [None, None]
+        comp_coords = SkyCoord(ra=comp_stars['RA'], dec=comp_stars['Dec'],
+                               unit=unit)
 
+    # Check for matches of stars in star data to the stars in comp_stars
+    # and eliminate as comps any stars for which the separation is bigger
+    # than 1.2 arcsec in any of the frames.
     index, d2d, _ = star_data_coords.match_to_catalog_sky(comp_coords)
 
     # Not sure this is really close enough for a good match...
