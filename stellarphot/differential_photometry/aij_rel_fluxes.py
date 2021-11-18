@@ -27,7 +27,15 @@ def calc_aij_relative_flux(star_data, comp_stars,
         Table of star data from one or more images.
 
     comp_stars : '~astropy.table.Table'
-        Table of known comparison stars in the field, given by AAVSO
+        Table of comparison stars in the field. Must contain a column
+        called ``RA`` and a column called ``Dec``.
+        NOTE that not all
+        of the comparison stars will necessarily be used. Stars in
+        this table are excluded from the comparison set if, in any
+        of the `star_data` for that comparison, the net counts are
+        ``NaN`` or if the angular distance between the position in
+        the `star_data` and the position in the `comp_stars` table
+        is too large.
 
     in_place : ``bool``, optional
         If ``True``, add new columns to input table. Otherwise, return
@@ -90,8 +98,21 @@ def calc_aij_relative_flux(star_data, comp_stars,
     check_for_bad = check_for_bad.group_by('star_id')
     is_all_good = check_for_bad.groups.aggregate(np.all)
 
-    bad_comps = is_all_good['star_id'][~is_all_good['good']]
+    bad_comps = set(is_all_good['star_id'][~is_all_good['good']])
+    print(f'{bad_comps=}')
 
+    # Check whether any of the comp stars have NaN values and,
+    # if they do, exclude them from the comp set.
+    check_for_nan = Table(data=[star_data[star_id_column].data,
+                                star_data[flux_column_name].data],
+                          names=['star_id', 'net_counts'])
+    check_for_nan = check_for_nan.group_by('star_id')
+    check_for_nan['good'] = ~np.isnan(check_for_nan['net_counts'])
+    is_all_good = check_for_nan.groups.aggregate(np.all)
+
+    bad_comps = bad_comps | set(is_all_good['star_id'][~is_all_good['good']])
+
+    print(f'{bad_comps=}')
     for comp in bad_comps:
         this_comp = star_data[star_id_column] == comp
         good[this_comp] = False
