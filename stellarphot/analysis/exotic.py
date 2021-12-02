@@ -1,8 +1,12 @@
+import re
 from pathlib import Path
 import json
 
+import numpy as np
 import ipywidgets as ipw
+from traitlets import observe, Bool
 
+from astroquery.mast import Catalogs
 from astropy.utils.data import get_pkg_data_filename
 
 template_types = ['known', 'candidate']
@@ -25,6 +29,83 @@ exotic_arguments = dict(
 
 join_char = "😬"
 
+exotic_tic = {
+    "Star Effective Temperature (K)": "Teff",
+    "Star Effective Temperature (+) Uncertainty": "epos_Teff",
+    "Star Effective Temperature (-) Uncertainty": "eneg_Teff",
+    "Star Surface Gravity (log(g))": "logg",
+    "Star Surface Gravity (+) Uncertainty": "epos_logg",
+    "Star Surface Gravity (-) Uncertainty": "eneg_logg",
+    "Host Star Name": "UCAC",
+    "Star Metallicity ([FE/H])": "MH",
+    "Star Metallicity (+) Uncertainty": "e_MH",
+    "Star Metallicity (-) Uncertainty": "e_MH"
+}
+
+
+class MyValid(ipw.Button):
+    """
+    A more compact indicator of valid entries.
+    """
+    value = Bool(False, help="Bool value").tag(sync=True)
+
+    def __init__(self, **kwd):
+        super().__init__(**kwd)
+        self.layout.width = '35px'
+        self._set_properties(None)
+
+    @observe('value')
+    def _set_properties(self, change):
+        if self.value:
+            self.style.button_color = 'green'
+            self.icon = 'check'
+        else:
+            self.style.button_color = 'red'
+            self.icon = 'times'
+
+
+def get_tic_info(TIC_ID):
+    catalog_data = Catalogs.query_criteria(catalog="Tic", ID=TIC_ID)
+    return catalog_data
+
+
+def make_checker(indicator_widget, value_widget):
+    def check_name(change):
+        # Valid TIC number is 9 digits
+        ticced = re.compile(r'TIC \d{9,9}$')
+        owner = change['owner']
+        is_tic = ticced.match(change['new'])
+        if is_tic:
+            if indicator_widget is not None:
+                indicator_widget.value = True
+            owner.disabled = True
+            tic_info = get_tic_info(change['new'][-9:])
+            if not tic_info:
+                indicator_widget.value = False
+                indicator_widget.tooltip = "Not a valid TIC number"
+            else:
+                populate_boxes(tic_info, value_widget)
+            owner.disabled = False
+        else:
+            owner.disabled = False
+            if indicator_widget is not None:
+                indicator_widget.value = False
+                indicator_widget.tooltip = 'TIC numbers have 9 digits'
+
+    return check_name
+
+
+def populate_boxes(tic_info, value_widget):
+    """
+    Noop for the win!
+    """
+    for k, v in exotic_tic.items():
+        exotic_key = join_char.join(["planetary_parameters", k])
+        if k == "Host Star Name":
+            value_widget['candidate'][exotic_key].value = f'UCAC4 {tic_info[v][0]}'
+        elif not np.isnan(tic_info[v][0]):
+            value_widget['candidate'][exotic_key].value = tic_info[v][0]
+
 
 def exotic_settings_widget():
     widget_list = {}
@@ -44,9 +125,19 @@ def exotic_settings_widget():
                     if v >= 0:
                         input_widget = ipw.FloatText(value=v)
                     else:
-                        input_widget = ipw.FloatText(max=0.0, min=-1e4, value=v)
+                        input_widget = ipw.FloatText(value=v)
                 input_widget.layout = layout_input
-                hb = ipw.HBox([ipw.HTML(value=k2, layout=layout_description), input_widget])
+                hb = ipw.HBox([ipw.HTML(value=k2, layout=layout_description),
+                               input_widget])
+                if k2 == "Planet Name" and template == 'candidate':
+                    kids = list(hb.children)
+                    indicator = MyValid(value=False)
+                    kids.append(indicator)
+                    input_widget.observe(make_checker(indicator, value_widget),
+                                         names='value')
+
+                    hb.children = kids
+
                 val_key = join_char.join([k, k2])
                 value_widget[template][val_key] = input_widget
                 widget_list[template].append(hb)
@@ -58,7 +149,7 @@ def exotic_settings_widget():
 
     select_planet_type = ipw.ToggleButtons(description='Known or candidate exoplanet?',
                                            options=template_types,
-                                           style = {'description_width': 'initial'})
+                                           style={'description_width': 'initial'})
 
     lookup_link_text = dict(known='https://exoplanetarchive.ipac.caltech.edu/',
                             candidate='https://exofop.ipac.caltech.edu/tess/')
@@ -73,6 +164,10 @@ def exotic_settings_widget():
     whole_thing = ipw.VBox(children=[select_planet_type, input_container])
     whole_thing.planet_type = select_planet_type
     whole_thing.value_widget = value_widget
+    whole_thing.data_file_widget = {
+        'candidate': value_widget['candidate']['optional_info😬Pre-reduced File:'],
+        'known': value_widget['known']['optional_info😬Pre-reduced File:']
+    }
 
     def observe_select(change):
         input_container.children = [lookup_link_html[select_planet_type.value],
@@ -83,7 +178,9 @@ def exotic_settings_widget():
 
     return whole_thing
 
+
 whole_thing = exotic_settings_widget()
+
 
 def get_values_from_widget(key):
     for k, widget in whole_thing.value_widget[key].items():
