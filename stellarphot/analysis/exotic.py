@@ -190,7 +190,7 @@ def get_values_from_widget(key, whole_thing):
 
 
 def generate_json_file_name(key, whole_thing):
-    get_values_from_widget(key)
+    get_values_from_widget(key, whole_thing)
     user_info = 'user_info'
     planet = 'planetary_parameters'
     date = template_json[key][user_info]['Observation date']
