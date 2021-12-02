@@ -182,14 +182,14 @@ def exotic_settings_widget():
 whole_thing = exotic_settings_widget()
 
 
-def get_values_from_widget(key):
+def get_values_from_widget(key, whole_thing):
     for k, widget in whole_thing.value_widget[key].items():
         k1, k2 = k.split(join_char)
         template_json[key][k1][k2] = widget.value
     return template_json[key]
 
 
-def generate_json_file_name(key):
+def generate_json_file_name(key, whole_thing):
     get_values_from_widget(key)
     user_info = 'user_info'
     planet = 'planetary_parameters'
