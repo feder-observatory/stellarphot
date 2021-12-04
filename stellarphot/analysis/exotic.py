@@ -51,7 +51,7 @@ class MyValid(ipw.Button):
 
     def __init__(self, **kwd):
         super().__init__(**kwd)
-        self.layout.width = '35px'
+        self.layout.width = '40px'
         self._set_properties(None)
 
     @observe('value')
