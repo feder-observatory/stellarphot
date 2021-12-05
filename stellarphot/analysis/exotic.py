@@ -9,16 +9,18 @@ from traitlets import observe, Bool
 from astroquery.mast import Catalogs
 from astropy.utils.data import get_pkg_data_filename
 
+
 template_types = ['known', 'candidate']
 template_json = {}
 to_fill = {}
 
 for template in template_types:
-    template_name = get_pkg_data_filename('data/' + f'tic-template-for-exotic-{template}.json')
+    template_name = get_pkg_data_filename('data/tic-template-for-exotic-'
+                                          f'{template}.json')
     with open(template_name) as f:
         template_json[template] = json.load(f)
 
-    template_name = get_pkg_data_filename('data/' + f'exotic-to-mod-{template}.json')
+    template_name = get_pkg_data_filename(f'data/exotic-to-mod-{template}.json')
     with open(Path(template_name)) as f:
         to_fill[template] = json.load(f)
 
@@ -102,12 +104,13 @@ def populate_boxes(tic_info, value_widget):
     for k, v in exotic_tic.items():
         exotic_key = join_char.join(["planetary_parameters", k])
         if k == "Host Star Name":
-            value_widget['candidate'][exotic_key].value = f'UCAC4 {tic_info[v][0]}'
+            value_widget['candidate'][exotic_key].value = \
+                f'UCAC4 {tic_info[v][0]}'
         elif not np.isnan(tic_info[v][0]):
             value_widget['candidate'][exotic_key].value = tic_info[v][0]
 
 
-def exotic_settings_widget():
+def exotic_settings_widget(init_from_json=None):
     widget_list = {}
 
     layout_description = ipw.Layout(width='70%')
@@ -144,12 +147,15 @@ def exotic_settings_widget():
 
     hb2 = {}
     for template in template_types:
-        hb2[template] = ipw.HBox([ipw.VBox(widget_list[template][:16], layout=ipw.Layout(padding='10px')),
+        hb2[template] = ipw.HBox([ipw.VBox(widget_list[template][:16],
+                                           layout=ipw.Layout(padding='10px')),
                                   ipw.VBox(widget_list[template][16:])])
 
-    select_planet_type = ipw.ToggleButtons(description='Known or candidate exoplanet?',
-                                           options=template_types,
-                                           style={'description_width': 'initial'})
+    select_planet_type = ipw.ToggleButtons(
+        description='Known or candidate exoplanet?',
+        options=template_types,
+        style={'description_width': 'initial'}
+    )
 
     lookup_link_text = dict(known='https://exoplanetarchive.ipac.caltech.edu/',
                             candidate='https://exofop.ipac.caltech.edu/tess/')
@@ -157,16 +163,20 @@ def exotic_settings_widget():
     lookup_link_html = {}
 
     for k, v in lookup_link_text.items():
-        lookup_link_html[k] = ipw.HTML(f'<h3>For some information about this object: <a href="{v}" target="_blank">{v}</a></h3>')
+        lookup_link_html[k] = ipw.HTML(
+            f'<h3>For some information about this '
+            f'object: <a href="{v}" target="_blank">{v}</a></h3>'
+        )
 
     input_container = ipw.VBox()
 
     whole_thing = ipw.VBox(children=[select_planet_type, input_container])
     whole_thing.planet_type = select_planet_type
     whole_thing.value_widget = value_widget
+    pre_reduced_file = join_char.join(['optional_info', 'Pre-reduced File:'])
     whole_thing.data_file_widget = {
-        'candidate': value_widget['candidate']['optional_info😬Pre-reduced File:'],
-        'known': value_widget['known']['optional_info😬Pre-reduced File:']
+        'candidate': value_widget['candidate'][pre_reduced_file],
+        'known': value_widget['known'][pre_reduced_file]
     }
 
     def observe_select(change):
@@ -193,8 +203,9 @@ def generate_json_file_name(key, whole_thing):
     get_values_from_widget(key, whole_thing)
     user_info = 'user_info'
     planet = 'planetary_parameters'
+    filter_key = 'Filter Name (aavso.org/filters)'
     date = template_json[key][user_info]['Observation date']
     planet_name = template_json[key][planet]['Planet Name']
-    filter_name = template_json[key][user_info]['Filter Name (aavso.org/filters)']
+    filter_name = template_json[key][user_info][filter_key]
     name = f'{planet_name}-{date}-{filter_name}'
     return name.replace(' ', '_') + '.json'
