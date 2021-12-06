@@ -97,9 +97,22 @@ def make_checker(indicator_widget, value_widget):
     return check_name
 
 
+def validate_exposure_time(indicator_widget, value_widget):
+    def check_exposure(change):
+        # Valid Exposure time is greater than zero
+        if change['new'] > 0:
+            if indicator_widget is not None:
+                indicator_widget.value = True
+        else:
+            if indicator_widget is not None:
+                indicator_widget.value = False
+    return check_exposure
+
+
 def populate_boxes(tic_info, value_widget):
     """
-    Noop for the win!
+    Set the appropriate widget values given information pulled from the
+    TIC.
     """
     for k, v in exotic_tic.items():
         exotic_key = join_char.join(["planetary_parameters", k])
@@ -108,6 +121,12 @@ def populate_boxes(tic_info, value_widget):
                 f'UCAC4 {tic_info[v][0]}'
         elif not np.isnan(tic_info[v][0]):
             value_widget['candidate'][exotic_key].value = tic_info[v][0]
+
+
+validators = dict(known={}, candidate={})
+validators['candidate']['Planet Name'] = make_checker
+for k in validators:
+    validators[k]['Exposure Time (s)'] = validate_exposure_time
 
 
 def exotic_settings_widget(init_from_json=None):
@@ -132,11 +151,15 @@ def exotic_settings_widget(init_from_json=None):
                 input_widget.layout = layout_input
                 hb = ipw.HBox([ipw.HTML(value=k2, layout=layout_description),
                                input_widget])
-                if k2 == "Planet Name" and template == 'candidate':
+                try:
+                    validator = validators[template][k2]
+                except KeyError:
+                    pass
+                else:
                     kids = list(hb.children)
                     indicator = MyValid(value=False)
                     kids.append(indicator)
-                    input_widget.observe(make_checker(indicator, value_widget),
+                    input_widget.observe(validator(indicator, value_widget),
                                          names='value')
 
                     hb.children = kids
