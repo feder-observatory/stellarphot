@@ -193,7 +193,12 @@ def wrap(imagewidget, outputwidget):
         y = int(np.floor(event.data_y))
         ra, dec = i.wcs.wcs.all_pix2world(event.data_x, event.data_y, 0)
         out_skycoord = SkyCoord(ra=ra, dec=dec, unit=(u.degree, u.degree))
-        all_table = imagewidget.get_markers(marker_name='all')
+
+        try:
+            all_table = imagewidget.get_markers(marker_name='all')
+        except AttributeError:
+            all_table = imagewidget.get_all_markers()
+
         with outputwidget:
             index, d2d, d3d = out_skycoord.match_to_catalog_sky(
                 all_table['coord'])
