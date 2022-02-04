@@ -151,7 +151,10 @@ def make_markers(iw, ccd, RD, vsx, ent,
     """
     iw.load_nddata(ccd)
     iw.zoom_level = 'fit'
-    iw.reset_markers()
+    try:
+        iw.reset_markers()
+    except AttributeError:
+        iw.remove_all_markers()
 
     if RD:
         iw.marker = {'type': 'circle', 'color': 'green', 'radius': 10}
