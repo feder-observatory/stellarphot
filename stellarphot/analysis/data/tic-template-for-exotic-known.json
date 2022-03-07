@@ -1,0 +1,66 @@
+{
+    "inits_guide": {
+            "Title": "EXOTIC's Initialization File",
+            "Comment": "Please answer all the following requirements below by following the format of the given",
+            "Comment1": "sample dataset HAT-P-32 b. Edit this file as needed to match the data wanting to be reduced.",
+            "Comment2": "Do not delete areas where there are quotation marks, commas, and brackets.",
+            "Comment3": "The inits_guide dictionary (these lines of text) does not have to be edited",
+            "Comment4": "and is only here to serve as a guide. Will be updated per user's advice.",
+            "Image Calibrations Directory Guide": "Enter in the path to image calibrations or enter in null for none.",
+            "Planetary Parameters Guide": "For planetary parameters that are not filled in, enter in null.",
+            "Comparison Star(s) Guide": "Up to 10 comparison stars can be added following the format given below.",
+            "Obs. Latitude Guide": "Indicate the sign (+ North, - South) before the degrees. Needs to be in decimal or HH:MM:SS format.",
+            "Obs. Longitude Guide": "Indicate the sign (+ East, - West) before the degrees. Needs to be in decimal or HH:MM:SS format.",
+            "Camera Type (1)": "If you are using a CMOS, please enter CCD in 'Camera Type (CCD or DSLR)' and then note",
+            "Camera Type (2)": "your actual camera type under 'Observing Notes'.",
+            "Plate Solution": "For your image to be given a plate solution, type y.",
+            "Plate Solution Disclaimer": "One of your imaging files will be publicly viewable on nova.astrometry.net.",
+            "Standard Filter": "To use EXOTIC standard filters, type only the filter name.",
+            "Custom Filter": "To use a custom filter, enter in the FWHM in optional_info.",
+            "Target Star RA": "Must be in HH:MM:SS sexagesimal format.",
+            "Target Star DEC": "Must be in +/-DD:MM:SS sexagesimal format with correct sign at the beginning (+ or -).",
+            "Formatting of null": "Due to the file being a .json, null is case sensitive and must be spelled as shown.",
+            "Decimal Format": "Leading zero must be included when appropriate (Ex: 0.32, .32 or 00.32 causes errors.)."
+    },
+    "user_info": {
+            "Directory with FITS files": null,
+            "Directory to Save Plots": "FILL IN",
+            "Directory of Flats": null,
+            "Directory of Darks": null,
+            "Directory of Biases": null,
+
+            "AAVSO Observer Code (blank if none)": "",
+            "Secondary Observer Codes (blank if none)": "",
+
+            "Observation date": "2020-08-07",
+            "Obs. Latitude": "+46.86678",
+            "Obs. Longitude": "-96.45328",
+            "Obs. Elevation (meters)": 311,
+            "Camera Type (CCD or DSLR)": "CCD",
+            "Pixel Binning": "1x1",
+            "Filter Name (aavso.org/filters)": "SR",
+            "Observing Notes": "Weather, seeing was nice.",
+
+            "Plate Solution? (y/n)": "n",
+
+            "Target Star X & Y Pixel": [],
+            "Comparison Star(s) X & Y Pixel": [[]]
+    },
+    "planetary_parameters": {
+            "Planet Name": "TIC FILL IN"
+    },
+    "optional_info": {
+            "Pre-reduced File:": "../for_exotic.csv",
+            "Pre-reduced File Time Format (BJD_TDB, JD_UTC, MJD_UTC)": "BJD_TDB",
+            "Pre-reduced File Units of Flux (flux, magnitude, millimagnitude)": "flux",
+
+            "Comparison Star used in Photometry (leave blank if none)": {"ra": "", "dec": "", "x": "", "y": ""},
+
+            "Filter Minimum Wavelength (nm)": null,
+            "Filter Maximum Wavelength (nm)": null,
+
+            "Image Scale (Ex: 5.21 arcsecs/pixel)": null,
+
+            "Exposure Time (s)": 60.0
+    }
+}

@@ -1,0 +1,40 @@
+{
+    "user_info": {
+            "Directory to Save Plots": "EXOTIC-Output",
+            "AAVSO Observer Code (blank if none)": "",
+            "Secondary Observer Codes (blank if none)": "",
+            "Observation date": "FILL IN",
+            "Filter Name (aavso.org/filters)": "FILL IN (SG, SR, SI, ...)",
+            "Observing Notes": "CHECK README"
+    },
+    "planetary_parameters": {
+            "Planet Name": "TIC 12345678",
+            "Host Star Name": "UCAC4 LOOK THIS UP",
+            "Target Star RA": "LOOK UP",
+            "Target Star Dec": "LOOK UP",
+            "Orbital Period (days)": 0.0,
+            "Orbital Period Uncertainty": 0.0,
+            "Published Mid-Transit Time (BJD-UTC)": 0.0,
+            "Mid-Transit Time Uncertainty": 0.0,
+            "Ratio of Planet to Stellar Radius (Rp/Rs)": 0.0,
+            "Ratio of Planet to Stellar Radius (Rp/Rs) Uncertainty": 0.0,
+            "Ratio of Distance to Stellar Radius (a/Rs)": 0.0,
+            "Ratio of Distance to Stellar Radius (a/Rs) Uncertainty": 0.0,
+            "Orbital Inclination (deg)": 90.0,
+            "Orbital Inclination (deg) Uncertainty": 1.0,
+            "Orbital Eccentricity (0 if null)": 0.0,
+            "Star Effective Temperature (K)": 0.0,
+            "Star Effective Temperature (+) Uncertainty": 1.0,
+            "Star Effective Temperature (-) Uncertainty": -1.0,
+            "Star Metallicity ([FE/H])": -0.1,
+            "Star Metallicity (+) Uncertainty": 0.1,
+            "Star Metallicity (-) Uncertainty": -0.1,
+            "Star Surface Gravity (log(g))": 0.0,
+            "Star Surface Gravity (+) Uncertainty": 1.0,
+            "Star Surface Gravity (-) Uncertainty": -1.0
+    },
+    "optional_info": {
+            "Pre-reduced File:": "RELATIVE FLUX CSV FILE",
+            "Exposure Time (s)": 0.0
+    }
+}

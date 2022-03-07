@@ -1,0 +1,17 @@
+{
+    "user_info": {
+            "Directory to Save Plots": "EXOTIC-Output",
+            "AAVSO Observer Code (blank if none)": "",
+            "Secondary Observer Codes (blank if none)": "",
+            "Observation date": "FILL IN",
+            "Filter Name (aavso.org/filters)": "FILL IN (SG, SR, SI, ...)",
+            "Observing Notes": "CHECK README"
+    },
+    "planetary_parameters": {
+            "Planet Name": "FILL IN"
+    },
+    "optional_info": {
+            "Pre-reduced File:": "RELATIVE FLUX CSV FILE CSV FILE",
+            "Exposure Time (s)": 0.0
+    }
+}
