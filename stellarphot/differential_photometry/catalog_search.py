@@ -172,8 +172,12 @@ def find_apass_stars(image,
 
 def find_known_variables(image):
     # Get any known variable stars from a new catalog search of VSX
-    vsx = catalog_search(image.wcs, image.shape, 'B/vsx/vsx',
-                         ra_column='RAJ2000', dec_column='DEJ2000')
+    try:
+        vsx = catalog_search(image.wcs, image.shape, 'B/vsx/vsx',
+                             ra_column='RAJ2000', dec_column='DEJ2000')
+    except IndexError:
+        raise RuntimeError('No variables found in this field of view '
+                           f'centered on {image.wcs}')
     return vsx
 
 
