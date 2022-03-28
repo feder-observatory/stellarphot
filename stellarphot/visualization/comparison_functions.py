@@ -67,10 +67,14 @@ def set_up(sample_image_for_finding_stars,
         path = Path(directory_with_images) / sample_image_for_finding_stars
 
     ccd = CCDData.read(path)
-    vsx = find_known_variables(ccd)
-    ra = vsx['RAJ2000']
-    dec = vsx['DEJ2000']
-    vsx['coords'] = SkyCoord(ra=ra, dec=dec, unit=(u.hour, u.degree))
+    try:
+        vsx = find_known_variables(ccd)
+    except RuntimeError:
+        vsx = []
+    else:
+        ra = vsx['RAJ2000']
+        dec = vsx['DEJ2000']
+        vsx['coords'] = SkyCoord(ra=ra, dec=dec, unit=(u.hour, u.degree))
 
     return ccd, vsx
 
@@ -167,9 +171,10 @@ def make_markers(iw, ccd, RD, vsx, ent,
         else:
             iw.center_on(name_or_coord)
 
-    iw.marker = {'type': 'circle', 'color': 'blue', 'radius': 10}
-    iw.add_markers(vsx, skycoord_colname='coords',
-                   use_skycoord=True, marker_name='VSX')
+    if vsx:
+        iw.marker = {'type': 'circle', 'color': 'blue', 'radius': 10}
+        iw.add_markers(vsx, skycoord_colname='coords',
+                       use_skycoord=True, marker_name='VSX')
 
     iw.marker = {'type': 'circle', 'color': 'red', 'radius': 10}
     iw.add_markers(ent, skycoord_colname='coords',
