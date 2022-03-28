@@ -1,7 +1,8 @@
 import bottleneck as bn
 import numpy as np
 from photutils import (DAOStarFinder, aperture_photometry, CircularAperture,
-                       CircularAnnulus, centroid_sources, extract_stars)
+                       CircularAnnulus, extract_stars)
+from photutils.centroids import centroid_sources
 
 from astropy.coordinates import SkyCoord, EarthLocation
 from astropy.table import vstack
