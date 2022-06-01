@@ -1,3 +1,17 @@
+1.1.0 (unreleased)
+------------------
+
+New Features
+^^^^^^^^^^^^
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Bug Fixes
+^^^^^^^^^
+
++ Pin astropy version until changes to modeling can be incorporated
+
 1.0.1 (2022-06-01)
 ------------------
 
@@ -5,9 +19,6 @@ New Features
 ^^^^^^^^^^^^
 
 + GUI for making EXOTIC settings. [#59]
-
-Other Changes and Additions
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Bug Fixes
 ^^^^^^^^^

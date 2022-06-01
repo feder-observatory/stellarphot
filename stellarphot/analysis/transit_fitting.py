@@ -5,9 +5,20 @@ import numpy as np
 from astropy.modeling.models import Polynomial1D, Gaussian1D, custom_model
 from astropy.modeling.fitting import (LevMarLSQFitter,
                                       _validate_model,
-                                      _fitter_to_model_params,
-                                      _model_to_fit_params,
                                       _convert_input)
+
+# Functions blow changed from private to public in astropy 5
+try:
+    from astropy.modeling.fitting import (
+        fitter_to_model_params,
+        model_to_fit_params,
+    )
+except ImportError:
+    from astropy.modeling.fitting import (
+        _fitter_to_model_params as fitter_to_model_params,
+        _model_to_fit_params as model_to_fit_params,
+    )
+
 from astropy.utils.exceptions import AstropyUserWarning
 
 try:
@@ -40,12 +51,12 @@ class VariableArgsFitter(LevMarLSQFitter):
             dfunc = None
         else:
             dfunc = self._wrap_deriv
-        init_values, _ = _model_to_fit_params(model_copy)
+        init_values = model_to_fit_params(model_copy)
         fitparams, cov_x, dinfo, mess, ierr = optimize.leastsq(
             self.objective_function, init_values, args=farg, Dfun=dfunc,
             col_deriv=model_copy.col_fit_deriv, maxfev=maxiter, epsfcn=epsilon,
             xtol=acc, full_output=True)
-        _fitter_to_model_params(model_copy, fitparams)
+        fitter_to_model_params(model_copy, fitparams)
         self.fit_info.update(dinfo)
         self.fit_info['cov_x'] = cov_x
         self.fit_info['message'] = mess
