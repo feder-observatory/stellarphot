@@ -1,4 +1,4 @@
-1.1.0 (unreleased)
+1.0.2 (2022-06-01)
 ------------------
 
 New Features
@@ -10,7 +10,7 @@ Other Changes and Additions
 Bug Fixes
 ^^^^^^^^^
 
-+ Pin astropy version until changes to modeling can be incorporated
++ Pin astropy version until changes to modeling can be incorporated. [#69]
 
 1.0.1 (2022-06-01)
 ------------------
