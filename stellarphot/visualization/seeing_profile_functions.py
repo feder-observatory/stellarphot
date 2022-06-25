@@ -215,6 +215,7 @@ def make_show_event(iw):
         i = iw._viewer.get_image()
         data = i.get_data()
 
+        fig_size = (10, 5)
         # Rough location of click in original image
         x = int(np.floor(event.data_x))
         y = int(np.floor(event.data_y))
@@ -223,12 +224,12 @@ def make_show_event(iw):
 
         # ADD MARKER WHERE CLICKED
         iw.add_markers(Table(data=[[cen[0]], [cen[1]]], names=['x', 'y']))
-        # print(cen[0], cen[1])
 
         # ----> MOVE PROFILE CONSTRUCTION INTO FUNCTION <----
 
         # CONSTRUCT RADIAL PROFILE OF PATCH AROUND STAR
-        profile_size = 40
+        profile_size = 60
+        # NOTE: THIS IS NOT BACKGROUND SUBTRACTED
         r_exact, ravg, radialprofile = radial_profile(data, cen, size=profile_size)
         sub_data = Cutout2D(data, cen, size=profile_size).data
         sub_med = np.median(sub_data)
@@ -239,51 +240,66 @@ def make_show_event(iw):
         # DISPLAY THE SCALED PROFILE
         out.clear_output(wait=True)
         with out:
-            # print(dir(event))
-            # print(event.data_x, event.data_y)
             plt.clf()
             # sub_med += med
             HWHM = find_hwhm(ravg, scaled_profile)
             seeing_plot(r_exact, scaled_exact_counts, ravg, scaled_profile, HWHM,
                         'Some Image Name', file_name='some_name', gap=6, annulus_width=13)
-            plt.show()
+            plt.show();
 
         # CALCULATE AND DISPLAY NET COUNTS INSIDE RADIUS
         out2.clear_output(wait=True)
         with out2:
-            r_exact, ravg, tbin2 = radial_profile(data - sub_med, cen,
+            sub_blot = sub_data.copy()
+            FWHM = int(np.round(2 * HWHM))
+            min_idx = profile_size // 2 - 2 * FWHM
+            max_idx = profile_size // 2 + 2 * FWHM
+            sub_blot[min_idx:max_idx, min_idx:max_idx] = np.nan
+            sub_std = np.nanstd(sub_blot)
+            new_sub_med = np.nanmedian(sub_blot)
+            r_exact, ravg, tbin2 = radial_profile(data - new_sub_med, cen,
                                                   size=profile_size,
                                                   return_scaled=False)
+            r_exact_s, ravg_s, tbin2_s = radial_profile(data - new_sub_med, cen,
+                                                  size=profile_size,
+                                                  return_scaled=True)
             #tbin2 = np.bincount(r.ravel(), (sub_data - sub_med).ravel())
             counts = np.cumsum(tbin2)
-
+            plt.figure(figsize=fig_size)
             plt.plot(range(len(radialprofile)), counts)
-            plt.xlim(0, 20)
+            plt.xlim(0, 40)
             plt.grid()
 
-            sub_blot = sub_data.copy()
-            sub_blot[10:30, 10:30] = np.nan
-            sub_std = np.nanstd(sub_blot)
-            plt.title('Net counts in aperture std {:.2f} med {:.2f}'.format(
-                sub_std, sub_med))
-            e_sky = np.sqrt(sub_med)
+            plt.title('Net counts in aperture std {:.2f} med {:.2f} new {:.2f}'.format(
+                sub_std, sub_med, new_sub_med))
+            e_sky = np.sqrt(new_sub_med)
             plt.xlabel('Aperture radius')
             plt.show()
 
         # CALCULATE And DISPLAY SNR AS A FUNCTION OF RADIUS
         out3.clear_output(wait=True)
         with out3:
-            rn = 10
+            read_noise = 10  # electrons
+            gain = 1.5  # electrons/count
+            # Poisson error is square root of the net number of counts enclosed
             poisson = np.sqrt(np.cumsum(tbin2))
-            nr = tbin2 / radialprofile
+
+            # This is obscure, but correctly calculated the number of pixels at
+            # each radius
+            nr = tbin2 / tbin2_s
+
+            # This ignores dark current
             error = np.sqrt(poisson ** 2 + np.cumsum(nr)
-                            * (e_sky ** 2 + rn ** 2))
+                            * (e_sky ** 2 + (read_noise / gain)** 2))
+
             snr = np.cumsum(tbin2) / error
-            # snr_max = snr[:20].max()
-            plt.plot(range(len(radialprofile)), snr)
-            plt.title('Signal to noise ratio {}'.format(snr.max()))
-            plt.xlim(0, 20)
-            # plt.ylim(0, 2)
+            plt.figure(figsize=fig_size)
+            plt.plot(np.arange(len(radialprofile)) + 1, snr)
+
+            plt.title(f'Signal to noise ratio max {snr.max():.1f} '
+                      f'at radius {snr.argmax() + 1}')
+            plt.xlim(0, 40)
+
             plt.xlabel('Aperture radius')
             plt.grid()
             plt.show()

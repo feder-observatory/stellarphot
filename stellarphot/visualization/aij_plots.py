@@ -79,7 +79,7 @@ def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM,
                  (outer_annulus - 1, -0.25), fontsize=15, color='red')
 
     # title the plot
-    title_string = [f"{plot_title}", f"FWHM:{HWHM*2} pixels"]
+    title_string = [f"{plot_title}", f"FWHM:{HWHM*2:.1f} pixels"]
     plt.title('\n'.join(title_string))
 
     # save plot as png
