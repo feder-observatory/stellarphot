@@ -39,20 +39,32 @@ def calc_multi_vmag(var_stars, star_data, comp_stars):
     return vmag_table
 
 
-def calc_vmag(var_stars, star_data, comp_stars):
+def calc_vmag(var_stars, star_data, comp_stars, filter=None,
+              star_data_mag_column='mag_inst'):
     """
     Calculate the average magnitude and standard deviation of a variable star in field.
 
     Parameters
     ----------
+
     var_stars : '~astropy.table.Table'
-        Table of variable stars known in field
+        Table of variable stars known in field. It should contain a column
+        called ``coords`` with the coordinates for each variable star as
+        astropy ``SkyCoord`` objects.
 
     star_data : '~astropy.table.Table'
-        Table of star data from observation image
+        Table of star data from observation image. One column should be named
+        ``Filter`` and contain the passband in which observations were done.
+        The column containing instrumental magnitudes is passed in with the
+        argument ``star_data_mag_column``.
 
     comp_stars : '~astropy.table.Table'
-        Table of known comparison stars in the field, given by AAVSO
+        Table of known comparison stars in the field, given by AAVSO. The
+        column containing the reference magnitudes for the filter specified
+        by filter is passed in with the argument ``comp_star_mag_column``.
+
+    filter : str
+        Filter in which magnitude is being calculated.
 
     Returns
     -------
@@ -77,8 +89,8 @@ def calc_vmag(var_stars, star_data, comp_stars):
     good = d2d < 1 * u.arcsec
     good_index = index[good]
 
-    vmag_image = star_data[v_index]['mag_inst_R']
-    comp_star_mag = star_data[good_index]['mag_inst_R']
+    vmag_image = star_data[v_index][star_data_mag_column]
+    comp_star_mag = star_data[good_index][star_data_mag_column]
     a_index, a_d2d, _ = comp_coords.match_to_catalog_sky(comp_coords)
     good_a_index = a_index[good]
     accepted_comp = rcomps[good_a_index]['mag']
