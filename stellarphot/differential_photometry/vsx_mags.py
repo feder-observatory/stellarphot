@@ -68,6 +68,10 @@ def calc_vmag(var_stars, star_data, comp_stars, band=None,
     band : str
         Filter/passband in which magnitude is being calculated.
 
+    star_data_mag_column : str, optional
+        Name of the column containing the instrumental magnitudes
+        in ``star_data``.
+
     Returns
     -------
     avg : float
@@ -89,7 +93,7 @@ def calc_vmag(var_stars, star_data, comp_stars, band=None,
     rcomps = comp_stars[comp_stars['band'] == band]
 
     # Match comparison star list to instrumental magnitude information
-    comp_coords = SkyCoord(ra=rcomps['ra'], dec=rcomps['dec'])
+    comp_coords = SkyCoord(ra=rcomps['RAJ2000'], dec=rcomps['DEJ2000'])
     index, d2d, _ = comp_coords.match_to_catalog_sky(star_data_coords)
     good = d2d < 1 * u.arcsec
     good_index = index[good]
