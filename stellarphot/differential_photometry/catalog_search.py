@@ -152,12 +152,34 @@ def catalog_clean(catalog, remove_rows_with_mask=True,
     return catalog[keepers]
 
 
-def find_apass_stars(image,
+def find_apass_stars(image_or_center,
+                     radius=1,
                      max_mag_error=0.05,
                      max_color_error=0.1):
+    """
+    Get APASS data from Vizer.
+
+    Parameters
+    ---------
+
+    image_or_center : `astropy.nddata.CCDData` or `astropy.coordinates.SkyCoord`
+        Either an image with a WCS (from which the RA/Dec will be extracted) or coordinate of
+        the center.
+
+    radius : float, optional
+        Radius, in degrees, around which to search. Not needed if the first argument is an image.
+    """
+    if isinstance(image_or_center, SkyCoord):
+        # Center was passed in, just use it.
+        cen_wcs = image_or_center
+        shape = None
+    else:
+        cen_wcs = image_or_center.wcs
+        shape = image_or_center.shape
     # use the catalog_search function to find the apass stars in the frame of the image read above
-    all_apass = catalog_search(image.wcs, image.shape, 'II/336/apass9',
-                               'RAJ2000', 'DEJ2000', 1, False)
+    all_apass = catalog_search(cen_wcs, shape, 'II/336/apass9',
+                               ra_column='RAJ2000', dec_column='DEJ2000', radius=radius,
+                               clip_by_frame=False)
 
     # Creates a boolean array of the apass stars that have well defined
     # magnitudes and color.
