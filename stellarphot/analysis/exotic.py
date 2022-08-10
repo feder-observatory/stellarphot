@@ -74,7 +74,7 @@ def get_tic_info(TIC_ID):
 def make_checker(indicator_widget, value_widget):
     def check_name(change):
         # Valid TIC number is 9 digits
-        ticced = re.compile(r'TIC \d{9,9}$')
+        ticced = re.compile(r'TIC \d{9,10}$')
         owner = change['owner']
         is_tic = ticced.match(change['new'])
         if is_tic:
