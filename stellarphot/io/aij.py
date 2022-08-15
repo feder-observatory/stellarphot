@@ -94,7 +94,8 @@ class ApertureFileAIJ:
     def from_table(cls, aperture_table,
                    aperture_rad=None, inner_annulus=None, outer_annulus=None,
                    default_absmag=99.999, default_isalign=True,
-                   default_centroidstar=True):
+                   default_centroidstar=True,
+                   y_size=4096):
         """
         Create an `stellarphot.io.ApertureFileAIJ` from a stellarphot aperture
         table and info about the aperture sizes.
@@ -129,6 +130,8 @@ class ApertureFileAIJ:
         n_apertures = len(aperture_table)
         columns = aperture_table.colnames
 
+        if n_apertures > apAIJ.multiaperture.naperturesmax:
+            apAIJ.multiaperture.naperturesmax = n_apertures + 1
         # A boolean column for this would be better, but this will do
         # for now.
         apAIJ.multiaperture.isrefstar = [('comparison' in name.lower())
@@ -146,7 +149,7 @@ class ApertureFileAIJ:
             apAIJ.multiaperture.isalignstar = aperture_table['isalign']
 
         apAIJ.multiaperture.xapertures = aperture_table['x']
-        apAIJ.multiaperture.yapertures = aperture_table['y']
+        apAIJ.multiaperture.yapertures = y_size - aperture_table['y']
 
         if 'absmag' not in columns:
             apAIJ.multiaperture.absmagapertures = [default_absmag] * n_apertures
