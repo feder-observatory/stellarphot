@@ -209,11 +209,16 @@ def generate_aij_table(table_name, comparison_table):
         for old_col, new_col in by_source_columns.items():
             new_column_name = new_col + f'_{char}{star_id[0]}'
             new_table.rename_column(old_col, new_column_name)
-        base_table = hstack([base_table, new_table])
+        # Add individual columns to the existing table instead of hstack
+        # Turns out hstack is super slow.
+        for new_col in new_table.colnames:
+            base_table[new_col] = new_table[new_col]
+
     for old_col, new_col in info_columns.items():
         base_table.rename_column(old_col, new_col)
 
     return base_table
+
 
 def parse_aij_table(table_name):
     """
