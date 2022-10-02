@@ -130,12 +130,24 @@ for k in validators:
 
 
 def exotic_settings_widget(init_from_json=None):
+    """
+    Generate a widget to enter settings from sample.
+    """
+
+    # We rely on some global variables:
+    global to_fill, template_types
+    # This dictionary will contain all of the widgets
     widget_list = {}
 
+    # Each widget has the same layout for its description and its value/input
     layout_description = ipw.Layout(width='70%')
     layout_input = ipw.Layout(width='30%')
+
+    # Maintain a separate dict of just the value widgets
     value_widget = {}
 
+    # For exotic there are two templates, one for known exoplanets and one for
+    # candidate exoplanets
     for template in template_types:
         value_widget[template] = {}
         widget_list[template] = []
