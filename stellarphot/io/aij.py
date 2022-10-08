@@ -30,6 +30,25 @@ class ApertureAIJ:
         # Not sure what this does but stellarphot doesn't use it.
         self.backplane = False
 
+    def __setattr__(self, attr, value):
+        floats = ['rback1', 'rback2', 'radius']
+        bools = ['removebackstars', 'backplane']
+        if attr in floats:
+            super().__setattr__(attr, float(value))
+        elif attr in bools:
+            if isinstance(value, str):
+                value = True if value.lower() == 'true' else False
+
+            super().__setattr__(attr, value)
+
+    def __eq__(self, other):
+        attributes = ['rback1', 'rback2', 'radius',
+                      'removebackstars', 'backplane']
+        equal = [getattr(self, attr) == getattr(other, attr)
+                 for attr in attributes]
+
+        return all(equal)
+
 
 class MultiApertureAIJ:
     """
@@ -54,6 +73,59 @@ class MultiApertureAIJ:
 
         self.raapertures = []
         self.decapertures = []
+
+    def __setattr__(self, name, value):
+        floats = ['naperturesmax', 'apfwhmfactor']
+        bools = ['usevarsizeap']
+        lists = ['isrefstar', 'centroidstar', 'isalignstar', 'xapertures',
+                 'yapertures', 'absmagapertures', 'raapertures', 'decapertures']
+
+        list_is_bool = ['isrefstar', 'centroidstar', 'isalignstar']
+
+        if name not in (floats + bools + lists):
+            raise AttributeError(f'Attribute {name} does not exist')
+
+        if name in floats:
+            value = float(value)
+        elif name in bools:
+            if isinstance(value, str):
+                value = True if value.lower() == 'true' else False
+            else:
+                value = bool(value)
+        elif name in lists:
+            if (name in list_is_bool) and (len(value) > 0) and isinstance(value[0], str):
+                value = [True if v.lower() == 'true' else False for v in value]
+            value = list(value)
+
+        super().__setattr__(name, value)
+
+    def __eq__(self, other):
+        simple_attrs = [
+            'naperturesmax',
+            'apfwhmfactor',
+            'usevarsizeap',
+            'isrefstar',
+            'centroidstar',
+            'isalignstar',
+        ]
+
+        float_attrs = [
+            'xapertures',
+            'yapertures',
+            'absmagapertures',
+            'raapertures',
+            'decapertures'
+        ]
+
+        simple_eq = [getattr(self, attr) == getattr(other, attr)
+                     for attr in simple_attrs]
+
+        float_eq = [np.allclose(getattr(self, attr), getattr(other, attr), equal_nan=True)
+                    for attr in float_attrs]
+
+        equal = simple_eq + float_eq
+
+        return all(equal)
 
 
 class ApertureFileAIJ:
@@ -86,15 +158,51 @@ class ApertureFileAIJ:
         # Add a trailing blank line
         return '\n'.join(lines) + '\n'
 
+    def __eq__(self, other):
+        return (self.aperture == other.aperture) and (self.multiaperture == other.multiaperture)
+
     def write(self, file):
         p = Path(file)
         p.write_text(str(self))
 
     @classmethod
+    def read(cls, file):
+        """
+        Generate aperture object from file. Happily, each line is basically a path
+        to an attribute name followed by a value.
+        """
+
+        # Make the instance to return
+
+        aij_aps = cls()
+
+        with open(file, 'r') as f:
+            for line in f:
+                class_path, value = line.strip().split('=')
+                # There is always a leading dot
+                _, attr1, attr2 = class_path.split('.')
+                obj = getattr(aij_aps, attr1)
+
+                # value is either a single value or a list of values separated by commas
+                vals = value.split(',')
+                if len(vals) == 1:
+                    val_to_set = vals[0]
+                else:
+                    try:
+                        val_to_set = [float(v) for v in vals]
+                    except ValueError:
+                        val_to_set = list(vals)
+
+                setattr(obj, attr2, val_to_set)
+
+        return aij_aps
+
+    @classmethod
     def from_table(cls, aperture_table,
                    aperture_rad=None, inner_annulus=None, outer_annulus=None,
                    default_absmag=99.999, default_isalign=True,
-                   default_centroidstar=True):
+                   default_centroidstar=True,
+                   y_size=4096):
         """
         Create an `stellarphot.io.ApertureFileAIJ` from a stellarphot aperture
         table and info about the aperture sizes.
@@ -129,6 +237,8 @@ class ApertureFileAIJ:
         n_apertures = len(aperture_table)
         columns = aperture_table.colnames
 
+        if n_apertures > apAIJ.multiaperture.naperturesmax:
+            apAIJ.multiaperture.naperturesmax = n_apertures + 1
         # A boolean column for this would be better, but this will do
         # for now.
         apAIJ.multiaperture.isrefstar = [('comparison' in name.lower())
@@ -146,7 +256,7 @@ class ApertureFileAIJ:
             apAIJ.multiaperture.isalignstar = aperture_table['isalign']
 
         apAIJ.multiaperture.xapertures = aperture_table['x']
-        apAIJ.multiaperture.yapertures = aperture_table['y']
+        apAIJ.multiaperture.yapertures = y_size - aperture_table['y']
 
         if 'absmag' not in columns:
             apAIJ.multiaperture.absmagapertures = [default_absmag] * n_apertures
@@ -193,7 +303,7 @@ def generate_aij_table(table_name, comparison_table):
         'comparison counts': 'tot_C_cnts',
         'comparison error': 'tot_C_err'
     }
-    by_star = table_name.group_by('id')
+    by_star = table_name.group_by('star_id')
     base_table = by_star.groups[0][list(info_columns.keys())]
     for star_id, sub_table in zip(by_star.groups.keys, by_star.groups):
         star_co = SkyCoord(ra=sub_table['RA'][0], dec=sub_table['Dec'][0],
@@ -209,11 +319,16 @@ def generate_aij_table(table_name, comparison_table):
         for old_col, new_col in by_source_columns.items():
             new_column_name = new_col + f'_{char}{star_id[0]}'
             new_table.rename_column(old_col, new_column_name)
-        base_table = hstack([base_table, new_table])
+        # Add individual columns to the existing table instead of hstack
+        # Turns out hstack is super slow.
+        for new_col in new_table.colnames:
+            base_table[new_col] = new_table[new_col]
+
     for old_col, new_col in info_columns.items():
         base_table.rename_column(old_col, new_col)
 
     return base_table
+
 
 def parse_aij_table(table_name):
     """
