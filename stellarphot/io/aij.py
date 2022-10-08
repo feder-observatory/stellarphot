@@ -30,6 +30,17 @@ class ApertureAIJ:
         # Not sure what this does but stellarphot doesn't use it.
         self.backplane = False
 
+    def __setattr__(self, attr, value):
+        floats = ['rback1', 'rback2', 'radius']
+        bools = ['removebackstars', 'backplane']
+        if attr in floats:
+            super().__setattr__(attr, float(value))
+        elif attr in bools:
+            if isinstance(value, str):
+                value = True if value.lower() == 'true' else False
+
+            super().__setattr__(attr, value)
+
     def __eq__(self, other):
         attributes = ['rback1', 'rback2', 'radius',
                       'removebackstars', 'backplane']
@@ -63,6 +74,31 @@ class MultiApertureAIJ:
         self.raapertures = []
         self.decapertures = []
 
+    def __setattr__(self, name, value):
+        floats = ['naperturesmax', 'apfwhmfactor']
+        bools = ['usevarsizeap']
+        lists = ['isrefstar', 'centroidstar', 'isalignstar', 'xapertures',
+                 'yapertures', 'absmagapertures', 'raapertures', 'decapertures']
+
+        list_is_bool = ['isrefstar', 'centroidstar', 'isalignstar']
+
+        if name not in (floats + bools + lists):
+            raise AttributeError(f'Attribute {name} does not exist')
+
+        if name in floats:
+            value = float(value)
+        elif name in bools:
+            if isinstance(value, str):
+                value = True if value.lower() == 'true' else False
+            else:
+                value = bool(value)
+        elif name in lists:
+            if (name in list_is_bool) and (len(value) > 0) and isinstance(value[0], str):
+                value = [True if v.lower() == 'true' else False for v in value]
+            value = list(value)
+
+        super().__setattr__(name, value)
+
     def __eq__(self, other):
         simple_attrs = [
             'naperturesmax',
@@ -90,6 +126,7 @@ class MultiApertureAIJ:
         equal = simple_eq + float_eq
 
         return all(equal)
+
 
 class ApertureFileAIJ:
     """
@@ -127,6 +164,38 @@ class ApertureFileAIJ:
     def write(self, file):
         p = Path(file)
         p.write_text(str(self))
+
+    @classmethod
+    def read(cls, file):
+        """
+        Generate aperture object from file. Happily, each line is basically a path
+        to an attribute name followed by a value.
+        """
+
+        # Make the instance to return
+
+        aij_aps = cls()
+
+        with open(file, 'r') as f:
+            for line in f:
+                class_path, value = line.strip().split('=')
+                # There is always a leading dot
+                _, attr1, attr2 = class_path.split('.')
+                obj = getattr(aij_aps, attr1)
+
+                # value is either a single value or a list of values separated by commas
+                vals = value.split(',')
+                if len(vals) == 1:
+                    val_to_set = vals[0]
+                else:
+                    try:
+                        val_to_set = [float(v) for v in vals]
+                    except ValueError:
+                        val_to_set = list(vals)
+
+                setattr(obj, attr2, val_to_set)
+
+        return aij_aps
 
     @classmethod
     def from_table(cls, aperture_table,
