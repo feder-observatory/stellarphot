@@ -30,6 +30,14 @@ class ApertureAIJ:
         # Not sure what this does but stellarphot doesn't use it.
         self.backplane = False
 
+    def __eq__(self, other):
+        attributes = ['rback1', 'rback2', 'radius',
+                      'removebackstars', 'backplane']
+        equal = [getattr(self, attr) == getattr(other, attr)
+                 for attr in attributes]
+
+        return all(equal)
+
 
 class MultiApertureAIJ:
     """
@@ -55,6 +63,33 @@ class MultiApertureAIJ:
         self.raapertures = []
         self.decapertures = []
 
+    def __eq__(self, other):
+        simple_attrs = [
+            'naperturesmax',
+            'apfwhmfactor',
+            'usevarsizeap',
+            'isrefstar',
+            'centroidstar',
+            'isalignstar',
+        ]
+
+        float_attrs = [
+            'xapertures',
+            'yapertures',
+            'absmagapertures',
+            'raapertures',
+            'decapertures'
+        ]
+
+        simple_eq = [getattr(self, attr) == getattr(other, attr)
+                     for attr in simple_attrs]
+
+        float_eq = [np.allclose(getattr(self, attr), getattr(other, attr), equal_nan=True)
+                    for attr in float_attrs]
+
+        equal = simple_eq + float_eq
+
+        return all(equal)
 
 class ApertureFileAIJ:
     """
@@ -85,6 +120,9 @@ class ApertureFileAIJ:
 
         # Add a trailing blank line
         return '\n'.join(lines) + '\n'
+
+    def __eq__(self, other):
+        return (self.aperture == other.aperture) and (self.multiaperture == other.multiaperture)
 
     def write(self, file):
         p = Path(file)
