@@ -13,6 +13,7 @@ def test_one_vmag():
     star_data = Table.read(find_star_data)
     find_comp_data = get_pkg_data_filename('data/comp_stars.fits')
     comp_stars = Table.read(find_comp_data)
+    comp_stars['coords'] = SkyCoord(ra=comp_stars['ra'], dec=comp_stars['dec'], unit='degree')
     vmag, error = calc_vmag(var_stars, star_data, comp_stars, band='Rc', star_data_mag_column='mag_inst_R')
     np.testing.assert_almost_equal(vmag, 14.54827, decimal=5)
     np.testing.assert_almost_equal(error, 0.028685, decimal=5)
@@ -25,6 +26,8 @@ def test_multi_vmag():
     star_data = Table.read(find_star_data)
     find_comp_data = get_pkg_data_filename('data/comp_stars.fits')
     comp_stars = Table.read(find_comp_data)
+    comp_stars['coords'] = SkyCoord(ra=comp_stars['ra'], dec=comp_stars['dec'], unit='degree')
+
     vmag, error = calc_vmag(var_stars, star_data, comp_stars, band='Rc', star_data_mag_column='mag_inst_R')
     del var_stars['coords']
     v_data = vstack([var_stars, var_stars])
