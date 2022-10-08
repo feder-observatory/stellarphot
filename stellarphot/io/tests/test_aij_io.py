@@ -1,11 +1,22 @@
 from pathlib import Path
 
+import numpy as np
+
 from astropy.coordinates import SkyCoord
 from astropy.table import Table
 from astropy.utils.data import get_pkg_data_filename
 
 from stellarphot.io import ApertureFileAIJ
 from stellarphot.io.aij import ApertureAIJ
+
+
+def test_aperture_eq():
+    ap1 = ApertureAIJ()
+    ap2 = ApertureAIJ()
+    ap3 = ApertureAIJ()
+    ap3.rback1 = 27.0
+    assert ap1 == ap2
+    assert ap2 == ap3
 
 
 def test_aperture_file_content():
@@ -16,7 +27,10 @@ def test_aperture_file_content():
     ref_table = Table.read(ref_data)
 
     ap.multiaperture.xapertures = ref_table['x']
-    ap.multiaperture.yapertures = ref_table['y']
+
+    # AIJ has origin in different place than the reference table.
+    ap.multiaperture.yapertures = np.around((4096 - ref_table['y']),
+                                            decimals=4)
 
     ap.multiaperture.raapertures = ref_table['ra']
     ap.multiaperture.decapertures = ref_table['dec']
@@ -30,9 +44,9 @@ def test_aperture_file_content():
     ref_aperture_file = \
         get_pkg_data_filename('data/aij-sample-apertures.aperture')
 
-    ref_contents = Path(ref_aperture_file).read_text()
+    ref_apertures = ApertureFileAIJ.read(ref_aperture_file)
 
-    assert ref_contents == str(ap)
+    assert ref_apertures == ap
 
 
 def test_aperture_creation_from_table():
@@ -68,6 +82,6 @@ def test_aperture_creation_from_table():
     ref_aperture_file = \
         get_pkg_data_filename('data/aij-sample-apertures.aperture')
 
-    ref_contents = Path(ref_aperture_file).read_text()
+    ref_apertures = ApertureFileAIJ.read(ref_aperture_file)
 
-    assert ref_contents == str(ap_aij)
+    assert ref_apertures == ap_aij
