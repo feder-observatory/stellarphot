@@ -1,3 +1,21 @@
+1.0.3 (2022-10-08)
+------------------
+
+New Features
+^^^^^^^^^^^^
+
++ Add equality method for AstroImageJ aperture objects. [#71]
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Bug Fixes
+^^^^^^^^^
+
++ Fix error in generation of AstroImageJ data tables and aperture files. [#71]
++ Allow TIC ID numbers to have 9 or 10 digits. [#71]
+
+
 1.0.2 (2022-06-01)
 ------------------
 
