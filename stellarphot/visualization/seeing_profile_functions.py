@@ -5,6 +5,7 @@ import ipywidgets as ipw
 from astropy.stats import sigma_clipped_stats
 from astropy.table import Table
 from astropy.nddata import Cutout2D
+from astrowidgets import ImageWidget
 
 import matplotlib.pyplot as plt
 from stellarphot.visualization import seeing_plot
@@ -270,8 +271,7 @@ def make_show_event(iw):
             plt.xlim(0, 40)
             plt.grid()
 
-            plt.title('Net counts in aperture std {:.2f} med {:.2f} new {:.2f}'.format(
-                sub_std, sub_med, new_sub_med))
+            plt.title('Net counts in aperture')
             e_sky = np.sqrt(new_sub_med)
             plt.xlabel('Aperture radius')
             plt.show()
@@ -307,6 +307,29 @@ def make_show_event(iw):
 
 
 def box(imagewidget):
+    """
+    Compatibility layer for older versions of the photometry notebooks.
+    """
+    return seeing_profile_widget(imagewidget=imagewidget)
+
+
+def seeing_profile_widget(imagewidget=None, width=500):
+    """
+    Build a widget for measuring the seeing profile of stars in an image.
+    """
+    if not imagewidget:
+        imagewidget = ImageWidget(image_width=width,
+                                  image_height=width,
+                                  use_opencv=True)
+
+    # Do some set up of the ImageWidget
+    set_keybindings(imagewidget, scroll_zoom=False)
+    bind_map = imagewidget._viewer.get_bindmap()
+    bind_map.map_event(None, ('shift',), 'ms_left', 'cursor')
+    gvc = imagewidget._viewer.get_canvas()
+    gvc.add_callback('cursor-down', make_show_event(imagewidget))
+
+    # Build the larger widget
     big_box = ipw.HBox()
     big_box = ipw.GridspecLayout(1, 2)
     layout = ipw.Layout(width='20ch')
@@ -318,12 +341,18 @@ def box(imagewidget):
 
     lil_box = ipw.VBox()
     lil_box.children = [out, out2, out3]
-    # big_box.children = [imagewidget, lil_box]
+
     big_box[0, 0] = imagewidget
     big_box[0, 1] = lil_box
     big_box.layout.width = '100%'
+
     # Line below puts space between the image and the plots so the plots
     # don't jump around as the image value changes.
     big_box.layout.justify_content = 'space-between'
+
+    def load_fits(file):
+        imagewidget.load_fits(file)
+
+    big_box.load_fits = load_fits
 
     return big_box
