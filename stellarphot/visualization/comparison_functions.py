@@ -1,3 +1,4 @@
+import functools
 from pathlib import Path
 
 import pandas
@@ -10,6 +11,7 @@ from astropy.table import Table
 from astropy.coordinates import SkyCoord
 from astropy import units as u
 from astropy.nddata import CCDData
+from astropy import units as u
 from astrowidgets import ImageWidget
 
 from stellarphot.differential_photometry import *
@@ -255,3 +257,133 @@ def viewer():
     box.children = [header, inner_box]
 
     return box, iw
+
+
+class ComparisonViewer:
+    def __init__(self,
+                 image,
+                 directory='.',
+                 target_mag=10,
+                 bright_mag_limit=8,
+                 dim_mag_limit=17,
+                 targets_from_file=None,
+                 object_coordinate=None):
+
+        self._label_name = 'labels'
+        self._circle_name = 'target circle'
+        self.ccd, self.vsx = \
+            set_up(image,
+                   directory_with_images=directory
+                   )
+
+        apass, vsx_apass_angle, targets_apass_angle = match(self.ccd,
+                                                            targets_from_file,
+                                                            self.vsx)
+
+        apass_good_coord, good_stars = mag_scale(target_mag, apass, vsx_apass_angle,
+                                                 targets_apass_angle,
+                                                 brighter_dmag=target_mag - bright_mag_limit,
+                                                 dimmer_dmag=dim_mag_limit - target_mag)
+
+        apass_comps = in_field(apass_good_coord, self.ccd, apass, good_stars)
+
+        self.box, self.iw = viewer()
+
+        make_markers(self.iw, self.ccd, targets_from_file, self.vsx, apass_comps,
+                     name_or_coord=object_coordinate)
+
+        self.target_coord = object_coordinate
+
+    @property
+    def variables(self):
+        comp_table = self.generate_table()
+        new_vsx_mark = comp_table['marker name'] == 'VSX'
+        idx, _, _ = comp_table['coord'][new_vsx_mark].match_to_catalog_sky(self.vsx['coords'])
+        our_vsx = self.vsx[idx]
+        our_vsx['star_id'] = comp_table['star_id'][new_vsx_mark]
+        return our_vsx
+
+    def generate_table(self):
+        try:
+            all_table = self.iw.get_all_markers()
+        except AttributeError:
+            all_table = self.iw.get_markers(marker_name='all')
+
+        elims = np.array([name.startswith('elim')
+                         for name in all_table['marker name']])
+        elim_table = all_table[elims]
+        comp_table = all_table[~elims]
+
+        index, d2d, d3d = elim_table['coord'].match_to_catalog_sky(comp_table['coord'])
+        comp_table.remove_rows(index)
+
+        # Calculate how far each is from target
+        comp_table['separation'] = self.target_coord.separation(comp_table['coord'])
+
+        # Add dummy column for sorting in the order we want
+        comp_table['sort'] = np.zeros(len(comp_table))
+
+        # Set sort order
+        apass_mark = comp_table['marker name'] == 'APASS comparison'
+        vsx_mark = comp_table['marker name'] == 'VSX'
+        tess_mark = ((comp_table['marker name'] == 'TESS Targets') |
+                (comp_table['separation'] < 0.3 * u.arcsec))
+
+
+        comp_table['sort'][apass_mark] = 2
+        comp_table['sort'][vsx_mark] = 1
+        comp_table['sort'][tess_mark] = 0
+
+        # Sort the table
+        comp_table.sort(['sort', 'separation'])
+
+        # Assign the IDs
+        comp_table['star_id'] = range(1, len(comp_table) + 1)
+
+        return comp_table
+
+    def show_labels(self):
+        plot_names = []
+        comp_table = self.generate_table()
+
+        for star in comp_table:
+            star_id = star['star_id']
+            if star['marker name'] == 'TESS Targets':
+                label = f'T{star_id}'
+                self.iw._marker = functools.partial(self.iw.dc.Text, text=label, fontsize=20, fontscale=False, color='green')
+                self.iw.add_markers(Table(data=[[star['x']+20], [star['y']-20]], names=['x', 'y']),
+                               marker_name=self._label_name)
+
+            elif star['marker name'] == 'APASS comparison':
+                label = f'C{star_id}'
+                self.iw._marker = functools.partial(self.iw.dc.Text, text=label, fontsize=20, fontscale=False, color='red')
+                self.iw.add_markers(Table(data=[[star['x']+20], [star['y']-20]], names=['x', 'y']),
+                                    marker_name=self._label_name)
+
+            elif star['marker name'] == 'VSX':
+                label = f'V{star_id}'
+                self.iw._marker = functools.partial(self.iw.dc.Text, text=label, fontsize=20, fontscale=False, color='blue')
+                self.iw.add_markers(Table(data=[[star['x']+20], [star['y']-20]], names=['x', 'y']),
+                                    marker_name=self._label_name)
+            else:
+                label = f'U{star_id}'
+                print(f"Unrecognized marker name: {star['marker name']}")
+            plot_names.append(label)
+
+    def remove_labels(self):
+        self.iw.remove_markers(marker_name=self._label_name)
+
+    def show_circle(self,
+                    radius=2.5 * u.arcmin,
+                    pixel_scale=0.56 * u.arcsec / u.pixel):
+        radius_pixels = np.round((radius / pixel_scale).to(u.pixel).value,
+                                 decimals=0)
+        self.iw.marker = {'color': 'yellow',
+                          'radius': radius_pixels,
+                          'type': 'circle'}
+        self.iw.add_markers(Table(data=[[self.target_coord]], names=['coords']),
+                            skycoord_colname='coords',
+                            use_skycoord=True, marker_name=self._circle_name)
+
+    def remove_circle(self):
+        self.iw.remove_markers(marker_name=self._circle_name)
