@@ -229,36 +229,6 @@ def wrap(imagewidget, outputwidget):
     return cb
 
 
-def viewer():
-    header = ipw.HTML(value="""
-    <h2>Click and drag or use arrow keys to pan, use +/- keys to zoom</h2>
-    <h3>Shift-left click (or Crtl-left click)to exclude star as target or comp. Click again to include.</h3>
-    """)
-
-    legend = ipw.HTML(value="""
-    <h3>Green circles -- Gaia stars within 2.5 arcmin of target</h3>
-    <h3>Red circles -- APASS stars within 1 mag of target</h3>
-    <h3>Blue circles -- VSX variables</h3>
-    <h3>Red × -- Exclude as target or comp</h3>
-    """)
-
-    iw = ImageWidget()
-    out = ipw.Output()
-    set_keybindings(iw)
-    bind_map = iw._viewer.get_bindmap()
-    gvc = iw._viewer.get_canvas()
-    bind_map.map_event(None, ('shift',), 'ms_left', 'cursor')
-    gvc.add_callback('cursor-down', wrap(iw, out))
-
-
-    box = ipw.VBox()
-    inner_box = ipw.HBox()
-    inner_box.children = [iw, legend]
-    box.children = [header, inner_box]
-
-    return box, iw
-
-
 class ComparisonViewer:
     def __init__(self,
                  image,
@@ -287,12 +257,14 @@ class ComparisonViewer:
 
         apass_comps = in_field(apass_good_coord, self.ccd, apass, good_stars)
 
-        self.box, self.iw = viewer()
+        self.box, self.iw = self._viewer()
 
         make_markers(self.iw, self.ccd, targets_from_file, self.vsx, apass_comps,
                      name_or_coord=object_coordinate)
 
         self.target_coord = object_coordinate
+
+        self._make_observers()
 
     @property
     def variables(self):
@@ -302,6 +274,75 @@ class ComparisonViewer:
         our_vsx = self.vsx[idx]
         our_vsx['star_id'] = comp_table['star_id'][new_vsx_mark]
         return our_vsx
+
+    def _make_observers(self):
+        self._show_labels_button.observe(self._show_label_button_handler,
+                                         names='value')
+        self._save_var_info.on_click(self._save_variables_to_file)
+
+    def _save_variables_to_file(self, button=None, filename=''):
+        if not filename:
+            filename = 'variables.csv'
+        self.variables.write(filename)
+
+    def _show_label_button_handler(self, change):
+        value = change['new']
+        if value:
+            # Showing labels can take a bit, disable while in progress
+            self._show_labels_button.disabled = True
+            self.show_labels()
+            self._show_labels_button.disabled = False
+        else:
+            self.remove_labels()
+        self._show_labels_button.description = self._show_labels_button.descriptions[value]
+
+    def _make_control_bar(self):
+        self._show_labels_button = ipw.ToggleButton(description='Click to show labels')
+        self._show_labels_button.descriptions = {
+            True: 'Click to hide labels',
+            False: 'Click to show labels'
+        }
+
+        self._save_var_info = ipw.Button(description='Save variable info')
+
+        controls = ipw.HBox(
+            children=[
+                self._show_labels_button,
+                self._save_var_info
+            ]
+        )
+
+        return controls
+
+    def _viewer(self):
+        header = ipw.HTML(value="""
+        <h2>Click and drag or use arrow keys to pan, use +/- keys to zoom</h2>
+        <h3>Shift-left click (or Crtl-left click)to exclude star as target
+        or comp. Click again to include.</h3>
+        """)
+
+        legend = ipw.HTML(value="""
+        <h3>Green circles -- Gaia stars within 2.5 arcmin of target</h3>
+        <h3>Red circles -- APASS stars within 1 mag of target</h3>
+        <h3>Blue circles -- VSX variables</h3>
+        <h3>Red × -- Exclude as target or comp</h3>
+        """)
+
+        iw = ImageWidget()
+        out = ipw.Output()
+        set_keybindings(iw)
+        bind_map = iw._viewer.get_bindmap()
+        gvc = iw._viewer.get_canvas()
+        bind_map.map_event(None, ('shift',), 'ms_left', 'cursor')
+        gvc.add_callback('cursor-down', wrap(iw, out))
+
+        controls = self._make_control_bar()
+        box = ipw.VBox()
+        inner_box = ipw.HBox()
+        inner_box.children = [iw, legend]
+        box.children = [header, inner_box, controls]
+
+        return box, iw
 
     def generate_table(self):
         try:
