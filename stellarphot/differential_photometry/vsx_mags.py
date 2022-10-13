@@ -1,3 +1,5 @@
+import numpy as np
+
 from astropy.table import Table
 from astropy.coordinates import SkyCoord
 from astropy import units as u
@@ -107,7 +109,7 @@ def calc_vmag(var_stars, star_data, comp_stars, band=None,
     good_a_index = a_index[good]
     accepted_comp = rcomps[good_a_index]['mag']
     new_mag = vmag_image - comp_star_mag + accepted_comp
-    avg = new_mag.mean()
-    stdev = new_mag.std()
+    avg = np.nanmean(new_mag)
+    stdev = np.nanstd(new_mag)
 
     return avg, stdev
