@@ -10,6 +10,20 @@ Other Changes and Additions
 Bug Fixes
 ^^^^^^^^^
 
+1.0.4 (2022-10-13)
+------------------
+
+New Features
+^^^^^^^^^^^^
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Bug Fixes
+^^^^^^^^^
+
++ Ignore ``NaN``s in the calculation of AAVSO magnitudes. [#72]
+
 1.0.3 (2022-10-08)
 ------------------
 
