@@ -1,3 +1,18 @@
+1.1.1 (2022-10-18)
+------------------
+
+New Features
+^^^^^^^^^^^^
+
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Bug Fixes
+^^^^^^^^^
+
++ Include photometry notebooks in wheel.
+
 1.1.0 (2022-10-18)
 ------------------
 
