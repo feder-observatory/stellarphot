@@ -1,3 +1,4 @@
+import functools
 from pathlib import Path
 
 import pandas
@@ -10,7 +11,12 @@ from astropy.table import Table
 from astropy.coordinates import SkyCoord
 from astropy import units as u
 from astropy.nddata import CCDData
-from astrowidgets import ImageWidget
+from astropy import units as u
+
+try:
+    from astrowidgets import ImageWidget
+except ImportError:
+    from astrowidgets.ginga import ImageWidget
 
 from stellarphot.differential_photometry import *
 from stellarphot.photometry import *
@@ -227,31 +233,205 @@ def wrap(imagewidget, outputwidget):
     return cb
 
 
-def viewer():
-    header = ipw.HTML(value="""
-    <h2>Click and drag or use arrow keys to pan, use +/- keys to zoom</h2>
-    <h3>Shift-left click (or Crtl-left click)to exclude star as target or comp. Click again to include.</h3>
-    """)
+class ComparisonViewer:
+    def __init__(self,
+                 image,
+                 directory='.',
+                 target_mag=10,
+                 bright_mag_limit=8,
+                 dim_mag_limit=17,
+                 targets_from_file=None,
+                 object_coordinate=None):
 
-    legend = ipw.HTML(value="""
-    <h3>Green circles -- Gaia stars within 2.5 arcmin of target</h3>
-    <h3>Red circles -- APASS stars within 1 mag of target</h3>
-    <h3>Blue circles -- VSX variables</h3>
-    <h3>Red × -- Exclude as target or comp</h3>
-    """)
+        self._label_name = 'labels'
+        self._circle_name = 'target circle'
+        self.ccd, self.vsx = \
+            set_up(image,
+                   directory_with_images=directory
+                   )
 
-    iw = ImageWidget()
-    out = ipw.Output()
-    set_keybindings(iw)
-    bind_map = iw._viewer.get_bindmap()
-    gvc = iw._viewer.get_canvas()
-    bind_map.map_event(None, ('shift',), 'ms_left', 'cursor')
-    gvc.add_callback('cursor-down', wrap(iw, out))
+        apass, vsx_apass_angle, targets_apass_angle = match(self.ccd,
+                                                            targets_from_file,
+                                                            self.vsx)
+
+        apass_good_coord, good_stars = mag_scale(target_mag, apass, vsx_apass_angle,
+                                                 targets_apass_angle,
+                                                 brighter_dmag=target_mag - bright_mag_limit,
+                                                 dimmer_dmag=dim_mag_limit - target_mag)
+
+        apass_comps = in_field(apass_good_coord, self.ccd, apass, good_stars)
+
+        self.box, self.iw = self._viewer()
+
+        make_markers(self.iw, self.ccd, targets_from_file, self.vsx, apass_comps,
+                     name_or_coord=object_coordinate)
+
+        self.target_coord = object_coordinate
+
+        self._make_observers()
+
+    @property
+    def variables(self):
+        comp_table = self.generate_table()
+        new_vsx_mark = comp_table['marker name'] == 'VSX'
+        idx, _, _ = comp_table['coord'][new_vsx_mark].match_to_catalog_sky(self.vsx['coords'])
+        our_vsx = self.vsx[idx]
+        our_vsx['star_id'] = comp_table['star_id'][new_vsx_mark]
+        return our_vsx
+
+    def _make_observers(self):
+        self._show_labels_button.observe(self._show_label_button_handler,
+                                         names='value')
+        self._save_var_info.on_click(self._save_variables_to_file)
+
+    def _save_variables_to_file(self, button=None, filename=''):
+        if not filename:
+            filename = 'variables.csv'
+        self.variables.write(filename)
+
+    def _show_label_button_handler(self, change):
+        value = change['new']
+        if value:
+            # Showing labels can take a bit, disable while in progress
+            self._show_labels_button.disabled = True
+            self.show_labels()
+            self._show_labels_button.disabled = False
+        else:
+            self.remove_labels()
+        self._show_labels_button.description = self._show_labels_button.descriptions[value]
+
+    def _make_control_bar(self):
+        self._show_labels_button = ipw.ToggleButton(description='Click to show labels')
+        self._show_labels_button.descriptions = {
+            True: 'Click to hide labels',
+            False: 'Click to show labels'
+        }
+
+        self._save_var_info = ipw.Button(description='Save variable info')
+
+        controls = ipw.HBox(
+            children=[
+                self._show_labels_button,
+                self._save_var_info
+            ]
+        )
+
+        return controls
+
+    def _viewer(self):
+        header = ipw.HTML(value="""
+        <h2>Click and drag or use arrow keys to pan, use +/- keys to zoom</h2>
+        <h3>Shift-left click (or Crtl-left click)to exclude star as target
+        or comp. Click again to include.</h3>
+        """)
+
+        legend = ipw.HTML(value="""
+        <h3>Green circles -- Gaia stars within 2.5 arcmin of target</h3>
+        <h3>Red circles -- APASS stars within 1 mag of target</h3>
+        <h3>Blue circles -- VSX variables</h3>
+        <h3>Red × -- Exclude as target or comp</h3>
+        """)
+
+        iw = ImageWidget()
+        out = ipw.Output()
+        set_keybindings(iw)
+        bind_map = iw._viewer.get_bindmap()
+        gvc = iw._viewer.get_canvas()
+        bind_map.map_event(None, ('shift',), 'ms_left', 'cursor')
+        gvc.add_callback('cursor-down', wrap(iw, out))
+
+        controls = self._make_control_bar()
+        box = ipw.VBox()
+        inner_box = ipw.HBox()
+        inner_box.children = [iw, legend]
+        box.children = [header, inner_box, controls]
+
+        return box, iw
+
+    def generate_table(self):
+        try:
+            all_table = self.iw.get_all_markers()
+        except AttributeError:
+            all_table = self.iw.get_markers(marker_name='all')
+
+        elims = np.array([name.startswith('elim')
+                         for name in all_table['marker name']])
+        elim_table = all_table[elims]
+        comp_table = all_table[~elims]
+
+        index, d2d, d3d = elim_table['coord'].match_to_catalog_sky(comp_table['coord'])
+        comp_table.remove_rows(index)
+
+        # Calculate how far each is from target
+        comp_table['separation'] = self.target_coord.separation(comp_table['coord'])
+
+        # Add dummy column for sorting in the order we want
+        comp_table['sort'] = np.zeros(len(comp_table))
+
+        # Set sort order
+        apass_mark = comp_table['marker name'] == 'APASS comparison'
+        vsx_mark = comp_table['marker name'] == 'VSX'
+        tess_mark = ((comp_table['marker name'] == 'TESS Targets') |
+                (comp_table['separation'] < 0.3 * u.arcsec))
 
 
-    box = ipw.VBox()
-    inner_box = ipw.HBox()
-    inner_box.children = [iw, legend]
-    box.children = [header, inner_box]
+        comp_table['sort'][apass_mark] = 2
+        comp_table['sort'][vsx_mark] = 1
+        comp_table['sort'][tess_mark] = 0
 
-    return box, iw
+        # Sort the table
+        comp_table.sort(['sort', 'separation'])
+
+        # Assign the IDs
+        comp_table['star_id'] = range(1, len(comp_table) + 1)
+
+        return comp_table
+
+    def show_labels(self):
+        plot_names = []
+        comp_table = self.generate_table()
+
+        for star in comp_table:
+            star_id = star['star_id']
+            if star['marker name'] == 'TESS Targets':
+                label = f'T{star_id}'
+                self.iw._marker = functools.partial(self.iw.dc.Text, text=label, fontsize=20, fontscale=False, color='green')
+                self.iw.add_markers(Table(data=[[star['x']+20], [star['y']-20]], names=['x', 'y']),
+                               marker_name=self._label_name)
+
+            elif star['marker name'] == 'APASS comparison':
+                label = f'C{star_id}'
+                self.iw._marker = functools.partial(self.iw.dc.Text, text=label, fontsize=20, fontscale=False, color='red')
+                self.iw.add_markers(Table(data=[[star['x']+20], [star['y']-20]], names=['x', 'y']),
+                                    marker_name=self._label_name)
+
+            elif star['marker name'] == 'VSX':
+                label = f'V{star_id}'
+                self.iw._marker = functools.partial(self.iw.dc.Text, text=label, fontsize=20, fontscale=False, color='blue')
+                self.iw.add_markers(Table(data=[[star['x']+20], [star['y']-20]], names=['x', 'y']),
+                                    marker_name=self._label_name)
+            else:
+                label = f'U{star_id}'
+                print(f"Unrecognized marker name: {star['marker name']}")
+            plot_names.append(label)
+
+    def remove_labels(self):
+        try:
+            self.iw.remove_markers(marker_name=self._label_name)
+        except AttributeError:
+            self.iw.remove_markers_by_name(marker_name=self._label_name)
+
+    def show_circle(self,
+                    radius=2.5 * u.arcmin,
+                    pixel_scale=0.56 * u.arcsec / u.pixel):
+        radius_pixels = np.round((radius / pixel_scale).to(u.pixel).value,
+                                 decimals=0)
+        self.iw.marker = {'color': 'yellow',
+                          'radius': radius_pixels,
+                          'type': 'circle'}
+        self.iw.add_markers(Table(data=[[self.target_coord]], names=['coords']),
+                            skycoord_colname='coords',
+                            use_skycoord=True, marker_name=self._circle_name)
+
+    def remove_circle(self):
+        self.iw.remove_markers(marker_name=self._circle_name)

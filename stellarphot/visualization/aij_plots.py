@@ -4,7 +4,7 @@ __all__ = ['seeing_plot', 'plot_predict_ingress_egress']
 
 
 def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM,
-                plot_title='', file_name='', gap=6, annulus_width=13):
+                plot_title='', file_name='', gap=6, annulus_width=13, radius=None):
     """
     Show a seeing plot for data from an image with radius on the x axis and counts (ADU) on the y axis.
 
@@ -35,11 +35,13 @@ def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM,
     annulus_width : number
         the distance between the inner and outer annulus
     """
-    radius = HWHM * 4
+    if radius is None:
+        radius = HWHM * 4
+
     plt.figure(figsize=(20, 10))
     plt.grid(True)
     inner_annulus = radius + gap
-    outer_annulus = radius + annulus_width
+    outer_annulus = inner_annulus + annulus_width
 
     # plot the raw radius and raw counts
     plt.plot(raw_radius, raw_counts, linestyle='none',
