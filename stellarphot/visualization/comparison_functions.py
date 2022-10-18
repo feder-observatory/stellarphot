@@ -12,7 +12,11 @@ from astropy.coordinates import SkyCoord
 from astropy import units as u
 from astropy.nddata import CCDData
 from astropy import units as u
-from astrowidgets import ImageWidget
+
+try:
+    from astrowidgets import ImageWidget
+except ImportError:
+    from astrowidgets.ginga import ImageWidget
 
 from stellarphot.differential_photometry import *
 from stellarphot.photometry import *
@@ -412,7 +416,10 @@ class ComparisonViewer:
             plot_names.append(label)
 
     def remove_labels(self):
-        self.iw.remove_markers(marker_name=self._label_name)
+        try:
+            self.iw.remove_markers(marker_name=self._label_name)
+        except AttributeError:
+            self.iw.remove_markers_by_name(marker_name=self._label_name)
 
     def show_circle(self,
                     radius=2.5 * u.arcmin,
