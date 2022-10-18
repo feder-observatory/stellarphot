@@ -1,3 +1,18 @@
+1.1.2 (2022-10-18)
+------------------
+
+New Features
+^^^^^^^^^^^^
+
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Bug Fixes
+^^^^^^^^^
+
++ Simplify comparison notebook.
+
 1.1.1 (2022-10-18)
 ------------------
 
