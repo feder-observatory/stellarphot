@@ -301,7 +301,7 @@ def make_show_event(iw):
             plt.grid()
 
             plt.title('Net counts in aperture')
-            e_sky = np.sqrt(new_sub_med)
+            e_sky = np.nanmax([np.sqrt(new_sub_med), sub_std])
             plt.xlabel('Aperture radius (pixels)')
             plt.show()
 
@@ -374,7 +374,8 @@ class SeeingProfileWidget:
         self.ap_t = ipw.IntText(description='Aperture radius', value=5, layout=layout)
         self.in_t = ipw.IntText(description='Inner annulus', value=10, layout=layout)
         self.out_t = ipw.IntText(description='Outer annulus', value=20, layout=layout)
-        hb.children = [self.ap_t] #, self.in_t, self.out_t]
+        self.save_aps = ipw.Button(description="Save settings")
+        hb.children = [self.ap_t, self.save_aps] #, self.in_t, self.out_t]
 
         lil_box = ipw.VBox()
         lil_box.children = [self.out, self.out2, self.out3]
@@ -401,6 +402,13 @@ class SeeingProfileWidget:
             self._mse(self.iw, aperture=change['new'])
 
         self.ap_t.observe(aperture_obs, names='value')
+        self.save_aps.on_click(self._save_ap_settings)
+
+    def _save_ap_settings(self, button):
+        print('foo')
+        ap_rad = self.ap_t.value
+        with open('aperture_settings.txt', 'w') as f:
+            f.write(f'{ap_rad},{ap_rad + 10},{ap_rad + 15}')
 
     def _make_show_event(self):
 
@@ -459,9 +467,10 @@ class SeeingProfileWidget:
             # CALCULATE AND DISPLAY NET COUNTS INSIDE RADIUS
             self.out2.clear_output(wait=True)
             with self.out2:
-                sub_blot = rad_prof.sub_data.copy()
+                sub_blot = rad_prof.sub_data.copy().astype('float32')
                 min_idx = profile_size // 2 - 2 * rad_prof.FWHM
                 max_idx = profile_size // 2 + 2 * rad_prof.FWHM
+                print(f'{min_idx=} {max_idx=}')
                 sub_blot[min_idx:max_idx, min_idx:max_idx] = np.nan
                 sub_std = np.nanstd(sub_blot)
                 new_sub_med = np.nanmedian(sub_blot)
@@ -482,7 +491,8 @@ class SeeingProfileWidget:
                 plt.grid()
 
                 plt.title('Net counts in aperture')
-                e_sky = np.sqrt(new_sub_med)
+                e_sky = np.nanmax([np.sqrt(new_sub_med), sub_std])
+
                 plt.xlabel('Aperture radius (pixels)')
                 plt.show()
 
