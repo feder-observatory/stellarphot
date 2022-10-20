@@ -224,7 +224,11 @@ def wrap(imagewidget, outputwidget):
                                             marker_name=f'elim{imagewidget.next_elim}')
                 else:
                     for elim in elims:
-                        imagewidget.remove_markers(marker_name=elim)
+                        try:
+                            imagewidget.remove_markers_by_name(marker_name=elim)
+                        except AttributeError:
+                            imagewidget.remove_markers(marker_name=elim)
+
             else:
                 print('sorry try again')
                 imagewidget._viewer.onscreen_message('Click closer to a star')
@@ -241,7 +245,8 @@ class ComparisonViewer:
                  bright_mag_limit=8,
                  dim_mag_limit=17,
                  targets_from_file=None,
-                 object_coordinate=None):
+                 object_coordinate=None,
+                 aperture_output_file=None):
 
         self._label_name = 'labels'
         self._circle_name = 'target circle'
@@ -267,6 +272,7 @@ class ComparisonViewer:
                      name_or_coord=object_coordinate)
 
         self.target_coord = object_coordinate
+        self.aperture_output_file = aperture_output_file
 
         self._make_observers()
 
@@ -283,6 +289,7 @@ class ComparisonViewer:
         self._show_labels_button.observe(self._show_label_button_handler,
                                          names='value')
         self._save_var_info.on_click(self._save_variables_to_file)
+        self._save_aperture_file.on_click(self._save_aperture_to_file)
 
     def _save_variables_to_file(self, button=None, filename=''):
         if not filename:
@@ -300,6 +307,12 @@ class ComparisonViewer:
             self.remove_labels()
         self._show_labels_button.description = self._show_labels_button.descriptions[value]
 
+    def _save_aperture_to_file(self, button=None, filename=''):
+        if not filename:
+            filename = self.aperture_output_file
+        print(filename)
+        self.generate_table().write(filename)
+
     def _make_control_bar(self):
         self._show_labels_button = ipw.ToggleButton(description='Click to show labels')
         self._show_labels_button.descriptions = {
@@ -309,10 +322,13 @@ class ComparisonViewer:
 
         self._save_var_info = ipw.Button(description='Save variable info')
 
+        self._save_aperture_file = ipw.Button(description='Save aperture file')
+
         controls = ipw.HBox(
             children=[
                 self._show_labels_button,
-                self._save_var_info
+                self._save_var_info,
+                self._save_aperture_file
             ]
         )
 
@@ -434,4 +450,7 @@ class ComparisonViewer:
                             use_skycoord=True, marker_name=self._circle_name)
 
     def remove_circle(self):
-        self.iw.remove_markers(marker_name=self._circle_name)
+        try:
+            self.iw.remove_markers(marker_name=self._circle_name)
+        except AttributeError:
+            self.iw.remove_markers_by_name(marker_name=self._circle_name)
