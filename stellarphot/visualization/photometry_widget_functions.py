@@ -36,7 +36,7 @@ class PhotometrySettings:
 
     @property
     def object_name(self):
-        self._object_name.value
+        return self._object_name.value
 
     def _update_ifc(self, change):
         self.ifc = ImageFileCollection(change.selected)
