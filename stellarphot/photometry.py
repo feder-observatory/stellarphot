@@ -356,7 +356,7 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
                                  ra=bjd_coords.ra, dec=bjd_coords.dec)
 
     if camera is not None:
-        phot['mag_inst_{}'.format(ccd.header['filter'])] = \
+        phot['mag_inst'] = \
             (-2.5 * np.log10(camera.gain * phot['aperture_net_flux'].value /
                              phot['exposure'].value))
 
