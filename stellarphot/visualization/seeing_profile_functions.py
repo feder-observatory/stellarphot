@@ -1,6 +1,9 @@
+import warnings
+
 import numpy as np
 from photutils.centroids import centroid_com
 import ipywidgets as ipw
+from ipyfilechooser import FileChooser
 
 from astropy.stats import sigma_clipped_stats
 from astropy.table import Table
@@ -243,99 +246,6 @@ class RadialProfile:
         return np.arange(len(self.radialprofile))
 
 
-def make_show_event(iw):
-    def show_event(viewer, event, datax, datay):
-
-        i = iw._viewer.get_image()
-        data = i.get_data()
-
-        fig_size = (10, 5)
-        # Rough location of click in original image
-        x = int(np.floor(event.data_x))
-        y = int(np.floor(event.data_y))
-
-        rad_prof = RadialProfile(data, x, y)
-
-        # ADD MARKER WHERE CLICKED
-        iw.add_markers(Table(data=[[rad_prof.cen[0]], [rad_prof.cen[1]]],
-                             names=['x', 'y']),)
-
-        # ----> MOVE PROFILE CONSTRUCTION INTO FUNCTION <----
-
-        # CONSTRUCT RADIAL PROFILE OF PATCH AROUND STAR
-        profile_size = 60
-        # NOTE: THIS IS NOT BACKGROUND SUBTRACTED
-        rad_prof.profile(profile_size)
-
-        # DISPLAY THE SCALED PROFILE
-        out.clear_output(wait=True)
-        with out:
-            plt.clf()
-            # sub_med += med
-            seeing_plot(rad_prof.r_exact, rad_prof.scaled_exact_counts,
-                        rad_prof.ravg,
-                        rad_prof.scaled_profile, rad_prof.HWHM,
-                        'Some Image Name', file_name='some_name', gap=6, annulus_width=13)
-            plt.show();
-
-        # CALCULATE AND DISPLAY NET COUNTS INSIDE RADIUS
-        out2.clear_output(wait=True)
-        with out2:
-            sub_blot = rad_prof.sub_data.copy()
-            min_idx = profile_size // 2 - 2 * rad_prof.FWHM
-            max_idx = profile_size // 2 + 2 * rad_prof.FWHM
-            sub_blot[min_idx:max_idx, min_idx:max_idx] = np.nan
-            sub_std = np.nanstd(sub_blot)
-            new_sub_med = np.nanmedian(sub_blot)
-            r_exact, ravg, tbin2 = radial_profile(rad_prof.data - new_sub_med, rad_prof.cen,
-                                                  size=profile_size,
-                                                  return_scaled=False)
-            r_exact_s, ravg_s, tbin2_s = radial_profile(rad_prof.data - new_sub_med, rad_prof.cen,
-                                                  size=profile_size,
-                                                  return_scaled=True)
-            #tbin2 = np.bincount(r.ravel(), (sub_data - sub_med).ravel())
-            counts = np.cumsum(tbin2)
-            plt.figure(figsize=fig_size)
-            plt.plot(rad_prof.radius_values, counts)
-            plt.xlim(0, 40)
-            plt.grid()
-
-            plt.title('Net counts in aperture')
-            e_sky = np.nanmax([np.sqrt(new_sub_med), sub_std])
-            plt.xlabel('Aperture radius (pixels)')
-            plt.show()
-
-        # CALCULATE And DISPLAY SNR AS A FUNCTION OF RADIUS
-        out3.clear_output(wait=True)
-        with out3:
-            read_noise = 10  # electrons
-            gain = 1.5  # electrons/count
-            # Poisson error is square root of the net number of counts enclosed
-            poisson = np.sqrt(np.cumsum(tbin2))
-
-            # This is obscure, but correctly calculated the number of pixels at
-            # each radius, since the smoothed is tbin2 divided by the number of
-            # pixels.
-            nr = tbin2 / tbin2_s
-
-            # This ignores dark current
-            error = np.sqrt(poisson ** 2 + np.cumsum(nr)
-                            * (e_sky ** 2 + (read_noise / gain)** 2))
-
-            snr = np.cumsum(tbin2) / error
-            plt.figure(figsize=fig_size)
-            plt.plot(rad_prof.radius_values + 1, snr)
-
-            plt.title(f'Signal to noise ratio max {snr.max():.1f} '
-                      f'at radius {snr.argmax() + 1}')
-            plt.xlim(0, 40)
-
-            plt.xlabel('Aperture radius (pixels)')
-            plt.grid()
-            plt.show()
-    return show_event
-
-
 def box(imagewidget):
     """
     Compatibility layer for older versions of the photometry notebooks.
@@ -367,6 +277,8 @@ class SeeingProfileWidget:
         self.out2 = ipw.Output()
         self.out3 = ipw.Output()
         # Build the larger widget
+        self.container = ipw.VBox()
+        self.filechooser = FileChooser(title="Choose an image")
         big_box = ipw.HBox()
         big_box = ipw.GridspecLayout(1, 2)
         layout = ipw.Layout(width='20ch')
@@ -378,7 +290,12 @@ class SeeingProfileWidget:
         hb.children = [self.ap_t, self.save_aps] #, self.in_t, self.out_t]
 
         lil_box = ipw.VBox()
-        lil_box.children = [self.out, self.out2, self.out3]
+        lil_tabs = ipw.Tab()
+        lil_tabs.children = [self.out3, self.out, self.out2]
+        lil_tabs.set_title(0, "SNR")
+        lil_tabs.set_title(1, "Seeing profile")
+        lil_tabs.set_title(2, "Integrated counts")
+        lil_box.children = [lil_tabs]
 
         imbox = ipw.VBox()
         imbox.children = [imagewidget, hb]
@@ -389,13 +306,19 @@ class SeeingProfileWidget:
         # Line below puts space between the image and the plots so the plots
         # don't jump around as the image value changes.
         big_box.layout.justify_content = 'space-between'
-
-        self.box = big_box
+        self.big_box = big_box
+        self.container.children = [self.filechooser, self.big_box]
+        self.box = self.container
         self._aperture_name = 'aperture'
         self._set_observers()
 
     def load_fits(self, file):
+        with warnings.catch_warnings():
             self.iw.load_fits(file)
+
+    def _update_file(self, change):
+         with warnings.catch_warnings():
+            self.load_fits(change.selected)
 
     def _set_observers(self):
         def aperture_obs(change):
@@ -403,9 +326,9 @@ class SeeingProfileWidget:
 
         self.ap_t.observe(aperture_obs, names='value')
         self.save_aps.on_click(self._save_ap_settings)
+        self.filechooser.register_callback(self._update_file)
 
     def _save_ap_settings(self, button):
-        print('foo')
         ap_rad = self.ap_t.value
         with open('aperture_settings.txt', 'w') as f:
             f.write(f'{ap_rad},{ap_rad + 10},{ap_rad + 15}')
@@ -445,9 +368,13 @@ class SeeingProfileWidget:
                 # NOTE: THIS IS NOT BACKGROUND SUBTRACTED
                 rad_prof.profile(profile_size)
 
-                # Bad default, but use for consistency for now
-                aperture_radius = 2 * 2 * rad_prof.HWHM
+                # Default is 1.5 times FWHM
+                aperture_radius = np.round(1.5 * 2 * rad_prof.HWHM, 0)
                 self.rad_prof = rad_prof
+
+                # Set this AFTER the radial profile has been created to avoid an attribute
+                # error.
+                self.ap_t.value = aperture_radius
             else:
                 # User changed aperture
                 aperture_radius = aperture
@@ -470,7 +397,6 @@ class SeeingProfileWidget:
                 sub_blot = rad_prof.sub_data.copy().astype('float32')
                 min_idx = profile_size // 2 - 2 * rad_prof.FWHM
                 max_idx = profile_size // 2 + 2 * rad_prof.FWHM
-                print(f'{min_idx=} {max_idx=}')
                 sub_blot[min_idx:max_idx, min_idx:max_idx] = np.nan
                 sub_std = np.nanstd(sub_blot)
                 new_sub_med = np.nanmedian(sub_blot)
@@ -494,7 +420,7 @@ class SeeingProfileWidget:
                 e_sky = np.nanmax([np.sqrt(new_sub_med), sub_std])
 
                 plt.xlabel('Aperture radius (pixels)')
-                plt.show()
+                plt.show();
 
             # CALCULATE And DISPLAY SNR AS A FUNCTION OF RADIUS
             self.out3.clear_output(wait=True)
@@ -525,6 +451,6 @@ class SeeingProfileWidget:
                 plt.ylim(*ylim)
                 plt.xlabel('Aperture radius (pixels)')
                 plt.grid()
-                plt.show()
+                plt.show();
         return show_event
 
