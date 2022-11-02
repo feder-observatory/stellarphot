@@ -2,3 +2,4 @@
 
 from .aij import *
 from .tess import *
+from .aavso import *
