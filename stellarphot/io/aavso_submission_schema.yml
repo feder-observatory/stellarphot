@@ -1,0 +1,242 @@
+comments:
+  TYPE:
+    summary: |
+      Should always say Extended for this format.
+    options:
+      - EXTENDED
+  OBSCODE:
+    summary: |
+      The official AAVSO Observer Code for the observer which was previously
+      assigned by the AAVSO.
+  SOFTWARE:
+    summary: |
+      Name and version of software used to create the format. If it is
+      private software, put some type of description here.
+      For example: "#SOFTWARE=AIP4Win Version 2.2".
+      Limit: 255 characters.
+  DELIM:
+    summary: |
+      The delimiter used to separate fields in the report. Any ASCII character
+      or UNICODE number that corresponds to ascii code 32-126 is acceptable as
+      long as it is not used in any field.
+      Suggested delimiters are: comma (,) semi-colon(;), and exclamation point(!).
+      The only characters that cannot be used are the pipe(|), the pound/hash (#)
+      or the " " (space). If you want to use a tab, use the word "tab" instead of
+      an actual tab character.
+      Note: Excel users who want to use a comma will have to type "comma" here
+      instead of a ",". Otherwise Excel will export the field incorrectly.
+  DATE:
+    summary: |
+      The format of the date used in the report. Times are midpoint of the
+      observation. Convert all times from UT to one of the following formats:
+          JD: Julian Day (Ex: 2454101.7563)
+          HJD: Heliocentric Julian Day
+          EXCEL: the format created by Excel's NOW() function (Ex: 12/31/2007 12:59:59 a.m )
+    options:
+      - JD
+      - HJD
+      - EXCEL
+  OBSTYPE:
+    summary: |
+      The type of observation in the data file. It can be CCD, DSLR,
+      PEP (for Photoelectric Photometry). If absent, it is assumed to be CCD.
+      If you use a CMOS camera please report it as CCD. [If you are
+      submitting photographic/photovisual observations, please use the
+      Visual File Format instead of the Extended File Format.
+      See the Visual File Format explanation for details.]
+    options:
+      - CCD
+      - DSLR
+      - PEP
+
+data:
+  STARID:
+    summary: |
+      The star's identifier. It can be the AAVSO Designation, the AAVSO Name, or
+      the AAVSO Unique Identifier, but NOT more than one of these.
+      Limit: 30 characters.
+  DATE:
+    summary: |
+      The date of the observation, in the format specified in the DATE parameter.
+      Limit: 16 characters.
+  MAGNITUDE:
+    summary: |
+      The magnitude of the observation. Prepend with < if a fainter-than.
+      A dot is required (e.g. "9.0" rather than "9"). Limit: 8 characters.
+  MAGERR:
+    summary: |
+      Photometric uncertainty associated with the variable star magnitude.
+      If not available put "na". Limit: 6 characters.
+  FILTER:
+    summary: |
+      The filter used for the observation.
+      This can be one of the following letters (in bold):
+    options:
+      U:
+        summary: Johnson U
+      B:
+        summary: Johnson B
+      V:
+        summary: Johnson V
+      R:
+        summary: Cousins R (Rc = R)
+      I:
+        summary: Cousins I (Ic = I)
+      J:
+        summary: NIR 1.2 micron
+      H:
+        summary: NIR 1.6 micron
+      K:
+        summary: NIR 2.2 micron
+      TG:
+        summary: |
+          Green Filter (or Tri-color green). This is commonly the "green-channel"
+          in a DSLR or color CCD camera, or Astroimaging G filter. These observations
+          use V-band comp star magnitudes.
+      TB:
+        summary: |
+          Blue Filter (or Tri-color blue). This is commonly the "blue-channel"
+          in a DSLR or color CCD camera, or Astroimaging B filter. These
+          observations use B-band comp star magnitudes.
+      TR:
+        summary: |
+          Red Filter (or Tri-color red). This is commonly the "red-channel"
+          in a DSLR or color CCD camera, or Astroimaging R filter. These
+          observations use R-band comp star magnitudes.
+      CV:
+        summary: |
+          Clear (unfiltered) using V-band comp star magnitudes (this
+          is more common than CR). A clear with blue-blocking (CBB) filter
+          commonly used for exoplanet observations should be considered
+          a CV filter. Report "CBB filter" in NOTES field.
+      CR:
+        summary: |
+          Clear (unfiltered) using R-band comp star magnitudes.
+          A clear with blue-blocking (CBB) filter commonly used for
+          exoplanet observations should be considered a CR filter.
+          Report "CBB filter" in NOTES field.
+      SZ:
+        summary: Sloan z
+      SU:
+        summary: Sloan u
+      SG:
+        summary: Sloan g
+      SR:
+        summary: Sloan r
+      SI:
+        summary: Sloan i
+      STU:
+        summary: Stromgren u
+      STV:
+        summary: Stromgren v
+      STB:
+        summary: Stromgren b
+      STY:
+        summary: Stromgren y
+      STHBW:
+        summary: Stromgren Hbw
+      STHBN:
+        summary: Stromgren Hbn
+      MA:
+        summary: Optec Wing A
+      MB:
+        summary: Optec Wing B
+      MI:
+        summary: Optec Wing C
+      ZS:
+        summary: PanSTARRS z-short (APASS)
+      Y:
+        summary: PanSTARRS y (APASS)
+      HA:
+        summary: H-alpha
+      HAC:
+        summary: H-alpha continuum
+      O:
+        summary: |
+          Other filter not listed above, must be described in NOTES.
+          Please Note: Due to a problem in WebObs, this filter choice is
+          currently unavailable. Please consider removing your filter
+          and using CV or TB/TG/TR instead.
+  TRANS:
+    summary: |
+      YES if transformed using the Landolt Standards or those fields that
+      contain secondary standards, or NO if not. Document the method used
+      to transform in the "NOTES" section.
+  MTYPE:
+    summary: |
+      Magnitude type. STD if standardized (Click here for definition of
+      standardized) or DIF if differential (very rare). If you are currently
+      using ABS for 'absolute' we will still accept it.
+      Differential requires the use of CNAME.
+    options:
+      - STD
+      - DIF
+      - ABS
+  CNAME:
+    summary: |
+      Comparison star name or label such as the AUID (much preferred)
+      or the chart label for the comparison star used.
+      Use "ENSEMBLE" for ensemble photometry.
+      If not present, use "na". Limit: 20 characters.
+  CMAG:
+    summary: |
+      Instrumental magnitude of the comparison star.
+      If "ensemble" see example below. If not present,
+      use "na". Limit: 8 characters.
+  KNAME:
+    summary: |
+      Check star name or label such as the AUID (much preferred)
+      or the chart label for the check star. If not present,
+      use "na".
+      Limit: 20 characters.
+  KMAG:
+    summary: |
+      Instrumental magnitude of the check star.
+      If "ensemble" see example below. If not present, use "na".
+      Limit: 8 characters.
+  AIRMASS:
+    summary: |
+      Airmass of observation Limit 7 characters - entry will be truncated
+      if longer than that. If not present, use "na".
+  GROUP:
+    summary: |
+      Grouping identifier (maximum 5 characters). It is used
+      for grouping multiple observations together, usually an observation
+      set that was taken through multiple filters. It makes it easier to
+      retrieve all magnitudes from a given set in the database, say, if
+      someone wanted to form color indices such as (B-V) with them. If you
+      are just doing time series, or using the same filter
+      for multiple stars, etc., just set GROUP to "na." For cases where you
+      want to group observations, GROUP should be an integer, identical for
+      all observations in a group, and unique for a given observer for a
+      given star on a given Julian Date. Limit: 5 characters.
+  CHART:
+    summary: |
+      Please use the sequence ID you will find written in Bold print
+      near the top of the photometry table in a sentence that reads
+      "Report this sequence as [ID] in the chart field of your observation report."
+      If you used your own comparison stars (e.g. in the case of
+      time-sensitive alerts when the Sequence Team had no time to create a sequence),
+      do not give a chart ID, even if you plotted the chart using VSP.
+      Use the comment code K (non-AAVSO chart) and give a proper
+      chart name like "APASS DR10". Then add information on the comp
+      stars in the notes. Limit: 20 characters.
+  NOTES:
+    summary: |
+      Comments or notes about the observation. If no comments, use "na".
+      This field has a maximum length of several thousand characters, so you
+      can be as descriptive as necessary.  The convention to use for including
+      a lot of information as concisely as possible is to use subfields after
+      any freeform comment you wish to make.
+      The subfield format is |A=B; the '|' character is the separator, A is a
+      keyword name and B is its value. To make it possible to programatically
+      access this information, use keywords taken from this list:
+          VMAGINS, CMAGINS, KMAGINS are the instrumental magnitudes of target, single comp, and check star
+          CREFMAG and KREFMAG are the reference magnitudes of comp and check
+          CREFERR and KREFERR are the errors of the reference magnitudes
+          VX, CX and KX are the airmass values for target, comp and check
+      Transform coefficients can also be documented here. See the example below
+      Not all the values are necessary. But using this mechanism you can
+      document your submission in much better detail. Here is an example of a
+      notes field created by TransformApplier:
+          (free format notes)|NOBS=5|VMAGINS=-7.244|VERR=0.006|CREFMAG=13.793|CREFERR=0.026| KREFMAG=14.448|KREFERR=0.021|VX=1.1501|CX=1.1505|KX=1.1500|Tv_bv=0.0090|Tv_bvErr=0.0100| TAver=2.47
