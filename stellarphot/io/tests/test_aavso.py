@@ -13,10 +13,16 @@ def test_no_obscode_raises_error():
 def test_default_values():
     aef = AAVSOExtendedFileFormat(DEFAULT_OBSCODE)
     assert aef.delim == ","
-    assert len(aef.data) == 0
+    assert len(aef.variable_data) == 0
 
 
 def test_setting_type_raises_error():
     aef = AAVSOExtendedFileFormat(DEFAULT_OBSCODE)
     with pytest.raises(AttributeError, match="can't set attribute"):
         aef.type = 'STD'
+
+
+def test_writing():
+    aef = AAVSOExtendedFileFormat(DEFAULT_OBSCODE)
+    aef.write('foo.csv')
+    assert 0
