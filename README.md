@@ -30,6 +30,7 @@ pip install stellarphot
 2. Open the Launcher (see below)
 3. Click on the notebook you want (see below)
 4. Output files will show up in the file browser
+5. Questions? Feel free to contact @mwcraig
 
 <img width="833" alt="stellarphot-screenshot" src="https://user-images.githubusercontent.com/1147167/200139186-100934ca-6d1e-46f9-ac89-a83d05528bb2.png">
 
