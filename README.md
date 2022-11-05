@@ -24,6 +24,15 @@ or install with `pip`:
 pip install stellarphot
 ```
 
+## Running stellarphot
+
+1. Start jupyterlab from the command line: `jupyter lab`
+2. Open the Launcher (see below)
+3. Click on the notebook you want (see below)
+4. Output files will show up in the file browser
+
+<img width="833" alt="stellarphot-screenshot" src="https://user-images.githubusercontent.com/1147167/200139186-100934ca-6d1e-46f9-ac89-a83d05528bb2.png">
+
 
 ## License
 
