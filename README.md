@@ -3,9 +3,10 @@
 [![Powered by Astropy Badge](http://img.shields.io/badge/powered%20by-AstroPy-orange.svg?style=flat)](http://www.astropy.org) [![GitHub Workflow badge](https://github.com/feder-observatory/stellarphot/workflows/Test/badge.svg?branch=main)](https://github.com/feder-observatory/stellarphot/actions?query=workflow%3ATest)
 
 + If you already have aperture photometry for a field, 
-    * calculate relative flux (like [AstroImageJ]()), and/or
+    * calculate relative flux (like [AstroImageJ](https://www.astro.louisville.edu/software/astroimagej/)), and/or
     * calculate calibrated magnitudes by transforming to a catalog (e.g. APASS DR9)
 + If you have calibrated images but haven't done photometry yet, you can do aperture photometry on your images.
++ If you have not calibrated your images, `stellarphot` can help -- choose the 
 
 
 ## Installation
@@ -15,13 +16,14 @@ You can install `stellarphot` with either pip or conda. `conda` is recommended a
 Install with `conda`:
 
 ```
-conda install -c conda-forge stellarphot
+conda install -c conda-forge stellarphot reducer
+pip install astronbs
 ```
 
 or install with `pip`:
 
 ```
-pip install stellarphot
+pip install stellarphot reducer astronbs
 ```
 
 ## Running stellarphot
