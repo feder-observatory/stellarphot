@@ -515,15 +515,14 @@ def transform_to_catalog(observed_mags_grouped, obs_mag_col, obs_filter,
 
         # Impose some constraints on what is included in the fit
         good_cat = ~(color.mask | cat_mag.mask) & (d2d.arcsecond < 1)
-        good_data = ((one_image[obs_mag_col] < -3) &
+        good_dat = ((one_image[obs_mag_col] < -3) &
                      (one_image[obs_mag_col] > -20) &
                      ~np.isnan(one_image[obs_mag_col])
                      )
 
         mag_diff = cat_mag - mag_inst
 
-        good_data = good_data & (np.abs(mag_diff - np.nanmean(mag_diff)) < 1)
-
+        good_data = good_dat & (np.abs(mag_diff - np.nanmedian(mag_diff[good_dat & ~mag_diff.mask])) < 1)
         try:
             good_data = good_data & ~one_image[obs_mag_col].mask
         except AttributeError:
