@@ -497,6 +497,7 @@ def transform_to_catalog(observed_mags_grouped, obs_mag_col, obs_filter,
     cal_mags = []
     resids = []
     cat_mags = []
+    cat_colors = []
     cat = None
     cat_coords = None
 
@@ -568,6 +569,7 @@ def transform_to_catalog(observed_mags_grouped, obs_mag_col, obs_filter,
         cal_mag[bad_match] = np.nan
         cal_mags.extend(cal_mag)
         cat_mags.extend(cat_mag)
+        cat_colors.extend(color)
 
         # Keep the user entertained....
         print(f'{file[0]} has fit {opts_to_str(popt)} with {residual=:.4f}')
@@ -589,4 +591,5 @@ def transform_to_catalog(observed_mags_grouped, obs_mag_col, obs_filter,
         result[name] = values
 
     result['mag_cat'] = cat_mags
+    result['color_cat'] = cat_colors
     return result
