@@ -420,7 +420,8 @@ class SeeingProfileWidget:
                 e_sky = np.nanmax([np.sqrt(new_sub_med), sub_std])
 
                 plt.xlabel('Aperture radius (pixels)')
-                plt.show();
+                plt.ylabel('Net counts')
+                plt.show()
 
             # CALCULATE And DISPLAY SNR AS A FUNCTION OF RADIUS
             self.out3.clear_output(wait=True)
@@ -450,7 +451,8 @@ class SeeingProfileWidget:
                 plt.vlines(aperture_radius, *plt.ylim(), colors=['red'])
                 plt.ylim(*ylim)
                 plt.xlabel('Aperture radius (pixels)')
+                plt.ylabel('SNR')
                 plt.grid()
-                plt.show();
+                plt.show()
         return show_event
 
