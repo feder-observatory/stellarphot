@@ -382,7 +382,6 @@ class SeeingProfileWidget:
             # DISPLAY THE SCALED PROFILE
             self.out.clear_output(wait=True)
             with self.out:
-                plt.clf()
                 # sub_med += med
                 seeing_plot(rad_prof.r_exact, rad_prof.scaled_exact_counts,
                             rad_prof.ravg,
