@@ -386,9 +386,10 @@ class SeeingProfileWidget:
                 seeing_plot(rad_prof.r_exact, rad_prof.scaled_exact_counts,
                             rad_prof.ravg,
                             rad_prof.scaled_profile, rad_prof.HWHM,
-                            'Some Image Name', file_name='some_name', gap=10, annulus_width=15,
-                            radius = aperture_radius)
-                plt.show();
+                            self.object_name, file_name=self.object_name, gap=10, annulus_width=15,
+                            radius = aperture_radius,
+                            figsize=fig_size)
+                plt.show()
 
             # CALCULATE AND DISPLAY NET COUNTS INSIDE RADIUS
             self.out2.clear_output(wait=True)
