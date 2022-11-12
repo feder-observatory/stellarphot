@@ -310,6 +310,9 @@ class SeeingProfileWidget:
         self.container.children = [self.filechooser, self.big_box]
         self.box = self.container
         self._aperture_name = 'aperture'
+
+        # Fill this in later with name of object from FITS file
+        self.object_name = ''
         self._set_observers()
 
     def load_fits(self, file):
@@ -317,8 +320,12 @@ class SeeingProfileWidget:
             self.iw.load_fits(file)
 
     def _update_file(self, change):
-         with warnings.catch_warnings():
+        with warnings.catch_warnings():
             self.load_fits(change.selected)
+        try:
+            self.object_name = fits.getval(change.selected, 'object')
+        except KeyError:
+            pass
 
     def _set_observers(self):
         def aperture_obs(change):
