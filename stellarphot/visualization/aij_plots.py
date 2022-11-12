@@ -56,33 +56,34 @@ def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM,
 
     # draw vertical line at HWHM and label it
     plt.vlines(HWHM, -0.2, 1.2, linestyle=(0, (5, 10)), color='#00cc00')
-    plt.annotate(f"HWHM {HWHM:2.1f}", (HWHM - 1, -0.25),
-                 fontsize=15, color='#00cc00')
+    plt.annotate(f"HWHM {HWHM:2.1f}", (HWHM, -0.25),
+                 color='#00cc00', horizontalalignment='center')
 
     # label axis
-    plt.xlabel('Radius (pixels)', fontsize=20)
-    plt.ylabel('ADU', fontsize=20)
+    plt.xlabel('Radius (pixels)')
+    plt.ylabel('ADU')
 
     # draw vertical line at the radius and label it
     plt.vlines(radius, -0.2, binned_counts[0], color='red')
-    plt.annotate(f"Radius {radius:2.1f}", (radius - 1, -0.25),
-                 fontsize=15, color='red')
+    plt.annotate(f"Radius {radius:2.1f}", (radius, -0.25),
+                 color='red', horizontalalignment='center')
     plt.hlines(binned_counts[0], binned_counts[0], radius, color='red')
 
     # label the source
     plt.annotate(
-        'SOURCE', (radius - 2, binned_counts[0] + 0.02), fontsize=15, color='red')
+        'SOURCE', (radius, binned_counts[0] + 0.02),
+        color='red', horizontalalignment='center')
 
     # draw vertical lines at the background and label it
     plt.vlines(inner_annulus, -0.2, binned_counts[0], color='red')
     plt.vlines(outer_annulus, -0.2, binned_counts[0], color='red')
     plt.hlines(binned_counts[0], inner_annulus, outer_annulus, color='red')
     plt.annotate('BACKGROUND', (inner_annulus,
-                                binned_counts[0] + 0.02), fontsize=15, color='red')
+                                binned_counts[0] + 0.02), color='red')
     plt.annotate(f"Back> {inner_annulus:2.1f}",
-                 (inner_annulus - 1, -0.25), fontsize=15, color='red')
+                 (inner_annulus, -0.25), color='red', horizontalalignment='center')
     plt.annotate(f"<Back {outer_annulus:2.1f}",
-                 (outer_annulus - 1, -0.25), fontsize=15, color='red')
+                 (outer_annulus, -0.25), color='red', horizontalalignment='center')
 
     # title the plot
     title_string = [f"{plot_title}", f"FWHM:{HWHM*2:.1f} pixels"]
@@ -90,7 +91,8 @@ def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM,
 
     # save plot as png
     if file_name:
-        plt.savefig(f"{file_name}.png")
+        safe_name = file_name.replace(" ", "-")
+        plt.savefig(f"{safe_name + '-seeing-profile'}.png")
 
 
 def plot_predict_ingress_egress(ingress_time, egress_time, end_line=1,
@@ -119,7 +121,7 @@ def plot_predict_ingress_egress(ingress_time, egress_time, end_line=1,
     plt.vlines(ingress_time, ymin - end_line, ymax,
                linestyle=(0, (5, 10)), color='red')
     plt.annotate("Predicted Ingress", (ingress_time - ingress_x_pos,
-                                       ymin - labels_y_pos), fontsize=10, color='red')
+                                       ymin - labels_y_pos), color='red')
 
     # create a vertical line at the egress time and label it
     plt.vlines(egress_time, ymin - end_line, ymax,
