@@ -42,7 +42,7 @@ def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM,
     if radius is None:
         radius = HWHM * 4
 
-    plt.figure(figsize=figsize)
+    fig = plt.figure(figsize=figsize)
     plt.grid(True)
     inner_annulus = radius + gap
     outer_annulus = inner_annulus + annulus_width
@@ -93,7 +93,7 @@ def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM,
     if file_name:
         safe_name = file_name.replace(" ", "-")
         plt.savefig(f"{safe_name + '-seeing-profile'}.png")
-
+    return fig
 
 def plot_predict_ingress_egress(ingress_time, egress_time, end_line=1,
                                 ingress_x_pos=1, egress_x_pos=1, labels_y_pos=1):
