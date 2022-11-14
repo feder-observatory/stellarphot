@@ -5,6 +5,7 @@ from photutils.centroids import centroid_com
 import ipywidgets as ipw
 from ipyfilechooser import FileChooser
 
+from astropy.io import fits
 from astropy.stats import sigma_clipped_stats
 from astropy.table import Table
 from astropy.nddata import Cutout2D
@@ -15,13 +16,13 @@ except ImportError:
     from astrowidgets.ginga import ImageWidget
 
 import matplotlib.pyplot as plt
+
+from stellarphot.io import TessSubmission
 from stellarphot.visualization import seeing_plot
 
 __all__ = ['set_keybindings', 'box', 'make_show_event']
 
-out = ipw.Output()
-out2 = ipw.Output()
-out3 = ipw.Output()
+desc_style = {"description_width": "initial"}
 
 
 def set_keybindings(image_widget, scroll_zoom=False):
@@ -283,9 +284,9 @@ class SeeingProfileWidget:
         big_box = ipw.GridspecLayout(1, 2)
         layout = ipw.Layout(width='20ch')
         hb = ipw.HBox()
-        self.ap_t = ipw.IntText(description='Aperture radius', value=5, layout=layout)
-        self.in_t = ipw.IntText(description='Inner annulus', value=10, layout=layout)
-        self.out_t = ipw.IntText(description='Outer annulus', value=20, layout=layout)
+        self.ap_t = ipw.IntText(description='Aperture radius', value=5, layout=layout, style=desc_style)
+        self.in_t = ipw.IntText(description='Inner annulus', value=10, layout=layout, style=desc_style)
+        self.out_t = ipw.IntText(description='Outer annulus', value=20, layout=layout, style=desc_style)
         self.save_aps = ipw.Button(description="Save settings")
         hb.children = [self.ap_t, self.save_aps] #, self.in_t, self.out_t]
 
@@ -295,7 +296,8 @@ class SeeingProfileWidget:
         lil_tabs.set_title(0, "SNR")
         lil_tabs.set_title(1, "Seeing profile")
         lil_tabs.set_title(2, "Integrated counts")
-        lil_box.children = [lil_tabs]
+        self.tess_box = self._make_tess_box()
+        lil_box.children = [lil_tabs, self.tess_box]
 
         imbox = ipw.VBox()
         imbox.children = [imagewidget, hb]
@@ -310,6 +312,11 @@ class SeeingProfileWidget:
         self.container.children = [self.filechooser, self.big_box]
         self.box = self.container
         self._aperture_name = 'aperture'
+
+        self._tess_sub = None
+
+        # Fill this in later with name of object from FITS file
+        self.object_name = ''
         self._set_observers()
 
     def load_fits(self, file):
@@ -317,8 +324,36 @@ class SeeingProfileWidget:
             self.iw.load_fits(file)
 
     def _update_file(self, change):
-         with warnings.catch_warnings():
+        with warnings.catch_warnings():
             self.load_fits(change.selected)
+        try:
+            self.object_name = fits.getval(change.selected, 'object')
+        except KeyError:
+            pass
+
+    def _construct_tess_sub(self):
+        file = self.filechooser.selected
+        self._tess_sub = TessSubmission.from_header(
+            fits.getheader(file),
+            telescope_code=self.setting_box.telescope_code.value,
+            planet=self.setting_box.planet_num.value
+        )
+
+    def _set_seeing_profile_name(self, change):
+        self._construct_tess_sub()
+        self.seeing_file_name.value = self._tess_sub.seeing_profile + ".png"
+
+    def _save_toggle_action(self, change):
+        activated = change['new']
+
+        if activated:
+            self.setting_box.layout.visibility = "visible"
+            self._set_seeing_profile_name("")
+        else:
+            self.setting_box.layout.visibility = "hidden"
+
+    def _save_seeing_plot(self, button):
+        self._seeing_plot_fig.savefig(self.seeing_file_name.value)
 
     def _set_observers(self):
         def aperture_obs(change):
@@ -327,17 +362,45 @@ class SeeingProfileWidget:
         self.ap_t.observe(aperture_obs, names='value')
         self.save_aps.on_click(self._save_ap_settings)
         self.filechooser.register_callback(self._update_file)
+        self.save_toggle.observe(self._save_toggle_action, names='value')
+        self.save_seeing.on_click(self._save_seeing_plot)
+        self.setting_box.planet_num.observe(self._set_seeing_profile_name)
+        self.setting_box.telescope_code.observe(self._set_seeing_profile_name)
 
     def _save_ap_settings(self, button):
         ap_rad = self.ap_t.value
         with open('aperture_settings.txt', 'w') as f:
             f.write(f'{ap_rad},{ap_rad + 10},{ap_rad + 15}')
 
+    def _make_tess_box(self):
+        box = ipw.VBox()
+        setting_box = ipw.HBox()
+        self.save_toggle = ipw.ToggleButton(description="TESS seeing profile...",
+                                            disabled=True)
+        scope_name = ipw.Text(description="Telescope code",
+                              value="Paul-P-Feder-0.4m",
+                              style=desc_style)
+        planet_num = ipw.IntText(description="Planet", value=1)
+        self.save_seeing = ipw.Button(description="Save")
+        self.seeing_file_name = ipw.Label(value="Moo")
+        setting_box.children = (scope_name, planet_num, self.seeing_file_name, self.save_seeing)
+        # for kid in setting_box.children:
+        #     kid.disabled = True
+        box.children = (self.save_toggle, setting_box)
+        setting_box.telescope_code = scope_name
+        setting_box.planet_num = planet_num
+        setting_box.layout.flex_flow = "row wrap"
+        setting_box.layout.visibility = "hidden"
+        self.setting_box = setting_box
+        return box
+
     def _make_show_event(self):
 
         def show_event(viewer, event=None, datax=None, datay=None, aperture=None):
             profile_size = 60
             fig_size = (10, 5)
+
+            self.save_toggle.disabled = False
 
             if event is not None:
                 # User clicked on a star, so generate profile
@@ -382,14 +445,14 @@ class SeeingProfileWidget:
             # DISPLAY THE SCALED PROFILE
             self.out.clear_output(wait=True)
             with self.out:
-                plt.clf()
                 # sub_med += med
-                seeing_plot(rad_prof.r_exact, rad_prof.scaled_exact_counts,
+                self._seeing_plot_fig = seeing_plot(rad_prof.r_exact, rad_prof.scaled_exact_counts,
                             rad_prof.ravg,
                             rad_prof.scaled_profile, rad_prof.HWHM,
-                            'Some Image Name', file_name='some_name', gap=10, annulus_width=15,
-                            radius = aperture_radius)
-                plt.show();
+                            self.object_name, gap=10, annulus_width=15,
+                            radius = aperture_radius,
+                            figsize=fig_size)
+                plt.show()
 
             # CALCULATE AND DISPLAY NET COUNTS INSIDE RADIUS
             self.out2.clear_output(wait=True)
@@ -420,7 +483,8 @@ class SeeingProfileWidget:
                 e_sky = np.nanmax([np.sqrt(new_sub_med), sub_std])
 
                 plt.xlabel('Aperture radius (pixels)')
-                plt.show();
+                plt.ylabel('Net counts')
+                plt.show()
 
             # CALCULATE And DISPLAY SNR AS A FUNCTION OF RADIUS
             self.out3.clear_output(wait=True)
@@ -450,7 +514,8 @@ class SeeingProfileWidget:
                 plt.vlines(aperture_radius, *plt.ylim(), colors=['red'])
                 plt.ylim(*ylim)
                 plt.xlabel('Aperture radius (pixels)')
+                plt.ylabel('SNR')
                 plt.grid()
-                plt.show();
+                plt.show()
         return show_event
 
