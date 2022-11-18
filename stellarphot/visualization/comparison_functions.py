@@ -21,6 +21,7 @@ except ImportError:
 from stellarphot.differential_photometry import *
 from stellarphot.photometry import *
 from stellarphot.visualization.seeing_profile_functions import set_keybindings
+from stellarphot.visualization.fits_opener import FitsOpener
 
 
 __all__ = ['read_file', 'set_up', 'match', 'mag_scale',
@@ -250,6 +251,7 @@ class ComparisonViewer:
 
         self._label_name = 'labels'
         self._circle_name = 'target circle'
+        self._file_chooser = FitsOpener()
         self.ccd, self.vsx = \
             set_up(image,
                    directory_with_images=directory
@@ -360,7 +362,7 @@ class ComparisonViewer:
         box = ipw.VBox()
         inner_box = ipw.HBox()
         inner_box.children = [iw, legend]
-        box.children = [header, inner_box, controls]
+        box.children = [self._file_chooser.file_chooser, header, inner_box, controls]
 
         return box, iw
 
