@@ -83,3 +83,24 @@ class FitsOpener:
         """
         with warnings.catch_warnings():
             image_widget.load_fits(str(self.path))
+
+    def set_file(self, file, directory=None):
+        """
+        Set the selected file of the ``FileChooser`` to be the input file.
+
+        Parameters
+        ----------
+
+        file : Path-like
+            The file to be set as selected. Can be a string or a pathlib.Path.
+            Cannot contain any directory information.
+
+        directory : Path-like, optional
+            Directory the file is in. The default value is the current directory of the
+            ``FileChooser``.
+        """
+        if directory is None:
+            directory = self._fc.selected_path
+
+        self._fc.reset(directory, file)
+        self._fc._apply_selection()
