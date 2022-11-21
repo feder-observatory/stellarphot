@@ -240,7 +240,7 @@ def wrap(imagewidget, outputwidget):
 
 class ComparisonViewer:
     def __init__(self,
-                 image,
+                 file="",
                  directory='.',
                  target_mag=10,
                  bright_mag_limit=8,
@@ -252,31 +252,48 @@ class ComparisonViewer:
         self._label_name = 'labels'
         self._circle_name = 'target circle'
         self._file_chooser = FitsOpener()
-        self.ccd, self.vsx = \
-            set_up(image,
-                   directory_with_images=directory
-                   )
 
-        apass, vsx_apass_angle, targets_apass_angle = match(self.ccd,
-                                                            targets_from_file,
-                                                            self.vsx)
-
-        apass_good_coord, good_stars = mag_scale(target_mag, apass, vsx_apass_angle,
-                                                 targets_apass_angle,
-                                                 brighter_dmag=target_mag - bright_mag_limit,
-                                                 dimmer_dmag=dim_mag_limit - target_mag)
-
-        apass_comps = in_field(apass_good_coord, self.ccd, apass, good_stars)
+        self._directory = directory
+        self.target_mag = target_mag
+        self.bright_mag_limit = bright_mag_limit
+        self.dim_mag_limit = dim_mag_limit
+        self.targets_from_file = targets_from_file
+        self.object_coordinate = object_coordinate
 
         self.box, self.iw = self._viewer()
-
-        make_markers(self.iw, self.ccd, targets_from_file, self.vsx, apass_comps,
-                     name_or_coord=object_coordinate)
 
         self.target_coord = object_coordinate
         self.aperture_output_file = aperture_output_file
 
+        if file:
+            self._file_chooser.set_file(file, directory=directory)
+            self._init()
+
         self._make_observers()
+
+    def _init(self):
+        """
+        Some initialization needs to be defered until a file is chosen.
+        """
+
+        self.ccd, self.vsx = \
+            set_up(self._file_chooser.path.name,
+                   directory_with_images=self._file_chooser.path.parent
+                   )
+
+        apass, vsx_apass_angle, targets_apass_angle = match(self.ccd,
+                                                            self.targets_from_file,
+                                                            self.vsx)
+
+        apass_good_coord, good_stars = mag_scale(self.target_mag, apass, vsx_apass_angle,
+                                                 targets_apass_angle,
+                                                 brighter_dmag=self.target_mag - self.bright_mag_limit,
+                                                 dimmer_dmag=self.dim_mag_limit - self.target_mag)
+
+        apass_comps = in_field(apass_good_coord, self.ccd, apass, good_stars)
+
+        make_markers(self.iw, self.ccd, self.targets_from_file, self.vsx, apass_comps,
+                     name_or_coord=self.target_coord)
 
     @property
     def variables(self):
@@ -287,11 +304,15 @@ class ComparisonViewer:
         our_vsx['star_id'] = comp_table['star_id'][new_vsx_mark]
         return our_vsx
 
+    def _set_file(self, change):
+        self._init()
+
     def _make_observers(self):
         self._show_labels_button.observe(self._show_label_button_handler,
                                          names='value')
         self._save_var_info.on_click(self._save_variables_to_file)
         self._save_aperture_file.on_click(self._save_aperture_to_file)
+        self._file_chooser.register_callback(self._set_file)
 
     def _save_variables_to_file(self, button=None, filename=''):
         if not filename:
