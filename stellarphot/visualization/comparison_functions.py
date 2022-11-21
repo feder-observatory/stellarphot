@@ -275,6 +275,7 @@ class ComparisonViewer:
         """
         Some initialization needs to be defered until a file is chosen.
         """
+        ### NEED A WAY TO SET OBJECT!!!!!
 
         self.ccd, self.vsx = \
             set_up(self._file_chooser.path.name,
