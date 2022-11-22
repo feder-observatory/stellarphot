@@ -1,6 +1,11 @@
 from dataclasses import dataclass
 import re
 
+from astropy.coordinates import SkyCoord
+from astroquery.mast import Catalogs
+
+from stellarphot.analysis.exotic import get_tic_info
+
 __all__ = ["TessSubmission"]
 
 TIC_regex = re.compile(r"[tT][iI][cC][^\d]?(?P<star>\d+)(?P<planet>\.\d\d)?")
@@ -13,6 +18,9 @@ class TessSubmission:
     utc_start: int
     tic_id: int
     planet_number: int
+
+    def __post_init__(self, *args, **kwargs):
+        self._tic_info = None
 
     @classmethod
     def from_header(cls, header, telescope_code="", planet=0):
@@ -102,6 +110,12 @@ class TessSubmission:
     @property
     def seeing_profile(self):
         return self.base_name + "_seeing-profile"
+
+    @property
+    def tic_coord(self):
+        if not self._tic_info:
+            self._tic_info = get_tic_info(self.tic_id)
+        return SkyCoord(ra=self._tic_info['ra'], dec=self._tic_info['dec'], unit='degree')
 
     def invalid_parts(self):
         if self._valid():
