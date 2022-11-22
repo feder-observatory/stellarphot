@@ -12,6 +12,8 @@ from astropy.coordinates import SkyCoord
 from astropy import units as u
 from astropy.nddata import CCDData
 from astropy import units as u
+from astropy.coordinates.name_resolve import NameResolveError
+
 
 try:
     from astrowidgets import ImageWidget
@@ -19,6 +21,7 @@ except ImportError:
     from astrowidgets.ginga import ImageWidget
 
 from stellarphot.differential_photometry import *
+from stellarphot.io import TessSubmission
 from stellarphot.photometry import *
 from stellarphot.visualization.seeing_profile_functions import set_keybindings
 from stellarphot.visualization.fits_opener import FitsOpener
@@ -267,6 +270,7 @@ class ComparisonViewer:
 
         if file:
             self._file_chooser.set_file(file, directory=directory)
+            self._set_object()
             self._init()
 
         self._make_observers()
@@ -305,7 +309,38 @@ class ComparisonViewer:
         our_vsx['star_id'] = comp_table['star_id'][new_vsx_mark]
         return our_vsx
 
+    def _set_object(self):
+        """
+        Try to automatically set object name immediately after file is chosen.
+        """
+        try:
+            self.object_name.value = self._file_chooser.header['object']
+        except KeyError:
+            # No object, will show empty box for name
+            pass
+
+        # We have a name, try to get coordinates from it
+        try:
+            self.object_coordinate = SkyCoord.from_name(self.object_name.value)
+        except NameResolveError:
+            pass
+
+        # Maybe this is a tess object?
+        try:
+            self.tess_submission = TessSubmission.from_header(
+                self._file_chooser.header,
+                telescope_code="Paul-P-Feder-0.4m",
+                planet=1
+            )
+        except ValueError:
+            # Guess not, time to turn on the coordinates box
+            # self._turn_on_coordinates()
+            self.tess_submission = None
+        else:
+            self.object_coordinate = self.tess_submission.tic_coord
+
     def _set_file(self, change):
+        self._set_object()
         self._init()
 
     def _make_observers(self):
@@ -380,11 +415,12 @@ class ComparisonViewer:
         bind_map.map_event(None, ('shift',), 'ms_left', 'cursor')
         gvc.add_callback('cursor-down', wrap(iw, out))
 
+        self.object_name = ipw.Text(description="Object", disabled=True)
         controls = self._make_control_bar()
         box = ipw.VBox()
         inner_box = ipw.HBox()
         inner_box.children = [iw, legend]
-        box.children = [self._file_chooser.file_chooser, header, inner_box, controls]
+        box.children = [self._file_chooser.file_chooser, self.object_name, header, inner_box, controls]
 
         return box, iw
 
