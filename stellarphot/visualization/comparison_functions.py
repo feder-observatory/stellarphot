@@ -21,7 +21,7 @@ except ImportError:
     from astrowidgets.ginga import ImageWidget
 
 from stellarphot.differential_photometry import *
-from stellarphot.io import TessSubmission
+from stellarphot.io import TessSubmission, TOI, TessTargetFile
 from stellarphot.photometry import *
 from stellarphot.visualization.seeing_profile_functions import set_keybindings
 from stellarphot.visualization.fits_opener import FitsOpener
@@ -165,6 +165,7 @@ def make_markers(iw, ccd, RD, vsx, ent,
     """
     iw.load_nddata(ccd)
     iw.zoom_level = 'fit'
+
     try:
         iw.reset_markers()
     except AttributeError:
@@ -185,12 +186,10 @@ def make_markers(iw, ccd, RD, vsx, ent,
         iw.marker = {'type': 'circle', 'color': 'blue', 'radius': 10}
         iw.add_markers(vsx, skycoord_colname='coords',
                        use_skycoord=True, marker_name='VSX')
-
     iw.marker = {'type': 'circle', 'color': 'red', 'radius': 10}
     iw.add_markers(ent, skycoord_colname='coords',
                    use_skycoord=True, marker_name='APASS comparison')
     iw.marker = {'type': 'cross', 'color': 'red', 'radius': 6}
-
 
 def wrap(imagewidget, outputwidget):
     """
@@ -261,11 +260,12 @@ class ComparisonViewer:
         self.bright_mag_limit = bright_mag_limit
         self.dim_mag_limit = dim_mag_limit
         self.targets_from_file = targets_from_file
-        self.object_coordinate = object_coordinate
+        self.tess_submission = None
+        self._tess_object_info = None
+        self.target_coord = object_coordinate
 
         self.box, self.iw = self._viewer()
 
-        self.target_coord = object_coordinate
         self.aperture_output_file = aperture_output_file
 
         if file:
@@ -279,8 +279,8 @@ class ComparisonViewer:
         """
         Some initialization needs to be defered until a file is chosen.
         """
-        ### NEED A WAY TO SET OBJECT!!!!!
-
+        if self.tess_submission is not None:
+            self._tess_object_info.layout.visibility = "visible"
         self.ccd, self.vsx = \
             set_up(self._file_chooser.path.name,
                    directory_with_images=self._file_chooser.path.parent
@@ -317,11 +317,11 @@ class ComparisonViewer:
             self.object_name.value = self._file_chooser.header['object']
         except KeyError:
             # No object, will show empty box for name
-            pass
+            self.object_name.disabled = False
 
         # We have a name, try to get coordinates from it
         try:
-            self.object_coordinate = SkyCoord.from_name(self.object_name.value)
+            self.target_coord = SkyCoord.from_name(self.object_name.value)
         except NameResolveError:
             pass
 
@@ -336,8 +336,19 @@ class ComparisonViewer:
             # Guess not, time to turn on the coordinates box
             # self._turn_on_coordinates()
             self.tess_submission = None
+            self._tess_object_info.layout.visibility = "hidden"
         else:
-            self.object_coordinate = self.tess_submission.tic_coord
+            self.toi_info = TOI(self.tess_submission.tic_id)
+
+            self._target_file_info = TessTargetFile(self.toi_info.coord,
+                                                    self.toi_info.tess_mag,
+                                                    self.toi_info.depth)
+
+            self.target_coord = self.tess_submission.tic_coord
+            self._tess_object_info.mag.value = self.toi_info.tess_mag
+            self._tess_object_info.depth.value = self.toi_info.depth
+            self._tess_object_info.layout.visibility = "visible"
+            self.targets_from_file = self._target_file_info.table
 
     def _set_file(self, change):
         self._set_object()
@@ -393,6 +404,20 @@ class ComparisonViewer:
 
         return controls
 
+    def _make_tess_object_info(self):
+        """
+        Make the controls for the TESS mag and depth used to look up GAIA target list.
+        """
+        tess_object_info = ipw.HBox()
+        tess_mag = ipw.FloatText(description="TESS mag")
+        tess_depth = ipw.FloatText(description="Depth (ppt)")
+        tess_object_info.children = [tess_mag, tess_depth]
+        self._tess_object_info = tess_object_info
+        self._tess_object_info.mag = tess_mag
+        self._tess_object_info.depth = tess_depth
+        if self.tess_submission is None:
+            self._tess_object_info.layout.visibility = "hidden"
+
     def _viewer(self):
         header = ipw.HTML(value="""
         <h2>Click and drag or use arrow keys to pan, use +/- keys to zoom</h2>
@@ -417,10 +442,11 @@ class ComparisonViewer:
 
         self.object_name = ipw.Text(description="Object", disabled=True)
         controls = self._make_control_bar()
+        self._make_tess_object_info()
         box = ipw.VBox()
         inner_box = ipw.HBox()
         inner_box.children = [iw, legend]
-        box.children = [self._file_chooser.file_chooser, self.object_name, header, inner_box, controls]
+        box.children = [self._file_chooser.file_chooser, self.object_name, self._tess_object_info, header, inner_box, controls]
 
         return box, iw
 
