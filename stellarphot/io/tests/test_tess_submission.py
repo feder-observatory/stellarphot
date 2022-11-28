@@ -2,7 +2,7 @@ import re
 
 import pytest
 
-from stellarphot.io.tess_submission import TessSubmission
+from stellarphot.io.tess import TessSubmission
 
 GOOD_HEADER = {
     "date-obs": "2022-06-04T05:44:28.010",
