@@ -12,6 +12,8 @@ from astropy.coordinates import SkyCoord
 from astropy import units as u
 from astropy.nddata import CCDData
 from astropy import units as u
+from astropy.coordinates.name_resolve import NameResolveError
+
 
 try:
     from astrowidgets import ImageWidget
@@ -19,12 +21,16 @@ except ImportError:
     from astrowidgets.ginga import ImageWidget
 
 from stellarphot.differential_photometry import *
+from stellarphot.io import TessSubmission, TOI, TessTargetFile
 from stellarphot.photometry import *
 from stellarphot.visualization.seeing_profile_functions import set_keybindings
+from stellarphot.visualization.fits_opener import FitsOpener
 
 
 __all__ = ['read_file', 'set_up', 'match', 'mag_scale',
            'in_field', 'make_markers', 'wrap']
+
+DESC_STYLE = {"description_width": "initial"}
 
 
 def read_file(radec_file):
@@ -161,6 +167,7 @@ def make_markers(iw, ccd, RD, vsx, ent,
     """
     iw.load_nddata(ccd)
     iw.zoom_level = 'fit'
+
     try:
         iw.reset_markers()
     except AttributeError:
@@ -181,12 +188,10 @@ def make_markers(iw, ccd, RD, vsx, ent,
         iw.marker = {'type': 'circle', 'color': 'blue', 'radius': 10}
         iw.add_markers(vsx, skycoord_colname='coords',
                        use_skycoord=True, marker_name='VSX')
-
     iw.marker = {'type': 'circle', 'color': 'red', 'radius': 10}
     iw.add_markers(ent, skycoord_colname='coords',
                    use_skycoord=True, marker_name='APASS comparison')
     iw.marker = {'type': 'cross', 'color': 'red', 'radius': 6}
-
 
 def wrap(imagewidget, outputwidget):
     """
@@ -232,14 +237,13 @@ def wrap(imagewidget, outputwidget):
             else:
                 print('sorry try again')
                 imagewidget._viewer.onscreen_message('Click closer to a star')
-            print(all_table['marker name'][index])
-            print(x, y, ra, dec, out_skycoord)
+
     return cb
 
 
 class ComparisonViewer:
     def __init__(self,
-                 image,
+                 file="",
                  directory='.',
                  target_mag=10,
                  bright_mag_limit=8,
@@ -250,31 +254,50 @@ class ComparisonViewer:
 
         self._label_name = 'labels'
         self._circle_name = 'target circle'
-        self.ccd, self.vsx = \
-            set_up(image,
-                   directory_with_images=directory
-                   )
+        self._file_chooser = FitsOpener()
 
-        apass, vsx_apass_angle, targets_apass_angle = match(self.ccd,
-                                                            targets_from_file,
-                                                            self.vsx)
-
-        apass_good_coord, good_stars = mag_scale(target_mag, apass, vsx_apass_angle,
-                                                 targets_apass_angle,
-                                                 brighter_dmag=target_mag - bright_mag_limit,
-                                                 dimmer_dmag=dim_mag_limit - target_mag)
-
-        apass_comps = in_field(apass_good_coord, self.ccd, apass, good_stars)
+        self._directory = directory
+        self.target_mag = target_mag
+        self.bright_mag_limit = bright_mag_limit
+        self.dim_mag_limit = dim_mag_limit
+        self.targets_from_file = targets_from_file
+        self.tess_submission = None
+        self._tess_object_info = None
+        self.target_coord = object_coordinate
 
         self.box, self.iw = self._viewer()
 
-        make_markers(self.iw, self.ccd, targets_from_file, self.vsx, apass_comps,
-                     name_or_coord=object_coordinate)
-
-        self.target_coord = object_coordinate
         self.aperture_output_file = aperture_output_file
 
+        if file:
+            self._file_chooser.set_file(file, directory=directory)
+            self._set_file(None)
+
         self._make_observers()
+
+    def _init(self):
+        """
+        Some initialization needs to be defered until a file is chosen.
+        """
+        if self.tess_submission is not None:
+            self._tess_object_info.layout.visibility = "visible"
+        self.ccd, self.vsx = \
+            set_up(self._file_chooser.path.name,
+                   directory_with_images=self._file_chooser.path.parent
+                   )
+
+        apass, vsx_apass_angle, targets_apass_angle = match(self.ccd,
+                                                            self.targets_from_file,
+                                                            self.vsx)
+
+        apass_good_coord, good_stars = mag_scale(self.target_mag, apass, vsx_apass_angle,
+                                                 targets_apass_angle,
+                                                 brighter_dmag=self.target_mag - self.bright_mag_limit,
+                                                 dimmer_dmag=self.dim_mag_limit - self.target_mag)
+
+        apass_comps = in_field(apass_good_coord, self.ccd, apass, good_stars)
+        make_markers(self.iw, self.ccd, self.targets_from_file, self.vsx, apass_comps,
+                     name_or_coord=self.target_coord)
 
     @property
     def variables(self):
@@ -285,11 +308,72 @@ class ComparisonViewer:
         our_vsx['star_id'] = comp_table['star_id'][new_vsx_mark]
         return our_vsx
 
+    def _set_object(self):
+        """
+        Try to automatically set object name immediately after file is chosen.
+        """
+        try:
+            self.object_name.value = self._file_chooser.header['object']
+        except KeyError:
+            # No object, will show empty box for name
+            self.object_name.disabled = False
+
+        # We have a name, try to get coordinates from it
+        try:
+            self.target_coord = SkyCoord.from_name(self.object_name.value)
+        except NameResolveError:
+            pass
+
+        # Maybe this is a tess object?
+        try:
+            self.tess_submission = TessSubmission.from_header(
+                self._file_chooser.header,
+                telescope_code="Paul-P-Feder-0.4m",
+                planet=1
+            )
+        except ValueError:
+            # Guess not, time to turn on the coordinates box
+            # self._turn_on_coordinates()
+            self.tess_submission = None
+            self.toi_info = None
+            self.targets_from_file = None
+            self._tess_object_info.layout.visibility = "hidden"
+            self.tess_save_toggle.value = False
+            self.tess_save_toggle.disabled = True
+        else:
+            self.tess_save_toggle.disabled = False
+            self.toi_info = TOI(self.tess_submission.tic_id)
+
+            self._target_file_info = TessTargetFile(self.toi_info.coord,
+                                                    self.toi_info.tess_mag,
+                                                    self.toi_info.depth)
+
+            self.target_coord = self.tess_submission.tic_coord
+            self._tess_object_info.mag.value = self.toi_info.tess_mag
+            self._tess_object_info.depth.value = self.toi_info.depth
+            self._tess_object_info.layout.visibility = "visible"
+            self.targets_from_file = self._target_file_info.table
+
+    def _set_file(self, change):
+        self._set_object()
+        self._init()
+        self._update_tess_save_names()
+
+    def _save_toggle_action(self, change):
+        activated = change['new']
+
+        if activated:
+            self._tess_save_box.layout.visibility = "visible"
+        else:
+            self._tess_save_box.layout.visibility = "hidden"
+
     def _make_observers(self):
         self._show_labels_button.observe(self._show_label_button_handler,
                                          names='value')
         self._save_var_info.on_click(self._save_variables_to_file)
         self._save_aperture_file.on_click(self._save_aperture_to_file)
+        self._file_chooser.register_callback(self._set_file)
+        self.tess_save_toggle.observe(self._save_toggle_action, "value")
 
     def _save_variables_to_file(self, button=None, filename=''):
         if not filename:
@@ -310,7 +394,7 @@ class ComparisonViewer:
     def _save_aperture_to_file(self, button=None, filename=''):
         if not filename:
             filename = self.aperture_output_file
-        print(filename)
+
         self.generate_table().write(filename)
 
     def _make_control_bar(self):
@@ -334,6 +418,57 @@ class ComparisonViewer:
 
         return controls
 
+    def _make_tess_object_info(self):
+        """
+        Make the controls for the TESS mag and depth used to look up GAIA target list.
+        """
+        tess_object_info = ipw.HBox()
+        tess_mag = ipw.FloatText(description="TESS mag")
+        tess_depth = ipw.FloatText(description="Depth (ppt)")
+        tess_object_info.children = [tess_mag, tess_depth]
+        self._tess_object_info = tess_object_info
+        self._tess_object_info.mag = tess_mag
+        self._tess_object_info.depth = tess_depth
+        if self.tess_submission is None:
+            self._tess_object_info.layout.visibility = "hidden"
+
+    def _make_tess_save_box(self):
+        self.tess_save_toggle = ipw.ToggleButton(description="TESS files...",
+                                            disabled=True)
+        self._tess_save_box = ipw.VBox()
+        self._tess_save_box.layout.visibility = "hidden"
+
+        scope_name = ipw.Text(description="Telescope code",
+                              value="Paul-P-Feder-0.4m",
+                              style=DESC_STYLE)
+
+        planet_num = ipw.IntText(description="Planet", value=1)
+
+        dumb = []
+        dumb2 = []
+
+        for save in ["Full field of view", "Zoomed filed of view"]:  # , "Aperture file"]:
+            box = ipw.HBox()
+            title = ipw.HTML(value=f"<b>{save} file name</b>")
+            label = ipw.Label(value="")
+            box.children = (title, label)
+            dumb.append(label)
+            dumb2.append(box)
+
+        # self._field_name, self._zoom_name, self._aper_name = dumb
+        self._field_name, self._zoom_name = dumb
+        self.save_files = ipw.Button(description="Save")
+        self._tess_save_box.children = [scope_name, planet_num] + dumb2 + [self.save_files]
+
+    def _update_tess_save_names(self):
+        if self.tess_submission is not None:
+            self._field_name.value = self.tess_submission.field_image
+            self._zoom_name.value = self.tess_submission.field_image_zoom
+            # self._aper_name.value = self.tess_submission.apertures
+        else:
+            self._field_name.value = ""
+            self._zoom_name.value = ""
+
     def _viewer(self):
         header = ipw.HTML(value="""
         <h2>Click and drag or use arrow keys to pan, use +/- keys to zoom</h2>
@@ -356,13 +491,26 @@ class ComparisonViewer:
         bind_map.map_event(None, ('shift',), 'ms_left', 'cursor')
         gvc.add_callback('cursor-down', wrap(iw, out))
 
+        self.object_name = ipw.Text(description="Object", disabled=True)
         controls = self._make_control_bar()
+        self._make_tess_object_info()
+        self._make_tess_save_box()
         box = ipw.VBox()
         inner_box = ipw.HBox()
         inner_box.children = [iw, legend]
-        box.children = [header, inner_box, controls]
+        box.children = [self._file_chooser.file_chooser, self.object_name, self._tess_object_info, header,
+                        inner_box, controls, self.tess_save_toggle, self._tess_save_box]
 
         return box, iw
+
+    def save_tess_files(self):
+        if self._field_name.value:
+            self.tess_field_view()
+            self.iw.save(self._field_name.value, overwrite=True)
+
+        if self._zoom_name.value:
+            self.tess_field_zoom_view()
+            self.iw.save(self._zoom_name.value, overwrite=True)
 
     def generate_table(self):
         try:
@@ -407,6 +555,7 @@ class ComparisonViewer:
         plot_names = []
         comp_table = self.generate_table()
 
+        original_mark = self.iw._marker
         for star in comp_table:
             star_id = star['star_id']
             if star['marker name'] == 'TESS Targets':
@@ -430,27 +579,65 @@ class ComparisonViewer:
                 label = f'U{star_id}'
                 print(f"Unrecognized marker name: {star['marker name']}")
             plot_names.append(label)
+        self.iw._marker = original_mark
 
     def remove_labels(self):
         try:
-            self.iw.remove_markers(marker_name=self._label_name)
-        except AttributeError:
-            self.iw.remove_markers_by_name(marker_name=self._label_name)
+            try:
+                self.iw.remove_markers(marker_name=self._label_name)
+            except AttributeError:
+                self.iw.remove_markers_by_name(marker_name=self._label_name)
+        except ValueError:
+            # No labels, keep going
+            pass
 
     def show_circle(self,
                     radius=2.5 * u.arcmin,
                     pixel_scale=0.56 * u.arcsec / u.pixel):
         radius_pixels = np.round((radius / pixel_scale).to(u.pixel).value,
                                  decimals=0)
+        orig_marker = self.iw.marker
         self.iw.marker = {'color': 'yellow',
                           'radius': radius_pixels,
                           'type': 'circle'}
         self.iw.add_markers(Table(data=[[self.target_coord]], names=['coords']),
                             skycoord_colname='coords',
                             use_skycoord=True, marker_name=self._circle_name)
+        self.iw.marker = orig_marker
 
     def remove_circle(self):
         try:
             self.iw.remove_markers(marker_name=self._circle_name)
         except AttributeError:
             self.iw.remove_markers_by_name(marker_name=self._circle_name)
+
+    def tess_field_view(self):
+        # Show whole field of view
+        self.iw.zoom_level = 'fit'
+
+        # Show the circle
+        self.show_circle()
+
+        # Turn of labels -- too cluttered
+        self.remove_labels()
+
+    def tess_field_zoom_view(self, width=6 * u.arcmin):
+        # Turn off labels -- too cluttered
+        self.remove_labels()
+
+        left_side = self.ccd.wcs.pixel_to_world(0, self.ccd.shape[1]/2)
+        right_side = self.ccd.wcs.pixel_to_world(self.ccd.shape[0], self.ccd.shape[1]/2)
+        fov = left_side.separation(right_side)
+
+        view_ratio = width / fov
+        # fit first to get zoom level at full field of view
+        self.iw.zoom_level = "fit"
+
+        # Then set it to what we actually want...
+        self.iw.zoom_level = self.iw.zoom_level / view_ratio
+
+        # Show the circle
+        self.show_circle()
+
+
+

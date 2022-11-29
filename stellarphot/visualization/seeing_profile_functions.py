@@ -3,7 +3,6 @@ import warnings
 import numpy as np
 from photutils.centroids import centroid_com
 import ipywidgets as ipw
-from ipyfilechooser import FileChooser
 
 from astropy.io import fits
 from astropy.stats import sigma_clipped_stats
@@ -19,6 +18,7 @@ import matplotlib.pyplot as plt
 
 from stellarphot.io import TessSubmission
 from stellarphot.visualization import seeing_plot
+from stellarphot.visualization.fits_opener import FitsOpener
 
 __all__ = ['set_keybindings', 'box', 'make_show_event']
 
@@ -279,7 +279,7 @@ class SeeingProfileWidget:
         self.out3 = ipw.Output()
         # Build the larger widget
         self.container = ipw.VBox()
-        self.filechooser = FileChooser(title="Choose an image")
+        self.fits_file = FitsOpener(title="Choose an image")
         big_box = ipw.HBox()
         big_box = ipw.GridspecLayout(1, 2)
         layout = ipw.Layout(width='20ch')
@@ -309,7 +309,7 @@ class SeeingProfileWidget:
         # don't jump around as the image value changes.
         big_box.layout.justify_content = 'space-between'
         self.big_box = big_box
-        self.container.children = [self.filechooser, self.big_box]
+        self.container.children = [self.fits_file.file_chooser, self.big_box]
         self.box = self.container
         self._aperture_name = 'aperture'
 
@@ -320,19 +320,13 @@ class SeeingProfileWidget:
         self._set_observers()
 
     def load_fits(self, file):
-        with warnings.catch_warnings():
-            self.iw.load_fits(file)
+        self.fits_file.load_in_image_widget(self.iw)
 
     def _update_file(self, change):
-        with warnings.catch_warnings():
-            self.load_fits(change.selected)
-        try:
-            self.object_name = fits.getval(change.selected, 'object')
-        except KeyError:
-            pass
+        self.load_fits(change.selected)
 
     def _construct_tess_sub(self):
-        file = self.filechooser.selected
+        file = self.fits_file.path
         self._tess_sub = TessSubmission.from_header(
             fits.getheader(file),
             telescope_code=self.setting_box.telescope_code.value,
@@ -341,7 +335,7 @@ class SeeingProfileWidget:
 
     def _set_seeing_profile_name(self, change):
         self._construct_tess_sub()
-        self.seeing_file_name.value = self._tess_sub.seeing_profile + ".png"
+        self.seeing_file_name.value = self._tess_sub.seeing_profile
 
     def _save_toggle_action(self, change):
         activated = change['new']
@@ -361,7 +355,7 @@ class SeeingProfileWidget:
 
         self.ap_t.observe(aperture_obs, names='value')
         self.save_aps.on_click(self._save_ap_settings)
-        self.filechooser.register_callback(self._update_file)
+        self.fits_file.register_callback(self._update_file)
         self.save_toggle.observe(self._save_toggle_action, names='value')
         self.save_seeing.on_click(self._save_seeing_plot)
         self.setting_box.planet_num.observe(self._set_seeing_profile_name)
