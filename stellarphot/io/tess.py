@@ -120,7 +120,19 @@ class TessSubmission:
 
     @property
     def seeing_profile(self):
-        return self.base_name + "_seeing-profile"
+        return self.base_name + "_seeing-profile.png"
+
+    @property
+    def field_image(self):
+        return self.base_name + "_field.png"
+
+    @property
+    def field_image_zoom(self):
+        return self.base_name + "_field-zoom.png"
+
+    @property
+    def apertures(self):
+        return self.base_name + "_measurements.apertures"
 
     @property
     def tic_coord(self):
@@ -149,7 +161,6 @@ class TOI:
             if not allow_download:
                 raise ValueError(f"File {toi_table} not found.")
             toi_table = download_file(TOI_TABLE_URL, cache=True, show_progress=True, timeout=60)
-            print(toi_table)
 
         self._toi_table = Table.read(toi_table, format="ascii.csv")
         self._toi_table = self._toi_table[self._toi_table['TIC ID'] == tic_id]
@@ -229,10 +240,8 @@ class TessTargetFile:
             depth=self.depth
         )
         result = requests.get(self.aperture_server + "cgi-bin/gaia_to_aij/upload_request.cgi", params=params)
-        print(result.url)
         links = re.search('href="(.+)"', result.text.replace('\n', ''), )
         download_link = self.aperture_server + links[1]
-        print(download_link)
         target_file_contents = requests.get(download_link)
         with open(self._path, "w") as f:
             f.write(target_file_contents.text)
