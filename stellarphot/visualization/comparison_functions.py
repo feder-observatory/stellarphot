@@ -374,6 +374,7 @@ class ComparisonViewer:
         self._save_aperture_file.on_click(self._save_aperture_to_file)
         self._file_chooser.register_callback(self._set_file)
         self.tess_save_toggle.observe(self._save_toggle_action, "value")
+        self.save_files.on_click(self.save_tess_files)
 
     def _save_variables_to_file(self, button=None, filename=''):
         if not filename:
@@ -503,7 +504,7 @@ class ComparisonViewer:
 
         return box, iw
 
-    def save_tess_files(self):
+    def save_tess_files(self, button=None):
         if self._field_name.value:
             self.tess_field_view()
             self.iw.save(self._field_name.value, overwrite=True)
