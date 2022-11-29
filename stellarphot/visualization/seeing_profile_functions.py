@@ -335,7 +335,7 @@ class SeeingProfileWidget:
 
     def _set_seeing_profile_name(self, change):
         self._construct_tess_sub()
-        self.seeing_file_name.value = self._tess_sub.seeing_profile + ".png"
+        self.seeing_file_name.value = self._tess_sub.seeing_profile
 
     def _save_toggle_action(self, change):
         activated = change['new']
