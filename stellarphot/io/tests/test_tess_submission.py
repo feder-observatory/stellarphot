@@ -49,7 +49,7 @@ def test_base_name():
 
 def test_seeing_profile():
     tsub = TessSubmission.from_header(GOOD_HEADER_WITH_PLANET, telescope_code="ABS")
-    assert tsub.seeing_profile == "TIC237205154-01_20220604_ABS_ip_seeing-profile"
+    assert tsub.seeing_profile == "TIC237205154-01_20220604_ABS_ip_seeing-profile.png"
 
 
 def test_valid_method():
