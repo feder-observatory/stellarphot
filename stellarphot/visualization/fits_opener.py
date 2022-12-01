@@ -12,6 +12,8 @@ class FitsOpener:
         self._fc = FileChooser(title=title, **kwargs)
         if not filter_pattern:
             self._fc.filter_pattern = ['*.fit*', '*.fit*.[bg]z']
+        else:
+            self._fc.filter_pattern = filter_pattern
 
         self._header = {}
         self._selected_cache = self._fc.selected

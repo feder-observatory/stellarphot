@@ -218,6 +218,9 @@ class TOI:
     def coord(self):
         return SkyCoord(ra=self._tic_info['ra'][0], dec=self._tic_info['dec'][0], unit='degree')
 
+    @property
+    def tic_id(self):
+        return self._tic_info['ID'][0]
 
 @dataclass
 class TessTargetFile:
