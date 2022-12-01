@@ -44,7 +44,7 @@ class PhotometrySettings:
 
     def _update_object_list(self, change):
         if self.ifc.summary:
-            self._object_name.options = sorted(set(self.ifc.summary['object'][~ps.ifc.summary['object'].mask]))
+            self._object_name.options = sorted(set(self.ifc.summary['object'][~self.ifc.summary['object'].mask]))
         else:
             self._object_name.options = []
 
