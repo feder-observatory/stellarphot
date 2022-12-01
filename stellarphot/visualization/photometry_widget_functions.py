@@ -25,11 +25,11 @@ class PhotometrySettings:
     @property
     def image_folder(self):
         return self._image_dir.selected
-    
+
     @property
     def aperture_locations(self):
         return self._aperture_file_loc.selected
-    
+
     @property
     def aperture_radius(self):
         return self._aperture_radius
@@ -44,12 +44,12 @@ class PhotometrySettings:
 
     def _update_object_list(self, change):
         if self.ifc.summary:
-            self._object_name.options = sorted(set(self.ifc.summary['object']))
+            self._object_name.options = sorted(set(self.ifc.summary['object'][~ps.ifc.summary['object'].mask]))
         else:
             self._object_name.options = []
-    
+
     def _update_aperture_rad(self, locator):
         with open(locator.selected) as f:
             stuff = f.read()
-        
+
         self._aperture_radius = int(stuff.split(',')[0])
