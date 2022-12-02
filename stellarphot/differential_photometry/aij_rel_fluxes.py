@@ -14,7 +14,7 @@ def add_in_quadrature(array):
 
 
 def calc_aij_relative_flux(star_data, comp_stars,
-                           in_place=True, coord_column=None, 
+                           in_place=True, coord_column=None,
                            star_id_column='star_id',
                            flux_column_name='aperture_net_flux'):
     """
@@ -99,7 +99,6 @@ def calc_aij_relative_flux(star_data, comp_stars,
     is_all_good = check_for_bad.groups.aggregate(np.all)
 
     bad_comps = set(is_all_good['star_id'][~is_all_good['good']])
-    print(f'{bad_comps=}')
 
     # Check whether any of the comp stars have NaN values and,
     # if they do, exclude them from the comp set.
@@ -112,7 +111,6 @@ def calc_aij_relative_flux(star_data, comp_stars,
 
     bad_comps = bad_comps | set(is_all_good['star_id'][~is_all_good['good']])
 
-    print(f'{bad_comps=}')
     for comp in bad_comps:
         this_comp = star_data[star_id_column] == comp
         good[this_comp] = False
