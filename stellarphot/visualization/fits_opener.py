@@ -46,7 +46,11 @@ class FitsOpener:
     def _set_header(self):
         if not self._header or self._fc.selected != self._selected_cache:
             self._selected_cache = self._fc.selected
-            self._header = fits.getheader(self.path)
+            try:
+                self._header = fits.getheader(self.path)
+            except OSError:
+                return
+
         try:
             self.object = self._header['object']
         except KeyError:
