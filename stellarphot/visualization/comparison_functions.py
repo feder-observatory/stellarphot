@@ -527,6 +527,10 @@ class ComparisonViewer:
         index, d2d, d3d = elim_table['coord'].match_to_catalog_sky(comp_table['coord'])
         comp_table.remove_rows(index)
 
+        # Add separate RA and Dec columns for ease in processing later
+        comp_table['ra'] = comp_table['coord'].ra.degree
+        comp_table['dec'] = comp_table['coord'].dec.degree
+
         # Calculate how far each is from target
         comp_table['separation'] = self.target_coord.separation(comp_table['coord'])
 
