@@ -1,6 +1,7 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 import re
+from tempfile import NamedTemporaryFile
 
 from astropy.coordinates import SkyCoord
 from astropy.table import Table
@@ -227,11 +228,13 @@ class TessTargetFile:
     coord : SkyCoord
     magnitude : float
     depth : float
-    file : str = "aperture_locations.csv"
+    file : str = ""
     aperture_server : str = "https://www.astro.louisville.edu/"
 
     def __post_init__(self):
-        self._path = Path(self.file)
+        if not self.file:
+            self.file = NamedTemporaryFile()
+        self._path = Path(self.file.name)
         self.target_file = self._retrieve_target_file()
         self.target_table = self._build_table()
 
