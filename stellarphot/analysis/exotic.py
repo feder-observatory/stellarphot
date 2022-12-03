@@ -107,7 +107,7 @@ def make_checker(indicator_widget, value_widget):
                 indicator_widget.value = False
                 indicator_widget.tooltip = "Not a valid TIC number"
             else:
-                populate_boxes(tic_info, value_widget)
+                populate_TIC_boxes(tic_info, value_widget)
             owner.disabled = False
         else:
             owner.disabled = False
@@ -130,7 +130,7 @@ def validate_exposure_time(indicator_widget, value_widget):
     return check_exposure
 
 
-def populate_boxes(tic_info, value_widget):
+def populate_TIC_boxes(tic_info, value_widget):
     """
     Set the appropriate widget values given information pulled from
     MAST TIC.
