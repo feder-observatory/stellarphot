@@ -158,6 +158,42 @@ def populate_TIC_boxes(tic_info, value_widget):
             value_widget['candidate'][exotic_key].value = tic_info[v][0]
 
 
+def populate_TOI_boxes(toi, exotic_widget):
+    """
+    Set the appropriate widget values given information pulled from
+    MAST TIC.
+    """
+    # Match EXOTIC json keys to columns in the result returned from
+    # astroquery
+    exotic_toi = {
+            "Planet Name": "tic_id",
+            "Target Star RA": "coord",
+            "Target Star Dec": "coordP",
+            "Orbital Period (days)": "period",
+            "Orbital Period Uncertainty": "period_error",
+            "Published Mid-Transit Time (BJD-UTC)": "epoch",
+            "Mid-Transit Time Uncertainty": "epoch_error",
+            # Could maybe get these from TOI information, but not straightforward
+            #"Ratio of Planet to Stellar Radius (Rp/Rs)": 0.0,
+            #"Ratio of Planet to Stellar Radius (Rp/Rs) Uncertainty": 0.0,
+            #"Ratio of Distance to Stellar Radius (a/Rs)": 0.0,
+            #"Ratio of Distance to Stellar Radius (a/Rs) Uncertainty": 0.0,
+    }
+    for k, v in exotic_toi.items():
+        exotic_key = join_char.join(["planetary_parameters", k])
+        if k == "Planet Name":
+            exotic_widget['candidate'][exotic_key].value = \
+                f'TIC {toi.tic_id}'
+        elif k == "Target Star RA":
+            exotic_widget['candidate'][exotic_key].value = \
+                toi.coord.ra.to_string(unit='hour', decimal=False, sep=":")
+        elif k == "Target Star Dec":
+            exotic_widget['candidate'][exotic_key].value = \
+                toi.coord.dec.to_string(unit='degree', decimal=False, sep=":")
+        else:
+            exotic_widget['candidate'][exotic_key].value = getattr(toi, v).value
+
+
 # This sets up the specific widgets whose values get validated.
 # That includes the widget that contains the TIC number for candidates.
 validators = dict(known={}, candidate={})
