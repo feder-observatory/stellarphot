@@ -593,7 +593,7 @@ def find_times(phot_column, exposure,
                ra=331.1170417, dec=81.5659444,
                latitude=46.86678, longitude=263.54672):
     """
-    Returns a numpy array of barycentric julien date times
+    Returns a numpy array of barycentric Julian date times
 
     Parameters
     ----------
@@ -621,7 +621,7 @@ def find_times(phot_column, exposure,
     -------
 
     new_time : numpy array
-        array of barycentric times by julien date
+        array of barycentric times by Julian date
 
     """
     location = EarthLocation(lat=latitude, lon=longitude)
