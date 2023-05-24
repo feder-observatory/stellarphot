@@ -21,7 +21,8 @@ Reference/API
 =============
 
 .. automodapi:: stellarphot
-.. automodapi:: stellarphot.photometry
+.. automodapi:: stellarphot.analysis
 .. automodapi:: stellarphot.differential_photometry
-.. automodapi:: stellarphot.visualization
+.. automodapi:: stellarphot.photometry
 .. automodapi:: stellarphot.io
+.. automodapi:: stellarphot.visualization
