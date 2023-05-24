@@ -20,7 +20,7 @@ from stellarphot.io import TessSubmission
 from stellarphot.visualization import seeing_plot
 from stellarphot.visualization.fits_opener import FitsOpener
 
-__all__ = ['set_keybindings', 'box', 'make_show_event']
+__all__ = ['set_keybindings', 'box', 'SeeingProfileWidget']
 
 desc_style = {"description_width": "initial"}
 
