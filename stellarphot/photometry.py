@@ -338,7 +338,7 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
     phot['date-obs'] = [ccd.header['DATE-OBS']] * len(phot)
     night = Time(ccd.header['DATE-OBS'], scale='utc')
     night.format = 'mjd'
-    phot['night'] = np.int(np.floor(night.value - 0.5))
+    phot['night'] = int(np.floor(night.value - 0.5))
     phot['aperture_net_flux'] = (phot['aperture_sum'] -
                                  (phot['aperture_area'] *
                                   phot['sky_per_pix_avg']))
