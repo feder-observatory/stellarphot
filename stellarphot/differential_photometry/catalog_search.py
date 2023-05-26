@@ -146,7 +146,7 @@ def catalog_clean(catalog, remove_rows_with_mask=True,
         comparison_func = comparisons[results.group(1)]
         comparison_value = results.group(2)
         new_keepers = comparison_func(catalog[column],
-                                      np.float(comparison_value))
+                                      float(comparison_value))
         keepers = keepers & new_keepers
 
     return catalog[keepers]
