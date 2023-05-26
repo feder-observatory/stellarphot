@@ -122,7 +122,7 @@ def photutils_stellar_photometry(ccd_image, sources,
 
     # Obtain RA/Dec coordinates and add them to table
     try:
-        ra, dec = convert_pixel_wcs(ccd_image, coords[0], coords[1], 1)
+        ra, dec = ccd_image.wcs.all_pix2world(coords[0], coords[1], 0)
         phot_table['RA_center'] = ra
         phot_table['Dec_center'] = dec
     except AttributeError:
