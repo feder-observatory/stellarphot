@@ -5,6 +5,9 @@ import ipywidgets as ipw
 from ipyfilechooser import FileChooser
 
 
+__all__ = ['PhotometrySettings']
+
+
 class PhotometrySettings:
     def __init__(self):
         self._image_dir = FileChooser(title="Choose folder with images", show_only_dirs=True)

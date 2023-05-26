@@ -71,7 +71,7 @@ def get_tic_info(TIC_ID):
 
 def make_checker(indicator_widget, value_widget):
     """
-    Build an observer thatchecks TIC number and, if it is a valid
+    Build an observer that checks TIC number and, if it is a valid
     TIC number, looks up information about the TIC object from
     MAST copy of TIC as priors for EXOTIC. It also sets the visible checkbox
     to the appropriate state.

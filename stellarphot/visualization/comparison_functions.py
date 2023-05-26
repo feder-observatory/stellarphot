@@ -28,7 +28,7 @@ from stellarphot.visualization.fits_opener import FitsOpener
 
 
 __all__ = ['read_file', 'set_up', 'match', 'mag_scale',
-           'in_field', 'make_markers', 'wrap']
+           'in_field', 'make_markers', 'wrap', 'ComparisonViewer']
 
 DESC_STYLE = {"description_width": "initial"}
 
