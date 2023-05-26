@@ -14,7 +14,6 @@ from ccdproc import ImageFileCollection
 from astropy.stats import sigma_clipped_stats
 from astropy.nddata import NoOverlapError
 
-from .coordinates import convert_pixel_wcs
 from .source_detection import compute_fwhm
 
 __all__ = ['photutils_stellar_photometry',
