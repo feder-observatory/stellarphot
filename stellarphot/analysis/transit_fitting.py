@@ -29,6 +29,7 @@ except ImportError:
                 'or\n'
                 'pip install batman-package')
 
+__all__ = ['VariableArgsFitter', 'TransitModelFit']
 
 class VariableArgsFitter(LevMarLSQFitter):
     """
