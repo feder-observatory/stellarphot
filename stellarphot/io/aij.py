@@ -7,7 +7,7 @@ from astropy.table import Table, hstack
 
 import numpy as np
 
-__all__ = ['parse_aij_table', 'ApertureFileAIJ']
+__all__ = ['parse_aij_table', 'ApertureAIJ', 'ApertureFileAIJ', 'MultiApertureAIJ', 'Star', 'generate_aij_table']
 
 
 class ApertureAIJ:

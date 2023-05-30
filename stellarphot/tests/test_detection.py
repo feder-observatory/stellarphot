@@ -138,7 +138,7 @@ def test_aperture_photometry_with_outlier_rejection(reject):
     # adding these moves the average pixel value by quite a bit,
     # so we'll only get the correct net flux if these are removed.
     for source in fake_image.sources:
-        center_px = (np.int(source['x_mean']), np.int(source['y_mean']))
+        center_px = (int(source['x_mean']), int(source['y_mean']))
         begin = center_px[0] + inner_annulus + 1
         end = begin + (outer_annulus - inner_annulus - 1)
         # Yes, x and y are deliberately reversed below.

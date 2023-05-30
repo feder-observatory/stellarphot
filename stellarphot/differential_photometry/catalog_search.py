@@ -97,7 +97,7 @@ def catalog_search(frame_wcs_or_center, shape, desired_catalog,
     if clip_by_frame:
         in_fov = in_frame(frame_wcs_or_center, cat_coords, padding=padding)
     else:
-        in_fov = np.ones([len(cat_coords)], dtype=np.bool)
+        in_fov = np.ones([len(cat_coords)], dtype=bool)
     return cat[in_fov]
 
 
@@ -131,7 +131,7 @@ def catalog_clean(catalog, remove_rows_with_mask=True,
     }
 
     recognized_comparison_ops = '|'.join(comparisons.keys())
-    keepers = np.ones([len(catalog)], dtype=np.bool)
+    keepers = np.ones([len(catalog)], dtype=bool)
 
     if remove_rows_with_mask and catalog.masked:
         for c in catalog.columns:
@@ -146,7 +146,7 @@ def catalog_clean(catalog, remove_rows_with_mask=True,
         comparison_func = comparisons[results.group(1)]
         comparison_value = results.group(2)
         new_keepers = comparison_func(catalog[column],
-                                      np.float(comparison_value))
+                                      float(comparison_value))
         keepers = keepers & new_keepers
 
     return catalog[keepers]

@@ -10,6 +10,11 @@ from astroquery.mast import Catalogs
 from astropy.utils.data import get_pkg_data_filename
 
 
+__all__ = ['MyValid', 'get_tic_info', 'make_checker','validate_exposure_time',
+           'populate_TIC_boxes', 'populate_TOI_boxes', 'exotic_settings_widget',
+           'set_values_from_json_file', 'get_values_from_widget','generate_json_file_name']
+
+
 template_types = ['known', 'candidate']
 template_json = {}
 to_fill = {}
@@ -71,7 +76,7 @@ def get_tic_info(TIC_ID):
 
 def make_checker(indicator_widget, value_widget):
     """
-    Build an observer thatchecks TIC number and, if it is a valid
+    Build an observer that checks TIC number and, if it is a valid
     TIC number, looks up information about the TIC object from
     MAST copy of TIC as priors for EXOTIC. It also sets the visible checkbox
     to the appropriate state.

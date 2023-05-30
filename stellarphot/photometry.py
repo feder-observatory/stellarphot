@@ -14,7 +14,6 @@ from ccdproc import ImageFileCollection
 from astropy.stats import sigma_clipped_stats
 from astropy.nddata import NoOverlapError
 
-from .coordinates import convert_pixel_wcs
 from .source_detection import compute_fwhm
 
 __all__ = ['photutils_stellar_photometry',
@@ -122,7 +121,7 @@ def photutils_stellar_photometry(ccd_image, sources,
 
     # Obtain RA/Dec coordinates and add them to table
     try:
-        ra, dec = convert_pixel_wcs(ccd_image, coords[0], coords[1], 1)
+        ra, dec = ccd_image.wcs.all_pix2world(coords[0], coords[1], 0)
         phot_table['RA_center'] = ra
         phot_table['Dec_center'] = dec
     except AttributeError:
@@ -339,7 +338,7 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
     phot['date-obs'] = [ccd.header['DATE-OBS']] * len(phot)
     night = Time(ccd.header['DATE-OBS'], scale='utc')
     night.format = 'mjd'
-    phot['night'] = np.int(np.floor(night.value - 0.5))
+    phot['night'] = int(np.floor(night.value - 0.5))
     phot['aperture_net_flux'] = (phot['aperture_sum'] -
                                  (phot['aperture_area'] *
                                   phot['sky_per_pix_avg']))
@@ -593,7 +592,7 @@ def find_times(phot_column, exposure,
                ra=331.1170417, dec=81.5659444,
                latitude=46.86678, longitude=263.54672):
     """
-    Returns a numpy array of barycentric julien date times
+    Returns a numpy array of barycentric Julian date times
 
     Parameters
     ----------
@@ -621,7 +620,7 @@ def find_times(phot_column, exposure,
     -------
 
     new_time : numpy array
-        array of barycentric times by julien date
+        array of barycentric times by Julian date
 
     """
     location = EarthLocation(lat=latitude, lon=longitude)

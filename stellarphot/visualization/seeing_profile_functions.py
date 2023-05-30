@@ -20,7 +20,7 @@ from stellarphot.io import TessSubmission
 from stellarphot.visualization import seeing_plot
 from stellarphot.visualization.fits_opener import FitsOpener
 
-__all__ = ['set_keybindings', 'box', 'make_show_event']
+__all__ = ['set_keybindings', 'box', 'SeeingProfileWidget']
 
 desc_style = {"description_width": "initial"}
 
@@ -176,7 +176,7 @@ def radial_profile(data, center, size=30, return_scaled=True):
 
     r = np.sqrt((xd - sub_center[0])**2 + (yd - sub_center[1])**2)
     r_exact = r.copy()
-    r = r.astype(np.int)
+    r = r.astype(int)
 
     sub_data = sub_image.data
 

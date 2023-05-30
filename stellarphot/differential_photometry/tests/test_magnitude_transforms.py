@@ -38,7 +38,7 @@ def generate_star_coordinates(n_stars,
     """
     # The plus one guarantees we'll have enough positions for
     # all of our stars.
-    max_index = np.int(np.sqrt(n_stars)) + 1
+    max_index = int(np.sqrt(n_stars)) + 1
 
     grids = np.mgrid[:max_index, :max_index]
     dec_grid, ra_grid = grids
