@@ -13,6 +13,7 @@ from astropy import units as u
 
 __all__ = ['source_detection', 'compute_fwhm']
 
+
 def _fit_2dgaussian(data):
     """
     Fit a 2d Gaussian to data.
