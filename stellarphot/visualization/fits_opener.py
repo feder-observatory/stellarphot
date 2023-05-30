@@ -9,6 +9,7 @@ from ipyfilechooser import FileChooser
 
 __all__ = ['FitsOpener']
 
+
 class FitsOpener:
     def __init__(self, title="Choose an image", filter_pattern=None, **kwargs):
         self._fc = FileChooser(title=title, **kwargs)
