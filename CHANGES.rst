@@ -1,3 +1,18 @@
+1.1.5 (2023-05-31)
+------------------
+
+New Features
+^^^^^^^^^^^^
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
++ Most functions are now linked to the documentation (some still need doctrings).
+
+Bug Fixes
+^^^^^^^^^
++ Runs without errors on current numpy (1.24.3) and astropy (5.3).
+
+
 1.1.2 (2022-10-18)
 ------------------
 
@@ -10,8 +25,8 @@ Other Changes and Additions
 
 Bug Fixes
 ^^^^^^^^^
-
 + Simplify comparison notebook.
+
 
 1.1.1 (2022-10-18)
 ------------------

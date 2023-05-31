@@ -7,7 +7,7 @@ from astropy.modeling.fitting import (LevMarLSQFitter,
                                       _validate_model,
                                       _convert_input)
 
-# Functions blow changed from private to public in astropy 5
+# Functions below changed from private to public in astropy 5
 try:
     from astropy.modeling.fitting import (
         fitter_to_model_params,
@@ -52,7 +52,17 @@ class VariableArgsFitter(LevMarLSQFitter):
             dfunc = None
         else:
             dfunc = self._wrap_deriv
-        init_values = model_to_fit_params(model_copy)
+        init_values0 = model_to_fit_params(model_copy)
+        # This returns a tuple of (model_params, fitparam_indices, model_bounds),
+        # where model_params is a numpy array, fitparam_indices is a list, and
+        # model_bounds is a tuple of tuples.  The problem is that this doesn't
+        # convert simply into an array withing scipy.optimize.leastsq, when called.
+        # Sp we handle model_bounds here first to the scipy.optimize.leastsq format.
+        # can handle the list of initial values we pass in.
+        init_values = np.concatenate((np.asarray(init_values0[0]).flatten(),
+                                      np.asarray(init_values0[1]).flatten(),
+                                      np.asarray(init_values0[2]).flatten()), axis=None)
+
         fitparams, cov_x, dinfo, mess, ierr = optimize.leastsq(
             self.objective_function, init_values, args=farg, Dfun=dfunc,
             col_deriv=model_copy.col_fit_deriv, maxfev=maxiter, epsfcn=epsilon,
