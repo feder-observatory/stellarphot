@@ -56,7 +56,7 @@ class VariableArgsFitter(LevMarLSQFitter):
         # This returns a tuple of (model_params, fitparam_indices, model_bounds),
         # where model_params is a numpy array, fitparam_indices is a list, and
         # model_bounds is a tuple of tuples.  The problem is that this doesn't
-        # convert simply into an array withing scipy.optimize.leastsq, when called.
+        # convert simply into an array within scipy.optimize.leastsq, when called.
         # Sp we handle model_bounds here first to the scipy.optimize.leastsq format.
         # can handle the list of initial values we pass in.
         init_values = np.concatenate((np.asarray(init_values0[0]).flatten(),
