@@ -1,3 +1,18 @@
+1.1.6 (2023-06-06)
+------------------
+
+New Features
+^^^^^^^^^^^^
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
++ Old and redundant notebooks have been purged and bad references to `glowing-waffles` instead of `stellarphot` [#93]
+
+Bug Fixes
+^^^^^^^^^
++ Runs without errors on release version of astrowidgets (0.3.0) [more importantly, it doesn't depend on a non-release version of astrowidgets]
+
+
 1.1.5 (2023-05-31)
 ------------------
 
