@@ -1,4 +1,4 @@
-1.1.6 (2023-06-06)
+1.4.0 (2023-06-06)
 ------------------
 
 New Features
@@ -13,7 +13,7 @@ Bug Fixes
 + Runs without errors on release version of astrowidgets (0.3.0) [more importantly, it doesn't depend on a non-release version of astrowidgets] [#93]
 
 
-1.1.5 (2023-05-31)
+1.3.9 (2023-05-31)
 ------------------
 
 New Features
