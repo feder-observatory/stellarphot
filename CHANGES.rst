@@ -6,7 +6,7 @@ New Features
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-+ Most functions are now linked to the documentation (some still need doctrings).
++ Most functions are now linked to the documentation (some still need docstrings). [#92]
 
 Bug Fixes
 ^^^^^^^^^
