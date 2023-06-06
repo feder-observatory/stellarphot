@@ -408,8 +408,10 @@ class SeeingProfileWidget:
                 rad_prof = RadialProfile(data, x, y)
 
                 try:
-                    # Remove previous marker
-                    self.iw.remove_markers_by_name(self._aperture_name)
+                    try: # Remove previous marker
+                        self.iw.remove_markers(marker_name=self._aperture_name)
+                    except AttributeError:
+                        self.iw.remove_markers_by_name(marker_name=self._aperture_name)
                 except ValueError:
                     # No markers yet, keep going
                     pass
@@ -436,6 +438,7 @@ class SeeingProfileWidget:
                 # User changed aperture
                 aperture_radius = aperture
                 rad_prof = self.rad_prof
+
             # DISPLAY THE SCALED PROFILE
             self.out.clear_output(wait=True)
             with self.out:
