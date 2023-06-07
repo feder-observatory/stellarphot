@@ -4,7 +4,47 @@ __all__ = ['Camera']
 
 
 class Camera:
-    """docstring for Camera"""
+    """
+    A class to represent a CCD-based camera.
+
+    Parameters
+    ----------
+    gain : float times u.electron / u.adu,
+        The gain of the camera in units of electrons per ADU.
+    read_noise : float times u.electron
+        The read noise of the camera in units of electrons.
+    dark_current : float times u.electron / u.second
+        The dark current of the camera in units of electrons per second.
+
+    Attributes
+    ----------
+    gain : float times u.electron / u.adu,
+        The gain of the camera in units of electrons per ADU.
+    read_noise : float times u.electron
+        The read noise of the camera in units of electrons.
+    dark_current : float times u.electron / u.second
+        The dark current of the camera in units of electrons per second.
+
+    Notes
+    -----
+    The gain, read noise, and dark current are all assumed to be constant
+    across the entire CCD.
+
+    Examples
+    --------
+    >>> from astropy import units as u
+    >>> from stellarphot import Camera
+    >>> camera = Camera(gain=1.0 * u.electron / u.adu,
+    ...                 read_noise=1.0 * u.electron,
+    ...                 dark_current=0.01 * u.electron / u.second)
+    >>> camera.gain
+    <Quantity 1. electron / adu>
+    >>> camera.read_noise
+    <Quantity 1. electron>
+    >>> camera.dark_current
+    <Quantity 0.01 electron / s>
+
+    """
     def __init__(self, gain=1.0 * u.electron / u.adu,
                  read_noise=1.0 * u.electron,
                  dark_current=0.01 * u.electron / u.second):
