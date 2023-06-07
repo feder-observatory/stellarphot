@@ -51,6 +51,7 @@ distribute-*.tar.gz
 
 # Other
 .cache
+.nova
 .tox
 .*.sw[op]
 *~
