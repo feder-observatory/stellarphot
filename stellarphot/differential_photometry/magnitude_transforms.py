@@ -13,7 +13,7 @@ from astroquery.vizier import Vizier
 
 
 __all__ = [
-    'f', 'get_cat', 'opts_to_str', 'calc_residual'.
+    'f', 'get_cat', 'opts_to_str', 'calc_residual',
     'filter_transform',
     'calculate_transform_coefficients',
     'transform_magnitudes',

@@ -156,15 +156,6 @@ def catalog_clean(catalog, remove_rows_with_mask=True,
     astropy.table.Table
         Table of catalog information for stars in the field of view.
 
-    Examples
-    --------
-
-    >>> catalog_clean(catalog, remove_rows_with_mask=True, e_r_mag='<0.1')
-    >>> catalog_clean(catalog, remove_rows_with_mask=True, e_r_mag='<0.1',
-    ...               e_B-V='>0.1')
-    >>> catalog_clean(catalog, remove_rows_with_mask=True, e_r_mag='<0.1',
-    ...               e_B-V='>0.1', r_mag='>10')
-
     """
 
     comparisons = {
