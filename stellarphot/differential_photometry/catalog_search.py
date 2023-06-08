@@ -60,6 +60,12 @@ def catalog_search(frame_wcs_or_center, shape, desired_catalog,
     Return the items from catalog that are within the search radius and
     (optionally) within the field of view of a frame.
 
+    This function takes coordinate data from an image and a
+    catalog name and returns the positions of those stars.
+    Preconditions:frame_wcs is a WCS object, shape is tuple, list or array of
+    numerical values, desired_catalog is a string and radius is a numerical
+    value.
+
     Parameters
     ----------
 
@@ -67,13 +73,37 @@ def catalog_search(frame_wcs_or_center, shape, desired_catalog,
         WCS of the image of interest.
 
     shape : tuple of int
+        Shape of the image of interest.
 
-    Description: This function takes coordinate data from an image and a
-    catalog name and returns the positions of those stars.
-    Preconditions:frame_wcs is a WCS object, shape is tuple, list or array of
-    numerical values, desired_catalog is a string and radius is a numerical
-    value.
-    Postconditions:
+    desired_catalog : str
+        Name of the catalog to be searched.
+
+    ra_column : str, optional
+        Name of the column in the catalog that contains the RA values.
+        Default is 'RAJ2000'.
+
+    dec_column : str, optional
+        Name of the column in the catalog that contains the Dec values.
+        Default is 'DEJ2000'.
+
+    radius : float, optional
+        Radius, in degrees, around which to search. Default is 0.5.
+
+    clip_by_frame : bool, optional
+        If ``True``, only return items that are within the field of view
+        of the frame. Default is ``True``.
+
+    padding : int, optional
+        Coordinates need to be at least this many pixels in from the edge
+        of the frame to be considered in the field of view. Default value
+        is 100.
+
+    Returns
+    -------
+
+    astropy.table.Table
+        Table of catalog information for stars in the field of view.
+
     """
     rad = radius * units.deg
     if isinstance(frame_wcs_or_center, SkyCoord):
@@ -119,6 +149,22 @@ def catalog_clean(catalog, remove_rows_with_mask=True,
         must satisfy to be kept in the cleaned catalog. The criteria must be
         simple, beginning with a comparison operator and including a value.
         See Examples below.
+
+    Returns
+    -------
+
+    astropy.table.Table
+        Table of catalog information for stars in the field of view.
+
+    Examples
+    --------
+
+    >>> catalog_clean(catalog, remove_rows_with_mask=True, e_r_mag='<0.1')
+    >>> catalog_clean(catalog, remove_rows_with_mask=True, e_r_mag='<0.1',
+    ...               e_B-V='>0.1')
+    >>> catalog_clean(catalog, remove_rows_with_mask=True, e_r_mag='<0.1',
+    ...               e_B-V='>0.1', r_mag='>10')
+
     """
 
     comparisons = {
@@ -168,6 +214,21 @@ def find_apass_stars(image_or_center,
 
     radius : float, optional
         Radius, in degrees, around which to search. Not needed if the first argument is an image.
+
+    max_mag_error : float, optional
+        Maximum error in magnitude to allow. Default is 0.05.
+
+    max_color_error : float, optional
+        Maximum error in color to allow. Default is 0.1.
+
+    Returns
+    -------
+
+    all_apass : `astropy.table.Table`
+        Table of all APASS stars in the field of view.
+
+    apass_lower_error : `astropy.table.Table`
+        Table of APASS stars in the field of view with errors lower than the specified values.
     """
     if isinstance(image_or_center, SkyCoord):
         # Center was passed in, just use it.
@@ -217,6 +278,13 @@ def filter_catalog(catalog, **kwd):
     kwd : key/value pairs, e.g. ``e_r_mag=0.1``
         The key must be the name of a column and the value the
         *upper limit* on the acceptable values.
+
+    Returns
+    -------
+
+    numpy.ndarray of bool
+        One value for each row in the catalog; values are ``True`` if the
+        row meets the criteria, ``False`` otherwise.
     """
     good_ones = np.ones(len(catalog), dtype='bool')
 

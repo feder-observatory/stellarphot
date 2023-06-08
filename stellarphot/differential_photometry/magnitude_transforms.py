@@ -13,21 +13,54 @@ from astroquery.vizier import Vizier
 
 
 __all__ = [
+    'f', 'get_cat', 'opts_to_str', 'calc_residual'.
     'filter_transform',
     'calculate_transform_coefficients',
     'transform_magnitudes',
-    'transform_to_catalog'
+    'transform_to_catalog',
 ]
 
 
 def f(X, a, b, c, d, z):
+    """
+    Calculate the calibrated magnitude from the instrumental magnitude and color.
+
+    Parameters
+    ----------
+    X : tuple of numpy.ndarray
+        The first element is an array of instrumental magnitudes,
+        the second is an array of colors.
+    a, b, c, d, z : float
+        Parameters of the fit.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of calibrated magnitudes.
+    """
     mag_inst, color = X
 
     return a * mag_inst + b * mag_inst ** 2 + c * color + d * color**2 + z
 
 
-# TODO: THIS SHOULD ALMOST CERTAINLY BE REPLACED
 def get_cat(image):
+    """ Get the APASS catalog entries within 1 degree of first object in
+    Astropy table 'image'.
+
+    Parameters
+    ----------
+
+    image : astropy.table.Table
+        Table containing the image information. Must have columns
+        ``RA`` and ``Dec``.
+
+    Returns
+    -------
+
+    astropy.table.Table
+        Table containing the APASS catalog entries within 1 degree of
+        first object in Astropy table.
+    """
     our_coords = SkyCoord(image['RA'], image['Dec'], unit='degree')
     # Get catalog via cone search
     Vizier.ROW_LIMIT = -1  # Set row_limit to have no limit
@@ -41,6 +74,20 @@ def get_cat(image):
 
 
 def opts_to_str(opts):
+    """Convert the options from a fit to a string.
+
+    Parameters
+    ----------
+
+    opts : tuple of float
+        Options from a fit.
+
+    Returns
+    -------
+
+    str
+        String representation of the options.
+    """
     opt_names = ['a', 'b', 'c', 'd', 'z']
     names = []
     for name, value in zip(opt_names, opts):
@@ -49,6 +96,25 @@ def opts_to_str(opts):
 
 
 def calc_residual(new_cal, catalog):
+    """Calculate the standard deviations of the residuals between
+    the new calibrated magnitude and the catalog magnitude.
+
+    Parameters
+    ----------
+
+    new_cal : numpy.ndarray
+        New calibrated magnitudes.
+
+    catalog : numpy.ndarray
+        Catalog magnitudes.
+
+    Returns
+    -------
+
+    float
+        Standard deviation of the residual.
+
+    """
     resid = new_cal - catalog
     return resid.std()
 
@@ -315,7 +381,6 @@ def transform_magnitudes(input_mags, catalog,
     catalog : astropy Table
         Table containing reference catalog of magnitudes and colors.
 
-
     transform_catalog : astropy Table
         Table containing the reference catalog of magnitudes and colors
         to use in determining the transform coefficients. Can be the
@@ -347,6 +412,21 @@ def transform_magnitudes(input_mags, catalog,
     gain : float, optional
         If not ``None``, adjust the instrumental magnitude by
         -2.5 * log10(gain), i.e. gain correct the magnitude.
+
+    Returns
+    -------
+
+    our_cat_mags : astropy Table column
+        The calculated catalog magnitudes for the stars in ``input_mags``.
+
+    good_match_all : numpy array
+        Boolean array indicating which stars in ``input_mags`` have a match
+        in the catalog.
+
+    transforms : namedtuple
+        The coefficients of the transform. The coefficients are in the order
+        of ascending power, i.e. the coefficient ``ci`` is the coefficient
+        of the term ``x**i``.
     """
     catalog_all_coords = SkyCoord(catalog['RAJ2000'],
                                   catalog['DEJ2000'],
@@ -462,6 +542,13 @@ def transform_to_catalog(observed_mags_grouped, obs_mag_col, obs_filter,
 
     verbose: bool optional
         If ``True``, print additional output.
+
+    Returns
+    -------
+
+    astropy.table.Table
+        Table containing the calibrated magnitudes and the fit parameters.
+
     """
 
     if obs_error_column is None:

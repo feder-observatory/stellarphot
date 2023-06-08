@@ -25,6 +25,16 @@ def _fit_2dgaussian(data):
 
     Copy/pasted from
     https://github.com/astropy/photutils/pull/1064/files#diff-9e64908ff7ac552845b4831870a749f397d73c681d218267bd9087c7757e6dd4R285
+
+    Parameters
+    ----------
+    data : array-like
+        The 2D array of data to fit.
+
+    Returns
+    -------
+    gfit : astropy.modeling.Model
+        The best-fit 2D Gaussian model.
     """
     props = data_properties(data - np.min(data))
 
@@ -73,7 +83,9 @@ def compute_fwhm(ccd, sources, fwhm_estimate=5,
         of the sources.
 
     fit : bool, optional
-        If ``True``, fit a 2D Gaussian to each source to estimate its FWHM.
+        If ``True``, fit a 2D Gaussian to each source to estimate its FWHM. If
+        ``False``, estimate the FWHM of each source by computing the second
+        moments of its light distribution using photutils.
 
     sky_per_pix_avg : float or array-like of float
         Sky background to subtract before centroiding.
@@ -136,7 +148,7 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
     within the image.
 
     Parameters
-    ----------------
+    ----------
 
     ccd : numpy.ndarray
         The CCD Image array.
@@ -156,13 +168,14 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
 
     find_fwhm : bool, optional
         If ``True``, estimate the FWHM of each source by fitting a 2D Gaussian
-        to it.
+        to it. If ``False``, estimate the FWHM of each source by computing
+        the second moments of its light distribution.
 
     sky_per_pix_avg : float or array-like of float
         Sky background to subtract before centroiding.
 
     Returns
-    -----------
+    -------
 
     sources
         an astropy table of the positions of sources in the image.
