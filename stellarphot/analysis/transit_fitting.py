@@ -33,7 +33,7 @@ __all__ = ['VariableArgsFitter', 'TransitModelFit']
 
 class VariableArgsFitter(LevMarLSQFitter):
     """
-    Least squares fitter that fits functions with arbitrary number of positional parameters.
+    A callable class that can be used to fit functions with arbitrary number of positional parameters.
     This is a modified version of the astropy.modeling.fitting.LevMarLSQFitter fitter.
     """
     def __init__(self):
@@ -358,12 +358,27 @@ class TransitModelFit:
         duration : float
             Duration of the transit,in the same units as ``t0`` and
             ``period``.
+
         period : float
             Period of the planet. Should be in the same units as ``t0``
             and times used for fitting.
 
         inclination : float
             Inclination of the orbit, in degrees.
+
+        airmass_trend : float
+            Coefficient for a linear trend in airmass.
+
+        width_trend : float
+            Coefficient for a linear trend in stellar width.
+
+        spp_trend : float
+            Coefficient for a linear trend in sky per pixel.
+
+        Returns
+        -------
+        None
+            Sets values for the model parameters.
         """
         self._setup_transit_model()
 
@@ -482,6 +497,22 @@ class TransitModelFit:
         """
         Calculate the light curve corresponding to the model, optionally
         detrended by one or more parameters.
+        
+        Parameters
+        ----------
+        at_times : array-like
+            Times at which to calculate the model. If not provided, the
+            times used for fitting will be used.
+            
+        detrend_by : str or list of str
+            Parameter(s) to detrend by. If ``None``, no detrending is
+            done. If ``'all'``, all parameters that are set will be
+            used for detrending.
+            
+        Returns
+        -------
+        model : array-like
+            Model light curve.
         """
         zeros = np.zeros_like(self.times)
         airmass = self.airmass if self.airmass is not None else zeros
