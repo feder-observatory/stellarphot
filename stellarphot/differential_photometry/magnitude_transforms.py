@@ -23,7 +23,7 @@ __all__ = [
 
 def f(X, a, b, c, d, z):
     """
-    Calculate the calibrated magnitude from the instrumental magnitude and color.
+    Calculate the calibrated magnitudes from the instrumental magnitudes and colors.
 
     Parameters
     ----------
