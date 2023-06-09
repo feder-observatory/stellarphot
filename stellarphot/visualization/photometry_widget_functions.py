@@ -9,6 +9,26 @@ __all__ = ['PhotometrySettings']
 
 
 class PhotometrySettings:
+    """
+    A class to hold the widgets for photometry settings.
+
+    Attributes
+    ----------
+    box : `~ipywidgets.VBox`
+        The box containing the widgets.
+
+    image_folder : `~pathlib.Path`
+        The path to the folder containing the images.
+
+    aperture_locations : `~pathlib.Path`
+        The path to the file containing the aperture locations.
+
+    aperture_radius : int
+        The radius of the aperture.
+
+    object_name : str
+        The name of the object.
+    """
     def __init__(self):
         self._image_dir = FileChooser(title="Choose folder with images", show_only_dirs=True)
         self._aperture_file_loc = FileChooser(title='Choose aperture location file')

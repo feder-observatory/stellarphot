@@ -20,7 +20,8 @@ from stellarphot.io import TessSubmission
 from stellarphot.visualization import seeing_plot
 from stellarphot.visualization.fits_opener import FitsOpener
 
-__all__ = ['set_keybindings', 'box', 'SeeingProfileWidget']
+__all__ = ['set_keybindings', 'find_center', 'radial_profile',
+            'find_hwhm', 'RadialProfile', 'box', 'SeeingProfileWidget']
 
 desc_style = {"description_width": "initial"}
 
@@ -31,8 +32,8 @@ def set_keybindings(image_widget, scroll_zoom=False):
 
     + Pan by click-and-drag or with arrow keys.
     + Zoom by scrolling or using the ``+``/``-`` keys.
-    + Adjust contrast by Ctrl-left click and drag; reset with
-      shift-right-click.
+    + Adjust contrast by Ctrl-right click and drag
+    + Reset contrast with shift-right-click.
 
     Any existing key bindings are removed.
 
@@ -41,6 +42,16 @@ def set_keybindings(image_widget, scroll_zoom=False):
 
     image_widget : astrowidgets.ImageWidget
         Image widget on which to set the key bindings.
+
+    scroll_zoom : bool
+        If True, zooming can be done by scrolling the mouse wheel.
+        Default is False.
+
+    Returns
+    -------
+
+    None
+        Adds key bindings to the image widget.
     """
     bind_map = image_widget._viewer.get_bindmap()
     # Displays the event map...
@@ -94,6 +105,13 @@ def find_center(image, center_guess, cutout_size=30, max_iters=10):
 
     max_iters : int, optional
         Maximum number of iterations to go through in finding the center.
+
+    Returns
+    -------
+
+    cen : array
+        The position of the star, in pixels, as found by the centroiding
+        algorithm.
     """
     pad = cutout_size // 2
     x, y = center_guess
@@ -140,8 +158,7 @@ def find_center(image, center_guess, cutout_size=30, max_iters=10):
 
 
 def radial_profile(data, center, size=30, return_scaled=True):
-    """
-    Construct a radial profile of a chunk of width ``size`` centered
+    """Construct a radial profile of a chunk of width ``size`` centered
     at ``center`` from image ``data`.
 
     Parameters
@@ -149,11 +166,14 @@ def radial_profile(data, center, size=30, return_scaled=True):
 
     data : numpy array or CCDData
         Image data
+
     center : list-like
         x, y position of the center in pixel coordinates, i.e. horizontal
         coordinate then vertical.
+
     size : int, optional
         Width of the rectangular cutout to use in constructing the profile.
+
     return_scaled : bool, optional
         If ``True``, return an average radius and profile, otherwise
         it is cumulative. Not at all clear what a "cumulative" radius
@@ -164,8 +184,10 @@ def radial_profile(data, center, size=30, return_scaled=True):
 
     r_exact : numpy array
         Exact radius of center of each pixels from profile center.
+
     ravg : numpy array
         Average radius of pixels in each bin.
+
     radialprofile : numpy array
         Radial profile.
     """
@@ -194,9 +216,24 @@ def radial_profile(data, center, size=30, return_scaled=True):
 
 
 def find_hwhm(r, intensity):
+    """Estimate the half-width half-max from normalized, angle-averaged intensity profile.
+
+    Parameters
+    ----------
+
+    r : array
+        Radius of each pixel from the center of the star.
+
+    intensity : array
+        Normalized intensity at each radius.
+
+    Returns
+    -------
+
+    r_half : float
+        Radius at which the intensity is 50% the maximum
     """
-    Estimate HWHM from normalized, angle-averaged intensity profile.
-    """
+
     # Make the bold assumption that intensity decreases monotonically
     # so that we just need to find the first place where intensity is
     # less than 0.5 to estimate the HWHM.
@@ -219,6 +256,23 @@ def find_hwhm(r, intensity):
 
 
 class RadialProfile:
+    """ Class to hold radial profile information for a star.
+
+    Attributes
+    ----------
+
+    cen : tuple
+        x, y position of the center of the star.
+
+    data : numpy array
+        Image data.
+
+    FWHM : float
+        Full-width half-max of the radial profile.
+
+    radius_values : numpy array
+        Radius values for the radial profile.
+    """
     def __init__(self, data, x, y):
         self.cen = find_center(data, (x, y), cutout_size=30)
         self.data = data
@@ -248,15 +302,33 @@ class RadialProfile:
 
 
 def box(imagewidget):
-    """
-    Compatibility layer for older versions of the photometry notebooks.
+    """Compatibility layer for older versions of the photometry notebooks.
+
+    Parameters
+    ----------
+
+    imagewidget : ImageWidget
+        ImageWidget instance to use for the seeing profile.
+
+    Returns
+    -------
+
+    box : ipywidgets.Box
+        Box containing the seeing profile widget.
     """
     return SeeingProfileWidget(imagewidget=imagewidget).box
 
 
 class SeeingProfileWidget:
-    """
-    Build a widget for measuring the seeing profile of stars in an image.
+    """A class for storing an instance of a widget displaying the seeing profile of stars in an image.
+
+    Parameters
+    ----------
+    imagewidget : ImageWidget
+        ImageWidget instance to use for the seeing profile.
+
+    width : int
+        Width of the seeing profile widget.
     """
     def __init__(self, imagewidget=None, width=500):
         if not imagewidget:
