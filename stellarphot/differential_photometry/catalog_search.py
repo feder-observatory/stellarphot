@@ -228,24 +228,37 @@ def find_apass_stars(image_or_center,
     else:
         cen_wcs = image_or_center.wcs
         shape = image_or_center.shape
-    # use the catalog_search function to find the apass stars in the frame of the image read above
+    # use the catalog_search function to find the APASS stars in the frame of the image read above
     all_apass = catalog_search(cen_wcs, shape, 'II/336/apass9',
                                ra_column='RAJ2000', dec_column='DEJ2000', radius=radius,
                                clip_by_frame=False)
 
-    # Creates a boolean array of the apass stars that have well defined
+    # Creates a boolean array of the APASS stars that have well defined
     # magnitudes and color.
     apass_lower_error = (all_apass['e_r_mag'] < max_mag_error) & (
         all_apass['e_B-V'] < max_color_error)
 
-    # create new table  of apass stars that meet error restrictions
+    # create new table of APASS stars that meet error restrictions
     apass_lower_error = all_apass[apass_lower_error]
 
     return all_apass, apass_lower_error
 
 
 def find_known_variables(image):
-    # Get any known variable stars from a new catalog search of VSX
+    '''Get any known variable stars in image field from the VSX catalog.
+
+    Parameters
+    ----------
+
+    image : `astropy.nddata.CCDData`
+        Image with a WCS.
+
+    Returns
+    -------
+
+    vsx : `astropy.table.Table`
+        Table of known variable stars in the field of view.
+    '''
     try:
         vsx = catalog_search(image.wcs, image.shape, 'B/vsx/vsx',
                              ra_column='RAJ2000', dec_column='DEJ2000')
