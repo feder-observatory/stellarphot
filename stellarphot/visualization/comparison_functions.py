@@ -27,7 +27,7 @@ from stellarphot.visualization.seeing_profile_functions import set_keybindings
 from stellarphot.visualization.fits_opener import FitsOpener
 
 
-__all__ = ['read_file', 'set_up', 'match', 'mag_scale',
+__all__ = ['read_file', 'set_up', 'crossmatch_APASS2VSX', 'mag_scale',
            'in_field', 'make_markers', 'wrap', 'ComparisonViewer']
 
 DESC_STYLE = {"description_width": "initial"}
@@ -58,20 +58,28 @@ def read_file(radec_file):
     return target_table
 
 
-def set_up(sample_image_for_finding_stars,
-           directory_with_images='.'):
-    """
-    Find known variable in the field of view and read sample image.
+def set_up(sample_image_for_finding_stars, directory_with_images='.'):
+    """Read in sample image and find known variables in the field of view.
 
     Parameters
     ----------
 
     sample_image_for_finding_stars : str
-        Name or URL of a fits image of the field of view.
+        Name or URL of a FITS image of the field of view.
 
     directory_with_images : str, optional
         Folder in which the image is located. Ignored if the sample image
         is a URL.
+
+    Returns
+    -------
+
+    ccd: `astropy.nddata.CCDData`
+        Sample image.
+
+    vsx: `astropy.table.Table`
+        Table with known variables in the field of view.
+
     """
     if sample_image_for_finding_stars.startswith('http'):
         path = sample_image_for_finding_stars
@@ -91,13 +99,35 @@ def set_up(sample_image_for_finding_stars,
     return ccd, vsx
 
 
-def match(CCD, RD, vsx):
+def crossmatch_APASS2VSX(CCD, RD, vsx):
+    """Find APASS stars in FOV and matches APASS stars to VSX and APASS to input targets.
+
+    Parameters
+    ----------
+
+    CCD : `astropy.nddata.CCDData`
+        Sample image.
+
+    RD : `astropy.table.Table`
+        Table with target information, including a
+        `astropy.coordinates.SkyCoord` column.
+
+    vsx : `astropy.table.Table`
+        Table with known variables in the field of view.
+
+    Returns
+    -------
+
+    apass : `astropy.table.Table`
+        Table with APASS stars in the field of view.
+
+    v_angle : `astropy.units.Quantity`
+        Angular separation between APASS stars and VSX stars.
+
+    RD_angle : `astropy.units.Quantity`
+        Angular separation between APASS stars and input targets.
     """
-    Find APASS stars in FOV and matches APASS stars to VSX and
-    APASS to input targets.
-    """
-    apass, apass_in_bright = find_apass_stars(
-        CCD)
+    apass, apass_in_bright = find_apass_stars(CCD)
     ra = apass['RAJ2000']
     dec = apass['DEJ2000']
     apass['coords'] = SkyCoord(ra=ra, dec=dec, unit=(u.hour, u.degree))
@@ -108,21 +138,50 @@ def match(CCD, RD, vsx):
             apass_coord.match_to_catalog_sky(vsx['coords'])
     else:
         v_angle = []
+
     if RD:
         RD_index, RD_angle, RD_dist = \
             apass_coord.match_to_catalog_sky(RD['coords'])
     else:
         RD_angle = []
+
     return apass, v_angle, RD_angle
 
 
 def mag_scale(cmag, apass, v_angle, RD_angle,
               brighter_dmag=0.44, dimmer_dmag=0.75):
-    """
-    Select comparison stars that are 1) not close the VSX stars or to other
+    """Select comparison stars that are 1) not close the VSX stars or to other
     target stars and 2) fall within a particular magnitude range.
 
+    Parameters
+    ----------
 
+    cmag : float
+        Magnitude of the target star.
+
+    apass : `astropy.table.Table`
+        Table with APASS stars in the field of view.
+
+    v_angle : `astropy.units.Quantity`
+        Angular separation between APASS stars and VSX stars.
+
+    RD_angle : `astropy.units.Quantity`
+        Angular separation between APASS stars and input targets.
+
+    brighter_dmag : float, optional
+        Maximum difference in magnitude between the target and comparison stars.
+
+    dimmer_dmag : float, optional
+        Minimum difference in magnitude between the target and comparison stars.
+
+    Returns
+    -------
+
+    apass_good_coord : `astropy.coordinates.SkyCoord`
+        Coordinates of the comparison stars.
+
+    good_stars : `astropy.table.Table`
+        Table with the comparison stars.
     """
     high_mag = apass['r_mag'] < cmag + dimmer_dmag
     low_mag = apass['r_mag'] > cmag - brighter_dmag
@@ -143,8 +202,28 @@ def mag_scale(cmag, apass, v_angle, RD_angle,
 
 
 def in_field(apass_good_coord, ccd, apass, good_stars):
-    """
-    Return apass stars in the field of view
+    """Return APASS stars in the field of view.
+
+    Parameters
+    ----------
+
+    apass_good_coord : `astropy.coordinates.SkyCoord`
+        Coordinates of the comparison stars.
+
+    ccd : `astropy.nddata.CCDData`
+        Sample image.
+
+    apass : `astropy.table.Table`
+        Table with APASS stars in the field of view.
+
+    good_stars : `astropy.table.Table`
+        Table with the comparison stars.
+
+    Returns
+    -------
+
+    ent : `astropy.table.Table`
+        Table with APASS stars in the field of view.
     """
     apassx, apassy = ccd.wcs.all_world2pix(
         apass_good_coord.ra, apass_good_coord.dec, 0)
@@ -159,11 +238,36 @@ def in_field(apass_good_coord, ccd, apass, good_stars):
     return ent
 
 
-def make_markers(iw, ccd, RD, vsx, ent,
-                 name_or_coord=None):
-    """
-    Add markers for APASS, TESS targets, VSX.
-    Also center on object/coordinate.
+def make_markers(iw, ccd, RD, vsx, ent, name_or_coord=None):
+    """Add markers for APASS, TESS targets, VSX.  Also center on object/coordinate.
+
+    Parameters
+    ----------
+
+    iw : `ginga.util.grc.RemoteClient`
+        Ginga widget.
+
+    ccd : `astropy.nddata.CCDData`
+        Sample image.
+
+    RD : `astropy.table.Table`
+        Table with target information, including a
+        `astropy.coordinates.SkyCoord` column.
+
+    vsx : `astropy.table.Table`
+        Table with known variables in the field of view.
+
+    ent : `astropy.table.Table`
+        Table with APASS stars in the field of view.
+
+    name_or_coord : str or `astropy.coordinates.SkyCoord`, optional
+        Name or coordinates of the target.
+
+    Returns
+    -------
+
+    None
+        Markers are added to the image in Ginga widget.
     """
     iw.load_nddata(ccd)
     iw.zoom_level = 'fit'
@@ -193,9 +297,19 @@ def make_markers(iw, ccd, RD, vsx, ent,
                    use_skycoord=True, marker_name='APASS comparison')
     iw.marker = {'type': 'cross', 'color': 'red', 'radius': 6}
 
+
 def wrap(imagewidget, outputwidget):
-    """
-    Make the bits that let you click to select/deselect comparisons
+    """Utility function to let you click to select/deselect comparisons.
+
+    Parameters
+    ----------
+
+    imagewidget : `ginga.util.grc.RemoteClient`
+        Ginga widget.
+
+    outputwidget : `ipywidgets.Output`
+        Output widget for printing information.
+
     """
     def cb(viewer, event, data_x, data_y):
         i = imagewidget._viewer.get_image()
@@ -242,6 +356,65 @@ def wrap(imagewidget, outputwidget):
 
 
 class ComparisonViewer:
+    """A class to store an instance of the comparison viewer.
+
+    Parameters
+    ----------
+
+    file : str, optional
+        File to open.
+
+    directory : str, optional
+        Directory to open file from.
+
+    target_mag : float, optional
+        Magnitude of the target.
+
+    bright_mag_limit : float, optional
+        Bright magnitude limit for APASS stars.
+
+    dim_mag_limit : float, optional
+        Dim magnitude limit for APASS stars.
+
+    targets_from_file : str, optional
+        File with target information.
+
+    object_coordinate : `astropy.coordinates.SkyCoord`, optional
+        Coordinates of the target.
+
+    aperture_output_file : str, optional
+        File to save aperture information to.
+
+    Attributes
+    ----------
+
+    target_mag : float
+        Magnitude of the target.
+
+    bright_mag_limit : float
+        Bright magnitude limit for APASS stars.
+
+    dim_mag_limit : float
+        Dim magnitude limit for APASS stars.
+
+    targets_from_file : str
+        File with target information.
+
+    tess_submission : `tess_stars2px.TessStars2Px`
+        Instance of the TESS submission class.
+
+    target_coord : `astropy.coordinates.SkyCoord`
+        Coordinates of the target.
+
+    box : `ipywidgets.Box`
+        Box containing the widgets.
+
+    iw : `ginga.util.grc.RemoteClient`
+        Ginga widget.
+
+    aperture_output_file : str
+        File to save aperture information to.
+    """
     def __init__(self,
                  file="",
                  directory='.',
@@ -286,9 +459,9 @@ class ComparisonViewer:
                    directory_with_images=self._file_chooser.path.parent
                    )
 
-        apass, vsx_apass_angle, targets_apass_angle = match(self.ccd,
-                                                            self.targets_from_file,
-                                                            self.vsx)
+        apass, vsx_apass_angle, targets_apass_angle = crossmatch_APASS2VSX(self.ccd,
+                                                                            self.targets_from_file,
+                                                                            self.vsx)
 
         apass_good_coord, good_stars = mag_scale(self.target_mag, apass, vsx_apass_angle,
                                                  targets_apass_angle,
@@ -301,6 +474,15 @@ class ComparisonViewer:
 
     @property
     def variables(self):
+        """ Return a dictionary of the variables in the class.
+
+        Returns
+        -------
+
+        our_vsx : dict
+            Dictionary of the variables in the class.
+
+        """
         comp_table = self.generate_table()
         new_vsx_mark = comp_table['marker name'] == 'VSX'
         idx, _, _ = comp_table['coord'][new_vsx_mark].match_to_catalog_sky(self.vsx['coords'])
@@ -505,6 +687,20 @@ class ComparisonViewer:
         return box, iw
 
     def save_tess_files(self, button=None):
+        """ Save the TESS files.
+
+        Parameters
+        ----------
+
+        button : ipywidgets.Button
+            The button that was clicked.
+
+        Returns
+        -------
+
+        None
+            Button to save TESS file set to true (triggering action).
+        """
         if self._field_name.value:
             self.tess_field_view()
             self.iw.save(self._field_name.value, overwrite=True)
@@ -514,6 +710,13 @@ class ComparisonViewer:
             self.iw.save(self._zoom_name.value, overwrite=True)
 
     def generate_table(self):
+        """ Generate the table of stars to use for the aperture file.
+
+        Returns
+        -------
+        comp_table : astropy.table.Table
+            Table of stars to use for the aperture file.
+        """
         try:
             all_table = self.iw.get_all_markers()
         except AttributeError:
@@ -557,6 +760,14 @@ class ComparisonViewer:
         return comp_table
 
     def show_labels(self):
+        """ Show the labels for the stars.
+
+        Returns
+        -------
+
+        None
+            Labels for the stars are shown.
+        """
         plot_names = []
         comp_table = self.generate_table()
 
@@ -587,6 +798,14 @@ class ComparisonViewer:
         self.iw._marker = original_mark
 
     def remove_labels(self):
+        """ Remove the labels for the stars.
+
+        Returns
+        -------
+
+        None
+            Labels for the stars are removed.
+        """
         try:
             try:
                 self.iw.remove_markers(marker_name=self._label_name)
@@ -599,6 +818,22 @@ class ComparisonViewer:
     def show_circle(self,
                     radius=2.5 * u.arcmin,
                     pixel_scale=0.56 * u.arcsec / u.pixel):
+        """ Show a circle around the target.
+
+        Parameters
+        ----------
+
+        radius : float * u.arcmin, optional
+            Radius of circle. The default is 2.5*u.arcmin.
+        pixel_scale : float * u.arcsec / u.pixel, optional
+            Pixel scale of image. The default is 0.56*u.arcsec/u.pixel.
+
+        Returns
+        -------
+
+        None
+            Circle is shown around the target.
+        """
         radius_pixels = np.round((radius / pixel_scale).to(u.pixel).value,
                                  decimals=0)
         orig_marker = self.iw.marker
@@ -611,22 +846,54 @@ class ComparisonViewer:
         self.iw.marker = orig_marker
 
     def remove_circle(self):
+        """Remove the circle around the target.
+
+        Returns
+        -------
+
+        None
+            Circle is removed from the image.
+        """
         try:
             self.iw.remove_markers(marker_name=self._circle_name)
         except AttributeError:
             self.iw.remove_markers_by_name(marker_name=self._circle_name)
 
     def tess_field_view(self):
+        """ Show the whole TESS field of view including circle around target, but hide labels.
+
+        Returns
+        -------
+
+        None
+            Shows image as described above.
+        """
+
         # Show whole field of view
         self.iw.zoom_level = 'fit'
 
         # Show the circle
         self.show_circle()
 
-        # Turn of labels -- too cluttered
+        # Turn off labels -- too cluttered
         self.remove_labels()
 
     def tess_field_zoom_view(self, width=6 * u.arcmin):
+        """ Zoom in on the TESS field of view.
+
+        Parameters
+        ----------
+
+        width : float * u.arcmin, optional
+            Width of field of view. The default is 6*u.arcmin.
+
+        Returns
+        -------
+
+        None
+            Zooms in on the image as described above.
+        """
+
         # Turn off labels -- too cluttered
         self.remove_labels()
 
@@ -643,6 +910,3 @@ class ComparisonViewer:
 
         # Show the circle
         self.show_circle()
-
-
-
