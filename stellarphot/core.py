@@ -10,7 +10,7 @@ class Camera:
     Parameters
     ----------
     gain : `astropy.quantity.Quantity`
-        The gain of the camera in units of electrons per ADU.
+        The gain of the camera in units such that the unit of the product `gain` times the image data matches the unit of the `read_noise`.
     read_noise : float times u.electron
         The read noise of the camera in units of electrons.
     dark_current : float times u.electron / u.second
