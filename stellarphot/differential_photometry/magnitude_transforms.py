@@ -44,7 +44,8 @@ def f(X, a, b, c, d, z):
 
 
 def get_cat(image):
-    """ Get the APASS catalog entries within 1 degree of first object in
+    """
+    Get the APASS catalog entries within 1 degree of first object in
     Astropy table 'image'.
 
     Parameters
