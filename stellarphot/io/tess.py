@@ -54,7 +54,7 @@ class TessSubmission:
     seeing_profile: str
         The name of the seeing profile file, e.g. "TIC123456789-01_20200101_SRO_Ic_seeing-profile.png"
 
-    field_image: String
+    field_image: str
         The name of the field image file, e.g. "TIC123456789-01_20200101_SRO_Ic_field.png"
 
     field_image_zoom: String
