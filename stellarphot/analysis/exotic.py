@@ -43,12 +43,6 @@ class MyValid(ipw.Button):
     A class containing a more compact indicator of valid entries based on ipywidgets
     buton value.
 
-    Parameters
-    ----------
-
-    value : ipywidgets.Button.value
-        Initial value of the indicator.
-
     Attributes
     ----------
 
@@ -87,8 +81,8 @@ def get_tic_info(TIC_ID):
     Returns
     -------
 
-    dict
-        Dictionary of information about the TIC object.
+    `astropy.table.Table`
+        Astropy table withinformation about the TIC object.
 
     """
     catalog_data = Catalogs.query_criteria(catalog="Tic", ID=TIC_ID)
@@ -149,7 +143,7 @@ def validate_exposure_time(indicator_widget, value_widget):
 
     Parameters
     ----------
-    indicator_widget : MyCheck widget
+    indicator_widget : `MyValid` widget
         The widget that indicates to the user whether or not the value is
         reasonable.
 
@@ -161,7 +155,7 @@ def validate_exposure_time(indicator_widget, value_widget):
     function
         Function that will set the correct boolean value on the
         indicator_widget to indicate if the value of the exposure time
-        is valid.
+        is valid.  This can be used as an observer for an ipywidget
     """
     def check_exposure(change):
         # Valid Exposure time is greater than zero

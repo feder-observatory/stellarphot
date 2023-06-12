@@ -324,10 +324,10 @@ class SeeingProfileWidget:
 
     Parameters
     ----------
-    imagewidget : ImageWidget
+    imagewidget : ImageWidget, optional
         ImageWidget instance to use for the seeing profile.
 
-    width : int
+    width : int, optional
         Width of the seeing profile widget.
     """
     def __init__(self, imagewidget=None, width=500):

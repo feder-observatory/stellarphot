@@ -10,7 +10,7 @@ def plot_many_factors(photometry, low, high, shift, scale):
     Parameters
     ----------
 
-    photometry : astropy.table.Table
+    photometry : `astropy.table.Table`
         The photometry table to plot.
 
     low : float
@@ -57,7 +57,7 @@ def bin_data(data_set, num=3, error_set=None):
     data_set : array-like
         The data to bin.
 
-    num : int
+    num : int, optional
         The number of data points to bin together. Default is 3.
 
     error_set : array-like
@@ -69,7 +69,7 @@ def bin_data(data_set, num=3, error_set=None):
     binned_set : array-like
         The binned data set.
 
-    error : array-like
+    error : array-like, optional
         The error on the binned data set.
     """
     binned_set = []
