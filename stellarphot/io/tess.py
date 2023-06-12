@@ -64,7 +64,7 @@ class TessSubmission:
         The name of the apertures file, e.g. "TIC123456789-01_20200101_SRO_Ic_measurements.apertures"
 
     tic_coord: `astropycoordinates.SkyCoord`
-        The SkyCoord of the target, from the TIC
+        The SkyCoord of the target, from the TIC catalog.
 
     Methods
     -------
