@@ -424,7 +424,8 @@ def parse_aij_table(table_name):
 
 
 class Star(object):
-    """ A class for storing photometry for a single star.
+    """
+    A class for storing photometry for a single star.
 
     Attributes
     ----------
