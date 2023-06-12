@@ -57,7 +57,7 @@ class TessSubmission:
     field_image: str
         The name of the field image file, e.g. "TIC123456789-01_20200101_SRO_Ic_field.png"
 
-    field_image_zoom: String
+    field_image_zoom: str
         The name of the zoomed-in field image file, e.g. "TIC123456789-01_20200101_SRO_Ic_field-zoom.png"
 
     apertures: String
