@@ -718,7 +718,7 @@ def find_times(phot_column, exposure, ra, dec,
     Returns
     -------
 
-    new_time : numpy array
+    numpy array
         array of times in barycentric Julian date
 
     """
@@ -730,9 +730,7 @@ def find_times(phot_column, exposure, ra, dec,
     times_tdb = times.tdb
     time_barycenter = times_tdb + ltt_bary
 
-    #adjust to midpoint of exposure
+    # Adjust to midpoint of exposure
     bary_time = time_barycenter + exposure / 2
 
-    new_time = bary_time.jd
-
-    return new_time
+    return bary_time.jd
