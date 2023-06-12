@@ -286,7 +286,8 @@ def _is_comp(star_coord, comp_table):
 
 
 def generate_aij_table(table_name, comparison_table):
-    """ Generate an AIJ table from a stellarphot table and a comparison table.
+    """
+    Generate an AIJ table from a stellarphot table and a comparison table.
 
     Parameters
     ----------
