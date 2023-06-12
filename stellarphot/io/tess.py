@@ -351,7 +351,7 @@ class TessTargetFile:
     file : str, optional
         The path to the target file. If not provided, a temporary file will be created.
 
-    aperture_server : str
+    aperture_server : str, optional
         The URL of the aperture server. default: https://www.astro.louisville.edu/
     """
     coord : SkyCoord

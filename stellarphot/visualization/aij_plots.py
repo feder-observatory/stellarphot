@@ -44,7 +44,7 @@ def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM,
     Returns
     -------
 
-    matplotlib.pyplot.figure
+    `matplotlib.pyplot.figure`
         The figure object containing the seeing plot.
     """
     if radius is None:

@@ -100,7 +100,8 @@ def set_up(sample_image_for_finding_stars, directory_with_images='.'):
 
 
 def crossmatch_APASS2VSX(CCD, RD, vsx):
-    """Find APASS stars in FOV and matches APASS stars to VSX and APASS to input targets.
+    """
+    Find APASS stars in FOV and matches APASS stars to VSX and APASS to input targets.
 
     Parameters
     ----------
@@ -244,7 +245,7 @@ def make_markers(iw, ccd, RD, vsx, ent, name_or_coord=None):
     Parameters
     ----------
 
-    iw : `ginga.util.grc.RemoteClient`
+    iw : `astrowidgets.ImageWidget`
         Ginga widget.
 
     ccd : `astropy.nddata.CCDData`
@@ -304,7 +305,7 @@ def wrap(imagewidget, outputwidget):
     Parameters
     ----------
 
-    imagewidget : `ginga.util.grc.RemoteClient`
+    imagewidget : `astrowidgets.ImageWidget`
         Ginga widget.
 
     outputwidget : `ipywidgets.Output`
@@ -479,8 +480,8 @@ class ComparisonViewer:
         Returns
         -------
 
-        our_vsx : dict
-            Dictionary of the variables in the class.
+        our_vsx : `astropy.table.Table`
+            Table of the variables in the class.
 
         """
         comp_table = self.generate_table()
@@ -687,12 +688,13 @@ class ComparisonViewer:
         return box, iw
 
     def save_tess_files(self, button=None):
-        """ Save the TESS files.
+        """
+        Save the TESS files.
 
         Parameters
         ----------
 
-        button : ipywidgets.Button
+        button : `ipywidgets.Button`, optional
             The button that was clicked.
 
         Returns
@@ -710,11 +712,12 @@ class ComparisonViewer:
             self.iw.save(self._zoom_name.value, overwrite=True)
 
     def generate_table(self):
-        """ Generate the table of stars to use for the aperture file.
+        """
+        Generate the table of stars to use for the aperture file.
 
         Returns
         -------
-        comp_table : astropy.table.Table
+        comp_table : `astropy.table.Table`
             Table of stars to use for the aperture file.
         """
         try:
@@ -760,7 +763,8 @@ class ComparisonViewer:
         return comp_table
 
     def show_labels(self):
-        """ Show the labels for the stars.
+        """
+        Show the labels for the stars.
 
         Returns
         -------
@@ -798,7 +802,8 @@ class ComparisonViewer:
         self.iw._marker = original_mark
 
     def remove_labels(self):
-        """ Remove the labels for the stars.
+        """
+        Remove the labels for the stars.
 
         Returns
         -------
@@ -818,15 +823,16 @@ class ComparisonViewer:
     def show_circle(self,
                     radius=2.5 * u.arcmin,
                     pixel_scale=0.56 * u.arcsec / u.pixel):
-        """ Show a circle around the target.
+        """
+        Show a circle around the target.
 
         Parameters
         ----------
 
-        radius : float * u.arcmin, optional
-            Radius of circle. The default is 2.5*u.arcmin.
-        pixel_scale : float * u.arcsec / u.pixel, optional
-            Pixel scale of image. The default is 0.56*u.arcsec/u.pixel.
+        radius : `astropy.units.Quantity`, optional
+            Radius of circle. The default is ``2.5*u.arcmin``.
+        pixel_scale : `astropy.units.Quantity`, optional
+            Pixel scale of image. The default is ``0.56*u.arcsec/u.pixel``.
 
         Returns
         -------
@@ -846,7 +852,8 @@ class ComparisonViewer:
         self.iw.marker = orig_marker
 
     def remove_circle(self):
-        """Remove the circle around the target.
+        """
+        Remove the circle around the target.
 
         Returns
         -------
@@ -860,7 +867,8 @@ class ComparisonViewer:
             self.iw.remove_markers_by_name(marker_name=self._circle_name)
 
     def tess_field_view(self):
-        """ Show the whole TESS field of view including circle around target, but hide labels.
+        """
+        Show the whole TESS field of view including circle around target, but hide labels.
 
         Returns
         -------
@@ -879,13 +887,14 @@ class ComparisonViewer:
         self.remove_labels()
 
     def tess_field_zoom_view(self, width=6 * u.arcmin):
-        """ Zoom in on the TESS field of view.
+        """
+        Zoom in on the TESS field of view.
 
         Parameters
         ----------
 
-        width : float * u.arcmin, optional
-            Width of field of view. The default is 6*u.arcmin.
+        width : `astropy.units.Quantity`, optional
+            Width of field of view. The default is ``6*u.arcmin``.
 
         Returns
         -------

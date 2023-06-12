@@ -20,25 +20,25 @@ def plot_magnitudes(mags=None, errors=None, times=None,
     Parameters
     ----------
 
-    mags : array of floats
+    mags : array of floats, optional
         Magnitudes of source.
 
-    errors : array of floats
+    errors : array of floats, optional
         Errors on magnitudes.
 
-    times : array-like
+    times : array-like, optional
         Times of observations.
 
-    source : `~stellarphot.source.Source`
+    source : `~stellarphot.source.Source`, optional
         Source object.
 
-    night : float
+    night : float, optional
         Night of observations.
 
-    ref_mag : float
+    ref_mag : float, optional
         Reference magnitude of source. Default is 0.
 
-    alpha : float
+    alpha : float, optional
         Alpha value for error bars. Default is 0.25.
 
     y_range : tuple
@@ -121,7 +121,7 @@ def multi_night(sources, unique_nights, night,
     mag_err : array-like
         Array of magnitude errors.
 
-    uniform_ylim : bool
+    uniform_ylim : bool, optional
         If True, use the median and median absolute deviation of the
         magnitudes to set the y-axis range for each source. Default is True.
 

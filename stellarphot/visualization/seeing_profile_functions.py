@@ -43,7 +43,7 @@ def set_keybindings(image_widget, scroll_zoom=False):
     image_widget : astrowidgets.ImageWidget
         Image widget on which to set the key bindings.
 
-    scroll_zoom : bool
+    scroll_zoom : bool, optional
         If True, zooming can be done by scrolling the mouse wheel.
         Default is False.
 

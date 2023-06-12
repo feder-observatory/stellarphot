@@ -65,10 +65,10 @@ def compute_fwhm(ccd, sources, fwhm_estimate=5,
     Parameters
     ----------
 
-    ccd : numpy.ndarray
+    ccd : `astropy.nddata.CCDData`
         The CCD Image array.
 
-    sources : astropy.table.Table
+    sources : `astropy.table.Table`
         An astropy table of the positions of sources in the image.
 
     fwhm_estimate : float, optional
@@ -87,7 +87,7 @@ def compute_fwhm(ccd, sources, fwhm_estimate=5,
         ``False``, estimate the FWHM of each source by computing the second
         moments of its light distribution using photutils.
 
-    sky_per_pix_avg : float or array-like of float
+    sky_per_pix_avg : float or array-like of float, optional
         Sky background to subtract before centroiding.
 
     Returns

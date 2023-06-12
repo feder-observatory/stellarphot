@@ -303,7 +303,7 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
         Gain, in electrons/ADU, of the camera that took the image. The gain
         is used in calculating the instrumental magnitude.
 
-    bjd_coords : astropy SkyCoord object
+    bjd_coords : `astropy.coordinates.SkyCoord`
         Coordinates of the object of interest in the Barycentric Julian Date
         frame. If not provided, the BJD column will not be added to the
         photometry table.
