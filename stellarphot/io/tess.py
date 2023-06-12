@@ -48,7 +48,7 @@ class TessSubmission:
 
     Attributes
     ----------
-    base_name: String
+    base_name: str
         The base name of the submission, e.g. "TIC123456789-01_20200101_SRO_Ic"
 
     seeing_profile: String
