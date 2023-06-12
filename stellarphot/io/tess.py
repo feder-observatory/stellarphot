@@ -60,7 +60,7 @@ class TessSubmission:
     field_image_zoom: str
         The name of the zoomed-in field image file, e.g. "TIC123456789-01_20200101_SRO_Ic_field-zoom.png"
 
-    apertures: String
+    apertures: str
         The name of the apertures file, e.g. "TIC123456789-01_20200101_SRO_Ic_measurements.apertures"
 
     tic_coord: SkyCoord
