@@ -51,7 +51,7 @@ class TessSubmission:
     base_name: str
         The base name of the submission, e.g. "TIC123456789-01_20200101_SRO_Ic"
 
-    seeing_profile: String
+    seeing_profile: str
         The name of the seeing profile file, e.g. "TIC123456789-01_20200101_SRO_Ic_seeing-profile.png"
 
     field_image: String
