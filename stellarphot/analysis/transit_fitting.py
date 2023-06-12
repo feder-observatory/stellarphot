@@ -89,7 +89,7 @@ class VariableArgsFitter(LevMarLSQFitter):
 
 
 class TransitModelFit:
-    """ A class for handling transit model fits to observed light curves.
+    """Transit model fits to observed light curves.
 
     Parameters
     ----------
