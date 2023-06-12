@@ -13,7 +13,7 @@ __all__ = [ 'ApertureAIJ', 'MultiApertureAIJ', 'ApertureFileAIJ',
 
 class ApertureAIJ:
     """
-    Class to represent the aperture information AstroImageJ saves.
+    Represents the aperture information AstroImageJ saves.
     """
     def __init__(self):
         # Outer annulus radius
@@ -133,15 +133,6 @@ class ApertureFileAIJ:
     """
     Class to represent AstroImageJ aperture file.
 
-    Methods
-    -------
-
-    read(file)
-        Read aperture file and return an ApertureFileAIJ object.
-
-    write(file)
-        Write aperture file to disk.
-
     """
     def __init__(self):
         self.aperture = ApertureAIJ()
@@ -173,6 +164,15 @@ class ApertureFileAIJ:
         return (self.aperture == other.aperture) and (self.multiaperture == other.multiaperture)
 
     def write(self, file):
+        """
+        Write the aperture object to a file.
+
+        Parameters
+        ----------
+
+        file : str
+            Name of the file to write.
+        """
         p = Path(file)
         p.write_text(str(self))
 
@@ -181,6 +181,12 @@ class ApertureFileAIJ:
         """
         Generate aperture object from file. Happily, each line is basically a path
         to an attribute name followed by a value.
+
+        Parameters
+        ----------
+
+        file : str
+            Name of the file to read.
         """
 
         # Make the instance to return

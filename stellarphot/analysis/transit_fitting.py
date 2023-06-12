@@ -366,7 +366,7 @@ class TransitModelFit:
         inclination : float
             Inclination of the orbit, in degrees.
 
-        airmass_trend : float
+        airmass_trend : float, optional
             Coefficient for a linear trend in airmass.
 
         width_trend : float

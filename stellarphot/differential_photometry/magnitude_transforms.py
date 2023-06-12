@@ -424,10 +424,11 @@ def transform_magnitudes(input_mags, catalog,
         Boolean array indicating which stars in ``input_mags`` have a match
         in the catalog.
 
-    transforms : namedtuple
+    transforms : `astropy.modeling.FittableModel`
         The coefficients of the transform. The coefficients are in the order
         of ascending power, i.e. the coefficient ``ci`` is the coefficient
-        of the term ``x**i``.
+        of the term ``x**i``.  Warning: This returns a namedtuple if the fit 
+        fails.
     """
     catalog_all_coords = SkyCoord(catalog['RAJ2000'],
                                   catalog['DEJ2000'],

@@ -60,12 +60,6 @@ def catalog_search(frame_wcs_or_center, shape, desired_catalog,
     Return the items from catalog that are within the search radius and
     (optionally) within the field of view of a frame.
 
-    This function takes coordinate data from an image and a
-    catalog name and returns the positions of those stars.
-    Preconditions:frame_wcs is a WCS object, shape is tuple, list or array of
-    numerical values, desired_catalog is a string and radius is a numerical
-    value.
-
     Parameters
     ----------
 
