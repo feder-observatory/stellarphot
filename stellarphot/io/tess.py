@@ -25,7 +25,8 @@ TIC_regex = re.compile(r"[tT][iI][cC][^\d]?(?P<star>\d+)(?P<planet>\.\d\d)?")
 
 @dataclass
 class TessSubmission:
-    """ A data class to represent TESS submissions.
+    """
+    A data class to represent TESS submissions.
 
     Parameters
     ----------
@@ -65,13 +66,6 @@ class TessSubmission:
 
     tic_coord: `astropycoordinates.SkyCoord`
         The SkyCoord of the target, from the TIC catalog.
-
-    Methods
-    -------
-
-    from_header(header, telescope_code="", planet=0)
-        Create a TessSubmission from a FITS header
-
     """
     telescope_code: str
     filter: str
@@ -84,7 +78,20 @@ class TessSubmission:
 
     @classmethod
     def from_header(cls, header, telescope_code="", planet=0):
-        # Set some default dummy values
+        """
+        Create a TessSubmission from a FITS header
+
+        Parameters
+        ----------
+        header: astropy.io.fits.Header
+            The FITS header to parse
+
+        telescope_code: str
+            The telescope code, e.g. "SRO" or "TJO"
+
+        planet: int
+            The planet number, if applicable
+        """
 
         tic_id = 0
         filter = ""
@@ -212,10 +219,10 @@ class TOI:
     tic_id: int
         The TIC ID of the target.
 
-    toi_table: str
+    toi_table: str, optional
         The path to the TOI table. If not provided, the default table will be downloaded.
 
-    allow_download: bool
+    allow_download: bool, optional
         Whether to allow the default table to be downloaded if it is not found.
 
     Attributes
@@ -326,12 +333,13 @@ class TOI:
 
 @dataclass
 class TessTargetFile:
-    """ A dataclass to hold information about a TESS target file.
+    """
+    A class to hold information about a TESS target file.
 
     Parameters
     ----------
 
-    coord : SkyCoord
+    coord : `astropy.coordinates.SkyCoord`
         The coordinates of the target.
 
     magnitude : float
@@ -340,7 +348,7 @@ class TessTargetFile:
     depth : float
         The depth of the transit.
 
-    file : str
+    file : str, optional
         The path to the target file. If not provided, a temporary file will be created.
 
     aperture_server : str

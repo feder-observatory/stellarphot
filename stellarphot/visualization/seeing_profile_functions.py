@@ -258,6 +258,18 @@ def find_hwhm(r, intensity):
 class RadialProfile:
     """ Class to hold radial profile information for a star.
 
+    Parameters
+    ----------
+
+    data : numpy array
+        Image data.
+
+    x : int
+        x position of the star.
+
+    y : int
+        y position of the star.
+
     Attributes
     ----------
 

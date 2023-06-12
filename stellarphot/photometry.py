@@ -240,7 +240,7 @@ def clipped_sky_per_pix_stats(data, annulus, sigma=5, iters=5):
     Returns
     -------
 
-    avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix : astropy.units.Quantity
+    avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix : `astropy.units.Quantity`
         Average, median and standard deviation of the sky per pixel.
 
     """
@@ -457,7 +457,7 @@ def photometry_on_directory(directory_with_images, object_of_interest,
         Dark current, in electron/sec. Used in the CCD equation
         to calculate error.
 
-    bjd_coords : astropy SkyCoord object
+    bjd_coords : `astropy.coordinates.SkyCoord`
         Coordinates of the object of interest in the Barycentric Julian Date
         frame. If not provided, the BJD column will not be added to the
         photometry table.
@@ -474,7 +474,7 @@ def photometry_on_directory(directory_with_images, object_of_interest,
     Returns
     -------
 
-    phot : astropy.table.Table
+    phot : `astropy.table.Table`
         Table containing the photometry results.
 
     """
