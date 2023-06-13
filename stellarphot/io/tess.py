@@ -83,7 +83,7 @@ class TessSubmission:
 
         Parameters
         ----------
-        header: astropy.io.fits.Header
+        header: `astropy.io.fits.Header`
             The FITS header to parse
 
         telescope_code: str
