@@ -19,7 +19,8 @@ from .source_detection import compute_fwhm
 __all__ = ['photutils_stellar_photometry',
            'faster_sigma_clip_stats',
            'find_too_close', 'clipped_sky_per_pix_stats',
-           'add_to_photometry_table', 'photometry_on_directory']
+           'add_to_photometry_table', 'photometry_on_directory',
+           'calculate_noise', 'find_times']
 
 
 def photutils_stellar_photometry(ccd_image, sources,
@@ -235,6 +236,13 @@ def clipped_sky_per_pix_stats(data, annulus, sigma=5, iters=5):
     iters : int, optional
         Maximum number of sigma clip iterations to perform. Iterations stop
         automatically if no pixels are rejected.
+
+    Returns
+    -------
+
+    avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix : `astropy.units.Quantity`
+        Average, median and standard deviation of the sky per pixel.
+
     """
     # Get a list of masks from the annuli
     # Use the 'center' method because then pixels are either in or out. To use
@@ -294,6 +302,26 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
     gain : float, optional
         Gain, in electrons/ADU, of the camera that took the image. The gain
         is used in calculating the instrumental magnitude.
+
+    bjd_coords : `astropy.coordinates.SkyCoord`
+        Coordinates of the object of interest in the Barycentric Julian Date
+        frame. If not provided, the BJD column will not be added to the
+        photometry table.
+
+    observatory_location : str
+        Name of the observatory where the images were taken. If not provided,
+        the BJD column will not be added to the photometry table.
+
+    fwhm_by_fit : bool, optional
+        If ``True``, the FWHM will be calculated by fitting a Gaussian to
+        the star. If ``False``, the FWHM will be calculated by finding the
+        second moments of the light distribution. Default is ``True``.
+
+    Returns
+    -------
+
+    None
+        The input table is modified in place.
     """
     phot.rename_column('aperture_sum_0', 'aperture_sum')
     phot['aperture_sum'].unit = u.adu
@@ -428,6 +456,27 @@ def photometry_on_directory(directory_with_images, object_of_interest,
     dark_current : float
         Dark current, in electron/sec. Used in the CCD equation
         to calculate error.
+
+    bjd_coords : `astropy.coordinates.SkyCoord`
+        Coordinates of the object of interest in the Barycentric Julian Date
+        frame. If not provided, the BJD column will not be added to the
+        photometry table.
+
+    observatory_location : str
+        Name of the observatory where the images were taken. If not provided,
+        the BJD column will not be added to the photometry table.
+
+    fwhm_by_fit : bool, optional
+        If ``True``, the FWHM will be calculated by fitting a Gaussian to
+        the star. If ``False``, the FWHM will be calculated by finding the
+        second order moments of the light distribution. Default is ``True``.
+
+    Returns
+    -------
+
+    phot : `astropy.table.Table`
+        Table containing the photometry results.
+
     """
     ifc = ImageFileCollection(directory_with_images)
     phots = []
@@ -557,6 +606,56 @@ def calculate_noise(gain=1.0, read_noise=0.0, dark_current_per_sec=0.0,
                     aperture_area=0, annulus_area=0,
                     exposure=0,
                     include_digitization=False):
+    """Computes the noise in a photometric measurement.
+
+    This function computes the noise (in units of gain) in a photometric measurement using the
+    revised CCD equation from Collins et al (2017) AJ, 153, 77.  The equation is:
+
+    .. math::
+
+    \sigma = \sqrt{G \cdot F + A \cdot \left(1 + \frac{A}{B}\right)\cdot \left[ G\cdot S + D \cdot t + R^2 + (0.289 G)^2\right]}
+
+    where :math:`\sigma` is the noise, :math:`G` is the gain, :math:`F` is the flux,
+    :math:`A` is the aperture area in pixels, :math:`B` is the annulus area in pixels,
+    :math:`S` is the sky per pixel, :math:`D` is the dark current per second,
+    :math:`R` is the read noise, and :math:`t` is exposure time.
+
+    Note: The :math:`(0.289 G)^2` term is "digitization noise" and is optional.
+
+    Parameters:
+    -----------
+    gain : float, optional
+        Gain of the CCD. In units of electrons per DN.
+
+    read_noise : float, optional
+        Read noise of the CCD in electrons.
+
+    dark_current_per_sec : float, optional
+        Dark current of the CCD in electrons per second.
+
+    flux : float, optional
+        Flux of the source in electrons.
+
+    sky_per_pix : float, optional
+        Sky per pixel in electrons.
+
+    aperture_area : int, optional
+        Area of the aperture in pixels.
+
+    annulus_area : int, optional
+        Area of the annulus in pixels.
+
+    exposure : int, optional
+        Exposure time in seconds.
+
+    include_digitization : bool, optional
+        Whether to include the digitization noise. Defaults to False.
+
+    Returns:
+    --------
+    float
+        The noise in the photometric measurement.
+    """
 
     try:
         no_annulus = (annulus_area == 0).all()
@@ -588,8 +687,7 @@ def calculate_noise(gain=1.0, read_noise=0.0, dark_current_per_sec=0.0,
     return np.sqrt(poisson_source + sky + dark + rn_error + digitization)
 
 
-def find_times(phot_column, exposure,
-               ra=331.1170417, dec=81.5659444,
+def find_times(phot_column, exposure, ra, dec,
                latitude=46.86678, longitude=263.54672):
     """
     Returns a numpy array of barycentric Julian date times
@@ -603,24 +701,25 @@ def find_times(phot_column, exposure,
     exposure : float; optional
         exposure time in seconds
 
-    RA : float; optional
-        Right ascension in degree format, default is for TIC-470127886
+    RA : float
+        Right ascension in degree units
 
-    Dec : float; optional
-        Declination  in degree format, default is for TIC-470127886
+    Dec : float
+        Declination  in degree units
 
     latitude : float; optional
-        latitude of the observatory, default is for Paul P. Feder Observatory
+        latitude of the observatory in degrees North, default is for Paul P. Feder Observatory
 
     longitude : float; optional
-        longitude of the observatory, default is for Paul P. Feder Observatory
+        longitude of the observatory in degree East of Greenwich (0 to 360), default
+        is for Paul P. Feder Observatory
 
 
     Returns
     -------
 
-    new_time : numpy array
-        array of barycentric times by Julian date
+    numpy array
+        array of times in barycentric Julian date
 
     """
     location = EarthLocation(lat=latitude, lon=longitude)
@@ -631,54 +730,7 @@ def find_times(phot_column, exposure,
     times_tdb = times.tdb
     time_barycenter = times_tdb + ltt_bary
 
-    #adjust to midpoint of exposure
+    # Adjust to midpoint of exposure
     bary_time = time_barycenter + exposure / 2
-
-    new_time = bary_time.jd
-
-    return new_time
-
-
-# ra=331.1170417, dec=81.5659444, latitude=46.86678, longitude=263.54672
-def find_bjd_mid_exposure(utc_times, exposure=0,
-                          coords=None, location=None):
-    """
-    Returns a numpy array of barycentric Julian date times
-
-    Parameters
-    ----------
-
-    phot_column : `astropy.table.Column` of `astropy.times.Time`  or numpy array
-        numpy array or column of observation dates/times.
-
-    exposure : float; optional
-        exposure time in seconds
-
-    coords : `astropy.coordinates.SkyCoord`
-        Ra/Dec of the object to be used for the light travel time
-        calculation.
-
-    location: `astropy.coordinates.EarthLocation`
-        Location of the observatory.
-
-    Returns
-    -------
-
-    new_time : numpy array
-        array of barycentric times by Julian date
-
-    """
-    location = EarthLocation(lat=latitude, lon=longitude)
-    ip_peg = SkyCoord(ra=[ra], dec=[dec], unit='degree')
-
-    if coords is None or observatory_location is None:
-        raise ValueError
-    times = Time(phot_column, scale='utc', format='isot', location=location)
-    ltt_bary = times.light_travel_time(coords)
-    times_tdb = times.tdb
-    time_barycenter = times_tdb + ltt_bary
-
-    # adjust to midpoint of exposure
-    bary_time = time_barycenter + exposure * u.second / 2
 
     return bary_time.jd

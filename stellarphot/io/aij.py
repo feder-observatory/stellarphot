@@ -7,12 +7,13 @@ from astropy.table import Table, hstack
 
 import numpy as np
 
-__all__ = ['parse_aij_table', 'ApertureAIJ', 'ApertureFileAIJ', 'MultiApertureAIJ', 'Star', 'generate_aij_table']
+__all__ = [ 'ApertureAIJ', 'MultiApertureAIJ', 'ApertureFileAIJ',
+           'generate_aij_table', 'parse_aij_table', 'Star']
 
 
 class ApertureAIJ:
     """
-    Represent the aperture information AstroImageJ saves.
+    Represents the aperture information AstroImageJ saves.
     """
     def __init__(self):
         # Outer annulus radius
@@ -52,7 +53,7 @@ class ApertureAIJ:
 
 class MultiApertureAIJ:
     """
-    Represent the multi-aperture information that AstroImageJ saves
+    Class to represent the multi-aperture information that AstroImageJ saves
     """
     def __init__(self):
         # Default values for these chosen to match AIJ defaults
@@ -130,7 +131,8 @@ class MultiApertureAIJ:
 
 class ApertureFileAIJ:
     """
-    Represent AstroImageJ aperture file.
+    Class to represent AstroImageJ aperture file.
+
     """
     def __init__(self):
         self.aperture = ApertureAIJ()
@@ -162,6 +164,15 @@ class ApertureFileAIJ:
         return (self.aperture == other.aperture) and (self.multiaperture == other.multiaperture)
 
     def write(self, file):
+        """
+        Write the aperture object to a file.
+
+        Parameters
+        ----------
+
+        file : str
+            Name of the file to write.
+        """
         p = Path(file)
         p.write_text(str(self))
 
@@ -170,6 +181,12 @@ class ApertureFileAIJ:
         """
         Generate aperture object from file. Happily, each line is basically a path
         to an attribute name followed by a value.
+
+        Parameters
+        ----------
+
+        file : str
+            Name of the file to read.
         """
 
         # Make the instance to return
@@ -275,6 +292,24 @@ def _is_comp(star_coord, comp_table):
 
 
 def generate_aij_table(table_name, comparison_table):
+    """
+    Generate an AIJ table from a stellarphot table and a comparison table.
+
+    Parameters
+    ----------
+
+    table_name : `astropy.table.Table`
+        Table of stellarphot photometry.
+
+    comparison_table : `astropy.table.Table`
+        Table of comparison star photometry.
+
+    Returns
+    -------
+
+    base_table : `astropy.table.Table`
+        Table of photometry in AIJ format.
+    """
     info_columns = {
         'date-obs': 'DATE_OBS',
         'airmass': 'AIRMASS',
@@ -340,6 +375,13 @@ def parse_aij_table(table_name):
 
     table_name : str
         Name of the table.
+
+    Returns
+    -------
+
+    stars : list
+        List of `Star` objects.
+
     """
 
     # Read in the raw table.
@@ -388,6 +430,66 @@ def parse_aij_table(table_name):
 
 
 class Star(object):
+    """
+    A class for storing photometry for a single star.
+
+    Attributes
+    ----------
+
+    airmass : `~astropy.units.Quantity`
+        Airmass at the time of observation.
+
+    counts : `~astropy.units.Quantity`
+        Net counts in the aperture.
+
+    ra : `~astropy.units.Quantity`
+        Right ascension of the star.
+
+    dec : `~astropy.units.Quantity`
+        Declination of the star.
+
+    error : `~astropy.units.Quantity`
+        Error in the net counts.
+
+    sky_per_pixel : `~astropy.units.Quantity`
+        Sky brightness per pixel.
+
+    peak : `~astropy.units.Quantity`
+        Peak counts in the aperture.
+
+    jd_utc_start : `~astropy.units.Quantity`
+        Julian date of the start of the observation.
+
+    mjd_utc_start : `~astropy.units.Quantity`
+        Modified Julian date of the start of the observation.
+
+    jd_utc_mid : `~astropy.units.Quantity`
+        Julian date of the middle of the observation.
+
+    mjd_utc_mid : `~astropy.units.Quantity`
+        Modified Julian date of the middle of the observation.
+
+    jd_utc_end : `~astropy.units.Quantity`
+        Julian date of the end of the observation.
+
+    mjd_utc_end : `~astropy.units.Quantity`
+        Modified Julian date of the end of the observation.
+
+    exposure : `~astropy.units.Quantity`
+        Exposure time of the observation.
+
+    magnitude : `~astropy.units.Quantity`
+        Magnitude of the star.
+
+    snr : `~astropy.units.Quantity`
+        Signal-to-noise ratio of the star.
+
+    magnitude_error : `~astropy.units.Quantity`
+        Error in the magnitude of the star.
+
+    bjd_tdb : `~astropy.units.Quantity`
+        Barycentric Dynamical Time taking into account relativity.
+    """
     def __init__(self, table, id_num):
         self._table = table
         self._table['DEC'].unit = u.degree

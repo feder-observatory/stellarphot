@@ -14,9 +14,44 @@ __all__ = ['plot_magnitudes', 'multi_night']
 def plot_magnitudes(mags=None, errors=None, times=None,
                     source=None, night=None, ref_mag=0,
                     alpha=0.25, y_range=None):
-    """
-    Plot one night of magnitude data for one source, overlaying a rolling
+    """Plot one night of magnitude data for one source, overlaying a rolling
     mean and indication of mean/deviation.
+
+    Parameters
+    ----------
+
+    mags : array of floats, optional
+        Magnitudes of source.
+
+    errors : array of floats, optional
+        Errors on magnitudes.
+
+    times : array-like, optional
+        Times of observations.
+
+    source : `~stellarphot.source.Source`, optional
+        Source object.
+
+    night : float, optional
+        Night of observations.
+
+    ref_mag : float, optional
+        Reference magnitude of source. Default is 0.
+
+    alpha : float, optional
+        Alpha value for error bars. Default is 0.25.
+
+    y_range : tuple
+        Range of y-axis. Default is None.
+
+    Returns
+    -------
+
+    mean : float
+        Mean magnitude of source.
+
+    std : float
+        Standard deviation of magnitudes.
     """
     mean = np.nanmean(mags)
     std = np.nanstd(mags)
@@ -63,8 +98,38 @@ def plot_magnitudes(mags=None, errors=None, times=None,
 def multi_night(sources, unique_nights, night,
                 brightest_mag, mags, mag_err,
                 uniform_ylim=True):
-    """
-    Plot magnitude vs time data for several sources over several nights
+    """Plot magnitude vs time data for several sources over several nights.
+
+    Parameters
+    ----------
+
+    sources : list
+        List of `~stellarphot.source.Source` objects.
+
+    unique_nights : list
+        List of unique nights.
+
+    night : array-like
+        Array of nights.
+
+    brightest_mag : float
+        Brightest magnitude of sources.
+
+    mags : array-like
+        Array of magnitudes.
+
+    mag_err : array-like
+        Array of magnitude errors.
+
+    uniform_ylim : bool, optional
+        If True, use the median and median absolute deviation of the
+        magnitudes to set the y-axis range for each source. Default is True.
+
+    Returns
+    -------
+
+    None
+        Generates a plot of magnitude vs time for each source.
     """
     number_of_nights = len(unique_nights)
 

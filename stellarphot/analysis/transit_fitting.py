@@ -33,8 +33,8 @@ __all__ = ['VariableArgsFitter', 'TransitModelFit']
 
 class VariableArgsFitter(LevMarLSQFitter):
     """
-    Allow fitting of functions with arbitrary number of positional
-    parameters.
+    A callable class that can be used to fit functions with arbitrary number of positional parameters.
+    This is a modified version of the astropy.modeling.fitting.LevMarLSQFitter fitter.
     """
     def __init__(self):
         super().__init__()
@@ -89,6 +89,55 @@ class VariableArgsFitter(LevMarLSQFitter):
 
 
 class TransitModelFit:
+    """Transit model fits to observed light curves.
+
+    Parameters
+    ----------
+    batman_params : batman.TransitParams
+        Parameters for the batman transit model. If not provided, the
+        default parameters will be used.
+
+    Attributes
+    ----------
+    times : array-like
+        Times at which the light curve is observed. Must be set before
+        fitting.
+
+    airmass : array-like
+        Airmass at each time. Must be set before fitting.
+
+    width : array-like
+        Width of the star in pixels at each time. Must be set before fitting.
+
+    spp : array-like
+        Sky per pixel at each time. Must be set before fitting.
+
+    data : array-like
+        Observed fluxes. Must be set before fitting.
+
+    model : astropy.modeling.Model
+        The model used for fitting. This is a combination of the batman
+        transit model and any other trends that are included in the fit.
+        This is set up when the ``setup_model`` method is called.
+
+    weights : array-like
+        Weights to use for fitting. If not provided, all weights are
+        set to 1.
+
+    detrend_parameters : set
+        Set of parameters to detrend by. This is set when the ``airmass``,
+        ``width``, or ``spp`` attributes are set. If all three are set,
+        then all three are used for detrending. If ``None`` of them are
+        set, then no detrending is done.
+
+    BIC : float
+        Bayesian Information Criterion for the fit. This is calculated
+        after the fit is performed.
+
+    n_fit_parameters : int
+        Number of parameters that were fit. This is calculated after the
+        fit is performed.
+    """
     def __init__(self, batman_params=None):
         self._batman_params = batman.TransitParams()
         self._set_default_batman_params()
@@ -309,12 +358,27 @@ class TransitModelFit:
         duration : float
             Duration of the transit,in the same units as ``t0`` and
             ``period``.
+
         period : float
             Period of the planet. Should be in the same units as ``t0``
             and times used for fitting.
 
         inclination : float
             Inclination of the orbit, in degrees.
+
+        airmass_trend : float, optional
+            Coefficient for a linear trend in airmass.
+
+        width_trend : float
+            Coefficient for a linear trend in stellar width.
+
+        spp_trend : float
+            Coefficient for a linear trend in sky per pixel.
+
+        Returns
+        -------
+        None
+            Sets values for the model parameters.
         """
         self._setup_transit_model()
 
@@ -433,6 +497,22 @@ class TransitModelFit:
         """
         Calculate the light curve corresponding to the model, optionally
         detrended by one or more parameters.
+        
+        Parameters
+        ----------
+        at_times : array-like
+            Times at which to calculate the model. If not provided, the
+            times used for fitting will be used.
+            
+        detrend_by : str or list of str
+            Parameter(s) to detrend by. If ``None``, no detrending is
+            done. If ``'all'``, all parameters that are set will be
+            used for detrending.
+            
+        Returns
+        -------
+        model : array-like
+            Model light curve.
         """
         zeros = np.zeros_like(self.times)
         airmass = self.airmass if self.airmass is not None else zeros

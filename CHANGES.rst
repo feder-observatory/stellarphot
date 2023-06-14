@@ -1,4 +1,4 @@
-1.1.5 (2023-05-31)
+1.3.9 (Unreleased)
 ------------------
 
 New Features
@@ -6,11 +6,15 @@ New Features
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-+ Most functions are now linked to the documentation (some still need docstrings). [#92]
++ Old and redundant notebooks have been purged and bad references to `glowing-waffles` instead of `stellarphot` [#94]
++ Most functions are now linked to the documentation. [#90]
++ Many functions and classes that had missing documentation have now had docstrings added.
 
 Bug Fixes
 ^^^^^^^^^
-+ Runs without errors on current numpy (1.24.3) and astropy (5.3).
+
++ Runs without errors on release version of astrowidgets (0.3.0) [#93]
++ Runs without errors on current numpy (1.24.3) and astropy (5.3). [#92]
 
 
 1.1.2 (2022-10-18)
@@ -18,7 +22,6 @@ Bug Fixes
 
 New Features
 ^^^^^^^^^^^^
-
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -31,13 +31,21 @@ def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM,
 
     file_name : optional, string
         if entered, file will save as png with this name
+
     gap : number
         the distance between the aperture and the inner annulus
+
     annulus_width : number
         the distance between the inner and outer annulus
 
     figsize : tuple of int, optional
         Size of figure.
+
+    Returns
+    -------
+
+    `matplotlib.pyplot.figure`
+        The figure object containing the seeing plot.
     """
     if radius is None:
         radius = HWHM * 4
@@ -107,6 +115,9 @@ def plot_predict_ingress_egress(ingress_time, egress_time, end_line=1,
     egress_time : number
         the end of an exoplanet transit
 
+    end_line : number
+        offset to move the vertical lines
+
     ingress_x_pos : number
         offset to center ingress label
 
@@ -115,6 +126,12 @@ def plot_predict_ingress_egress(ingress_time, egress_time, end_line=1,
 
     labels_y_pos : number
         offset to move ingress and egress labels
+
+    Returns
+    -------
+
+    None
+        Directly adds lines and labels to the current plot.
     """
     ymin, ymax = plt.ylim()
 

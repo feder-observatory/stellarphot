@@ -18,13 +18,55 @@ from stellarphot.analysis.exotic import get_tic_info
 __all__ = ["TessSubmission", "TOI", "TessTargetFile"]
 
 # Makes me want to vomit, but....
-DEFAULT_TABLE_LOCATION = "who.the.fuck.knows"
+DEFAULT_TABLE_LOCATION = "who.the.heck.knows"
 TOI_TABLE_URL = "https://exofop.ipac.caltech.edu/tess/download_toi.php?output=csv"
 TIC_regex = re.compile(r"[tT][iI][cC][^\d]?(?P<star>\d+)(?P<planet>\.\d\d)?")
 
 
 @dataclass
 class TessSubmission:
+    """
+    A data class to represent TESS submissions.
+
+    Parameters
+    ----------
+
+    telescope_code: String
+        The telescope code, e.g. "SRO" or "TJO"
+
+    filter: String
+        The filter used for the observations, e.g. "Ic" or "Rc"
+
+    utc_start: String
+        The UTC date of the first observation, in YYYYMMDD format
+
+    tic_id: int
+        The TIC ID of the target
+
+    planet_number: int
+        The planet number, if applicable
+
+
+    Attributes
+    ----------
+    base_name: str
+        The base name of the submission, e.g. "TIC123456789-01_20200101_SRO_Ic"
+
+    seeing_profile: str
+        The name of the seeing profile file, e.g. "TIC123456789-01_20200101_SRO_Ic_seeing-profile.png"
+
+    field_image: str
+        The name of the field image file, e.g. "TIC123456789-01_20200101_SRO_Ic_field.png"
+
+    field_image_zoom: str
+        The name of the zoomed-in field image file, e.g. "TIC123456789-01_20200101_SRO_Ic_field-zoom.png"
+
+    apertures: str
+        The name of the apertures file, e.g. "TIC123456789-01_20200101_SRO_Ic_measurements.apertures"
+
+    tic_coord: `astropycoordinates.SkyCoord`
+        The SkyCoord of the target, from the TIC catalog.
+    """
     telescope_code: str
     filter: str
     utc_start: int
@@ -36,7 +78,20 @@ class TessSubmission:
 
     @classmethod
     def from_header(cls, header, telescope_code="", planet=0):
-        # Set some default dummy values
+        """
+        Create a TessSubmission from a FITS header
+
+        Parameters
+        ----------
+        header: `astropy.io.fits.Header`
+            The FITS header to parse
+
+        telescope_code: str
+            The telescope code, e.g. "SRO" or "TJO"
+
+        planet: int
+            The planet number, if applicable
+        """
 
         tic_id = 0
         filter = ""
@@ -156,6 +211,59 @@ class TessSubmission:
 
 
 class TOI:
+    """ A class to hold information about a TOI (TESS Object of Interest).
+
+    Parameters
+    ----------
+
+    tic_id: int
+        The TIC ID of the target.
+
+    toi_table: str, optional
+        The path to the TOI table. If not provided, the default table will be downloaded.
+
+    allow_download: bool, optional
+        Whether to allow the default table to be downloaded if it is not found.
+
+    Attributes
+    ----------
+
+    tess_mag: float
+        The TESS magnitude of the target.
+
+    tess_mag_error: float
+        The uncertainty in the TESS magnitude.
+
+    depth: float
+        The transit depth of the target.
+
+    depth_error: float
+        The uncertainty in the transit depth.
+
+    epoch: float
+        The epoch of the transit.
+
+    epoch_error: float
+        The uncertainty in the epoch of the transit.
+
+    period: float
+        The period of the transit.
+
+    period_error: float
+        The uncertainty in the period of the transit.
+
+    duration: float
+        The duration of the transit.
+
+    duration_error: float
+        The uncertainty in the duration of the transit.
+
+    coord: SkyCoord
+        The coordinates of the target.
+
+    tic_id: int
+        The TIC ID of the target.
+    """
     def __init__(self, tic_id, toi_table=DEFAULT_TABLE_LOCATION, allow_download=True):
         path = Path(toi_table)
         if not path.is_file():
@@ -225,6 +333,27 @@ class TOI:
 
 @dataclass
 class TessTargetFile:
+    """
+    A class to hold information about a TESS target file.
+
+    Parameters
+    ----------
+
+    coord : `astropy.coordinates.SkyCoord`
+        The coordinates of the target.
+
+    magnitude : float
+        The magnitude of the target.
+
+    depth : float
+        The depth of the transit.
+
+    file : str, optional
+        The path to the target file. If not provided, a temporary file will be created.
+
+    aperture_server : str, optional
+        The URL of the aperture server. default: https://www.astro.louisville.edu/
+    """
     coord : SkyCoord
     magnitude : float
     depth : float
