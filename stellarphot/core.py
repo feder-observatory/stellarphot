@@ -11,19 +11,25 @@ class Camera:
     ----------
     gain : `astropy.quantity.Quantity`
         The gain of the camera in units such that the unit of the product `gain` times the image data matches the unit of the `read_noise`.
+
     read_noise : `astropy.quantity.Quantity`
         The read noise of the camera in units of electrons.
+
     dark_current : `astropy.quantity.Quantity`
         The dark current of the camera in units such that, when multiplied by exposure time, the unit matches the unit of the `read_noise`.
 
     Attributes
     ----------
-    gain : float times u.electron / u.adu,
-        The gain of the camera in units of electrons per ADU.
-    read_noise : float times u.electron
+
+    gain : `astropy.quantity.Quantity`
+        The gain of the camera in units such that the unit of the product `gain` times the image data matches the unit of the `read_noise`.
+
+    read_noise : `astropy.quantity.Quantity`
         The read noise of the camera in units of electrons.
-    dark_current : float times u.electron / u.second
-        The dark current of the camera in units of electrons per second.
+
+    dark_current : `astropy.quantity.Quantity`
+        The dark current of the camera in units such that, when multiplied by exposure time, the unit matches the unit of the `read_noise`.
+
 
     Notes
     -----
