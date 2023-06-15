@@ -10,7 +10,7 @@ def plot_many_factors(photometry, low, high, shift, scale):
     Parameters
     ----------
 
-    photometry : `astropy.table.Table`
+    photometry : `~astropy.table.Table`
         The photometry table to plot.
 
     low : float

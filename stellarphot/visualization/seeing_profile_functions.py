@@ -40,7 +40,7 @@ def set_keybindings(image_widget, scroll_zoom=False):
     Parameters
     ----------
 
-    image_widget : astrowidgets.ImageWidget
+    image_widget : `~astrowidgets.ImageWidget`
         Image widget on which to set the key bindings.
 
     scroll_zoom : bool, optional
@@ -92,7 +92,7 @@ def find_center(image, center_guess, cutout_size=30, max_iters=10):
     Parameters
     ----------
 
-    image : numpy array or CCDData
+    image : `~astropy.nddata.CCDData` or numpy array
         Image containing the star.
 
     center_guess : array or tuple
@@ -164,7 +164,7 @@ def radial_profile(data, center, size=30, return_scaled=True):
     Parameters
     ----------
 
-    data : numpy array or CCDData
+    data : `~astropy.nddata.CCDData` or numpy array
         Image data
 
     center : list-like
@@ -319,13 +319,13 @@ def box(imagewidget):
     Parameters
     ----------
 
-    imagewidget : ImageWidget
+    imagewidget : `~astrowidgets.ImageWidget`
         ImageWidget instance to use for the seeing profile.
 
     Returns
     -------
 
-    box : ipywidgets.Box
+    box : `~ipywidgets.VBox`
         Box containing the seeing profile widget.
     """
     return SeeingProfileWidget(imagewidget=imagewidget).box
@@ -336,7 +336,7 @@ class SeeingProfileWidget:
 
     Parameters
     ----------
-    imagewidget : ImageWidget, optional
+    imagewidget : `~astrowidgets.ImageWidget`, optional
         ImageWidget instance to use for the seeing profile.
 
     width : int, optional

@@ -46,9 +46,9 @@ def read_file(radec_file):
     Returns
     -------
 
-    `astropy.table.Table`
+    `~astropy.table.Table`
         Table with target information, including a
-        `astropy.coordinates.SkyCoord` column.
+        `~astropy.coordinates.SkyCoord` column.
     """
     df = pandas.read_csv(radec_file, names=['RA', 'Dec', 'a', 'b', 'Mag'])
     target_table = Table.from_pandas(df)
@@ -74,10 +74,10 @@ def set_up(sample_image_for_finding_stars, directory_with_images='.'):
     Returns
     -------
 
-    ccd: `astropy.nddata.CCDData`
+    ccd: `~astropy.nddata.CCDData`
         Sample image.
 
-    vsx: `astropy.table.Table`
+    vsx: `~astropy.table.Table`
         Table with known variables in the field of view.
 
     """
@@ -106,26 +106,26 @@ def crossmatch_APASS2VSX(CCD, RD, vsx):
     Parameters
     ----------
 
-    CCD : `astropy.nddata.CCDData`
+    CCD : `~astropy.nddata.CCDData`
         Sample image.
 
-    RD : `astropy.table.Table`
+    RD : `a~stropy.table.Table`
         Table with target information, including a
-        `astropy.coordinates.SkyCoord` column.
+        `~astropy.coordinates.SkyCoord` column.
 
-    vsx : `astropy.table.Table`
+    vsx : `~astropy.table.Table`
         Table with known variables in the field of view.
 
     Returns
     -------
 
-    apass : `astropy.table.Table`
+    apass : `~astropy.table.Table`
         Table with APASS stars in the field of view.
 
-    v_angle : `astropy.units.Quantity`
+    v_angle : `~astropy.units.Quantity`
         Angular separation between APASS stars and VSX stars.
 
-    RD_angle : `astropy.units.Quantity`
+    RD_angle : `~astropy.units.Quantity`
         Angular separation between APASS stars and input targets.
     """
     apass, apass_in_bright = find_apass_stars(CCD)
@@ -160,13 +160,13 @@ def mag_scale(cmag, apass, v_angle, RD_angle,
     cmag : float
         Magnitude of the target star.
 
-    apass : `astropy.table.Table`
+    apass : `~astropy.table.Table`
         Table with APASS stars in the field of view.
 
-    v_angle : `astropy.units.Quantity`
+    v_angle : `~astropy.units.Quantity`
         Angular separation between APASS stars and VSX stars.
 
-    RD_angle : `astropy.units.Quantity`
+    RD_angle : `~astropy.units.Quantity`
         Angular separation between APASS stars and input targets.
 
     brighter_dmag : float, optional
@@ -178,10 +178,10 @@ def mag_scale(cmag, apass, v_angle, RD_angle,
     Returns
     -------
 
-    apass_good_coord : `astropy.coordinates.SkyCoord`
+    apass_good_coord : `~astropy.coordinates.SkyCoord`
         Coordinates of the comparison stars.
 
-    good_stars : `astropy.table.Table`
+    good_stars : `~astropy.table.Table`
         Table with the comparison stars.
     """
     high_mag = apass['r_mag'] < cmag + dimmer_dmag
@@ -208,22 +208,22 @@ def in_field(apass_good_coord, ccd, apass, good_stars):
     Parameters
     ----------
 
-    apass_good_coord : `astropy.coordinates.SkyCoord`
+    apass_good_coord : `~astropy.coordinates.SkyCoord`
         Coordinates of the comparison stars.
 
-    ccd : `astropy.nddata.CCDData`
+    ccd : `~astropy.nddata.CCDData`
         Sample image.
 
-    apass : `astropy.table.Table`
+    apass : `~astropy.table.Table`
         Table with APASS stars in the field of view.
 
-    good_stars : `astropy.table.Table`
+    good_stars : `~astropy.table.Table`
         Table with the comparison stars.
 
     Returns
     -------
 
-    ent : `astropy.table.Table`
+    ent : `~astropy.table.Table`
         Table with APASS stars in the field of view.
     """
     apassx, apassy = ccd.wcs.all_world2pix(
@@ -248,20 +248,20 @@ def make_markers(iw, ccd, RD, vsx, ent, name_or_coord=None):
     iw : `astrowidgets.ImageWidget`
         Ginga widget.
 
-    ccd : `astropy.nddata.CCDData`
+    ccd : `~astropy.nddata.CCDData`
         Sample image.
 
-    RD : `astropy.table.Table`
+    RD : `~astropy.table.Table`
         Table with target information, including a
-        `astropy.coordinates.SkyCoord` column.
+        `~astropy.coordinates.SkyCoord` column.
 
-    vsx : `astropy.table.Table`
+    vsx : `~astropy.table.Table`
         Table with known variables in the field of view.
 
-    ent : `astropy.table.Table`
+    ent : `~astropy.table.Table`
         Table with APASS stars in the field of view.
 
-    name_or_coord : str or `astropy.coordinates.SkyCoord`, optional
+    name_or_coord : str or `~astropy.coordinates.SkyCoord`, optional
         Name or coordinates of the target.
 
     Returns
@@ -305,10 +305,10 @@ def wrap(imagewidget, outputwidget):
     Parameters
     ----------
 
-    imagewidget : `astrowidgets.ImageWidget`
+    imagewidget : `~astrowidgets.ImageWidget`
         Ginga widget.
 
-    outputwidget : `ipywidgets.Output`
+    outputwidget : `~ipywidgets.Output`
         Output widget for printing information.
 
     """
@@ -380,7 +380,7 @@ class ComparisonViewer:
     targets_from_file : str, optional
         File with target information.
 
-    object_coordinate : `astropy.coordinates.SkyCoord`, optional
+    object_coordinate : `~astropy.coordinates.SkyCoord`, optional
         Coordinates of the target.
 
     aperture_output_file : str, optional
@@ -401,16 +401,16 @@ class ComparisonViewer:
     targets_from_file : str
         File with target information.
 
-    tess_submission : `tess_stars2px.TessStars2Px`
+    tess_submission : `~stellarphot.io.TessSubmission`
         Instance of the TESS submission class.
 
-    target_coord : `astropy.coordinates.SkyCoord`
+    target_coord : `~astropy.coordinates.SkyCoord`
         Coordinates of the target.
 
-    box : `ipywidgets.Box`
+    box : `~ipywidgets.Box`
         Box containing the widgets.
 
-    iw : `ginga.util.grc.RemoteClient`
+    iw : `~ginga.util.grc.RemoteClient`
         Ginga widget.
 
     aperture_output_file : str
@@ -480,7 +480,7 @@ class ComparisonViewer:
         Returns
         -------
 
-        our_vsx : `astropy.table.Table`
+        our_vsx : `~astropy.table.Table`
             Table of the variables in the class.
 
         """
@@ -717,7 +717,7 @@ class ComparisonViewer:
 
         Returns
         -------
-        comp_table : `astropy.table.Table`
+        comp_table : `~astropy.table.Table`
             Table of stars to use for the aperture file.
         """
         try:
@@ -829,9 +829,10 @@ class ComparisonViewer:
         Parameters
         ----------
 
-        radius : `astropy.units.Quantity`, optional
+        radius : `~astropy.units.Quantity`, optional
             Radius of circle. The default is ``2.5*u.arcmin``.
-        pixel_scale : `astropy.units.Quantity`, optional
+
+        pixel_scale : `~astropy.units.Quantity`, optional
             Pixel scale of image. The default is ``0.56*u.arcsec/u.pixel``.
 
         Returns
@@ -893,7 +894,7 @@ class ComparisonViewer:
         Parameters
         ----------
 
-        width : `astropy.units.Quantity`, optional
+        width : `~astropy.units.Quantity`, optional
             Width of field of view. The default is ``6*u.arcmin``.
 
         Returns

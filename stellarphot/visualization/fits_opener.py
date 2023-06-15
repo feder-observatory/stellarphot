@@ -15,16 +15,17 @@ class FitsOpener:
 
     Attributes
     ----------
-    file_chooser : `ipyfilechooser.FileChooser`
+
+    ccd : `~astropy.nddata.CCDData`
+        The selected FITS file as a CCDData object.
+
+    file_chooser : `~ipyfilechooser.FileChooser`
         The actual FileChooser widget.
 
     header : dict
         The header of the selected FITS file.
 
-    ccd : `astropy.nddata.CCDData`
-        The selected FITS file as a CCDData object.
-
-    path : `pathlib.Path`
+    path : `~pathlib.Path`
         The path to the selected FITS file.
 
     register_callback : function, optional
@@ -107,7 +108,7 @@ class FitsOpener:
         Parameters
         ----------
 
-        image_widget : `astrowidgets.ImageWidget`
+        image_widget : `~astrowidgets.ImageWidget`
             The widget into which to load the image.
         """
         with warnings.catch_warnings():

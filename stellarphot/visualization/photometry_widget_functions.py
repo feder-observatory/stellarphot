@@ -14,17 +14,20 @@ class PhotometrySettings:
 
     Attributes
     ----------
-    box : `~ipywidgets.VBox`
-        The box containing the widgets.
-
-    image_folder : `~pathlib.Path`
-        The path to the folder containing the images.
-
     aperture_locations : `~pathlib.Path`
         The path to the file containing the aperture locations.
 
     aperture_radius : int
         The radius of the aperture.
+
+    box : `~ipywidgets.VBox`
+        The box containing the widgets.
+
+    ifc : `~ccdproc.ImageFileCollection`
+        The image file collection for the images.
+
+    image_folder : `~pathlib.Path`
+        The path to the folder containing the images.
 
     object_name : str
         The name of the object.
