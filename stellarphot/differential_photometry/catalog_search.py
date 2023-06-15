@@ -193,7 +193,7 @@ def find_apass_stars(image_or_center,
     Get APASS data from Vizer.
 
     Parameters
-    ---------
+    ----------
 
     image_or_center : `~astropy.nddata.CCDData` or `~astropy.coordinates.SkyCoord`
         Either an image with a WCS (from which the RA/Dec will be extracted) or coordinate of

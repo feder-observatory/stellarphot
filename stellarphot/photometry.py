@@ -612,7 +612,9 @@ def calculate_noise(gain=1.0, read_noise=0.0, dark_current_per_sec=0.0,
     This function computes the noise (in units of gain) in a photometric measurement using the
     revised CCD equation from Collins et al (2017) AJ, 153, 77.  The equation is:
 
-    .. math:: \sigma = \sqrt{G \cdot F + A \cdot \left(1 + \frac{A}{B}\right)\cdot \left[ G\cdot S + D \cdot t + R^2 + (0.289 G)^2\right]}
+    .. math::
+
+        \\sigma = \\sqrt{G \\cdot F + A \\cdot \\left(1 + \\frac{A}{B}\\right)\\cdot \\left[ G\\cdot S + D \\cdot t + R^2 + (0.289 G)^2\\right]}
 
     where :math:`\sigma` is the noise, :math:`G` is the gain, :math:`F` is the flux,
     :math:`A` is the aperture area in pixels, :math:`B` is the annulus area in pixels,
@@ -621,8 +623,9 @@ def calculate_noise(gain=1.0, read_noise=0.0, dark_current_per_sec=0.0,
 
     Note: The :math:`(0.289 G)^2` term is "digitization noise" and is optional.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
+
     gain : float, optional
         Gain of the CCD. In units of electrons per DN.
 
@@ -650,9 +653,10 @@ def calculate_noise(gain=1.0, read_noise=0.0, dark_current_per_sec=0.0,
     include_digitization : bool, optional
         Whether to include the digitization noise. Defaults to False.
 
-    Returns:
-    --------
-    float
+    Returns
+    -------
+
+    noise : float
         The noise in the photometric measurement.
     """
 
