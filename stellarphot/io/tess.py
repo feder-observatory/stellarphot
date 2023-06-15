@@ -64,7 +64,7 @@ class TessSubmission:
     apertures: str
         The name of the apertures file, e.g. "TIC123456789-01_20200101_SRO_Ic_measurements.apertures"
 
-    tic_coord: `astropycoordinates.SkyCoord`
+    tic_coord: `~astropy.coordinates.SkyCoord`
         The SkyCoord of the target, from the TIC catalog.
     """
     telescope_code: str
@@ -83,7 +83,7 @@ class TessSubmission:
 
         Parameters
         ----------
-        header: `astropy.io.fits.Header`
+        header: `~astropy.io.fits.Header`
             The FITS header to parse
 
         telescope_code: str
@@ -228,17 +228,20 @@ class TOI:
     Attributes
     ----------
 
-    tess_mag: float
-        The TESS magnitude of the target.
-
-    tess_mag_error: float
-        The uncertainty in the TESS magnitude.
+    coord: `~astropy.coordinates.SkyCoord`
+        The coordinates of the target.
 
     depth: float
         The transit depth of the target.
 
     depth_error: float
         The uncertainty in the transit depth.
+
+    duration: float
+        The duration of the transit.
+
+    duration_error: float
+        The uncertainty in the duration of the transit.
 
     epoch: float
         The epoch of the transit.
@@ -252,14 +255,11 @@ class TOI:
     period_error: float
         The uncertainty in the period of the transit.
 
-    duration: float
-        The duration of the transit.
+    tess_mag: float
+        The TESS magnitude of the target.
 
-    duration_error: float
-        The uncertainty in the duration of the transit.
-
-    coord: SkyCoord
-        The coordinates of the target.
+    tess_mag_error: float
+        The uncertainty in the TESS magnitude.
 
     tic_id: int
         The TIC ID of the target.
@@ -339,7 +339,7 @@ class TessTargetFile:
     Parameters
     ----------
 
-    coord : `astropy.coordinates.SkyCoord`
+    coord : `~astropy.coordinates.SkyCoord`
         The coordinates of the target.
 
     magnitude : float
@@ -353,6 +353,32 @@ class TessTargetFile:
 
     aperture_server : str, optional
         The URL of the aperture server. default: https://www.astro.louisville.edu/
+
+
+    Attributes
+    ----------
+
+    aperture_server : str
+        The URL of the aperture server.
+
+    coord : `~astropy.coordinates.SkyCoord`
+        The coordinates of the target.
+
+    depth : float
+        The depth of the transit.
+
+    file : str
+        The path to the target file. If not provided, a temporary file will be created.
+
+    magnitude : float
+        The magnitude of the target.
+
+    target_file : str
+        The path to the target file.
+
+    target_table : `~astropy.table.Table`
+        The target table.
+
     """
     coord : SkyCoord
     magnitude : float
