@@ -99,7 +99,8 @@ def plot_magnitudes(mags=None, errors=None, times=None,
 def multi_night(sources, unique_nights, night,
                 brightest_mag, mags, mag_err,
                 uniform_ylim=True):
-    """Plot magnitude vs time data for several sources over several nights.
+    """
+    Plot magnitude vs time data for several sources over several nights.
 
     Parameters
     ----------

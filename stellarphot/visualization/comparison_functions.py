@@ -249,7 +249,7 @@ def make_markers(iw, ccd, RD, vsx, ent, name_or_coord=None):
     Parameters
     ----------
 
-    iw : `astrowidgets.ImageWidget`
+    iw : `~astrowidgets.ImageWidget`
         Ginga widget.
 
     ccd : `~astropy.nddata.CCDData`
@@ -704,7 +704,7 @@ class ComparisonViewer:
         Parameters
         ----------
 
-        button : `ipywidgets.Button`, optional
+        button : `~ipywidgets.Button`, optional
             The button that was clicked.
 
         Returns

@@ -197,29 +197,11 @@ class ApertureFileAIJ:
     Attributes
     ----------
 
-    aperture : `stellarphot.io.ApertureAIJ`
+    aperture : `~stellarphot.io.ApertureAIJ`
         Aperture information.
-
-    multiaperture : `stellarphot.io.MultiApertureAIJ`
+`
+    multiaperture : `~stellarphot.io.MultiApertureAIJ`
         Multi-aperture information.
-
-    Methods
-    -------
-
-    from_table(aperture_table,aperture_rad, inner_annulus, outer_annulus,
-                   default_absmag, default_isalign,
-                   default_centroidstar,
-                   y_size) : `stellarphot.io.ApertureFileAIJ`
-        Create an `stellarphot.io.ApertureFileAIJ` from a stellarphot aperture
-        table and info about the aperture sizes.
-
-    read(file) : `stellarphot.io.ApertureFileAIJ`
-        Generate aperture object from file.  Each line is basically a path
-        to an attribute name followed by a value.
-
-    write(file) : None
-        Write the aperture object to a file.
-
     """
     def __init__(self):
         """
@@ -311,7 +293,7 @@ class ApertureFileAIJ:
                    default_centroidstar=True,
                    y_size=4096):
         """
-        Create an `stellarphot.io.ApertureFileAIJ` from a stellarphot aperture
+        Create an `~stellarphot.io.ApertureFileAIJ` from a stellarphot aperture
         table and info about the aperture sizes.
 
         Parameters
@@ -331,7 +313,7 @@ class ApertureFileAIJ:
 
         Returns
         -------
-        apAIJ: `stellarphot.io.ApertureFileAIJ`
+        apAIJ: `~stellarphot.io.ApertureFileAIJ`
             ApertureFileAIJ object representing the aperture table.
         """
 
