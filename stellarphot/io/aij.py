@@ -34,6 +34,10 @@ class ApertureAIJ:
 
     """
     def __init__(self):
+        """
+        Initialie and set default values for the attributes of the aperture object instance.
+        """
+
         # Outer annulus radius
         self.rback2 = 41.0
 
@@ -110,6 +114,9 @@ class MultiApertureAIJ:
         List of y positions of the apertures.
     """
     def __init__(self):
+        """
+        Initialize and set default values for the attributes of the multi-aperture object instance.
+        """
         # Default values for these chosen to match AIJ defaults
         # They are not used by stellarphot
         self.naperturesmax = 1000
@@ -215,6 +222,9 @@ class ApertureFileAIJ:
 
     """
     def __init__(self):
+        """
+        Initialize the AstroImageJ aperture file instance.
+        """
         self.aperture = ApertureAIJ()
         self.multiaperture = MultiApertureAIJ()
 
