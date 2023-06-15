@@ -60,7 +60,8 @@ def compute_fwhm(ccd, sources, fwhm_estimate=5,
                  x_column='xcenter', y_column='ycenter',
                  fit=True,
                  sky_per_pix_avg=0):
-    """Computes the FWHM in both x and y directions of sources in an image.
+    """
+    Computes the FWHM in both x and y directions of sources in an image.
 
     Parameters
     ----------

@@ -606,7 +606,8 @@ def calculate_noise(gain=1.0, read_noise=0.0, dark_current_per_sec=0.0,
                     aperture_area=0, annulus_area=0,
                     exposure=0,
                     include_digitization=False):
-    """Computes the noise in a photometric measurement.
+    """
+    Computes the noise in a photometric measurement.
 
     This function computes the noise (in units of gain) in a photometric measurement using the
     revised CCD equation from Collins et al (2017) AJ, 153, 77.  The equation is:
