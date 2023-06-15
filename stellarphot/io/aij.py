@@ -35,7 +35,7 @@ class ApertureAIJ:
     """
     def __init__(self):
         """
-        Initialie and set default values for the attributes of the aperture object instance.
+        Initialize and set default values for the attributes of the aperture object instance.
         """
 
         # Outer annulus radius
