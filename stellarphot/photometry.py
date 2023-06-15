@@ -611,9 +611,7 @@ def calculate_noise(gain=1.0, read_noise=0.0, dark_current_per_sec=0.0,
     This function computes the noise (in units of gain) in a photometric measurement using the
     revised CCD equation from Collins et al (2017) AJ, 153, 77.  The equation is:
 
-    .. math::
-
-    \sigma = \sqrt{G \cdot F + A \cdot \left(1 + \frac{A}{B}\right)\cdot \left[ G\cdot S + D \cdot t + R^2 + (0.289 G)^2\right]}
+    .. math:: \sigma = \sqrt{G \cdot F + A \cdot \left(1 + \frac{A}{B}\right)\cdot \left[ G\cdot S + D \cdot t + R^2 + (0.289 G)^2\right]}
 
     where :math:`\sigma` is the noise, :math:`G` is the gain, :math:`F` is the flux,
     :math:`A` is the aperture area in pixels, :math:`B` is the annulus area in pixels,
@@ -698,7 +696,7 @@ def find_times(phot_column, exposure, ra, dec,
     phot_column : `~astropy.table.Column` or numpy array
         numpy array or column of observation dates from the photometry table
 
-    exposure : float; optional
+    exposure : float, optional
         exposure time in seconds
 
     RA : float
@@ -707,10 +705,10 @@ def find_times(phot_column, exposure, ra, dec,
     Dec : float
         Declination  in degree units
 
-    latitude : float; optional
+    latitude : float, optional
         latitude of the observatory in degrees North, default is for Paul P. Feder Observatory
 
-    longitude : float; optional
+    longitude : float, optional
         longitude of the observatory in degree East of Greenwich (0 to 360), default
         is for Paul P. Feder Observatory
 

@@ -17,6 +17,10 @@ __all__ = []
 
 
 class UnsupportedPythonError(Exception):
+    """
+    Wraps an exception to raise if a user tries to use stellarphot
+    with an unsupported version of Python.
+    """
     pass
 
 
