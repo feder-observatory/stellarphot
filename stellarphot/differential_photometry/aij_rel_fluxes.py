@@ -56,7 +56,7 @@ def calc_aij_relative_flux(star_data, comp_stars,
     Returns
     -------
 
-    `astropy.table.Table` or None
+    `~astropy.table.Table` or None
         The return type depends on the value of ``in_place``. If it is
         ``False``, then the new columns are returned as a separate table,
         otherwise the columns are simply added to the input table.

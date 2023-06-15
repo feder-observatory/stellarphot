@@ -26,9 +26,9 @@ def in_frame(frame_wcs, coordinates, padding=0):
     Parameters
     ----------
 
-    frame_wcs : astropy WCS object
+    frame_wcs : `~astropy.wcs.WCS`
         WCS for the image.
-    coordinates : astropy.coordinates.SkyCoord
+    coordinates : `~astropy.coordinates.SkyCoord`
         Coordinate(s) whose position will be checked to see if they are in the
         field of view.
     padding : int, optional
@@ -39,7 +39,7 @@ def in_frame(frame_wcs, coordinates, padding=0):
     Returns
     -------
 
-    numpy.ndarray of bool
+    `~numpy.ndarray` of bool
         One value for each input coordinate; values are ``True`` if the
         coordinate was in the field of view, ``False`` otherwise.
 
@@ -63,7 +63,7 @@ def catalog_search(frame_wcs_or_center, shape, desired_catalog,
     Parameters
     ----------
 
-    frame_wcs : astropy.wcs.WCS
+    frame_wcs : `~astropy.wcs.WCS`
         WCS of the image of interest.
 
     shape : tuple of int
@@ -95,7 +95,7 @@ def catalog_search(frame_wcs_or_center, shape, desired_catalog,
     Returns
     -------
 
-    astropy.table.Table
+    `~astropy.table.Table`
         Table of catalog information for stars in the field of view.
 
     """
@@ -133,10 +133,12 @@ def catalog_clean(catalog, remove_rows_with_mask=True,
     Parameters
     ----------
 
-    catalog : astropy.Table
+    catalog : `~astropy.table.Table`
         Table of catalog information. There are no restrictions on the columns.
+
     remove_rows_with_mask : bool, optional
         If ``True``, remove rows in which one or more of the values is masked.
+
     other_restrictions: dict, optional
         Key/value pairs in which the key is the name of a column in the
         catalog and the value is the criteria that values in that column
@@ -147,7 +149,7 @@ def catalog_clean(catalog, remove_rows_with_mask=True,
     Returns
     -------
 
-    astropy.table.Table
+    `~astropy.table.Table`
         Table of catalog information for stars in the field of view.
 
     """
@@ -193,7 +195,7 @@ def find_apass_stars(image_or_center,
     Parameters
     ---------
 
-    image_or_center : `astropy.nddata.CCDData` or `astropy.coordinates.SkyCoord`
+    image_or_center : `~astropy.nddata.CCDData` or `~astropy.coordinates.SkyCoord`
         Either an image with a WCS (from which the RA/Dec will be extracted) or coordinate of
         the center.
 
@@ -209,10 +211,10 @@ def find_apass_stars(image_or_center,
     Returns
     -------
 
-    all_apass : `astropy.table.Table`
+    all_apass : `~astropy.table.Table`
         Table of all APASS stars in the field of view.
 
-    apass_lower_error : `astropy.table.Table`
+    apass_lower_error : `~astropy.table.Table`
         Table of APASS stars in the field of view with errors lower than the specified values.
     """
     if isinstance(image_or_center, SkyCoord):
@@ -239,20 +241,21 @@ def find_apass_stars(image_or_center,
 
 
 def find_known_variables(image):
-    '''Get any known variable stars in image field from the VSX catalog.
+    """
+    Get any known variable stars in image field from the VSX catalog.
 
     Parameters
     ----------
 
-    image : `astropy.nddata.CCDData`
+    image : `~astropy.nddata.CCDData`
         Image with a WCS.
 
     Returns
     -------
 
-    vsx : `astropy.table.Table`
+    vsx : `~astropy.table.Table`
         Table of known variable stars in the field of view.
-    '''
+    """
     try:
         vsx = catalog_search(image.wcs, image.shape, 'B/vsx/vsx',
                              ra_column='RAJ2000', dec_column='DEJ2000')
@@ -270,7 +273,7 @@ def filter_catalog(catalog, **kwd):
     Parameters
     ----------
 
-    catalog : astropy Table
+    catalog : `~astropy.table.Table`
         Table whose values are to be filtered.
 
     kwd : key/value pairs, e.g. ``e_r_mag=0.1``
@@ -280,7 +283,7 @@ def filter_catalog(catalog, **kwd):
     Returns
     -------
 
-    numpy.ndarray of bool
+    `~numpy.ndarray` of bool
         One value for each row in the catalog; values are ``True`` if the
         row meets the criteria, ``False`` otherwise.
     """
