@@ -129,15 +129,6 @@ class TransitModelFit:
         Weights to use for fitting. If not provided, all weights are
         set to 1.
 
-    Methods
-    -------
-
-    setup_model(t0, depth, duration, period, inclination,
-                airmass_trend, width_trend, spp_trend) : None
-        Configure a transit model for fitting. The ``duration`` and ``depth``
-        are used to estimate underlying fit parameters; they are not
-        themselves fit parameters.
-
     """
     def __init__(self, batman_params=None):
         """
@@ -496,6 +487,28 @@ class TransitModelFit:
         return detrended
 
     def data_light_curve(self, data=None, detrend_by=None):
+        """
+        Function to return data light curve, optionally detrended by one or
+        more parameters.
+
+        Parameters
+        ----------
+
+        data : array-like, optional
+            Data to use for calculating the light curve. If not provided,
+            the data used for fitting will be used.
+
+        detrend_by : str or list of str
+            Parameter(s) to detrend by. If ``None``, no detrending is
+            done. If ``'all'``, all parameters that are set will be
+            used for detrending.
+
+        Returns
+        -------
+
+        data : array-like
+            Data light curve, detrended if requested.
+        """
         data = data if data is not None else self.data
 
         if detrend_by is not None:
@@ -507,18 +520,18 @@ class TransitModelFit:
         """
         Calculate the light curve corresponding to the model, optionally
         detrended by one or more parameters.
-        
+
         Parameters
         ----------
         at_times : array-like
             Times at which to calculate the model. If not provided, the
             times used for fitting will be used.
-            
+
         detrend_by : str or list of str
             Parameter(s) to detrend by. If ``None``, no detrending is
             done. If ``'all'``, all parameters that are set will be
             used for detrending.
-            
+
         Returns
         -------
         model : array-like
