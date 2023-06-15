@@ -14,7 +14,8 @@ __all__ = ['plot_magnitudes', 'multi_night']
 def plot_magnitudes(mags=None, errors=None, times=None,
                     source=None, night=None, ref_mag=0,
                     alpha=0.25, y_range=None):
-    """Plot one night of magnitude data for one source, overlaying a rolling
+    """
+    Plot one night of magnitude data for one source, overlaying a rolling
     mean and indication of mean/deviation.
 
     Parameters

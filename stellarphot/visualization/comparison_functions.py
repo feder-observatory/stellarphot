@@ -59,7 +59,8 @@ def read_file(radec_file):
 
 
 def set_up(sample_image_for_finding_stars, directory_with_images='.'):
-    """Read in sample image and find known variables in the field of view.
+    """
+    Read in sample image and find known variables in the field of view.
 
     Parameters
     ----------
@@ -109,7 +110,7 @@ def crossmatch_APASS2VSX(CCD, RD, vsx):
     CCD : `~astropy.nddata.CCDData`
         Sample image.
 
-    RD : `a~stropy.table.Table`
+    RD : `~astropy.table.Table`
         Table with target information, including a
         `~astropy.coordinates.SkyCoord` column.
 
@@ -151,7 +152,8 @@ def crossmatch_APASS2VSX(CCD, RD, vsx):
 
 def mag_scale(cmag, apass, v_angle, RD_angle,
               brighter_dmag=0.44, dimmer_dmag=0.75):
-    """Select comparison stars that are 1) not close the VSX stars or to other
+    """
+    Select comparison stars that are 1) not close the VSX stars or to other
     target stars and 2) fall within a particular magnitude range.
 
     Parameters
@@ -203,7 +205,8 @@ def mag_scale(cmag, apass, v_angle, RD_angle,
 
 
 def in_field(apass_good_coord, ccd, apass, good_stars):
-    """Return APASS stars in the field of view.
+    """
+    Return APASS stars in the field of view.
 
     Parameters
     ----------
@@ -240,7 +243,8 @@ def in_field(apass_good_coord, ccd, apass, good_stars):
 
 
 def make_markers(iw, ccd, RD, vsx, ent, name_or_coord=None):
-    """Add markers for APASS, TESS targets, VSX.  Also center on object/coordinate.
+    """
+    Add markers for APASS, TESS targets, VSX.  Also center on object/coordinate.
 
     Parameters
     ----------
@@ -300,7 +304,8 @@ def make_markers(iw, ccd, RD, vsx, ent, name_or_coord=None):
 
 
 def wrap(imagewidget, outputwidget):
-    """Utility function to let you click to select/deselect comparisons.
+    """
+    Utility function to let you click to select/deselect comparisons.
 
     Parameters
     ----------
@@ -357,34 +362,8 @@ def wrap(imagewidget, outputwidget):
 
 
 class ComparisonViewer:
-    """A class to store an instance of the comparison viewer.
-
-    Parameters
-    ----------
-
-    file : str, optional
-        File to open.
-
-    directory : str, optional
-        Directory to open file from.
-
-    target_mag : float, optional
-        Magnitude of the target.
-
-    bright_mag_limit : float, optional
-        Bright magnitude limit for APASS stars.
-
-    dim_mag_limit : float, optional
-        Dim magnitude limit for APASS stars.
-
-    targets_from_file : str, optional
-        File with target information.
-
-    object_coordinate : `~astropy.coordinates.SkyCoord`, optional
-        Coordinates of the target.
-
-    aperture_output_file : str, optional
-        File to save aperture information to.
+    """
+    A class to store an instance of the comparison viewer.
 
     Attributes
     ----------
@@ -425,6 +404,36 @@ class ComparisonViewer:
                  targets_from_file=None,
                  object_coordinate=None,
                  aperture_output_file=None):
+        """
+        Initializes an instance of the ComparisonViewer class.
+
+        Parameters
+        ----------
+
+        file : str, optional
+            File to open. Defaults to "".
+
+        directory : str, optional
+            Directory to open file from. Defaults to '.'.
+
+        target_mag : float, optional
+            Magnitude of the target. Defaults to 10.
+
+        bright_mag_limit : float, optional
+            Bright magnitude limit for APASS stars. Defaults to 8.
+
+        dim_mag_limit : float, optional
+            Dim magnitude limit for APASS stars.  Defaults to 17.
+
+        targets_from_file : str, optional
+            File with target information.  Defaults to None.
+
+        object_coordinate : `~astropy.coordinates.SkyCoord`, optional
+            Coordinates of the target. Defaults to None.
+
+        aperture_output_file : str, optional
+            File to save aperture information to.  Defaults to None.
+        """
 
         self._label_name = 'labels'
         self._circle_name = 'target circle'
@@ -451,7 +460,7 @@ class ComparisonViewer:
 
     def _init(self):
         """
-        Some initialization needs to be defered until a file is chosen.
+        Handles aspects of initialization that need to be defered until a file is chosen.
         """
         if self.tess_submission is not None:
             self._tess_object_info.layout.visibility = "visible"
@@ -475,7 +484,8 @@ class ComparisonViewer:
 
     @property
     def variables(self):
-        """ Return a dictionary of the variables in the class.
+        """
+        Return a dictionary of the variables in the class.
 
         Returns
         -------

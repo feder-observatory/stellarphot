@@ -33,6 +33,9 @@ class PhotometrySettings:
         The name of the object.
     """
     def __init__(self):
+        """
+        Initialize an instance of the PhotometrySettings widget.
+        """
         self._image_dir = FileChooser(title="Choose folder with images", show_only_dirs=True)
         self._aperture_file_loc = FileChooser(title='Choose aperture location file')
         self._aperture_settings_loc = FileChooser(title='Choose file with aperture settings')

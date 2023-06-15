@@ -158,7 +158,8 @@ def find_center(image, center_guess, cutout_size=30, max_iters=10):
 
 
 def radial_profile(data, center, size=30, return_scaled=True):
-    """Construct a radial profile of a chunk of width ``size`` centered
+    """
+    Construct a radial profile of a chunk of width ``size`` centered
     at ``center`` from image ``data`.
 
     Parameters
@@ -186,7 +187,7 @@ def radial_profile(data, center, size=30, return_scaled=True):
         Exact radius of center of each pixels from profile center.
 
     ravg : numpy array
-        Average radius of pixels in each bin.
+        Average radius in pixels used in constructing profile.
 
     radialprofile : numpy array
         Radial profile.
@@ -216,7 +217,8 @@ def radial_profile(data, center, size=30, return_scaled=True):
 
 
 def find_hwhm(r, intensity):
-    """Estimate the half-width half-max from normalized, angle-averaged intensity profile.
+    """
+    Estimate the half-width half-max from normalized, angle-averaged intensity profile.
 
     Parameters
     ----------
@@ -256,7 +258,8 @@ def find_hwhm(r, intensity):
 
 
 class RadialProfile:
-    """ Class to hold radial profile information for a star.
+    """
+    Class to hold radial profile information for a star.
 
     Parameters
     ----------
@@ -282,14 +285,53 @@ class RadialProfile:
     FWHM : float
         Full-width half-max of the radial profile.
 
+    profile_size : int
+        Size of the cutout used to construct the radial profile.
+
     radius_values : numpy array
         Radius values for the radial profile.
+
+    r_exact : numpy array
+        Exact radius of center of each pixels from profile center.
+
+    ravg : numpy array
+        Average radius in pixels used in constructing profile.
+
     """
     def __init__(self, data, x, y):
+        """
+        Initialize the radial profile object instance.  Sets the center
+        of the star and the image data.
+
+        Parameters
+        ----------
+
+        data : numpy array
+            Image data.
+
+        x : int
+            x position of the star.
+
+        y : int
+            y position of the star.
+
+
+        """
         self.cen = find_center(data, (x, y), cutout_size=30)
         self.data = data
 
     def profile(self, profile_size):
+        """
+        Construct the radial profile of the star.  Sets
+        ``r_exact``, ``ravg``, and ``radialprofile`` attributes.
+
+        Parameters
+        ----------
+
+        profile_size : int
+            Size of the cutout to use in constructing the profile.
+
+        """
         self.profile_size = profile_size
         self.r_exact, self.ravg, self.radialprofile = (
             radial_profile(self.data,
@@ -314,7 +356,8 @@ class RadialProfile:
 
 
 def box(imagewidget):
-    """Compatibility layer for older versions of the photometry notebooks.
+    """
+    Compatibility layer for older versions of the photometry notebooks.
 
     Parameters
     ----------
@@ -332,7 +375,8 @@ def box(imagewidget):
 
 
 class SeeingProfileWidget:
-    """A class for storing an instance of a widget displaying the seeing profile of stars in an image.
+    """
+    A class for storing an instance of a widget displaying the seeing profile of stars in an image.
 
     Parameters
     ----------
