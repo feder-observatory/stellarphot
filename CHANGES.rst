@@ -1,4 +1,4 @@
-1.3.9 (Unreleased)
+1.3.9 (2023-06-16)
 ------------------
 
 New Features
@@ -8,7 +8,7 @@ Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 + Old and redundant notebooks have been purged and bad references to `glowing-waffles` instead of `stellarphot` [#94]
 + Most functions are now linked to the documentation. [#90]
-+ Many functions and classes that had missing documentation have now had docstrings added.
++ Many functions and classes that had missing documentation have now had docstrings added. [#100]
 
 Bug Fixes
 ^^^^^^^^^
