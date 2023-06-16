@@ -299,7 +299,7 @@ class ApertureFileAIJ:
         Parameters
         ----------
 
-        aperture_table : `~astropy.table.Table`
+        aperture_table : `astropy.table.Table`
             Table of aperture information.
 
         aperture_rad : number
@@ -376,16 +376,16 @@ def generate_aij_table(table_name, comparison_table):
     Parameters
     ----------
 
-    table_name : `~astropy.table.Table`
+    table_name : `astropy.table.Table`
         Table of stellarphot photometry.
 
-    comparison_table : `~astropy.table.Table`
+    comparison_table : `astropy.table.Table`
         Table of comparison star photometry.
 
     Returns
     -------
 
-    base_table : `~astropy.table.Table`
+    base_table : `astropy.table.Table`
         Table of photometry in AIJ format.
     """
     info_columns = {
@@ -514,7 +514,7 @@ class Star(object):
     Parameters
     ----------
 
-    table : `~astropy.table.Table`
+    table : `astropy.table.Table`
         Table of photometry for a single star.
 
     id_num : int
@@ -523,61 +523,61 @@ class Star(object):
     Attributes
     ----------
 
-    airmass : `~astropy.units.Quantity`
+    airmass : `astropy.units.Quantity`
         Airmass at the time of observation.
 
-    bjd_tdb : `~astropy.units.Quantity`
+    bjd_tdb : `astropy.units.Quantity`
         Barycentric Dynamical Time taking into account relativity.
 
-    counts : `~astropy.units.Quantity`
+    counts : `astropy.units.Quantity`
         Net counts in the aperture.
 
-    dec : `~astropy.units.Quantity`
+    dec : `astropy.units.Quantity`
         Declination of the star.
 
-    error : `~astropy.units.Quantity`
+    error : `astropy.units.Quantity`
         Error in the net counts.
 
-    exposure : `~astropy.units.Quantity`
+    exposure : `astropy.units.Quantity`
         Exposure time of the observation.
 
     id: int
         ID number of the star.
 
-    jd_utc_end : `~astropy.units.Quantity`
+    jd_utc_end : `astropy.units.Quantity`
         Julian date of the end of the observation.
 
-    jd_utc_mid : `~astropy.units.Quantity`
+    jd_utc_mid : `astropy.units.Quantity`
         Julian date of the middle of the observation.
 
-    jd_utc_start : `~astropy.units.Quantity`
+    jd_utc_start : `astropy.units.Quantity`
         Julian date of the start of the observation.
 
-    magnitude : `~astropy.units.Quantity`
+    magnitude : `astropy.units.Quantity`
         Magnitude of the star.
 
-    magnitude_error : `~astropy.units.Quantity`
+    magnitude_error : `astropy.units.Quantity`
         Error in the magnitude of the star.
 
-    mjd_utc_end : `~astropy.units.Quantity`
+    mjd_utc_end : `astropy.units.Quantity`
         Modified Julian date of the end of the observation.
 
-    mjd_utc_mid : `~astropy.units.Quantity`
+    mjd_utc_mid : `astropy.units.Quantity`
         Modified Julian date of the middle of the observation.
 
-    mjd_utc_start : `~astropy.units.Quantity`
+    mjd_utc_start : `astropy.units.Quantity`
         Modified Julian date of the start of the observation.
 
-    peak : `~astropy.units.Quantity`
+    peak : `astropy.units.Quantity`
         Peak counts in the aperture.
 
-    ra : `~astropy.units.Quantity`
+    ra : `astropy.units.Quantity`
         Right ascension of the star.
 
-    sky_per_pixel : `~astropy.units.Quantity`
+    sky_per_pixel : `astropy.units.Quantity`
         Sky brightness per pixel.
 
-    snr : `~astropy.units.Quantity`
+    snr : `astropy.units.Quantity`
         Signal-to-noise ratio of the star.
     """
     def __init__(self, table, id_num):

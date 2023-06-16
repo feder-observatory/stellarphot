@@ -106,7 +106,7 @@ class TransitModelFit:
     data : array-like
         Observed fluxes. Must be set before fitting.
 
-    model : `~astropy.modeling.Model`
+    model : `astropy.modeling.Model`
         The model used for fitting. This is a combination of the batman
         transit model and any other trends that are included in the fit.
         This is set up when the ``setup_model`` method is called.

@@ -33,7 +33,7 @@ def _fit_2dgaussian(data):
 
     Returns
     -------
-    gfit : `~astropy.modeling.Model`
+    gfit : `astropy.modeling.Model`
         The best-fit 2D Gaussian model.
     """
     props = data_properties(data - np.min(data))
@@ -66,10 +66,10 @@ def compute_fwhm(ccd, sources, fwhm_estimate=5,
     Parameters
     ----------
 
-    ccd : `~astropy.nddata.CCDData`
+    ccd : `astropy.nddata.CCDData`
         The CCD Image array.
 
-    sources : `~astropy.table.Table`
+    sources : `astropy.table.Table`
         An astropy table of the positions of sources in the image.
 
     fwhm_estimate : float, optional
@@ -151,7 +151,7 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
     Parameters
     ----------
 
-    ccd : `~astropy.nddata.CCDData`
+    ccd : `astropy.nddata.CCDData`
         The CCD Image array.
 
     fwhm : float, optional
@@ -178,7 +178,7 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
     Returns
     -------
 
-    sources: `~astropy.table.Table`
+    sources: `astropy.table.Table`
         A table of the positions of sources in the image.  If `find_fwhm` is
         ``True``, includes a column called ``FWHM``.
     """

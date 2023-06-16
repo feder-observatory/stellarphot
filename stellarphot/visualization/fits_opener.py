@@ -16,16 +16,16 @@ class FitsOpener:
     Attributes
     ----------
 
-    ccd : `~astropy.nddata.CCDData`
+    ccd : `astropy.nddata.CCDData`
         The selected FITS file as a CCDData object.
 
-    file_chooser : `~ipyfilechooser.FileChooser`
+    file_chooser : `ipyfilechooser.FileChooser`
         The actual FileChooser widget.
 
     header : dict
         The header of the selected FITS file.
 
-    path : `~pathlib.Path`
+    path : `pathlib.Path`
         The path to the selected FITS file.
 
     register_callback : function, optional
@@ -35,7 +35,7 @@ class FitsOpener:
     def __init__(self, title="Choose an image", filter_pattern=None, **kwargs):
         """
         Initializes an instance of the FitsOpener class, which is a wrapper around
-        the `~ipyfilechooser.FileChooser` widget that (if no `filter_pattern` is given)
+        the `ipyfilechooser.FileChooser` widget that (if no `filter_pattern` is given)
         defaults to showing only FITS files.
 
         Parameters
@@ -122,7 +122,7 @@ class FitsOpener:
         Parameters
         ----------
 
-        image_widget : `~astrowidgets.ImageWidget`
+        image_widget : `astrowidgets.ImageWidget`
             The widget into which to load the image.
         """
         with warnings.catch_warnings():
@@ -130,7 +130,7 @@ class FitsOpener:
 
     def set_file(self, file, directory=None):
         """
-        Set the selected file of the `~ipyfilechooser.FileChooser` to be the input file.
+        Set the selected file of the `ipyfilechooser.FileChooser` to be the input file.
 
         Parameters
         ----------
@@ -141,7 +141,7 @@ class FitsOpener:
 
         directory : Path-like, optional
             Directory the file is in. The default value is the current directory of the
-            `~ipyfilechooser.FileChooser`.
+            `ipyfilechooser.FileChooser`.
         """
         if directory is None:
             directory = self._fc.selected_path

@@ -37,7 +37,7 @@ def f(X, a, b, c, d, z):
 
     Returns
     -------
-    `~numpy.ndarray`
+    `numpy.ndarray`
         Array of calibrated magnitudes.
     """
     mag_inst, color = X
@@ -53,14 +53,14 @@ def get_cat(image):
     Parameters
     ----------
 
-    image : `~astropy.table.Table`
+    image : `astropy.table.Table`
         Table containing the image information. Must have columns
         ``RA`` and ``Dec``.
 
     Returns
     -------
 
-    `~astropy.table.Table`
+    `astropy.table.Table`
         Table containing the APASS catalog entries within 1 degree of
         first object in Astropy table.
     """
@@ -107,10 +107,10 @@ def calc_residual(new_cal, catalog):
     Parameters
     ----------
 
-    new_cal : `~numpy.ndarray`
+    new_cal : `numpy.ndarray`
         New calibrated magnitudes.
 
-    catalog : `~numpy.ndarray`
+    catalog : `numpy.ndarray`
         Catalog magnitudes.
 
     Returns
@@ -134,7 +134,7 @@ def filter_transform(mag_data, output_filter,
     Parameters
     ----------
 
-    mag_data : `~astropy.table.Table`
+    mag_data : `astropy.table.Table`
         Table containing ``g``, ``r`` and ``i`` magnitudes (or at least)
         those required to transform to the desired output filter.
 
@@ -241,17 +241,17 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
     Parameters
     ----------
 
-    input_mag : `~numpy.ndarray` or `~astropy.table.Column`
+    input_mag : `numpy.ndarray` or `astropy.table.Column`
         Input magnitudes; for example, instrumental magnitudes.
 
-    catalog_mag : `~numpy.ndarray` or `~astropy.table.Column`
+    catalog_mag : `numpy.ndarray` or `astropy.table.Column`
         Catalog (or reference) magnitudes; the magnitudes to which the
         input_mag will eventually be transformed.
 
-    color : `~numpy.ndarray` or `~astropy.table.Column`
+    color : `numpy.ndarray` or `astropy.table.Column`
         Colors to use in determining transform coefficients.
 
-    input_mag_error : `~numpy.ndarray` or `~astropy.table.Column`, optional
+    input_mag_error : `numpy.ndarray` or `astropy.table.Column`, optional
         Error in input magnitudes. Default is zero.
 
     catalog_mag_error : `numpy.ndarray` or `astropy.table.Column`, optional
@@ -281,11 +281,11 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
     Returns
     -------
 
-    filtered_data : `~numpy.ma.core.MaskedArray`
+    filtered_data : `numpy.ma.core.MaskedArray`
         The data, with the mask set ``True`` for the data that was *omitted*
         from the fit.
 
-    model : `~astropy.modeling.FittableModel`
+    model : `astropy.modeling.FittableModel`
         Entries in the model are the coefficients in the fit made to the
         data. Since the model is always a polynomial, these are terms in
         a polynomial in the order of ascending power. In other words, the
@@ -390,14 +390,14 @@ def transform_magnitudes(input_mags, catalog,
     Parameters
     ----------
 
-    input_mags : `~astropy.table.Table`
+    input_mags : `astropy.table.Table`
         Table which contains a column with instrumental magnitudes, i.e.
         -2.5 * log10(net_counts / exposure_time).
 
-    catalog : `~astropy.table.Table`
+    catalog : `astropy.table.Table`
         Table containing reference catalog of magnitudes and colors.
 
-    transform_catalog : `~astropy.table.Table`
+    transform_catalog : `astropy.table.Table`
         Table containing the reference catalog of magnitudes and colors
         to use in determining the transform coefficients. Can be the
         same table as ``catalog`` if desired.
@@ -432,14 +432,14 @@ def transform_magnitudes(input_mags, catalog,
     Returns
     -------
 
-    our_cat_mags : `~astropy.table.Column`
+    our_cat_mags : `astropy.table.Column`
         The calculated catalog magnitudes for the stars in ``input_mags``.
 
-    good_match_all : `~numpy.ndarray`
+    good_match_all : `numpy.ndarray`
         Boolean array indicating which stars in ``input_mags`` have a match
         in the catalog.
 
-    transforms : `~astropy.modeling.FittableModel`
+    transforms : `astropy.modeling.FittableModel`
         The coefficients of the transform. The coefficients are in the order
         of ascending power, i.e. the coefficient ``ci`` is the coefficient
         of the term ``x**i``.  Warning: This returns a namedtuple if the fit
@@ -517,7 +517,7 @@ def transform_to_catalog(observed_mags_grouped, obs_mag_col, obs_filter,
     Parameters
     ----------
 
-    observed_magnitudes_grouped : `~astropy.table.Table`
+    observed_magnitudes_grouped : `astropy.table.Table`
         An astropy table, grouped by whatever you want that sepearates the data into
         data from just one image. BJD of the center of the observatory is one reasonable choice
 
@@ -563,7 +563,7 @@ def transform_to_catalog(observed_mags_grouped, obs_mag_col, obs_filter,
     Returns
     -------
 
-    `~astropy.table.Table`
+    `astropy.table.Table`
         Table containing the calibrated magnitudes and the fit parameters.
 
     """
