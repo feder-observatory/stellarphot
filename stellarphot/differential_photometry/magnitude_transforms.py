@@ -151,7 +151,7 @@ def filter_transform(mag_data, output_filter,
     Returns
     -------
 
-    `~astropy.table.Column`
+    `astropy.table.Column`
         Output transformed magnitudes as a table column
 
     Notes
@@ -254,7 +254,7 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
     input_mag_error : `~numpy.ndarray` or `~astropy.table.Column`, optional
         Error in input magnitudes. Default is zero.
 
-    catalog_mag_error : `~numpy.ndarray` or `~astropy.table.Column`, optional
+    catalog_mag_error : `numpy.ndarray` or `astropy.table.Column`, optional
         Error in catalog magnitudes. Default is zero.
 
     faintest_mag_for_transform : float, optional
