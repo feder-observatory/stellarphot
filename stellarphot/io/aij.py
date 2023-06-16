@@ -527,7 +527,7 @@ class Star(object):
         Airmass at the time of observation.
 
     bjd_tdb : `astropy.units.Quantity`
-        Barycentric Dynamical Time taking into account relativity.
+        Midpoint of the exposure as barycentric Julian date in Barycentric Dynamical Time.
 
     counts : `astropy.units.Quantity`
         Net counts in the aperture.
