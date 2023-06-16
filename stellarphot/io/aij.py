@@ -75,7 +75,7 @@ class ApertureAIJ:
 
 class MultiApertureAIJ:
     """
-    Class to represent the multi-aperture information that AstroImageJ saves.
+    Multi-aperture information that AstroImageJ saves.
 
     Attributes
     ----------
