@@ -37,19 +37,19 @@ def calc_aij_relative_flux(star_data, comp_stars,
         the `star_data` and the position in the `comp_stars` table
         is too large.
 
-    in_place : ``bool``, optional
+    in_place : bool,  optional
         If ``True``, add new columns to input table. Otherwise, return
         new table with those columns added.
 
-    coord_column : ``str``, optional
+    coord_column : str,  optional
         If provided, use this column to match comparison stars to coordinates.
         If not provided, the coordinates are generated with SkyCoord.
 
-    flux_column_name : ``str``, optional
+    flux_column_name : str,  optional
         If provided, use this column to find flux.
         If not provided, the column 'aperture_net_flux' is used.
 
-    star_id_column : ``str``, optional
+    star_id_column : str,  optional
         Name of the column that provides a unique identifier for each
         comparison star.
 

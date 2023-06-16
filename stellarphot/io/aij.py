@@ -14,8 +14,30 @@ __all__ = [ 'ApertureAIJ', 'MultiApertureAIJ', 'ApertureFileAIJ',
 class ApertureAIJ:
     """
     Represents the aperture information AstroImageJ saves.
+
+    Attributes
+    ----------
+    backplane : bool
+        Not sure what this does but stellarphot doesn't use it. Default: False
+
+    radius : float
+        Aperture radius. Default: 15.0
+
+    rback1 : float
+        Inner annulus radius. Default: 27.0
+
+    rback2 : float
+        Outer annulus radius. Default: 41.0
+
+    removebackstars : bool
+        Whether to remove stars in the annulus from the photometry. Default: True
+
     """
     def __init__(self):
+        """
+        Initialize and set default values for the attributes of the aperture object instance.
+        """
+
         # Outer annulus radius
         self.rback2 = 41.0
 
@@ -53,9 +75,48 @@ class ApertureAIJ:
 
 class MultiApertureAIJ:
     """
-    Class to represent the multi-aperture information that AstroImageJ saves
+    Multi-aperture information that AstroImageJ saves.
+
+    Attributes
+    ----------
+
+    absmagapertures : list
+        List of absolute magnitudes of the apertures.
+
+    apfwhmfactor : float
+        Factor to multiply the aperture radius by relative to the FWHM. Default: 1.4
+
+    centroidstar : list
+        List of booleans indicating whether the aperture is a centroid star.
+
+    decapertures : list
+        List of Declinations of the apertures.
+
+    isalignstar : list
+        List of booleans indicating whether the aperture is an alignment star.
+
+    isrefstar : list
+        List of booleans indicating whether the aperture is a reference star.
+
+    naperturesmax : float
+        Maximum number of apertures. Default: 1000
+
+    raapertures : list
+        List of Right Ascensions of the apertures.
+
+    usevarsizeap : bool
+        Whether to use variable size apertures. Default: False
+
+    xapertures : list
+        List of x positions of the apertures.
+
+    yapertures : list
+        List of y positions of the apertures.
     """
     def __init__(self):
+        """
+        Initialize and set default values for the attributes of the multi-aperture object instance.
+        """
         # Default values for these chosen to match AIJ defaults
         # They are not used by stellarphot
         self.naperturesmax = 1000
@@ -133,8 +194,19 @@ class ApertureFileAIJ:
     """
     Class to represent AstroImageJ aperture file.
 
+    Attributes
+    ----------
+
+    aperture : `~stellarphot.io.ApertureAIJ`
+        Aperture information.
+`
+    multiaperture : `~stellarphot.io.MultiApertureAIJ`
+        Multi-aperture information.
     """
     def __init__(self):
+        """
+        Initialize the AstroImageJ aperture file instance.
+        """
         self.aperture = ApertureAIJ()
         self.multiaperture = MultiApertureAIJ()
 
@@ -179,7 +251,7 @@ class ApertureFileAIJ:
     @classmethod
     def read(cls, file):
         """
-        Generate aperture object from file. Happily, each line is basically a path
+        Generate aperture object from file.  Each line is basically a path
         to an attribute name followed by a value.
 
         Parameters
@@ -221,7 +293,7 @@ class ApertureFileAIJ:
                    default_centroidstar=True,
                    y_size=4096):
         """
-        Create an `stellarphot.io.ApertureFileAIJ` from a stellarphot aperture
+        Create an `~stellarphot.io.ApertureFileAIJ` from a stellarphot aperture
         table and info about the aperture sizes.
 
         Parameters
@@ -238,7 +310,13 @@ class ApertureFileAIJ:
 
         outer_annulus : number
             Outer radius of annulus.
+
+        Returns
+        -------
+        apAIJ: `~stellarphot.io.ApertureFileAIJ`
+            ApertureFileAIJ object representing the aperture table.
         """
+
         # Create the instance
         apAIJ = cls()
 
@@ -433,62 +511,74 @@ class Star(object):
     """
     A class for storing photometry for a single star.
 
+    Parameters
+    ----------
+
+    table : `astropy.table.Table`
+        Table of photometry for a single star.
+
+    id_num : int
+        ID number of the star.
+
     Attributes
     ----------
 
-    airmass : `~astropy.units.Quantity`
+    airmass : `astropy.units.Quantity`
         Airmass at the time of observation.
 
-    counts : `~astropy.units.Quantity`
+    bjd_tdb : `astropy.units.Quantity`
+        Midpoint of the exposure as barycentric Julian date in Barycentric Dynamical Time.
+
+    counts : `astropy.units.Quantity`
         Net counts in the aperture.
 
-    ra : `~astropy.units.Quantity`
-        Right ascension of the star.
-
-    dec : `~astropy.units.Quantity`
+    dec : `astropy.units.Quantity`
         Declination of the star.
 
-    error : `~astropy.units.Quantity`
+    error : `astropy.units.Quantity`
         Error in the net counts.
 
-    sky_per_pixel : `~astropy.units.Quantity`
-        Sky brightness per pixel.
-
-    peak : `~astropy.units.Quantity`
-        Peak counts in the aperture.
-
-    jd_utc_start : `~astropy.units.Quantity`
-        Julian date of the start of the observation.
-
-    mjd_utc_start : `~astropy.units.Quantity`
-        Modified Julian date of the start of the observation.
-
-    jd_utc_mid : `~astropy.units.Quantity`
-        Julian date of the middle of the observation.
-
-    mjd_utc_mid : `~astropy.units.Quantity`
-        Modified Julian date of the middle of the observation.
-
-    jd_utc_end : `~astropy.units.Quantity`
-        Julian date of the end of the observation.
-
-    mjd_utc_end : `~astropy.units.Quantity`
-        Modified Julian date of the end of the observation.
-
-    exposure : `~astropy.units.Quantity`
+    exposure : `astropy.units.Quantity`
         Exposure time of the observation.
 
-    magnitude : `~astropy.units.Quantity`
+    id: int
+        ID number of the star.
+
+    jd_utc_end : `astropy.units.Quantity`
+        Julian date of the end of the observation.
+
+    jd_utc_mid : `astropy.units.Quantity`
+        Julian date of the middle of the observation.
+
+    jd_utc_start : `astropy.units.Quantity`
+        Julian date of the start of the observation.
+
+    magnitude : `astropy.units.Quantity`
         Magnitude of the star.
 
-    snr : `~astropy.units.Quantity`
-        Signal-to-noise ratio of the star.
-
-    magnitude_error : `~astropy.units.Quantity`
+    magnitude_error : `astropy.units.Quantity`
         Error in the magnitude of the star.
 
-    bjd_tdb : `~astropy.units.Quantity`
-        Barycentric Dynamical Time taking into account relativity.
+    mjd_utc_end : `astropy.units.Quantity`
+        Modified Julian date of the end of the observation.
+
+    mjd_utc_mid : `astropy.units.Quantity`
+        Modified Julian date of the middle of the observation.
+
+    mjd_utc_start : `astropy.units.Quantity`
+        Modified Julian date of the start of the observation.
+
+    peak : `astropy.units.Quantity`
+        Peak counts in the aperture.
+
+    ra : `astropy.units.Quantity`
+        Right ascension of the star.
+
+    sky_per_pixel : `astropy.units.Quantity`
+        Sky brightness per pixel.
+
+    snr : `astropy.units.Quantity`
+        Signal-to-noise ratio of the star.
     """
     def __init__(self, table, id_num):
         self._table = table

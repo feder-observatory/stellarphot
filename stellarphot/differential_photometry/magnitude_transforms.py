@@ -27,15 +27,17 @@ def f(X, a, b, c, d, z):
 
     Parameters
     ----------
+
     X : tuple of numpy.ndarray
         The first element is an array of instrumental magnitudes,
         the second is an array of colors.
+
     a, b, c, d, z : float
         Parameters of the fit.
 
     Returns
     -------
-    numpy.ndarray
+    `numpy.ndarray`
         Array of calibrated magnitudes.
     """
     mag_inst, color = X
@@ -51,14 +53,14 @@ def get_cat(image):
     Parameters
     ----------
 
-    image : astropy.table.Table
+    image : `astropy.table.Table`
         Table containing the image information. Must have columns
         ``RA`` and ``Dec``.
 
     Returns
     -------
 
-    astropy.table.Table
+    `astropy.table.Table`
         Table containing the APASS catalog entries within 1 degree of
         first object in Astropy table.
     """
@@ -75,7 +77,8 @@ def get_cat(image):
 
 
 def opts_to_str(opts):
-    """Convert the options from a fit to a string.
+    """
+    Convert the options from a fit to a string.
 
     Parameters
     ----------
@@ -97,16 +100,17 @@ def opts_to_str(opts):
 
 
 def calc_residual(new_cal, catalog):
-    """Calculate the standard deviations of the residuals between
+    """
+    Calculate the standard deviations of the residuals between
     the new calibrated magnitude and the catalog magnitude.
 
     Parameters
     ----------
 
-    new_cal : numpy.ndarray
+    new_cal : `numpy.ndarray`
         New calibrated magnitudes.
 
-    catalog : numpy.ndarray
+    catalog : `numpy.ndarray`
         Catalog magnitudes.
 
     Returns
@@ -123,30 +127,31 @@ def calc_residual(new_cal, catalog):
 def filter_transform(mag_data, output_filter,
                      g=None, r=None, i=None,
                      transform=None):
-    '''
+    """
     Transform SDSS magnitudes to BVRI using either the transforms from
     Jester et al or Ivezic et al.
 
     Parameters
     ----------
 
-    mag_data : astropy.table.Table
+    mag_data : `astropy.table.Table`
         Table containing ``g``, ``r`` and ``i`` magnitudes (or at least)
         those required to transform to the desired output filter.
+
     output_filter : 'B', 'V', 'R' or 'I'
         Filter for which magnitude should be calculated. Note that
         *case matters* here.
+
     g, r, i : str
         Name of column in table for that magnitude.
+
     transform : 'jester' or 'ivezic'
         Transform equations to use.
-    Description: This function impliments the transforms in
-        'A Comparison of SDSS Standard
 
     Returns
     -------
 
-    astropy.table.Column
+    `astropy.table.Column`
         Output transformed magnitudes as a table column
 
     Notes
@@ -161,7 +166,7 @@ def filter_transform(mag_data, output_filter,
     The Future Of Photometric, Spectrophotometric And Polarimetric Standardization, ASP Conference Series 364, p. 165 (2007)
     http://aspbooks.org/custom/publications/paper/364-0165.html
 
-    '''
+    """
     supported_transforms = ['jester', 'ivezic']
     if transform not in supported_transforms:
         raise ValueError('Transform {} is not known. Must be one of '
@@ -236,37 +241,47 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
     Parameters
     ----------
 
-    input_mag : numpy array or astropy Table column
+    input_mag : `numpy.ndarray` or `astropy.table.Column`
         Input magnitudes; for example, instrumental magnitudes.
-    catalog_mag : numpy array or astropy Table column
+
+    catalog_mag : `numpy.ndarray` or `astropy.table.Column`
         Catalog (or reference) magnitudes; the magnitudes to which the
         input_mag will eventually be transformed.
-    color : numpy array or astropy Table column
+
+    color : `numpy.ndarray` or `astropy.table.Column`
         Colors to use in determining transform coefficients.
-    input_mag_error : numpy array or astropy Table column, optional
+
+    input_mag_error : `numpy.ndarray` or `astropy.table.Column`, optional
         Error in input magnitudes. Default is zero.
-    catalog_mag_error : numpy array or astropy Table column, optional
+
+    catalog_mag_error : `numpy.ndarray` or `astropy.table.Column`, optional
         Error in catalog magnitudes. Default is zero.
+
     faintest_mag_for_transform : float, optional
         If this is not ``None``, the magnitude of the faintest catalog stars
         to use in computing transform coefficients.
+
     order : int, optional
         Order of the polynomial fit to use in correcting for color.
+
     sigma : float, optional
         Value of sigma to use to reject outliers while fitting using
         sigma clipping.
+
     gain : float, optional
         If not ``None``, adjust the instrumental magnitude by
         -2.5 * log10(gain), i.e. gain correct the magnitude.
+
     verbose : bool, optional
         If ``True``, print some diagnostic information.
+
     extended_output : bool, optional
         If ``True``, return additional information.
 
     Returns
     -------
 
-    filtered_data : `~numpy.ma.core.MaskedArray`
+    filtered_data : `numpy.ma.core.MaskedArray`
         The data, with the mask set ``True`` for the data that was *omitted*
         from the fit.
 
@@ -375,14 +390,14 @@ def transform_magnitudes(input_mags, catalog,
     Parameters
     ----------
 
-    input_mags : astropy Table
+    input_mags : `astropy.table.Table`
         Table which contains a column with instrumental magnitudes, i.e.
         -2.5 * log10(net_counts / exposure_time).
 
-    catalog : astropy Table
+    catalog : `astropy.table.Table`
         Table containing reference catalog of magnitudes and colors.
 
-    transform_catalog : astropy Table
+    transform_catalog : `astropy.table.Table`
         Table containing the reference catalog of magnitudes and colors
         to use in determining the transform coefficients. Can be the
         same table as ``catalog`` if desired.
@@ -417,17 +432,17 @@ def transform_magnitudes(input_mags, catalog,
     Returns
     -------
 
-    our_cat_mags : astropy Table column
+    our_cat_mags : `astropy.table.Column`
         The calculated catalog magnitudes for the stars in ``input_mags``.
 
-    good_match_all : numpy array
+    good_match_all : `numpy.ndarray`
         Boolean array indicating which stars in ``input_mags`` have a match
         in the catalog.
 
     transforms : `astropy.modeling.FittableModel`
         The coefficients of the transform. The coefficients are in the order
         of ascending power, i.e. the coefficient ``ci`` is the coefficient
-        of the term ``x**i``.  Warning: This returns a namedtuple if the fit 
+        of the term ``x**i``.  Warning: This returns a namedtuple if the fit
         fails.
     """
     catalog_all_coords = SkyCoord(catalog['RAJ2000'],
@@ -502,7 +517,7 @@ def transform_to_catalog(observed_mags_grouped, obs_mag_col, obs_filter,
     Parameters
     ----------
 
-    observed_magnitudes_grouped : astropy.table.Table group
+    observed_magnitudes_grouped : `astropy.table.Table`
         An astropy table, grouped by whatever you want that sepearates the data into
         data from just one image. BJD of the center of the observatory is one reasonable choice
 
@@ -526,13 +541,13 @@ def transform_to_catalog(observed_mags_grouped, obs_mag_col, obs_filter,
         ``('r_mag', 'i_mag')`` then the calculated color will be the ``r_mag`` column minus
         the ``i_mag`` column.
 
-    a_delta, b_delta, c_delta, d_delta : flt, optional
+    a_delta, b_delta, c_delta, d_delta : float, optional
         Range allowed in fitting for each of the parameters ``a``, ``b``, ``c``, and ``d``. Use ``1E-6`` to fix a parameter.
 
-    a_cen : flt, optional
+    a_cen : float, optional
         Center of range for the fitting parameter ``a``.
 
-    zero_point_range : tuple of flt, optional
+    zero_point_range : tuple of float, optional
         Range to which the value of the zero point is restricted in fitting to observed magnitudes.
 
     in_place : bool, optional
@@ -548,7 +563,7 @@ def transform_to_catalog(observed_mags_grouped, obs_mag_col, obs_filter,
     Returns
     -------
 
-    astropy.table.Table
+    `astropy.table.Table`
         Table containing the calibrated magnitudes and the fit parameters.
 
     """

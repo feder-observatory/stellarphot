@@ -33,7 +33,7 @@ def _fit_2dgaussian(data):
 
     Returns
     -------
-    gfit : astropy.modeling.Model
+    gfit : `astropy.modeling.Model`
         The best-fit 2D Gaussian model.
     """
     props = data_properties(data - np.min(data))
@@ -60,7 +60,8 @@ def compute_fwhm(ccd, sources, fwhm_estimate=5,
                  x_column='xcenter', y_column='ycenter',
                  fit=True,
                  sky_per_pix_avg=0):
-    """Computes the FWHM in both x and y directions of sources in an image.
+    """
+    Computes the FWHM in both x and y directions of sources in an image.
 
     Parameters
     ----------
@@ -150,7 +151,7 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
     Parameters
     ----------
 
-    ccd : numpy.ndarray
+    ccd : `astropy.nddata.CCDData`
         The CCD Image array.
 
     fwhm : float, optional
@@ -177,9 +178,9 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
     Returns
     -------
 
-    sources
-        an astropy table of the positions of sources in the image.
-        If `find_fwhm` is ``True``, includes a column called ``FWHM``.
+    sources: `astropy.table.Table`
+        A table of the positions of sources in the image.  If `find_fwhm` is
+        ``True``, includes a column called ``FWHM``.
     """
     mean, median, std = sigma_clipped_stats(ccd, sigma=sigma, maxiters=iters)
     daofind = DAOStarFinder(fwhm=fwhm, threshold=threshold * std)
