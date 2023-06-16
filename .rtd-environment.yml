@@ -11,4 +11,5 @@ dependencies:
     - bottleneck
     - astrowidgets
     - ccdproc
+    - sphinx-astropy
 
