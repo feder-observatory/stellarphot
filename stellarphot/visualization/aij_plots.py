@@ -107,6 +107,8 @@ def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM,
 def plot_predict_ingress_egress(ingress_time, egress_time, end_line=1,
                                 ingress_x_pos=1, egress_x_pos=1, labels_y_pos=1):
     """
+    Plot vertical lines at the ingress and egress times and label them.
+
     Parameters
     ----------
     ingress_time : float
