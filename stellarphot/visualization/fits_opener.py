@@ -11,26 +11,8 @@ __all__ = ['FitsOpener']
 
 
 class FitsOpener:
-    """ A class to open FITS files and display them in an `astrowidgets.ImageWidget`.
-
-    Attributes
-    ----------
-
-    ccd : `astropy.nddata.CCDData`
-        The selected FITS file as a CCDData object.
-
-    file_chooser : `ipyfilechooser.FileChooser`
-        The actual FileChooser widget.
-
-    header : dict
-        The header of the selected FITS file.
-
-    path : `pathlib.Path`
-        The path to the selected FITS file.
-
-    register_callback : function, optional
-        A function that takes one argument. This function will be called when the
-        selected file changes.
+    """
+    A class to open FITS files using a file chooser and display them in an `astrowidgets.ImageWidget`.
     """
     def __init__(self, title="Choose an image", filter_pattern=None, **kwargs):
         """
@@ -67,18 +49,24 @@ class FitsOpener:
 
     @property
     def header(self):
+        """
+        The header of the selected FITS file.
+        """
         self._set_header()
         return self._header
 
     @property
     def ccd(self):
         """
-        Return image as CCDData object
+        Return image stored in FITS file as CCDData object
         """
         return CCDData.read(self.path)
 
     @property
     def path(self):
+        """
+        The path to the selected FITS file.
+        """
         return Path(self._fc.selected)
 
     def _set_header(self):

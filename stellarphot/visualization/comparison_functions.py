@@ -368,7 +368,6 @@ class ComparisonViewer:
     Attributes
     ----------
 
-
     aperture_output_file : str
         File to save aperture information to.
 
