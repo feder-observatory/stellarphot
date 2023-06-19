@@ -368,8 +368,12 @@ class ComparisonViewer:
     Attributes
     ----------
 
-    target_mag : float
-        Magnitude of the target.
+
+    aperture_output_file : str
+        File to save aperture information to.
+
+    box : `ipywidgets.Box`
+        Box containing the widgets.
 
     bright_mag_limit : float
         Bright magnitude limit for APASS stars.
@@ -377,23 +381,20 @@ class ComparisonViewer:
     dim_mag_limit : float
         Dim magnitude limit for APASS stars.
 
-    targets_from_file : str
-        File with target information.
-
-    tess_submission : `~stellarphot.io.TessSubmission`
-        Instance of the TESS submission class.
+    iw : `ginga.util.grc.RemoteClient`
+        Ginga widget.
 
     target_coord : `astropy.coordinates.SkyCoord`
         Coordinates of the target.
 
-    box : `ipywidgets.Box`
-        Box containing the widgets.
+    targets_from_file : str
+        File with target information.
 
-    iw : `ginga.util.grc.RemoteClient`
-        Ginga widget.
+    target_mag : float
+        Magnitude of the target.
 
-    aperture_output_file : str
-        File to save aperture information to.
+    tess_submission : `~stellarphot.io.TessSubmission`
+        Instance of the TESS submission class.
     """
     def __init__(self,
                  file="",
@@ -485,14 +486,7 @@ class ComparisonViewer:
     @property
     def variables(self):
         """
-        Return a dictionary of the variables in the class.
-
-        Returns
-        -------
-
-        our_vsx : `astropy.table.Table`
-            Table of the variables in the class.
-
+        An `astropy.table.Table` of the variables in the class.
         """
         comp_table = self.generate_table()
         new_vsx_mark = comp_table['marker name'] == 'VSX'
