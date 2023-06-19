@@ -1,26 +1,16 @@
-name: packagename
-
 channels:
-    - astropy
     - conda-forge
-
+    - defaults
 dependencies:
+    - python=3.11
     - astropy
-    - Cython
     - matplotlib
-    - numpy
     - reducer
-    - notebook
     - photutils
-    - ginga
     - astroquery
     - reproject
-    - msumastro
-    - pillow
-    - ipyevents
     - bottleneck
     - astrowidgets
-    - gatspy
     - ccdproc
-#   - pip:
-#       - dependency_from_pip
+    - sphinx-astropy
+
