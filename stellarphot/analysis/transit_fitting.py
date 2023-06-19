@@ -96,39 +96,17 @@ class TransitModelFit:
 
     Attributes
     ----------
-    airmass : array-like
-        Airmass at each time. Must be set before fitting.
 
     BIC : float
         Bayesian Information Criterion for the fit. This is calculated
         after the fit is performed.
 
-    data : array-like
-        Observed fluxes. Must be set before fitting.
-
-    model : `astropy.modeling.Model`
-        The model used for fitting. This is a combination of the batman
-        transit model and any other trends that are included in the fit.
-        This is set up when the ``setup_model`` method is called.
-
     n_fit_parameters : int
         Number of parameters that were fit. This is calculated after the
         fit is performed.
 
-    spp : array-like
-        Sky per pixel at each time. Must be set before fitting.
-
-    times : array-like
-        Times at which the light curve is observed. Must be set before
-        fitting.
-
     width : array-like
         Width of the star in pixels at each time. Must be set before fitting.
-
-    weights : array-like
-        Weights to use for fitting. If not provided, all weights are
-        set to 1.
-
     """
     def __init__(self, batman_params=None):
         """
@@ -175,6 +153,11 @@ class TransitModelFit:
 
     @property
     def times(self):
+        """
+        times : array-like
+            Times at which the light curve is observed. Must be set before
+            fitting.
+        """
         return self._times
 
     @times.setter
@@ -192,6 +175,10 @@ class TransitModelFit:
 
     @property
     def airmass(self):
+        """
+        airmass : array-like
+            Airmass at each time. Must be set before fitting.
+        """
         return self._airmass
 
     @airmass.setter
@@ -208,6 +195,11 @@ class TransitModelFit:
 
     @property
     def width(self):
+        """
+        weights : array-like
+            Weights to use for fitting. If not provided, all weights are
+            set to 1.
+        """
         return self._width
 
     @width.setter
@@ -224,6 +216,10 @@ class TransitModelFit:
 
     @property
     def spp(self):
+        """
+        spp : array-like
+            Sky per pixel at each time. Must be set before fitting.
+        """
         return self._spp
 
     @spp.setter
@@ -240,6 +236,10 @@ class TransitModelFit:
 
     @property
     def data(self):
+        """
+        data : array-like
+            Observed fluxes. Must be set before fitting.
+        """
         return self._data
 
     @data.setter
@@ -251,6 +251,12 @@ class TransitModelFit:
 
     @property
     def model(self):
+        """
+        model : `astropy.modeling.Model`
+            The model used for fitting. This is a combination of the batman
+            transit model and any other trends that are included in the fit.
+            This is set up when the ``setup_model`` method is called.
+        """
         return self._model
 
     def _set_default_batman_params(self):

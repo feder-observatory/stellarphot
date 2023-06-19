@@ -261,35 +261,11 @@ class RadialProfile:
     """
     Class to hold radial profile information for a star.
 
-    Parameters
-    ----------
-
-    data : numpy array
-        Image data.
-
-    x : int
-        x position of the star.
-
-    y : int
-        y position of the star.
-
     Attributes
     ----------
 
-    cen : tuple
-        x, y position of the center of the star.
-
-    data : numpy array
-        Image data.
-
-    FWHM : float
-        Full-width half-max of the radial profile.
-
     profile_size : int
         Size of the cutout used to construct the radial profile.
-
-    radius_values : numpy array
-        Radius values for the radial profile.
 
     r_exact : numpy array
         Exact radius of center of each pixels from profile center.
@@ -300,13 +276,13 @@ class RadialProfile:
     """
     def __init__(self, data, x, y):
         """
-        Initialize the radial profile object instance.  Sets the center
+        Initialize the radial profile object instance by setting the center
         of the star and the image data.
 
         Parameters
         ----------
 
-        data : numpy array
+        _data : numpy array
             Image data.
 
         x : int
@@ -317,13 +293,15 @@ class RadialProfile:
 
 
         """
-        self.cen = find_center(data, (x, y), cutout_size=30)
-        self.data = data
+        self._cen = find_center(data, (x, y), cutout_size=30)
+        self._data = data
 
     def profile(self, profile_size):
         """
         Construct the radial profile of the star.  Sets
-        ``r_exact``, ``ravg``, and ``radialprofile`` attributes.
+        ``r_exact``, ``ravg``, and ``radialprofile`` attributes
+        as well as ``scaled_profile``, ``scaled_exact_counts``, and
+        ``HWHM``.
 
         Parameters
         ----------
@@ -347,11 +325,35 @@ class RadialProfile:
         self.HWHM = find_hwhm(self.ravg, self.scaled_profile)
 
     @property
+    def data(self):
+        """
+        data : numpy array
+            Image data.
+        """
+        return self._data
+
+    @property
+    def cen(self):
+        """
+        cen : tuple
+            x, y position of the center of the star.
+        """
+        return self._cen
+
+    @property
     def FWHM(self):
+        """
+        FWHM : float
+            Full-width half-max of the radial profile.
+        """
         return int(np.round(2 * self.HWHM))
 
     @property
     def radius_values(self):
+        """
+        radius_values : numpy array
+            Radius values for the radial profile.
+        """
         return np.arange(len(self.radialprofile))
 
 

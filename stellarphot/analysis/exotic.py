@@ -47,12 +47,16 @@ class MyValid(ipw.Button):
     ----------
 
     value : bool
-        Current value of the indicator.
+        Current value of the indicator. Initizlized to False.
 
     """
     value = Bool(False, help="Bool value").tag(sync=True)
 
     def __init__(self, **kwd):
+        """
+        Initialize the indicator by passing all keyword arguments to the
+        ipywidgets.Button constructor.
+        """
         super().__init__(**kwd)
         self.layout.width = '40px'
         self._set_properties(None)
