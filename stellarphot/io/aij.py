@@ -35,7 +35,7 @@ class ApertureAIJ:
     """
     def __init__(self):
         """
-        Initialize and set default values for the attributes of the aperture object instance.
+        Default values for the attributes set when instantiating an aperture object.
         """
 
         # Outer annulus radius
@@ -115,7 +115,7 @@ class MultiApertureAIJ:
     """
     def __init__(self):
         """
-        Initialize and set default values for the attributes of the multi-aperture object instance.
+        The default valies of attributes are set when multi-aperture object instance is instantiated.
         """
         # Default values for these chosen to match AIJ defaults
         # They are not used by stellarphot
@@ -522,6 +522,10 @@ class Star(object):
 
     """
     def __init__(self, table, id_num):
+        """
+        Initialize a `Star` object by passing it a table of photometry and an
+        ID number.
+        """
         self._table = table
         self._table['DEC'].unit = u.degree
         self._id = id_num

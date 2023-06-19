@@ -45,7 +45,7 @@ class Camera:
                  read_noise=1.0 * u.electron,
                  dark_current=0.01 * u.electron / u.second):
         """
-        Initializes a Camera object instance.
+        Initialize a Camera object instance by passing the required parameters.
 
         Parameters
         ----------
