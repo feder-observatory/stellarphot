@@ -13,6 +13,16 @@ from stellarphot.photometry import photutils_stellar_photometry
 
 
 class FakeImage:
+    """
+    Creates a fake image with a set of sources using the datafile stored
+    at `data/test_sources.csv`.
+
+    Parameters
+    ----------
+
+    noise_dev : float
+        The standard deviation of the noise in the image.
+    """
     def __init__(self, noise_dev=1.0):
         self.image_shape = [400, 500]
         data_file = get_pkg_data_filename('data/test_sources.csv')
@@ -28,10 +38,16 @@ class FakeImage:
 
     @property
     def sources(self):
+        """
+        Return the table of sources used to create the fake image.
+        """
         return self._sources
 
     @property
     def image(self):
+        """
+        Return the fake image.
+        """
         return self._stars + self._noise
 
 
