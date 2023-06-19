@@ -525,6 +525,15 @@ class Star(object):
         """
         Initialize a `Star` object by passing it a table of photometry and an
         ID number.
+
+        Parameters
+        ----------
+
+        table : `astropy.table.Table`
+            Table of photometry for a single star.
+
+        id_num : int
+            ID number of the star.
         """
         self._table = table
         self._table['DEC'].unit = u.degree
