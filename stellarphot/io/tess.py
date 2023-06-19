@@ -349,7 +349,7 @@ class TOI:
 @dataclass
 class TessTargetFile:
     """
-    A data class to hold information about a TESS target file.
+    A class to hold information about a TESS target file.
 
     Parameters
     ----------

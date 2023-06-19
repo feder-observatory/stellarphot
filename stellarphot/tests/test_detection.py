@@ -20,7 +20,7 @@ class FakeImage:
     Parameters
     ----------
 
-    noise_dev : float
+    noise_dev : float, optional
         The standard deviation of the noise in the image.
     """
     def __init__(self, noise_dev=1.0):
