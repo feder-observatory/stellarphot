@@ -31,13 +31,13 @@ class TessSubmission:
     Parameters
     ----------
 
-    telescope_code: String
+    telescope_code: str
         The telescope code, e.g. "SRO" or "TJO"
 
-    filter: String
+    filter: str
         The filter used for the observations, e.g. "Ic" or "Rc"
 
-    utc_start: String
+    utc_start: str
         The UTC date of the first observation, in YYYYMMDD format
 
     tic_id: int
@@ -45,6 +45,37 @@ class TessSubmission:
 
     planet_number: int
         The planet number, if applicable
+
+    Attributes
+    ----------
+
+    apertures
+
+    base_name
+
+    field_image
+
+    field_image_zoom
+
+    filter: str
+        The filter used for the observations, e.g. "Ic" or "Rc"
+
+    planet_number: int
+        The planet number, if applicable
+
+    seeing_profile
+
+    tic_coord
+
+    tic_id: int
+        The TIC ID of the target
+
+    telescope_code: str
+        The telescope code, e.g. "SRO" or "TJO"
+
+    utc_start: str
+        The UTC date of the first observation, in YYYYMMDD format
+
     """
     telescope_code: str
     filter: str
@@ -176,7 +207,7 @@ class TessSubmission:
     @property
     def field_image_zoom(self):
         """
-        field_image_zoom: str
+
             The name of the zoomed-in field image file, e.g. "TIC123456789-01_20200101_SRO_Ic_field-zoom.png"
         """
         return self.base_name + "_field-zoom.png"
@@ -220,6 +251,31 @@ class TessSubmission:
 class TOI:
     """
     A class to hold information about a TOI (TESS Object of Interest).
+
+    Attributes
+    ----------
+
+    coord
+
+    depth
+
+    depth_error
+
+    duration
+
+    duration_error
+
+    epoch
+
+    period
+
+    period_error
+
+    tess_mag
+
+    tess_mag_error
+
+    tic_id
     """
     def __init__(self, tic_id, toi_table=DEFAULT_TABLE_LOCATION, allow_download=True):
         """
@@ -236,7 +292,6 @@ class TOI:
 
         allow_download: bool, optional
             Whether to allow the default table to be downloaded if it is not found.
-
         """
         path = Path(toi_table)
         if not path.is_file():
@@ -368,7 +423,6 @@ class TessTargetFile:
 
     aperture_server : str, optional
         The URL of the aperture server. default: https://www.astro.louisville.edu/
-
 
     Attributes
     ----------

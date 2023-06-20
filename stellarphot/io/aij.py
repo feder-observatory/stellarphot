@@ -511,14 +511,39 @@ class Star(object):
     """
     A class for storing photometry for a single star.
 
-    Parameters
+    Attributes
     ----------
 
-    table : `astropy.table.Table`
-        Table of photometry for a single star.
+    airmass
 
-    id_num : int
+    bjd_tdb
+
+    counts
+
+    dec
+
+    error
+
+    exposure
+
+    id: int
         ID number of the star.
+
+    jd_utc_start
+
+    magnitude
+
+    magnitude_error
+
+    mjd_start
+
+    peak
+
+    ra
+
+    sky_per_pixel
+
+    snr
 
     """
     def __init__(self, table, id_num):
@@ -537,15 +562,7 @@ class Star(object):
         """
         self._table = table
         self._table['DEC'].unit = u.degree
-        self._id = id_num
-
-    @property
-    def id(self):
-        """
-        id: int
-            ID number of the star.
-        """
-        return self._id
+        self.id = id_num
 
     @property
     def airmass(self):
