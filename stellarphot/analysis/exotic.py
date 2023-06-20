@@ -43,11 +43,18 @@ class MyValid(ipw.Button):
     A class containing a more compact indicator of valid entries based on ipywidgets
     buton value.
 
+    Parameters
+    ----------
+
+    **kwd :
+        All keyword arguments used to initialize an instance of this class are
+        passed to the ipywidgets.Button constructor.
+
     Attributes
     ----------
 
     value : bool
-        Current value of the indicator.
+        Current value of the indicator. Initizlized to False.
 
     """
     value = Bool(False, help="Bool value").tag(sync=True)

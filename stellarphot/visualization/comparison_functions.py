@@ -365,11 +365,41 @@ class ComparisonViewer:
     """
     A class to store an instance of the comparison viewer.
 
+    Parameters
+    ----------
+
+    file : str, optional
+        File to open. Defaults to "".
+
+    directory : str, optional
+        Directory to open file from. Defaults to '.'.
+
+    target_mag : float, optional
+        Magnitude of the target. Defaults to 10.
+
+    bright_mag_limit : float, optional
+        Bright magnitude limit for APASS stars. Defaults to 8.
+
+    dim_mag_limit : float, optional
+        Dim magnitude limit for APASS stars.  Defaults to 17.
+
+    targets_from_file : str, optional
+        File with target information.  Defaults to None.
+
+    object_coordinate : `astropy.coordinates.SkyCoord`, optional
+        Coordinates of the target. Defaults to None.
+
+    aperture_output_file : str, optional
+        File to save aperture information to.  Defaults to None.
+
     Attributes
     ----------
 
-    target_mag : float
-        Magnitude of the target.
+    aperture_output_file : str
+        File to save aperture information to.
+
+    box : `ipywidgets.Box`
+        Box containing the widgets.
 
     bright_mag_limit : float
         Bright magnitude limit for APASS stars.
@@ -377,23 +407,22 @@ class ComparisonViewer:
     dim_mag_limit : float
         Dim magnitude limit for APASS stars.
 
-    targets_from_file : str
-        File with target information.
-
-    tess_submission : `~stellarphot.io.TessSubmission`
-        Instance of the TESS submission class.
+    iw : `ginga.util.grc.RemoteClient`
+        Ginga widget.
 
     target_coord : `astropy.coordinates.SkyCoord`
         Coordinates of the target.
 
-    box : `ipywidgets.Box`
-        Box containing the widgets.
+    targets_from_file : str
+        File with target information.
 
-    iw : `ginga.util.grc.RemoteClient`
-        Ginga widget.
+    target_mag : float
+        Magnitude of the target.
 
-    aperture_output_file : str
-        File to save aperture information to.
+    tess_submission : `~stellarphot.io.TessSubmission`
+        Instance of the TESS submission class.
+
+    variables : `astropy.table.Table`
     """
     def __init__(self,
                  file="",
@@ -404,36 +433,6 @@ class ComparisonViewer:
                  targets_from_file=None,
                  object_coordinate=None,
                  aperture_output_file=None):
-        """
-        Initializes an instance of the ComparisonViewer class.
-
-        Parameters
-        ----------
-
-        file : str, optional
-            File to open. Defaults to "".
-
-        directory : str, optional
-            Directory to open file from. Defaults to '.'.
-
-        target_mag : float, optional
-            Magnitude of the target. Defaults to 10.
-
-        bright_mag_limit : float, optional
-            Bright magnitude limit for APASS stars. Defaults to 8.
-
-        dim_mag_limit : float, optional
-            Dim magnitude limit for APASS stars.  Defaults to 17.
-
-        targets_from_file : str, optional
-            File with target information.  Defaults to None.
-
-        object_coordinate : `astropy.coordinates.SkyCoord`, optional
-            Coordinates of the target. Defaults to None.
-
-        aperture_output_file : str, optional
-            File to save aperture information to.  Defaults to None.
-        """
 
         self._label_name = 'labels'
         self._circle_name = 'target circle'
@@ -485,14 +484,7 @@ class ComparisonViewer:
     @property
     def variables(self):
         """
-        Return a dictionary of the variables in the class.
-
-        Returns
-        -------
-
-        our_vsx : `astropy.table.Table`
-            Table of the variables in the class.
-
+        An `astropy.table.Table` of the variables in the class.
         """
         comp_table = self.generate_table()
         new_vsx_mark = comp_table['marker name'] == 'VSX'

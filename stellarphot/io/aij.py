@@ -34,10 +34,6 @@ class ApertureAIJ:
 
     """
     def __init__(self):
-        """
-        Initialize and set default values for the attributes of the aperture object instance.
-        """
-
         # Outer annulus radius
         self.rback2 = 41.0
 
@@ -114,9 +110,6 @@ class MultiApertureAIJ:
         List of y positions of the apertures.
     """
     def __init__(self):
-        """
-        Initialize and set default values for the attributes of the multi-aperture object instance.
-        """
         # Default values for these chosen to match AIJ defaults
         # They are not used by stellarphot
         self.naperturesmax = 1000
@@ -204,9 +197,6 @@ class ApertureFileAIJ:
         Multi-aperture information.
     """
     def __init__(self):
-        """
-        Initialize the AstroImageJ aperture file instance.
-        """
         self.aperture = ApertureAIJ()
         self.multiaperture = MultiApertureAIJ()
 
@@ -313,6 +303,7 @@ class ApertureFileAIJ:
 
         Returns
         -------
+
         apAIJ: `~stellarphot.io.ApertureFileAIJ`
             ApertureFileAIJ object representing the aperture table.
         """
@@ -524,61 +515,36 @@ class Star(object):
     ----------
 
     airmass : `astropy.units.Quantity`
-        Airmass at the time of observation.
 
     bjd_tdb : `astropy.units.Quantity`
-        Midpoint of the exposure as barycentric Julian date in Barycentric Dynamical Time.
 
     counts : `astropy.units.Quantity`
-        Net counts in the aperture.
 
     dec : `astropy.units.Quantity`
-        Declination of the star.
 
     error : `astropy.units.Quantity`
-        Error in the net counts.
 
     exposure : `astropy.units.Quantity`
-        Exposure time of the observation.
 
-    id: int
+    id : int
         ID number of the star.
 
-    jd_utc_end : `astropy.units.Quantity`
-        Julian date of the end of the observation.
-
-    jd_utc_mid : `astropy.units.Quantity`
-        Julian date of the middle of the observation.
-
     jd_utc_start : `astropy.units.Quantity`
-        Julian date of the start of the observation.
 
     magnitude : `astropy.units.Quantity`
-        Magnitude of the star.
 
     magnitude_error : `astropy.units.Quantity`
-        Error in the magnitude of the star.
 
-    mjd_utc_end : `astropy.units.Quantity`
-        Modified Julian date of the end of the observation.
-
-    mjd_utc_mid : `astropy.units.Quantity`
-        Modified Julian date of the middle of the observation.
-
-    mjd_utc_start : `astropy.units.Quantity`
-        Modified Julian date of the start of the observation.
+    mjd_start : `astropy.units.Quantity`
 
     peak : `astropy.units.Quantity`
-        Peak counts in the aperture.
 
     ra : `astropy.units.Quantity`
-        Right ascension of the star.
 
     sky_per_pixel : `astropy.units.Quantity`
-        Sky brightness per pixel.
 
     snr : `astropy.units.Quantity`
-        Signal-to-noise ratio of the star.
+
     """
     def __init__(self, table, id_num):
         self._table = table
@@ -587,42 +553,72 @@ class Star(object):
 
     @property
     def airmass(self):
+        """
+        Airmass at the time of observation.
+        """
         return self._table['AIRMASS']
 
     @property
     def counts(self):
+        """
+        Net counts in the aperture.
+        """
         return self._table['Source-Sky']
 
     @property
     def ra(self):
+        """
+        Right ascension of the star.
+        """
         return self._table['RA'] / 24 * 360 * u.degree
 
     @property
     def dec(self):
+        """
+        Declination of the star.
+        """
         return self._table['DEC']
 
     @property
     def error(self):
+        """
+        Error in the net counts.
+        """
         return self._table['Source_Error']
 
     @property
     def sky_per_pixel(self):
+        """
+        Sky brightness per pixel.
+        """
         return self._table['Sky/Pixel']
 
     @property
     def peak(self):
+        """
+        Peak counts in the aperture.
+        """
         return self._table['Peak']
 
     @property
     def jd_utc_start(self):
+        """
+        Julian date of the start of the observation.
+        """
         return self._table['JD_UTC']
 
     @property
     def mjd_start(self):
+        """
+        Modified Julian date of the start of the observation.
+        """
         return self._table['J.D.-2400000'] - 0.5
 
     @property
     def exposure(self):
+        """
+        Exposure time of the observation.
+        """
         try:
             return self._table['EXPOSURE']
         except KeyError:
@@ -630,16 +626,28 @@ class Star(object):
 
     @property
     def magnitude(self):
+        """
+        Magnitude of the star.
+        """
         return -2.5 * np.log10(self.counts) + 2.5 * np.log10(self.exposure)
 
     @property
     def snr(self):
+        """
+        Signal-to-noise ratio of the star.
+        """
         return self.counts / self.error
 
     @property
     def magnitude_error(self):
+        """
+        Error in the magnitude of the star.
+        """
         return 1.0857 / self.snr
 
     @property
     def bjd_tdb(self):
+        """
+        Midpoint of the exposure as barycentric Julian date in Barycentric Dynamical Time.
+        """
         return self._table['BJD_TDB']

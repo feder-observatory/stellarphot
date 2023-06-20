@@ -11,42 +11,33 @@ __all__ = ['FitsOpener']
 
 
 class FitsOpener:
-    """ A class to open FITS files and display them in an `astrowidgets.ImageWidget`.
+    """
+    A class to open FITS files using a file chooser and display them in an `astrowidgets.ImageWidget`.
+
+    Parameters
+    ----------
+
+    title : str, optional
+        The title of the FileChooser widget. The default is "Choose an image".
+
+    filter_pattern : str, optional
+        The filter pattern to use for the FileChooser widget. The default is None.
 
     Attributes
     ----------
 
     ccd : `astropy.nddata.CCDData`
-        The selected FITS file as a CCDData object.
 
     file_chooser : `ipyfilechooser.FileChooser`
-        The actual FileChooser widget.
 
-    header : dict
-        The header of the selected FITS file.
+    header : `astropy.io.fits.Header`
+
+    object : str
+        The object name from the FITS header.
 
     path : `pathlib.Path`
-        The path to the selected FITS file.
-
-    register_callback : function, optional
-        A function that takes one argument. This function will be called when the
-        selected file changes.
     """
     def __init__(self, title="Choose an image", filter_pattern=None, **kwargs):
-        """
-        Initializes an instance of the FitsOpener class, which is a wrapper around
-        the `ipyfilechooser.FileChooser` widget that (if no `filter_pattern` is given)
-        defaults to showing only FITS files.
-
-        Parameters
-        ----------
-
-        title : str, optional
-            The title of the FileChooser widget. The default is "Choose an image".
-
-        filter_pattern : str, optional
-            The filter pattern to use for the FileChooser widget. The default is None,
-        """
         self._fc = FileChooser(title=title, **kwargs)
         if not filter_pattern:
             self._fc.filter_pattern = ['*.fit*', '*.fit*.[bg]z']
@@ -67,18 +58,24 @@ class FitsOpener:
 
     @property
     def header(self):
+        """
+        The header of the selected FITS file.
+        """
         self._set_header()
         return self._header
 
     @property
     def ccd(self):
         """
-        Return image as CCDData object
+        Return image stored in FITS file as CCDData object
         """
         return CCDData.read(self.path)
 
     @property
     def path(self):
+        """
+        The path to the selected FITS file.
+        """
         return Path(self._fc.selected)
 
     def _set_header(self):
