@@ -394,6 +394,8 @@ class ComparisonViewer:
 
     tess_submission : `~stellarphot.io.TessSubmission`
         Instance of the TESS submission class.
+
+    variables : `astropy.table.Table`
     """
     def __init__(self,
                  file="",

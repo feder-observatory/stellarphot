@@ -11,6 +11,22 @@ __all__ = ['PhotometrySettings']
 class PhotometrySettings:
     """
     A class to hold the widgets for photometry settings.
+
+    Attributes
+    ----------
+
+    aperture_locations : `pathlib.Path`
+
+    aperture_radius : int
+
+    box : `ipywidgets.VBox`
+
+    image_folder : `pathlib.Path`
+
+    ifc : `ccdproc.ImageFileCollection`
+        The ImageFileCollection for the selected folder.
+
+    object_name : str
     """
     def __init__(self):
         """
@@ -30,40 +46,35 @@ class PhotometrySettings:
     @property
     def box(self):
         """
-        box : `ipywidgets.VBox`
-            The box containing the widgets.
+        The box containing the widgets.
         """
         return self._box
 
     @property
     def image_folder(self):
         """
-        image_folder : `pathlib.Path`
-            The path to the folder containing the images.
+        The path to the folder containing the images.
         """
         return self._image_dir.selected
 
     @property
     def aperture_locations(self):
         """
-        aperture_locations : `pathlib.Path`
-            The path to the file containing the aperture locations
+        The path to the file containing the aperture locations
         """
         return self._aperture_file_loc.selected
 
     @property
     def aperture_radius(self):
         """
-        aperture_radius : int
-            The radius of the aperture.
+        The radius of the aperture.
         """
         return self._aperture_radius
 
     @property
     def object_name(self):
         """
-        object_name : str
-            The name of the object.
+        The name of the object.
         """
         return self._object_name.value
 

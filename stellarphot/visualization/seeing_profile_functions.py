@@ -264,15 +264,31 @@ class RadialProfile:
     Attributes
     ----------
 
+    cen : tuple
+
+    data : numpy array
+
+    FWHM : float
+
+    HWHM : float
+        Half-width half-max of the radial profile.
+
     profile_size : int
         Size of the cutout used to construct the radial profile.
 
     r_exact : numpy array
         Exact radius of center of each pixels from profile center.
 
+    radius_values : numpy array
+
     ravg : numpy array
         Average radius in pixels used in constructing profile.
 
+    scaled_exact_counts : numpy array
+        Exact counts in each pixel, scaled to have a maximum of 1.
+
+    scaled_profile : numpy array
+        Radial profile scaled to have a maximum of 1.
     """
     def __init__(self, data, x, y):
         """
@@ -282,7 +298,7 @@ class RadialProfile:
         Parameters
         ----------
 
-        _data : numpy array
+        data : numpy array
             Image data.
 
         x : int
@@ -298,10 +314,7 @@ class RadialProfile:
 
     def profile(self, profile_size):
         """
-        Construct the radial profile of the star.  Sets
-        ``r_exact``, ``ravg``, and ``radialprofile`` attributes
-        as well as ``scaled_profile``, ``scaled_exact_counts``, and
-        ``HWHM``.
+        Construct the radial profile of the star.
 
         Parameters
         ----------
@@ -327,32 +340,28 @@ class RadialProfile:
     @property
     def data(self):
         """
-        data : numpy array
-            Image data.
+        Image data.
         """
         return self._data
 
     @property
     def cen(self):
         """
-        cen : tuple
-            x, y position of the center of the star.
+        x, y position of the center of the star.
         """
         return self._cen
 
     @property
     def FWHM(self):
         """
-        FWHM : float
-            Full-width half-max of the radial profile.
+        Full-width half-max of the radial profile.
         """
         return int(np.round(2 * self.HWHM))
 
     @property
     def radius_values(self):
         """
-        radius_values : numpy array
-            Radius values for the radial profile.
+        Radius values for the radial profile.
         """
         return np.arange(len(self.radialprofile))
 
@@ -380,15 +389,64 @@ class SeeingProfileWidget:
     """
     A class for storing an instance of a widget displaying the seeing profile of stars in an image.
 
-    Parameters
+    Attributes
     ----------
-    imagewidget : `astrowidgets.ImageWidget`, optional
-        ImageWidget instance to use for the seeing profile.
 
-    width : int, optional
-        Width of the seeing profile widget.
+    ap_t : `ipywidgets.IntText`
+        Text box for the aperture radius.
+
+    box : `ipywidgets.VBox`
+        Box containing the seeing profile widget.
+
+    container : `ipywidgets.VBox`
+        Container for the seeing profile widget.
+
+    object_name : str
+        Name of the object in the FITS file.
+
+    in_t : `ipywidgets.IntText`
+        Text box for the inner annulus.
+
+    iw : `astrowidgets.ImageWidget`
+        ImageWidget instance used for the seeing profile.
+
+    object_name : str
+        Name of the object in the FITS file.
+
+    out : `ipywidgets.Output`
+        Output widget for the seeing profile.
+
+    out2 : `ipywidgets.Output`
+        Output widget for the integrated counts.
+
+    out3 : `ipywidgets.Output`
+        Output widget for the SNR.
+
+    out_t : `ipywidgets.IntText`
+        Text box for the outer annulus.
+
+    rad_prof : `RadialProfile`
+        Radial profile of the star.
+
+    save_aps : `ipywidgets.Button`
+        Button to save the aperture settings.
+
+    tess_box : `ipywidgets.VBox`
+        Box containing the TESS settings.
+
     """
     def __init__(self, imagewidget=None, width=500):
+        """
+        Initizes the SeeingProfileWidget instance.
+
+        Parameters
+        ----------
+        imagewidget : `astrowidgets.ImageWidget`, optional
+            ImageWidget instance to use for the seeing profile.
+
+        width : int, optional
+            Width of the seeing profile widget. Default is 500 pixels.
+        """
         if not imagewidget:
             imagewidget = ImageWidget(image_width=width,
                                       image_height=width,
@@ -450,6 +508,15 @@ class SeeingProfileWidget:
         self._set_observers()
 
     def load_fits(self, file):
+        """
+        Load a FITS file into the image widget.
+
+        Parameters
+        ----------
+
+        file : str
+            Filename to open.
+        """
         self.fits_file.load_in_image_widget(self.iw)
 
     def _update_file(self, change):

@@ -31,49 +31,49 @@ class TessSubmission:
     Parameters
     ----------
 
-    telescope_code: str
+    telescope_code : str
         The telescope code, e.g. "SRO" or "TJO"
 
-    filter: str
+    filter : str
         The filter used for the observations, e.g. "Ic" or "Rc"
 
-    utc_start: str
+    utc_start : str
         The UTC date of the first observation, in YYYYMMDD format
 
-    tic_id: int
+    tic_id : int
         The TIC ID of the target
 
-    planet_number: int
+    planet_number : int
         The planet number, if applicable
 
     Attributes
     ----------
 
-    apertures
+    apertures : str
 
-    base_name
+    base_name : str
 
-    field_image
+    field_image : str
 
-    field_image_zoom
+    field_image_zoom : str
 
     filter: str
         The filter used for the observations, e.g. "Ic" or "Rc"
 
-    planet_number: int
+    planet_number : int
         The planet number, if applicable
 
-    seeing_profile
+    seeing_profile : str
 
-    tic_coord
+    tic_coord : `astropy.coordinates.SkyCoord`
 
-    tic_id: int
+    tic_id : int
         The TIC ID of the target
 
-    telescope_code: str
+    telescope_code : str
         The telescope code, e.g. "SRO" or "TJO"
 
-    utc_start: str
+    utc_start : str
         The UTC date of the first observation, in YYYYMMDD format
 
     """
@@ -93,13 +93,13 @@ class TessSubmission:
 
         Parameters
         ----------
-        header: `astropy.io.fits.Header`
+        header : `astropy.io.fits.Header`
             The FITS header to parse
 
-        telescope_code: str
+        telescope_code : str
             The telescope code, e.g. "SRO" or "TJO"
 
-        planet: int
+        planet : int
             The planet number, if applicable
         """
 
@@ -176,8 +176,7 @@ class TessSubmission:
     @property
     def base_name(self):
         """
-        base_name: str
-            The base name of the submission, e.g. "TIC123456789-01_20200101_SRO_Ic"
+        The base name of the submission, e.g. "TIC123456789-01_20200101_SRO_Ic"
         """
         if self._valid():
             pieces = [
@@ -191,40 +190,35 @@ class TessSubmission:
     @property
     def seeing_profile(self):
         """
-        seeing_profile: str
-            The name of the seeing profile file, e.g. "TIC123456789-01_20200101_SRO_Ic_seeing-profile.png"
+        The name of the seeing profile file, e.g. "TIC123456789-01_20200101_SRO_Ic_seeing-profile.png"
         """
         return self.base_name + "_seeing-profile.png"
 
     @property
     def field_image(self):
         """
-        field_image: str
-            The name of the field image file, e.g. "TIC123456789-01_20200101_SRO_Ic_field.png"
+        The name of the field image file, e.g. "TIC123456789-01_20200101_SRO_Ic_field.png"
         """
         return self.base_name + "_field.png"
 
     @property
     def field_image_zoom(self):
         """
-
-            The name of the zoomed-in field image file, e.g. "TIC123456789-01_20200101_SRO_Ic_field-zoom.png"
+        The name of the zoomed-in field image file, e.g. "TIC123456789-01_20200101_SRO_Ic_field-zoom.png"
         """
         return self.base_name + "_field-zoom.png"
 
     @property
     def apertures(self):
         """
-        apertures: str
-            The name of the apertures file, e.g. "TIC123456789-01_20200101_SRO_Ic_measurements.apertures"
+        The name of the apertures file, e.g. "TIC123456789-01_20200101_SRO_Ic_measurements.apertures"
         """
         return self.base_name + "_measurements.apertures"
 
     @property
     def tic_coord(self):
         """
-        tic_coord: `astropy.coordinates.SkyCoord`
-            The SkyCoord of the target, from the TIC catalog.
+        The SkyCoord of the target, from the TIC catalog.
         """
         if not self._tic_info:
             self._tic_info = get_tic_info(self.tic_id)
@@ -255,27 +249,29 @@ class TOI:
     Attributes
     ----------
 
-    coord
+    coord : `astropy.coordinates.SkyCoord`
 
-    depth
+    depth : float
 
-    depth_error
+    depth_error : float
 
-    duration
+    duration : float
 
-    duration_error
+    duration_error : float
 
-    epoch
+    epoch : float
 
-    period
+    epoch_error : float
 
-    period_error
+    period : float
 
-    tess_mag
+    period_error : float
 
-    tess_mag_error
+    tess_mag : float
 
-    tic_id
+    tess_mag_error : float
+
+    tic_id : int
     """
     def __init__(self, tic_id, toi_table=DEFAULT_TABLE_LOCATION, allow_download=True):
         """
@@ -284,13 +280,13 @@ class TOI:
         Parameters
         ----------
 
-        tic_id: int
+        tic_id : int
             The TIC ID of the target.
 
-        toi_table: str, optional
+        toi_table : str, optional
             The path to the TOI table. If not provided, the default table will be downloaded.
 
-        allow_download: bool, optional
+        allow_download : bool, optional
             Whether to allow the default table to be downloaded if it is not found.
         """
         path = Path(toi_table)
@@ -308,96 +304,84 @@ class TOI:
     @property
     def tess_mag(self):
         """
-        tess_mag: float
-            The TESS magnitude of the target.
+        The TESS magnitude of the target.
         """
         return self._toi_table['TESS Mag'][0]
 
     @property
     def tess_mag_error(self):
         """
-        tess_mag_error: float
-            The uncertainty in the TESS magnitude.
+        The uncertainty in the TESS magnitude.
         """
         return self._toi_table['TESS Mag err'][0]
 
     @property
     def depth(self):
         """
-        depth: float
-            The transit depth of the target in parts per thousand.
+        The transit depth of the target in parts per thousand.
         """
         return self._toi_table['Depth (ppm)'][0] / 1000
 
     @property
     def depth_error(self):
         """
-        depth_error: float
-            The uncertainty in the transit depth in parts per thousand.
+        The uncertainty in the transit depth in parts per thousand.
         """
         return self._toi_table['Depth (ppm) err'][0] / 1000
 
     @property
     def epoch(self):
         """
-        epoch: float
-            The epoch of the transit.
+        The epoch of the transit.
         """
         return Time(self._toi_table['Epoch (BJD)'][0], scale='tdb', format='jd')
 
     @property
     def epoch_error(self):
         """
-        epoch_error: float
-            The uncertainty in the epoch of the transit.
+        The uncertainty in the epoch of the transit.
         """
         return self._toi_table['Epoch (BJD) err'][0] * u.day
 
     @property
     def period(self):
         """
-        period: float
-            The period of the transit.
+        The period of the transit.
         """
         return self._toi_table['Period (days)'][0] * u.day
 
     @property
     def period_error(self):
         """
-        period_error: float
-            The uncertainty in the period of the transit.
+        The uncertainty in the period of the transit.
         """
         return self._toi_table['Period (days) err'][0] * u.day
 
     @property
     def duration(self):
         """
-        duration: float
-            The duration of the transit.
+        The duration of the transit.
         """
         return self._toi_table['Duration (hours)'][0] * u.hour
 
     @property
     def duration_error(self):
         """
-        duration_error: float
-            The uncertainty in the duration of the transit.
+        The uncertainty in the duration of the transit.
         """
         return self._toi_table['Duration (hours) err'][0] * u.hour
 
     @property
     def coord(self):
         """
-        coord: `astropy.coordinates.SkyCoord`
-            The coordinates of the target.
+        The coordinates of the target.
         """
         return SkyCoord(ra=self._tic_info['ra'][0], dec=self._tic_info['dec'][0], unit='degree')
 
     @property
     def tic_id(self):
         """
-        tic_id: int
-            The TIC ID of the target.
+        The TIC ID of the target.
         """
         return self._tic_info['ID'][0]
 

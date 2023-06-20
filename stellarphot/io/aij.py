@@ -313,6 +313,7 @@ class ApertureFileAIJ:
 
         Returns
         -------
+
         apAIJ: `~stellarphot.io.ApertureFileAIJ`
             ApertureFileAIJ object representing the aperture table.
         """
@@ -514,36 +515,36 @@ class Star(object):
     Attributes
     ----------
 
-    airmass
+    airmass : `astropy.units.Quantity`
 
-    bjd_tdb
+    bjd_tdb : `astropy.units.Quantity`
 
-    counts
+    counts : `astropy.units.Quantity`
 
-    dec
+    dec : `astropy.units.Quantity`
 
-    error
+    error : `astropy.units.Quantity`
 
-    exposure
+    exposure : `astropy.units.Quantity`
 
-    id: int
+    id : int
         ID number of the star.
 
-    jd_utc_start
+    jd_utc_start : `astropy.units.Quantity`
 
-    magnitude
+    magnitude : `astropy.units.Quantity`
 
-    magnitude_error
+    magnitude_error : `astropy.units.Quantity`
 
-    mjd_start
+    mjd_start : `astropy.units.Quantity`
 
-    peak
+    peak : `astropy.units.Quantity`
 
-    ra
+    ra : `astropy.units.Quantity`
 
-    sky_per_pixel
+    sky_per_pixel : `astropy.units.Quantity`
 
-    snr
+    snr : `astropy.units.Quantity`
 
     """
     def __init__(self, table, id_num):
@@ -567,80 +568,70 @@ class Star(object):
     @property
     def airmass(self):
         """
-        airmass : `astropy.units.Quantity`
-            Airmass at the time of observation.
+        Airmass at the time of observation.
         """
         return self._table['AIRMASS']
 
     @property
     def counts(self):
         """
-        counts : `astropy.units.Quantity`
-            Net counts in the aperture.
+        Net counts in the aperture.
         """
         return self._table['Source-Sky']
 
     @property
     def ra(self):
         """
-        ra : `astropy.units.Quantity`
-            Right ascension of the star.
+        Right ascension of the star.
         """
         return self._table['RA'] / 24 * 360 * u.degree
 
     @property
     def dec(self):
         """
-        dec : `astropy.units.Quantity`
-            Declination of the star.
+        Declination of the star.
         """
         return self._table['DEC']
 
     @property
     def error(self):
         """
-        error : `astropy.units.Quantity`
-            Error in the net counts.
+        Error in the net counts.
         """
         return self._table['Source_Error']
 
     @property
     def sky_per_pixel(self):
         """
-        sky_per_pixel : `astropy.units.Quantity`
-            Sky brightness per pixel.
+        Sky brightness per pixel.
         """
         return self._table['Sky/Pixel']
 
     @property
     def peak(self):
         """
-        peak : `astropy.units.Quantity`
-            Peak counts in the aperture.
+        Peak counts in the aperture.
         """
         return self._table['Peak']
 
     @property
     def jd_utc_start(self):
         """
-        jd_utc_start : `astropy.units.Quantity`
-            Julian date of the start of the observation.
+        Julian date of the start of the observation.
         """
         return self._table['JD_UTC']
 
     @property
     def mjd_start(self):
         """
-        mjd_start : `astropy.units.Quantity`
-            Modified Julian date of the start of the observation.
-"""
+        Modified Julian date of the start of the observation.
+        """
         return self._table['J.D.-2400000'] - 0.5
 
     @property
     def exposure(self):
         """
-        exposure : `astropy.units.Quantity`
-            Exposure time of the observation.
+        Exposure time of the observation.
         """
         try:
             return self._table['EXPOSURE']
@@ -650,31 +641,27 @@ class Star(object):
     @property
     def magnitude(self):
         """
-        magnitude : `astropy.units.Quantity`
-            Magnitude of the star.
+        Magnitude of the star.
         """
         return -2.5 * np.log10(self.counts) + 2.5 * np.log10(self.exposure)
 
     @property
     def snr(self):
         """
-        snr : `astropy.units.Quantity`
-            Signal-to-noise ratio of the star.
+        Signal-to-noise ratio of the star.
         """
         return self.counts / self.error
 
     @property
     def magnitude_error(self):
         """
-        magnitude_error : `astropy.units.Quantity`
-            Error in the magnitude of the star.
+        Error in the magnitude of the star.
         """
         return 1.0857 / self.snr
 
     @property
     def bjd_tdb(self):
         """
-        bjd_tdb : `astropy.units.Quantity`
-            Midpoint of the exposure as barycentric Julian date in Barycentric Dynamical Time.
+        Midpoint of the exposure as barycentric Julian date in Barycentric Dynamical Time.
         """
         return self._table['BJD_TDB']

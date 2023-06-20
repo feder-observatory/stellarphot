@@ -13,6 +13,20 @@ __all__ = ['FitsOpener']
 class FitsOpener:
     """
     A class to open FITS files using a file chooser and display them in an `astrowidgets.ImageWidget`.
+
+    Attributes
+    ----------
+
+    ccd : `astropy.nddata.CCDData`
+
+    file_chooser : `ipyfilechooser.FileChooser`
+
+    header : `astropy.io.fits.Header`
+
+    object : str
+        The object name from the FITS header.
+
+    path : `pathlib.Path`
     """
     def __init__(self, title="Choose an image", filter_pattern=None, **kwargs):
         """
