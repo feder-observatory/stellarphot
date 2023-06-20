@@ -246,6 +246,18 @@ class TOI:
     """
     A class to hold information about a TOI (TESS Object of Interest).
 
+    Parameters
+    ----------
+
+    tic_id : int
+        The TIC ID of the target.
+
+    toi_table : str, optional
+        The path to the TOI table. If not provided, the default table will be downloaded.
+
+    allow_download : bool, optional
+        Whether to allow the default table to be downloaded if it is not found.
+
     Attributes
     ----------
 
@@ -274,21 +286,6 @@ class TOI:
     tic_id : int
     """
     def __init__(self, tic_id, toi_table=DEFAULT_TABLE_LOCATION, allow_download=True):
-        """
-        Initialize a TOI object.
-
-        Parameters
-        ----------
-
-        tic_id : int
-            The TIC ID of the target.
-
-        toi_table : str, optional
-            The path to the TOI table. If not provided, the default table will be downloaded.
-
-        allow_download : bool, optional
-            Whether to allow the default table to be downloaded if it is not found.
-        """
         path = Path(toi_table)
         if not path.is_file():
             if not allow_download:

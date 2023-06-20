@@ -94,6 +94,12 @@ class TransitModelFit:
     """
     Transit model fits to observed light curves.
 
+    Parameters
+    ----------
+    batman_params : batman.TransitParams
+        Parameters for the batman transit model. If not provided, the
+        default parameters will be used.
+
     Attributes
     ----------
 
@@ -109,15 +115,6 @@ class TransitModelFit:
         Width of the star in pixels at each time. Must be set before fitting.
     """
     def __init__(self, batman_params=None):
-        """
-        Initialize the transit model fit.
-
-        Parameters
-        ----------
-        batman_params : batman.TransitParams
-            Parameters for the batman transit model. If not provided, the
-            default parameters will be used.
-        """
         self._batman_params = batman.TransitParams()
         self._set_default_batman_params()
         self._times = None

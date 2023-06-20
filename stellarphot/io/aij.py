@@ -34,10 +34,6 @@ class ApertureAIJ:
 
     """
     def __init__(self):
-        """
-        Default values for the attributes set when instantiating an aperture object.
-        """
-
         # Outer annulus radius
         self.rback2 = 41.0
 
@@ -114,9 +110,6 @@ class MultiApertureAIJ:
         List of y positions of the apertures.
     """
     def __init__(self):
-        """
-        The default valies of attributes are set when multi-aperture object instance is instantiated.
-        """
         # Default values for these chosen to match AIJ defaults
         # They are not used by stellarphot
         self.naperturesmax = 1000
@@ -204,9 +197,6 @@ class ApertureFileAIJ:
         Multi-aperture information.
     """
     def __init__(self):
-        """
-        Initialize the AstroImageJ aperture file instance.
-        """
         self.aperture = ApertureAIJ()
         self.multiaperture = MultiApertureAIJ()
 
@@ -512,6 +502,15 @@ class Star(object):
     """
     A class for storing photometry for a single star.
 
+    Parameters
+    ----------
+
+    table : `astropy.table.Table`
+        Table of photometry for a single star.
+
+    id_num : int
+        ID number of the star.
+
     Attributes
     ----------
 
@@ -548,19 +547,6 @@ class Star(object):
 
     """
     def __init__(self, table, id_num):
-        """
-        Initialize a `Star` object by passing it a table of photometry and an
-        ID number.
-
-        Parameters
-        ----------
-
-        table : `astropy.table.Table`
-            Table of photometry for a single star.
-
-        id_num : int
-            ID number of the star.
-        """
         self._table = table
         self._table['DEC'].unit = u.degree
         self.id = id_num

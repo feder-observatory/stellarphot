@@ -261,6 +261,18 @@ class RadialProfile:
     """
     Class to hold radial profile information for a star.
 
+    Parameters
+    ----------
+
+    data : numpy array
+        Image data.
+
+    x : int
+        x position of the star.
+
+    y : int
+        y position of the star.
+
     Attributes
     ----------
 
@@ -291,24 +303,6 @@ class RadialProfile:
         Radial profile scaled to have a maximum of 1.
     """
     def __init__(self, data, x, y):
-        """
-        Initialize the radial profile object instance by setting the center
-        of the star and the image data.
-
-        Parameters
-        ----------
-
-        data : numpy array
-            Image data.
-
-        x : int
-            x position of the star.
-
-        y : int
-            y position of the star.
-
-
-        """
         self._cen = find_center(data, (x, y), cutout_size=30)
         self._data = data
 
@@ -389,6 +383,14 @@ class SeeingProfileWidget:
     """
     A class for storing an instance of a widget displaying the seeing profile of stars in an image.
 
+    Parameters
+    ----------
+    imagewidget : `astrowidgets.ImageWidget`, optional
+        ImageWidget instance to use for the seeing profile.
+
+    width : int, optional
+        Width of the seeing profile widget. Default is 500 pixels.
+
     Attributes
     ----------
 
@@ -436,17 +438,6 @@ class SeeingProfileWidget:
 
     """
     def __init__(self, imagewidget=None, width=500):
-        """
-        Initizes the SeeingProfileWidget instance.
-
-        Parameters
-        ----------
-        imagewidget : `astrowidgets.ImageWidget`, optional
-            ImageWidget instance to use for the seeing profile.
-
-        width : int, optional
-            Width of the seeing profile widget. Default is 500 pixels.
-        """
         if not imagewidget:
             imagewidget = ImageWidget(image_width=width,
                                       image_height=width,

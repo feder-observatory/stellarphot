@@ -14,6 +14,15 @@ class FitsOpener:
     """
     A class to open FITS files using a file chooser and display them in an `astrowidgets.ImageWidget`.
 
+    Parameters
+    ----------
+
+    title : str, optional
+        The title of the FileChooser widget. The default is "Choose an image".
+
+    filter_pattern : str, optional
+        The filter pattern to use for the FileChooser widget. The default is None.
+
     Attributes
     ----------
 
@@ -29,20 +38,6 @@ class FitsOpener:
     path : `pathlib.Path`
     """
     def __init__(self, title="Choose an image", filter_pattern=None, **kwargs):
-        """
-        Initializes an instance of the FitsOpener class, which is a wrapper around
-        the `ipyfilechooser.FileChooser` widget that (if no `filter_pattern` is given)
-        defaults to showing only FITS files.
-
-        Parameters
-        ----------
-
-        title : str, optional
-            The title of the FileChooser widget. The default is "Choose an image".
-
-        filter_pattern : str, optional
-            The filter pattern to use for the FileChooser widget. The default is None,
-        """
         self._fc = FileChooser(title=title, **kwargs)
         if not filter_pattern:
             self._fc.filter_pattern = ['*.fit*', '*.fit*.[bg]z']
