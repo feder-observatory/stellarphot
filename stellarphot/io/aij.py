@@ -227,7 +227,7 @@ class ApertureFileAIJ:
 
     def write(self, file):
         """
-        Write the aperture object to a file.
+        Write the apertures data in class to a file.
 
         Parameters
         ----------
@@ -241,7 +241,7 @@ class ApertureFileAIJ:
     @classmethod
     def read(cls, file):
         """
-        Generate aperture object from file.  Each line is basically a path
+        Populate ApertureFileAIJ class by reading AstroImageJ apertures datafile.  Each line is basically a path
         to an attribute name followed by a value.
 
         Parameters
@@ -283,7 +283,7 @@ class ApertureFileAIJ:
                    default_centroidstar=True,
                    y_size=4096):
         """
-        Create an `~stellarphot.io.ApertureFileAIJ` from a stellarphot aperture
+        Create an `~stellarphot.io.ApertureFileAIJ` instance from a stellarphot aperture
         table and info about the aperture sizes.
 
         Parameters

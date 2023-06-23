@@ -385,7 +385,9 @@ class TOI:
 @dataclass
 class TessTargetFile:
     """
-    A class to hold information about a TESS target file.
+    A class to hold information about a TESS target file.  It will retrieve all
+    GAIA EDR3 sources within 2.5 arcminutes of the target using the online service at:
+    https://www.astro.louisville.edu/gaia_to_aij/index.html
 
     Parameters
     ----------
@@ -400,7 +402,7 @@ class TessTargetFile:
         The depth of the transit.
 
     file : str, optional
-        The path to the target file. If not provided, a temporary file will be created.
+        The path to a file listing the targets. If not provided, a temporary file will be created.
 
     aperture_server : str, optional
         The URL of the aperture server. default: https://www.astro.louisville.edu/
@@ -422,6 +424,9 @@ class TessTargetFile:
 
     magnitude : float
         The magnitude of the target.
+
+    table : `astropy.table.Table`
+        A table of targets read in from target_file.
 
     target_file : str
         The path to the target file.
