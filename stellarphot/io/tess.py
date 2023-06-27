@@ -20,6 +20,7 @@ __all__ = ["TessSubmission", "TOI", "TessTargetFile"]
 # Makes me want to vomit, but....
 DEFAULT_TABLE_LOCATION = "who.the.heck.knows"
 TOI_TABLE_URL = "https://exofop.ipac.caltech.edu/tess/download_toi.php?output=csv"
+GAIA_APERTURE_SERVER = "https://www.astro.louisville.edu/"
 TIC_regex = re.compile(r"[tT][iI][cC][^\d]?(?P<star>\d+)(?P<planet>\.\d\d)?")
 
 
@@ -406,9 +407,6 @@ class TessTargetFile:
         within 2.5 arcminutes the TESS target. If not provided, a temporary
         file will be created.
 
-    aperture_server : str, optional
-        The URL of the aperture server. default: https://www.astro.louisville.edu/
-
     Attributes
     ----------
 
@@ -442,9 +440,9 @@ class TessTargetFile:
     magnitude : float
     depth : float
     file : str = ""
-    aperture_server : str = "https://www.astro.louisville.edu/"
 
     def __post_init__(self):
+        self.aperture_server = GAIA_APERTURE_SERVER
         if not self.file:
             self.file = NamedTemporaryFile()
         self._path = Path(self.file.name)
