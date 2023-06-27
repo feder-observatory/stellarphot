@@ -7,6 +7,8 @@ import ipywidgets as ipw
 
 import numpy as np
 
+import os
+
 from astropy.table import Table
 from astropy.coordinates import SkyCoord
 from astropy.nddata import CCDData
@@ -391,6 +393,9 @@ class ComparisonViewer:
     aperture_output_file : str, optional
         File to save aperture information to.  Defaults to None.
 
+    overwrite_outputs: bool, optional
+        Whether to overwrite existing output files. Defaults to True.
+
     Attributes
     ----------
 
@@ -408,6 +413,9 @@ class ComparisonViewer:
 
     iw : `ginga.util.grc.RemoteClient`
         Ginga widget.
+
+    overwrite_outputs: bool
+        Whether to overwrite existing output files. Defaults to True.
 
     target_coord : `astropy.coordinates.SkyCoord`
         Coordinates of the target.
@@ -431,7 +439,8 @@ class ComparisonViewer:
                  dim_mag_limit=17,
                  targets_from_file=None,
                  object_coordinate=None,
-                 aperture_output_file=None):
+                 aperture_output_file=None,
+                 overwrite_outputs=True):
 
         self._label_name = 'labels'
         self._circle_name = 'target circle'
@@ -449,6 +458,7 @@ class ComparisonViewer:
         self.box, self.iw = self._viewer()
 
         self.aperture_output_file = aperture_output_file
+        self.overwrite_outputs = overwrite_outputs
 
         if file:
             self._file_chooser.set_file(file, directory=directory)
@@ -563,7 +573,8 @@ class ComparisonViewer:
     def _save_variables_to_file(self, button=None, filename=''):
         if not filename:
             filename = 'variables.csv'
-        self.variables.write(filename)
+        # Export variables as CSV (overwrite existing file if it exists)
+        self.variables.write(filename, overwrite=self.overwrite_outputs)
 
     def _show_label_button_handler(self, change):
         value = change['new']
@@ -579,8 +590,8 @@ class ComparisonViewer:
     def _save_aperture_to_file(self, button=None, filename=''):
         if not filename:
             filename = self.aperture_output_file
-
-        self.generate_table().write(filename)
+        # Export aperture file as CSV (overwrite existing file if it exists)
+        self.generate_table().write(filename, overwrite=self.overwrite_outputs)
 
     def _make_control_bar(self):
         self._show_labels_button = ipw.ToggleButton(description='Click to show labels')
@@ -706,11 +717,23 @@ class ComparisonViewer:
         """
         if self._field_name.value:
             self.tess_field_view()
-            self.iw.save(self._field_name.value, overwrite=True)
+            # Remove output file if it exists
+            if os.path.exists(self._field_name.value) and self.overwrite_outputs:
+                os.remove(self._field_name.value)
+            try:
+                self.iw.save(self._field_name.value)
+            except:
+                print("Error saving full field image.")
 
         if self._zoom_name.value:
             self.tess_field_zoom_view()
-            self.iw.save(self._zoom_name.value, overwrite=True)
+            # Remove output file if it exists
+            if os.path.exists(self._zoom_name.value) and self.overwrite_outputs:
+                os.remove(self._zoom_name.value)
+            try:
+                self.iw.save(self._zoom_name.value)
+            except:
+                print("Error saving zoomed in full field image.")
 
     def generate_table(self):
         """
