@@ -35,7 +35,7 @@ DESC_STYLE = {"description_width": "initial"}
 
 def read_file(radec_file):
     """
-    Read an AIJ radec file with target and/or comp positions
+    Read an AIJ radec file with target and/or comparison positions
 
     Parameters
     ----------
