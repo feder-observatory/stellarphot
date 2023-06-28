@@ -572,7 +572,11 @@ class ComparisonViewer:
         if not filename:
             filename = 'variables.csv'
         # Export variables as CSV (overwrite existing file if it exists)
-        self.variables.write(filename, overwrite=self.overwrite_outputs)
+        try:
+            self.variables.write(filename, overwrite=self.overwrite_outputs)
+        except OSError:
+            print(f"ERROR: Can't save variables to file, likely because existing file ({filename}) can not be overwritten.")
+
 
     def _show_label_button_handler(self, change):
         value = change['new']
@@ -589,7 +593,10 @@ class ComparisonViewer:
         if not filename:
             filename = self.aperture_output_file
         # Export aperture file as CSV (overwrite existing file if it exists)
-        self.generate_table().write(filename, overwrite=self.overwrite_outputs)
+        try:
+            self.generate_table().write(filename, overwrite=self.overwrite_outputs)
+        except OSError:
+            print(f"ERROR: Can't save variables to file, likely because existing file ({filename}) can not be overwritten.")
 
     def _make_control_bar(self):
         self._show_labels_button = ipw.ToggleButton(description='Click to show labels')
@@ -720,8 +727,8 @@ class ComparisonViewer:
                 Path(self._field_name.value).unlink()
             try:
                 self.iw.save(self._field_name.value)
-            except:
-                print("Error saving full field image.")
+            except OSError:
+                print(f"ERROR: Can't save full field image, likely because existing file ({self._field_name.value}) can not be overwritten.")
 
         if self._zoom_name.value:
             self.tess_field_zoom_view()
@@ -730,8 +737,8 @@ class ComparisonViewer:
                 Path(self._zoom_name.value).unlink()
             try:
                 self.iw.save(self._zoom_name.value)
-            except:
-                print("Error saving zoomed in full field image.")
+            except OSError:
+                print(f"ERROR: Can't save zoomed image, likely because existing file ({self._zoom_name.value}) can not be overwritten.")
 
     def generate_table(self):
         """
