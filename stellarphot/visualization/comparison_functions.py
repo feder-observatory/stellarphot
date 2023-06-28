@@ -596,7 +596,7 @@ class ComparisonViewer:
         try:
             self.generate_table().write(filename, overwrite=self.overwrite_outputs)
         except OSError:
-            print(f"ERROR: Can't save aperatures to file, likely because existing file ({filename}) can not be overwritten, set overwrite_outputs=True to address this.")
+            print(f"ERROR: Can't save apertures to file, likely because existing file ({filename}) can not be overwritten, set overwrite_outputs=True to address this.")
 
     def _make_control_bar(self):
         self._show_labels_button = ipw.ToggleButton(description='Click to show labels')
