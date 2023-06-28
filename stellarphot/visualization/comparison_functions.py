@@ -575,8 +575,7 @@ class ComparisonViewer:
         try:
             self.variables.write(filename, overwrite=self.overwrite_outputs)
         except OSError:
-            print(f"ERROR: Can't save variables to file, likely because existing file ({filename}) can not be overwritten. Set overwrite_outputs=True to address this.")
-
+            raise OSError(f"Existing file ({filename}) can not be overwritten. Set overwrite_outputs=True to address this.")
 
     def _show_label_button_handler(self, change):
         value = change['new']
@@ -596,7 +595,7 @@ class ComparisonViewer:
         try:
             self.generate_table().write(filename, overwrite=self.overwrite_outputs)
         except OSError:
-            print(f"ERROR: Can't save apertures to file, likely because existing file ({filename}) can not be overwritten. Set overwrite_outputs=True to address this.")
+            raise OSError(f"Existing file ({filename}) can not be overwritten. Set overwrite_outputs=True to address this.")
 
     def _make_control_bar(self):
         self._show_labels_button = ipw.ToggleButton(description='Click to show labels')
@@ -728,7 +727,7 @@ class ComparisonViewer:
             try:
                 self.iw.save(self._field_name.value)
             except OSError:
-                print(f"ERROR: Can't save full field image, likely because existing file ({self._field_name.value}) can not be overwritten. Set overwrite_outputs=True to address this.")
+                raise OSError(f"Existing file ({self._field_name.value}) can not be overwritten. Set overwrite_outputs=True to address this.")
 
         if self._zoom_name.value:
             self.tess_field_zoom_view()
@@ -738,7 +737,7 @@ class ComparisonViewer:
             try:
                 self.iw.save(self._zoom_name.value)
             except OSError:
-                print(f"ERROR: Can't save zoomed image, likely because existing file ({self._zoom_name.value}) can not be overwritten. Set overwrite_outputs=True to address this.")
+                raise OSError(f"Existing file ({self._zoom_name.value}) can not be overwritten. Set overwrite_outputs=True to address this.")
 
     def generate_table(self):
         """
