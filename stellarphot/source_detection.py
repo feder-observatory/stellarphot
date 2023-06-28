@@ -146,7 +146,7 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
                      sky_per_pix_avg=None):
     """
     Returns an astropy table containing the position of sources
-    within the image.
+    within the image identified using `photutils.DAOStarFinder` algorithm.
 
     Parameters
     ----------
