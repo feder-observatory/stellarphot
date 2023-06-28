@@ -7,8 +7,6 @@ import ipywidgets as ipw
 
 import numpy as np
 
-import os
-
 from astropy.table import Table
 from astropy.coordinates import SkyCoord
 from astropy.nddata import CCDData
@@ -718,8 +716,8 @@ class ComparisonViewer:
         if self._field_name.value:
             self.tess_field_view()
             # Remove output file if it exists
-            if os.path.exists(self._field_name.value) and self.overwrite_outputs:
-                os.remove(self._field_name.value)
+            if Path(self._field_name.value).exists() and self.overwrite_outputs:
+                Path(self._field_name.value).unlink()
             try:
                 self.iw.save(self._field_name.value)
             except:
@@ -728,8 +726,8 @@ class ComparisonViewer:
         if self._zoom_name.value:
             self.tess_field_zoom_view()
             # Remove output file if it exists
-            if os.path.exists(self._zoom_name.value) and self.overwrite_outputs:
-                os.remove(self._zoom_name.value)
+            if Path(self._zoom_name.value).exists() and self.overwrite_outputs:
+                Path(self._zoom_name.value).unlink()
             try:
                 self.iw.save(self._zoom_name.value)
             except:
