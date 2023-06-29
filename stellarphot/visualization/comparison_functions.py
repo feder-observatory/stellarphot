@@ -9,7 +9,6 @@ import numpy as np
 
 from astropy.table import Table
 from astropy.coordinates import SkyCoord
-from astropy import units as u
 from astropy.nddata import CCDData
 from astropy import units as u
 from astropy.coordinates.name_resolve import NameResolveError
@@ -188,12 +187,12 @@ def mag_scale(cmag, apass, v_angle, RD_angle,
     """
     high_mag = apass['r_mag'] < cmag + dimmer_dmag
     low_mag = apass['r_mag'] > cmag - brighter_dmag
-    if v_angle:
+    if len(v_angle)>0:
         good_v_angle = v_angle > 1.0 * u.arcsec
     else:
         good_v_angle = True
 
-    if RD_angle:
+    if len(RD_angle)>0:
         good_RD_angle = RD_angle > 1.0 * u.arcsec
     else:
         good_RD_angle = True
@@ -392,6 +391,9 @@ class ComparisonViewer:
     aperture_output_file : str, optional
         File to save aperture information to.  Defaults to None.
 
+    overwrite_outputs: bool, optional
+        Whether to overwrite existing output files. Defaults to True.
+
     Attributes
     ----------
 
@@ -409,6 +411,9 @@ class ComparisonViewer:
 
     iw : `ginga.util.grc.RemoteClient`
         Ginga widget.
+
+    overwrite_outputs: bool
+        Whether to overwrite existing output files. Defaults to True.
 
     target_coord : `astropy.coordinates.SkyCoord`
         Coordinates of the target.
@@ -432,7 +437,8 @@ class ComparisonViewer:
                  dim_mag_limit=17,
                  targets_from_file=None,
                  object_coordinate=None,
-                 aperture_output_file=None):
+                 aperture_output_file=None,
+                 overwrite_outputs=True):
 
         self._label_name = 'labels'
         self._circle_name = 'target circle'
@@ -450,6 +456,7 @@ class ComparisonViewer:
         self.box, self.iw = self._viewer()
 
         self.aperture_output_file = aperture_output_file
+        self.overwrite_outputs = overwrite_outputs
 
         if file:
             self._file_chooser.set_file(file, directory=directory)
@@ -564,7 +571,11 @@ class ComparisonViewer:
     def _save_variables_to_file(self, button=None, filename=''):
         if not filename:
             filename = 'variables.csv'
-        self.variables.write(filename)
+        # Export variables as CSV (overwrite existing file if it exists)
+        try:
+            self.variables.write(filename, overwrite=self.overwrite_outputs)
+        except OSError:
+            raise OSError(f"Existing file ({filename}) can not be overwritten. Set overwrite_outputs=True to address this.")
 
     def _show_label_button_handler(self, change):
         value = change['new']
@@ -580,8 +591,11 @@ class ComparisonViewer:
     def _save_aperture_to_file(self, button=None, filename=''):
         if not filename:
             filename = self.aperture_output_file
-
-        self.generate_table().write(filename)
+        # Export aperture file as CSV (overwrite existing file if it exists)
+        try:
+            self.generate_table().write(filename, overwrite=self.overwrite_outputs)
+        except OSError:
+            raise OSError(f"Existing file ({filename}) can not be overwritten. Set overwrite_outputs=True to address this.")
 
     def _make_control_bar(self):
         self._show_labels_button = ipw.ToggleButton(description='Click to show labels')
@@ -707,11 +721,23 @@ class ComparisonViewer:
         """
         if self._field_name.value:
             self.tess_field_view()
-            self.iw.save(self._field_name.value, overwrite=True)
+            # Remove output file if it exists
+            if Path(self._field_name.value).exists() and self.overwrite_outputs:
+                Path(self._field_name.value).unlink()
+            try:
+                self.iw.save(self._field_name.value)
+            except OSError:
+                raise OSError(f"Existing file ({self._field_name.value}) can not be overwritten. Set overwrite_outputs=True to address this.")
 
         if self._zoom_name.value:
             self.tess_field_zoom_view()
-            self.iw.save(self._zoom_name.value, overwrite=True)
+            # Remove output file if it exists
+            if Path(self._zoom_name.value).exists() and self.overwrite_outputs:
+                Path(self._zoom_name.value).unlink()
+            try:
+                self.iw.save(self._zoom_name.value)
+            except OSError:
+                raise OSError(f"Existing file ({self._zoom_name.value}) can not be overwritten. Set overwrite_outputs=True to address this.")
 
     def generate_table(self):
         """
