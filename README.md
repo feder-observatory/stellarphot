@@ -1,12 +1,12 @@
-# A package for transforming stellar photometry
+# A package for transforming stellar photometry (sorta)
 
 [![Powered by Astropy Badge](http://img.shields.io/badge/powered%20by-AstroPy-orange.svg?style=flat)](http://www.astropy.org) [![GitHub Workflow badge](https://github.com/feder-observatory/stellarphot/workflows/Test/badge.svg?branch=main)](https://github.com/feder-observatory/stellarphot/actions?query=workflow%3ATest)
 
-+ If you already have aperture photometry for a field, 
++ If you already have aperture photometry for a field,
     * calculate relative flux (like [AstroImageJ](https://www.astro.louisville.edu/software/astroimagej/)), and/or
     * calculate calibrated magnitudes by transforming to a catalog (e.g. APASS DR9)
 + If you have calibrated images but haven't done photometry yet, you can do aperture photometry on your images.
-+ If you have not calibrated your images, `stellarphot` can help -- choose the 
++ If you have not calibrated your images, `stellarphot` can help -- choose the
 
 
 ## Installation
