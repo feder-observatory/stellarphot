@@ -3,12 +3,15 @@
 
 New Features
 ^^^^^^^^^^^^
++ Continued fleshing out of the documentation.
++ Creation of new data classes for handling aperture, photometry, and catalog data in a more consistent way.
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Bug Fixes
 ^^^^^^^^^
++ Fixed dependence on non-release version of astrowidgets for overwrite capability on output images. [#108]
 
 1.3.9 (2023-06-16)
 ------------------
