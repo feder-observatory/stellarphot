@@ -1,6 +1,8 @@
 from astropy import units as u
+from astropy.table import Table
+import numpy as np
 
-__all__ = ['Camera']
+__all__ = ['Camera', 'BaseEnhancedTable', 'PhotometryData']
 
 
 class Camera:
