@@ -77,7 +77,7 @@ class BaseEnhancedTable:
     Parameters
     ----------
 
-    table_descript: `numpy.ndarray`
+    table_description: `numpy.ndarray`
         This is a 2-D numpy array where each row of the array is the
         table column name, dtype, astropy unit (can be None), and
         the associated attribute name (can also be None, in which case
@@ -86,20 +86,20 @@ class BaseEnhancedTable:
         among the listed attributes.
 
     data: `astropy.table.Table`, optional
-        A table containing all the instrumental aperture photometry results
-        for a given field on a given night.  If no data is passed,
+        A table containing astronomical data of interest, with at least object
+        ids, right ascensions, and declinations. If no data is passed,
         an empty data table with the proper columns but no data is created.
         If a table is provided, its format is checked against the
-        table_descript.
+        table_description.
 
         If data is passed in, it will be checked to make sure all columns
-        listed in table_descript exist, HOWEVER, additional columns in data
-        not listed in table_descript will NOT be removed.
+        listed in table_description exist, HOWEVER, additional columns in data
+        not listed in table_description will NOT be removed.
 
     Attributes
     ----------
     data: `astropy.table.Table`
-        A table formatted to match the table_descript formatting information
+        A table formatted to match the table_description formatting information
         but containing no data.
 
     dec: `astropy.table.Column`
@@ -111,44 +111,44 @@ class BaseEnhancedTable:
     ra: `astropy.table.Column`
         A column of right ascension values with units of degrees
 
-    Other attributes may be created as defined by table_descript.
+    Other attributes may be created as defined by table_description.
     """
 
-    def __init__(self, table_descript=None, data=None):
+    def __init__(self, table_description=None, data=None):
         # Handle parameters
-        self._table_descript = table_descript
+        self._table_description = table_description
         self.data = data
 
         # Confirm a proper table description is passed
-        if not isinstance(self._table_descript, np.ndarray):
-            raise TypeError(f"You must provide a 4-column numpy array as table_descript (it is type {type(self._table_descript)}).")
-        elif self._table_descript.shape[1] != 4:
-            raise ValueError(f"table_descript must be a 4-column numpy array (it has {self._table_descript.shape[1]} columns).")
+        if not isinstance(self._table_description, np.ndarray):
+            raise TypeError(f"You must provide a 4-column numpy array as table_description (it is type {type(self._table_description)}).")
+        elif self._table_description.shape[1] != 4:
+            raise ValueError(f"table_description must be a 4-column numpy array (it has {self._table_description.shape[1]} columns).")
 
-        # Extract appropriate information from input `table_descript`
-        colnames = self._table_descript[:,0].tolist()
-        coltypes = self._table_descript[:,1].tolist()
-        colunits = self._table_descript[:,2].tolist()
-        attrnames = self._table_descript[:,3].tolist()
+        # Extract appropriate information from input `table_description`
+        colnames = self._table_description[:,0].tolist()
+        coltypes = self._table_description[:,1].tolist()
+        colunits = self._table_description[:,2].tolist()
+        attrnames = self._table_description[:,3].tolist()
 
         # Check that required attributes are in the input attributes
         required_attr = ['ra', 'dec', 'id']
         required_units = [u.deg, u.deg, None]
         for i, this_attr in enumerate(required_attr):
             if this_attr not in attrnames:
-                raise ValueError(f"Required attribute '{this_attr}' is not defined in your table_descript.")
+                raise ValueError(f"Required attribute '{this_attr}' is not defined in your table_description.")
             if required_units[i] is not None:
                 if colunits[attrnames.index(this_attr)] != required_units[i]:
-                    raise ValueError(f"Required attribute '{this_attr}' must have units {required_units[i]} (table_descript has '{colunits[attrnames.index(this_attr)]}').")
+                    raise ValueError(f"Required attribute '{this_attr}' must have units {required_units[i]} (table_description has '{colunits[attrnames.index(this_attr)]}').")
 
         # Perform processing once initialized
         if self.data is None:
             # Create empty astropy table with right format and data
             self.data = Table(names=colnames, masked=False, dtype=coltypes, units=colunits)
         else:
-            # Check the format of the data table matches the table_descript by checking
-            # each column listed in table_descript exists and is he write type and unit.
-            # NOTE: This ignores any columns not in the table_descript, it does not remove them.
+            # Check the format of the data table matches the table_description by checking
+            # each column listed in table_description exists and is he write type and unit.
+            # NOTE: This ignores any columns not in the table_description, it does not remove them.
             for i, this_col in enumerate(colnames):
                 # Failure is assumed to be due to bad column value
                 try:
@@ -158,7 +158,7 @@ class BaseEnhancedTable:
                 # Check type
                 if data[this_col].dtype != coltypes[i]:
                     raise ValueError(f"data[{this_col}] is of wrong type (declared {coltypes[i]} but reported as {data[this_col].dtype}).")
-                if data[this_col].unit is not colunits[i]:
+                if data[this_col].unit != colunits[i]:
                     raise ValueError(f"data[{this_col}] is of wrong unit (declared {colunits[i]} but reported as {data[this_col].unit}).")
 
         # Create attibutes corresponding to table column
