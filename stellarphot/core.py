@@ -167,7 +167,7 @@ class BaseEnhancedTable:
 
     def cols_to_attr(self, colnames, attrnames):
         # Connects table columns to attributes
-        for i,attr in enumerate(attrnames):
+        for i, attr in enumerate(attrnames):
             if attr is not None:
                 self.__setattr__(attr, self.data[colnames[i]])
 
