@@ -42,7 +42,7 @@ def test_base_enhanced_table():
     # This should create a blank data set
     test_base = BaseEnhancedTable(test_descript)
 
-    assert type(test_base.data) == Table
+    assert isinstance(test_base.data, Table)
     assert len(test_base.ra) == 0
     assert len(test_base.dec) == 0
 
