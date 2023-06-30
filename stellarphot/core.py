@@ -114,7 +114,7 @@ class BaseEnhancedTable:
     Other attributes may be created as defined by table_description.
     """
 
-    def __init__(self, table_description=None, data=None):
+    def __init__(self, table_description, data=None):
         # Handle parameters
         self._table_description = table_description
         self.data = data
@@ -177,6 +177,24 @@ class PhotometryData(BaseEnhancedTable):
     A base class to hold an `astropy.table.Table` table of reduce photometry
     data, extending it with a mapping of various table columns to attributes.
 
+    Parameters
+    ----------
+
+    observatory: `astropy.coordinates.EarthLocation`
+        The location of the observatory.
+
+    camera: `stellarphot.Camera`
+        A description of the CCD used to perform the photometry.
+
+    filter_map: dict
+        A dictionary containing instrumental filter names as keys and
+        AAVSO filter names as values.
+
+    data: `astropy.table.Table`, optional
+        A table containing all the instrumental aperture photometry results.
+        If no data is passed, an empty data table with the proper columns but
+        no data is created.
+
     USAGE NOTES: If you input a data file, it MUST contain the following columns
     in the following column names, types, and units:
 
@@ -214,24 +232,6 @@ class PhotometryData(BaseEnhancedTable):
     noise               float64
     noise-aij           float64
     snr                 float64     adu
-
-    Parameters
-    ----------
-
-    observatory: `astropy.coordinates.EarthLocation`
-        The location of the observatory.
-
-    camera: `stellarphot.Camera`
-        A description of the CCD used to perform the photometry.
-
-    filter_map: dict
-        A dictionary containing instrumental filter names as keys and
-        AAVSO filter names as values.
-
-    data: `astropy.table.Table`, optional
-        A table containing all the instrumental aperture photometry results.
-        If no data is passed, an empty data table with the proper columns but
-        no data is created.
 
     Attributes
     ----------
