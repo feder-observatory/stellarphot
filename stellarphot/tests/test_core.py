@@ -17,28 +17,29 @@ def test_camera_attributes():
     assert c.read_noise == read_noise
 
 
-def test_base_enhanced_table():
-    # Define a realistic table of photometry data
-    data = np.array([[1, 78.17278712191920, 22.505771480719400, 31.798216414544900,
-                      31.658750534057600, 9.294325523269860, 13.02511260943810,
-                      13.02511260943810, 13.02511260943810]])
-    colnames = ['id', 'RA', 'Dec', 'sky_per_pix_avg', 'sky_per_pix_med', 'sky_per_pix_std',
-                'fwhm_x', 'fwhm_y', 'width']
-    coltypes = ['<i8', '<f8', '<f8', '<f8', '<f8', '<f8', '<f8', '<f8', '<f8']
-    colunits = [None,  u.deg,  u.deg,  u.adu,  u.adu,  u.adu,  None,  None,  None]
-    testdata = Table(data, names=colnames, dtype=coltypes, units=colunits)
+# Create several test descriptions for use in base_enhanced_table tests.
+test_descript = np.array([['id', '<i8', None, 'id'],
+                            ['RA', '<f8', u.deg, 'ra'],
+                            ['Dec', '<f8', u.deg, 'dec'],
+                            ['sky_per_pix_avg', '<f8', u.adu, 'spp_avg'],
+                            ['sky_per_pix_med', '<f8', u.adu, 'spp_med'],
+                            ['sky_per_pix_std', '<f8', u.adu, 'spp_std'],
+                            ['fwhm_x', '<f8', None, None],
+                            ['fwhm_y', '<f8', None, None],
+                            ['width', '<f8', None, 'fwhm']])
 
-    # Create several test descriptions
-    test_descript = np.array([['id', '<i8', None, 'id'],
-                                ['RA', '<f8', u.deg, 'ra'],
-                                ['Dec', '<f8', u.deg, 'dec'],
-                                ['sky_per_pix_avg', '<f8', u.adu, 'spp_avg'],
-                                ['sky_per_pix_med', '<f8', u.adu, 'spp_med'],
-                                ['sky_per_pix_std', '<f8', u.adu, 'spp_std'],
-                                ['fwhm_x', '<f8', None, None],
-                                ['fwhm_y', '<f8', None, None],
-                                ['width', '<f8', None, 'fwhm']])
+# Define a realistic table of astronomical data contianing one row
+data = np.array([[1, 78.17278712191920, 22.505771480719400, 31.798216414544900,
+                    31.658750534057600, 9.294325523269860, 13.02511260943810,
+                    13.02511260943810, 13.02511260943810]])
+colnames = ['id', 'RA', 'Dec', 'sky_per_pix_avg', 'sky_per_pix_med', 'sky_per_pix_std',
+            'fwhm_x', 'fwhm_y', 'width']
+coltypes = ['<i8', '<f8', '<f8', '<f8', '<f8', '<f8', '<f8', '<f8', '<f8']
+colunits = [None,  u.deg,  u.deg,  u.adu,  u.adu,  u.adu,  None,  None,  None]
+testdata = Table(data, names=colnames, dtype=coltypes, units=colunits)
 
+
+def test_base_enhanced_table_blank():
     # This should create a blank data set
     test_base = BaseEnhancedTable(test_descript)
 
@@ -46,27 +47,37 @@ def test_base_enhanced_table():
     assert len(test_base.ra) == 0
     assert len(test_base.dec) == 0
 
+
+def test_base_enhanced_table_from_existing_table():
     # Should create a populated dataset properly and display the astropy data
     test_base2 = BaseEnhancedTable(test_descript, testdata)
     assert len(test_base2.ra) == 1
     assert len(test_base2.dec) == 1
 
+
+def test_base_enhanced_table_no_inputs():
     # Should raise exception because no inputs are passed
     with pytest.raises(Exception):
         test_base = BaseEnhancedTable()
 
+
+def test_base_enhanced_table_missing_attr():
     # this should raise exception because one of the required attributes is missing
     broke_descript = np.copy(test_descript)
     broke_descript[0,3] = 'unique_id'
     with pytest.raises(Exception):
         test_base = BaseEnhancedTable(broke_descript, testdata)
 
+
+def test_base_enhanced_table_missing_column():
     # Should raise exception because the RA data is missing from input data
     testdata2 = testdata.copy()
     testdata2.remove_column('RA')
     with pytest.raises(Exception):
         test_base = BaseEnhancedTable(test_descript, testdata2)
 
+
+def test_base_enhanced_table_missing_badunits():
     # This will fail due to RA being in units of hours
     bad_ra_descript = test_descript.copy()
     bad_ra_descript[1,2] = u.hr
@@ -117,4 +128,3 @@ def test_photometry_data():
     assert type(phot_data.data) == Table
     assert len(phot_data.ra) == 1
     assert len(phot_data.dec) == 1
-    
