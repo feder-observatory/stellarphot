@@ -71,7 +71,7 @@ class BaseEnhancedTable:
     A base class to hold an `astropy.table.Table` data table and extend it
     so that chosen columns can be accessed as attributes.  This base class
     imposes the requirement that the table have columns corresponding to
-    attributes 'id', 'ra', and 'dec' attributes, as well as confirming
+    attributes 'id', 'ra', and 'dec', as well as confirming
     the 'ra' and 'dec' are in degrees.
 
     Parameters
