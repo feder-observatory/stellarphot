@@ -117,3 +117,4 @@ def test_photometry_data():
     assert type(phot_data.data) == Table
     assert len(phot_data.ra) == 1
     assert len(phot_data.dec) == 1
+    
