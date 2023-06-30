@@ -57,7 +57,7 @@ def test_base_enhanced_table_from_existing_table():
 
 def test_base_enhanced_table_no_inputs():
     # Should raise exception because no inputs are passed
-    with pytest.raises(Exception):
+    with pytest.raises(TypeError):
         test_base = BaseEnhancedTable()
 
 
@@ -65,7 +65,7 @@ def test_base_enhanced_table_missing_attr():
     # this should raise exception because one of the required attributes is missing
     broke_descript = np.copy(test_descript)
     broke_descript[0,3] = 'unique_id'
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         test_base = BaseEnhancedTable(broke_descript, testdata)
 
 
@@ -73,7 +73,7 @@ def test_base_enhanced_table_missing_column():
     # Should raise exception because the RA data is missing from input data
     testdata2 = testdata.copy()
     testdata2.remove_column('RA')
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         test_base = BaseEnhancedTable(test_descript, testdata2)
 
 
@@ -82,7 +82,7 @@ def test_base_enhanced_table_missing_badunits():
     bad_ra_descript = test_descript.copy()
     bad_ra_descript[1,2] = u.hr
 
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         test_base = BaseEnhancedTable(bad_ra_descript)
 
 
