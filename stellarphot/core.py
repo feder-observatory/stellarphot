@@ -158,7 +158,7 @@ class BaseEnhancedTable:
                 # Check type
                 if data[this_col].dtype != coltypes[i]:
                     raise ValueError(f"data[{this_col}] is of wrong type (declared {coltypes[i]} but reported as {data[this_col].dtype}).")
-                if data[this_col].unit != colunits[i]:
+                if data[this_col].unit is not colunits[i]:
                     raise ValueError(f"data[{this_col}] is of wrong unit (declared {colunits[i]} but reported as {data[this_col].unit}).")
 
         # Create attibutes corresponding to table column
