@@ -120,7 +120,7 @@ class BaseEnhancedTable:
         self.data = data
 
         # Confirm a proper table description is passed
-        if not isinstance(self._table_descript, np.ndarray)):
+        if not isinstance(self._table_descript, np.ndarray):
             raise TypeError(f"You must provide a 4-column numpy array as table_descript (it is type {type(self._table_descript)}).")
         elif self._table_descript.shape[1] != 4:
             raise ValueError(f"table_descript must be a 4-column numpy array (it has {self._table_descript.shape[1]} columns).")
