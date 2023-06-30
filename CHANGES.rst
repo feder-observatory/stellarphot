@@ -3,7 +3,6 @@
 
 New Features
 ^^^^^^^^^^^^
-+ Continued fleshing out of the documentation.
 + Creation of new data classes for handling aperture, photometry, and catalog data in a more consistent way. [#125]
 
 Other Changes and Additions
