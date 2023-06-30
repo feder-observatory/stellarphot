@@ -149,7 +149,7 @@ class BaseEnhancedTable:
             # Check the format of the data table matches the table_descript by checking
             # each column listed in table_descript exists and is he write type and unit.
             # NOTE: This ignores any columns not in the table_descript, it does not remove them.
-            for i,this_col in enumerate(colnames):
+            for i, this_col in enumerate(colnames):
                 # Failure is assumed to be due to bad column value
                 try:
                     data[this_col]
