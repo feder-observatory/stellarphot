@@ -21,7 +21,7 @@ from stellarphot.visualization import seeing_plot
 from stellarphot.visualization.fits_opener import FitsOpener
 
 __all__ = ['set_keybindings', 'find_center', 'radial_profile',
-            'find_hwhm', 'RadialProfile', 'box', 'SeeingProfileWidget']
+           'RadialProfile', 'box', 'SeeingProfileWidget']
 
 desc_style = {"description_width": "initial"}
 
