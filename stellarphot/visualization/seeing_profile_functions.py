@@ -216,47 +216,6 @@ def radial_profile(data, center, size=30, return_scaled=True):
     return r_exact, ravg, radialprofile
 
 
-def find_hwhm(r, intensity):
-    """
-    Estimate the half-width half-max from normalized, angle-averaged intensity profile.
-
-    Parameters
-    ----------
-
-    r : array
-        Radius of each pixel from the center of the star.
-
-    intensity : array
-        Normalized intensity at each radius.
-
-    Returns
-    -------
-
-    r_half : float
-        Radius at which the intensity is 50% the maximum
-    """
-
-    # Make the bold assumption that intensity decreases monotonically
-    # so that we just need to find the first place where intensity is
-    # less than 0.5 to estimate the HWHM.
-    less_than_half = intensity < 0.5
-    half_index = np.arange(len(less_than_half))[less_than_half][0]
-    before_half = half_index - 1
-
-    # Do linear interpolation to find the radius at which the intensity
-    # is 0.5.
-    r_more = r[before_half]
-    r_less = r[half_index]
-    I_more = intensity[before_half]
-    I_less = intensity[half_index]
-
-    I_half = 0.5
-
-    r_half = r_less - (I_less - I_half) / (I_less - I_more) * (r_less - r_more)
-
-    return r_half
-
-
 class RadialProfile:
     """
     Class to hold radial profile information for a star.
@@ -346,6 +305,13 @@ class RadialProfile:
         return self._cen
 
     @property
+    def HWHM(self):
+        """
+        Half-width half-max of the radial profile.
+        """
+        return self.find_hwhm()
+
+    @property
     def FWHM(self):
         """
         Full-width half-max of the radial profile.
@@ -358,6 +324,39 @@ class RadialProfile:
         Radius values for the radial profile.
         """
         return np.arange(len(self.radialprofile))
+
+    def find_hwhm(self):
+        """
+        Estimate the half-width half-max from normalized, angle-averaged intensity profile.
+
+        Returns
+        -------
+
+        r_half : float
+            Radius at which the intensity is 50% the maximum
+        """
+
+        r = self.ravg
+        intensity = self.scaled_profile
+        # Make the bold assumption that intensity decreases monotonically
+        # so that we just need to find the first place where intensity is
+        # less than 0.5 to estimate the HWHM.
+        less_than_half = intensity < 0.5
+        half_index = np.arange(len(less_than_half))[less_than_half][0]
+        before_half = half_index - 1
+
+        # Do linear interpolation to find the radius at which the intensity
+        # is 0.5.
+        r_more = r[before_half]
+        r_less = r[half_index]
+        I_more = intensity[before_half]
+        I_less = intensity[half_index]
+
+        I_half = 0.5
+
+        r_half = r_less - (I_less - I_half) / (I_less - I_more) * (r_less - r_more)
+
+        return r_half
 
 
 def box(imagewidget):
