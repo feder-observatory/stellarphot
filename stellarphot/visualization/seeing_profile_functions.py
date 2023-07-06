@@ -26,6 +26,8 @@ __all__ = ['set_keybindings', 'find_center', 'radial_profile',
 desc_style = {"description_width": "initial"}
 
 
+# TODO: maybe move this into SeeingProfileWidget unless we anticipate
+# other widgets using this.
 def set_keybindings(image_widget, scroll_zoom=False):
     """
     Set image widget keyboard bindings. The bindings are:
@@ -84,6 +86,7 @@ def set_keybindings(image_widget, scroll_zoom=False):
     bind_map.map_event(None, (), 'kp_down', 'pan_up')
 
 
+# TODO: Can this be replaced by a properly masked call to centroid_com?
 def find_center(image, center_guess, cutout_size=30, max_iters=10):
     """
     Find the centroid of a star from an initial guess of its position. Originally
@@ -157,6 +160,7 @@ def find_center(image, center_guess, cutout_size=30, max_iters=10):
     return cen
 
 
+# TODO: Why eactly is this separate from the class RadialProfile?
 def radial_profile(data, center, size=30, return_scaled=True):
     """
     Construct a radial profile of a chunk of width ``size`` centered
