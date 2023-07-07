@@ -13,9 +13,11 @@ build:
   os: "ubuntu-22.04"
   tools:
     python: "mambaforge-4.10"
-  pre_build: pip install -e .
 
-
+python:
+  install:
+    - method: pip
+      path: .
 
 # Build documentation in the docs/ directory with Sphinx
 sphinx:
