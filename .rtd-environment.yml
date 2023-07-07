@@ -3,14 +3,19 @@ channels:
     - defaults
 dependencies:
     - python=3.11
-    - astropy
-    - matplotlib
-    - reducer
-    - photutils
+    - astropy >=5
     - astroquery
-    - reproject
-    - bottleneck
-    - astrowidgets
     - ccdproc
+    - ginga
+    - ipywidgets
+    - bottleneck
+    - photutils >=1
+    - matplotlib
+    - pandas
+    - gatspy
+    - pyyaml
+    - astrowidgets
+    - ipyfilechooser
+    - reducer
+    - reproject
     - sphinx-astropy
-
