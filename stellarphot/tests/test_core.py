@@ -18,15 +18,15 @@ def test_camera_attributes():
 
 
 # Create several test descriptions for use in base_enhanced_table tests.
-test_descript = np.array([['id', '<i8', None, 'id'],
-                            ['RA', '<f8', u.deg, 'ra'],
-                            ['Dec', '<f8', u.deg, 'dec'],
-                            ['sky_per_pix_avg', '<f8', u.adu, 'spp_avg'],
-                            ['sky_per_pix_med', '<f8', u.adu, 'spp_med'],
-                            ['sky_per_pix_std', '<f8', u.adu, 'spp_std'],
-                            ['fwhm_x', '<f8', None, None],
-                            ['fwhm_y', '<f8', None, None],
-                            ['width', '<f8', None, 'fwhm']])
+test_descript = np.array([['id', 'int', None, 'id'],
+                            ['RA', 'float', u.deg, 'ra'],
+                            ['Dec', 'float', u.deg, 'dec'],
+                            ['sky_per_pix_avg', 'float', u.adu, 'spp_avg'],
+                            ['sky_per_pix_med', 'float', u.adu, 'spp_med'],
+                            ['sky_per_pix_std', 'float', u.adu, 'spp_std'],
+                            ['fwhm_x', 'float', None, None],
+                            ['fwhm_y', 'float', None, None],
+                            ['width', 'float', None, 'fwhm']])
 
 # Define a realistic table of astronomical data contianing one row
 data = np.array([[1, 78.17278712191920, 22.505771480719400, 31.798216414544900,
@@ -34,7 +34,7 @@ data = np.array([[1, 78.17278712191920, 22.505771480719400, 31.798216414544900,
                     13.02511260943810, 13.02511260943810]])
 colnames = ['id', 'RA', 'Dec', 'sky_per_pix_avg', 'sky_per_pix_med', 'sky_per_pix_std',
             'fwhm_x', 'fwhm_y', 'width']
-coltypes = ['<i8', '<f8', '<f8', '<f8', '<f8', '<f8', '<f8', '<f8', '<f8']
+coltypes = ['int', 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float']
 colunits = [None,  u.deg,  u.deg,  u.adu,  u.adu,  u.adu,  None,  None,  None]
 testdata = Table(data, names=colnames, dtype=coltypes, units=colunits)
 
@@ -103,9 +103,9 @@ def test_photometry_data():
             'sky_per_pix_med','sky_per_pix_std','fwhm_x','fwhm_y','width','aperture','aperture_area',
             'annulus_inner','annulus_outer','annulus_area','exposure','date-obs','night','aperture_net_flux',
             'BJD','mag_inst','airmass','filter','file','star_id','mag_error','noise','noise-aij','snr']
-    coltypes = ['<i8', '<f8', '<f8', '<f8', '<f8', '<f8', '<f8', '<f8', '<f8', '<f8', '<f8', '<f8',
-            '<f8', '<f8', '<f8', '<f8', '<f8', '<f8', '<f8', '<U23', '<i8', '<f8', '<f8', '<f8',
-            '<f8', '<U2', '<U38', '<i8', '<f8', '<f8', '<f8', '<f8']
+    coltypes = ['int', 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float',
+            'float', 'float', 'float', 'float', 'float', 'float', 'float', '<U23', 'int', 'float', 'float', 'float',
+            'float', '<U2', '<U38', 'int', 'float', 'float', 'float', 'float']
     colunits = [None, u.pix, u.pix, u.adu, None, u.deg, u.deg, u.adu, u.adu, u.adu, None, None, None,
             u.pix, None, u.pix, u.pix, None, u.s, None, None, u.adu, None, None, None, None, None,
             None, u.adu**-1, None, None, u.adu]

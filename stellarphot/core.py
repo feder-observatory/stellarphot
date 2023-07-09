@@ -200,38 +200,38 @@ class PhotometryData(BaseEnhancedTable):
 
     name                 dtype      unit
     -----------------   -------     -------
-    id                  int64
-    xcenter             float64     pix
-    ycenter             float64     pix
-    aperture_sum        float64     adu
-    annulus_sum         float64
-    RA                  float64     deg
-    Dec                 float64     deg
-    sky_per_pix_avg     float64     adu
-    sky_per_pix_med     float64     adu
-    sky_per_pix_std     float64     adu
-    fwhm_x              float64
-    fwhm_y              float64
-    width               float64
-    aperture float64    pix
-    aperture_area       float64
-    annulus_inner       float64     pix
-    annulus_outer       float64     pix
-    annulus_area        float64
-    exposure            float64       s
+    id                  int
+    xcenter             float       pix
+    ycenter             float       pix
+    aperture_sum        float       adu
+    annulus_sum         float
+    RA                  float       deg
+    Dec                 float       deg
+    sky_per_pix_avg     float       adu
+    sky_per_pix_med     float       adu
+    sky_per_pix_std     float       adu
+    fwhm_x              float
+    fwhm_y              float
+    width               float
+    aperture            float       pix
+    aperture_area       float
+    annulus_inner       float       pix
+    annulus_outer       float       pix
+    annulus_area        float
+    exposure            float       s
     date-obs            str23
-    night               int64
-    aperture_net_flux   float64     adu
-    BJD                 float64
-    mag_inst            float64
-    airmass             float64
+    night               int
+    aperture_net_flux   float       adu
+    BJD                 float
+    mag_inst            float
+    airmass             float
     filter              str2
-    file                 str38
-    star_id             int64
-    mag_error           float64     1 / adu
-    noise               float64
-    noise-aij           float64
-    snr                 float64     adu
+    file                str38
+    star_id             int
+    mag_error           float       1 / adu
+    noise               float
+    noise-aij           float
+    snr                 float       adu
 
     Attributes
     ----------
@@ -320,38 +320,38 @@ class PhotometryData(BaseEnhancedTable):
     # Define columns in the photo_table and provide information about their type, units,
     # and what attribute name to map that column into (each row of array is
     # name, dtype, unit, attr_name.
-    phot_descript = np.array([['id', '<i8', None, 'id'],
-                            ['xcenter', '<f8', u.pix, 'xcenter'],
-                            ['ycenter', '<f8', u.pix, 'ycenter'],
-                            ['aperture_sum', '<f8', u.adu, 'ap_sum'],
-                            ['annulus_sum', '<f8', None, 'ann_sum'],
-                            ['RA', '<f8', u.deg, 'ra'],
-                            ['Dec', '<f8', u.deg, 'dec'],
-                            ['sky_per_pix_avg', '<f8', u.adu, 'spp_avg'],
-                            ['sky_per_pix_med', '<f8', u.adu, 'spp_med'],
-                            ['sky_per_pix_std', '<f8', u.adu, 'spp_std'],
-                            ['fwhm_x', '<f8', None, None],
-                            ['fwhm_y', '<f8', None, None],
-                            ['width', '<f8', None, 'fwhm'],
-                            ['aperture', '<f8', u.pix, 'ap_rad'],
-                            ['aperture_area', '<f8', None, 'ap_area'],
-                            ['annulus_inner', '<f8', u.pix, 'ann_in'],
-                            ['annulus_outer', '<f8', u.pix, 'ann_out'],
-                            ['annulus_area', '<f8', None, 'ann_area'],
-                            ['exposure', '<f8', u.s, 'exposure'],
+    phot_descript = np.array([['id', 'int', None, 'id'],
+                            ['xcenter', 'float', u.pix, 'xcenter'],
+                            ['ycenter', 'float', u.pix, 'ycenter'],
+                            ['aperture_sum', 'float', u.adu, 'ap_sum'],
+                            ['annulus_sum', 'float', None, 'ann_sum'],
+                            ['RA', 'float', u.deg, 'ra'],
+                            ['Dec', 'float', u.deg, 'dec'],
+                            ['sky_per_pix_avg', 'float', u.adu, 'spp_avg'],
+                            ['sky_per_pix_med', 'float', u.adu, 'spp_med'],
+                            ['sky_per_pix_std', 'float', u.adu, 'spp_std'],
+                            ['fwhm_x', 'float', None, None],
+                            ['fwhm_y', 'float', None, None],
+                            ['width', 'float', None, 'fwhm'],
+                            ['aperture', 'float', u.pix, 'ap_rad'],
+                            ['aperture_area', 'float', None, 'ap_area'],
+                            ['annulus_inner', 'float', u.pix, 'ann_in'],
+                            ['annulus_outer', 'float', u.pix, 'ann_out'],
+                            ['annulus_area', 'float', None, 'ann_area'],
+                            ['exposure', 'float', u.s, 'exposure'],
                             ['date-obs', '<U23', None, 'date'],
-                            ['night', '<i8', None, 'night'],
-                            ['aperture_net_flux', '<f8', u.adu, 'ap_netflux'],
-                            ['BJD', '<f8', None, 'bjd'],
-                            ['mag_inst', '<f8', None, 'mag_inst'],
-                            ['airmass', '<f8', None, 'airmass'],
+                            ['night', 'int', None, 'night'],
+                            ['aperture_net_flux', 'float', u.adu, 'ap_netflux'],
+                            ['BJD', 'float', None, 'bjd'],
+                            ['mag_inst', 'float', None, 'mag_inst'],
+                            ['airmass', 'float', None, 'airmass'],
                             ['filter', '<U2', None, 'filter'],
                             ['file', '<U38', None, None],
-                            ['star_id', '<i8', None, 'star_id'],
-                            ['mag_error', '<f8', u.adu**-1, 'mag_err'],
-                            ['noise', '<f8', None, 'noise'],
-                            ['noise-aij', '<f8', None, 'noise_aij'],
-                            ['snr', '<f8', u.adu, 'snr']])
+                            ['star_id', 'int', None, 'star_id'],
+                            ['mag_error', 'float', u.adu**-1, 'mag_err'],
+                            ['noise', 'float', None, 'noise'],
+                            ['noise-aij', 'float', None, 'noise_aij'],
+                            ['snr', 'float', u.adu, 'snr']])
 
     def __init__(self, observatory, camera, filter_map, data = None):
         # Set metavariables
