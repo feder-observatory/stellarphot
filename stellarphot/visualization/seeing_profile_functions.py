@@ -21,11 +21,13 @@ from stellarphot.visualization import seeing_plot
 from stellarphot.visualization.fits_opener import FitsOpener
 
 __all__ = ['set_keybindings', 'find_center', 'radial_profile',
-            'find_hwhm', 'RadialProfile', 'box', 'SeeingProfileWidget']
+           'RadialProfile', 'box', 'SeeingProfileWidget']
 
 desc_style = {"description_width": "initial"}
 
 
+# TODO: maybe move this into SeeingProfileWidget unless we anticipate
+# other widgets using this.
 def set_keybindings(image_widget, scroll_zoom=False):
     """
     Set image widget keyboard bindings. The bindings are:
@@ -84,6 +86,7 @@ def set_keybindings(image_widget, scroll_zoom=False):
     bind_map.map_event(None, (), 'kp_down', 'pan_up')
 
 
+# TODO: Can this be replaced by a properly masked call to centroid_com?
 def find_center(image, center_guess, cutout_size=30, max_iters=10):
     """
     Find the centroid of a star from an initial guess of its position. Originally
@@ -157,6 +160,7 @@ def find_center(image, center_guess, cutout_size=30, max_iters=10):
     return cen
 
 
+# TODO: Why eactly is this separate from the class RadialProfile?
 def radial_profile(data, center, size=30, return_scaled=True):
     """
     Construct a radial profile of a chunk of width ``size`` centered
@@ -214,47 +218,6 @@ def radial_profile(data, center, size=30, return_scaled=True):
         ravg = rbin
 
     return r_exact, ravg, radialprofile
-
-
-def find_hwhm(r, intensity):
-    """
-    Estimate the half-width half-max from normalized, angle-averaged intensity profile.
-
-    Parameters
-    ----------
-
-    r : array
-        Radius of each pixel from the center of the star.
-
-    intensity : array
-        Normalized intensity at each radius.
-
-    Returns
-    -------
-
-    r_half : float
-        Radius at which the intensity is 50% the maximum
-    """
-
-    # Make the bold assumption that intensity decreases monotonically
-    # so that we just need to find the first place where intensity is
-    # less than 0.5 to estimate the HWHM.
-    less_than_half = intensity < 0.5
-    half_index = np.arange(len(less_than_half))[less_than_half][0]
-    before_half = half_index - 1
-
-    # Do linear interpolation to find the radius at which the intensity
-    # is 0.5.
-    r_more = r[before_half]
-    r_less = r[half_index]
-    I_more = intensity[before_half]
-    I_less = intensity[half_index]
-
-    I_half = 0.5
-
-    r_half = r_less - (I_less - I_half) / (I_less - I_more) * (r_less - r_more)
-
-    return r_half
 
 
 class RadialProfile:
@@ -346,6 +309,13 @@ class RadialProfile:
         return self._cen
 
     @property
+    def HWHM(self):
+        """
+        Half-width half-max of the radial profile.
+        """
+        return self.find_hwhm()
+
+    @property
     def FWHM(self):
         """
         Full-width half-max of the radial profile.
@@ -358,6 +328,39 @@ class RadialProfile:
         Radius values for the radial profile.
         """
         return np.arange(len(self.radialprofile))
+
+    def find_hwhm(self):
+        """
+        Estimate the half-width half-max from normalized, angle-averaged intensity profile.
+
+        Returns
+        -------
+
+        r_half : float
+            Radius at which the intensity is 50% the maximum
+        """
+
+        r = self.ravg
+        intensity = self.scaled_profile
+        # Make the bold assumption that intensity decreases monotonically
+        # so that we just need to find the first place where intensity is
+        # less than 0.5 to estimate the HWHM.
+        less_than_half = intensity < 0.5
+        half_index = np.arange(len(less_than_half))[less_than_half][0]
+        before_half = half_index - 1
+
+        # Do linear interpolation to find the radius at which the intensity
+        # is 0.5.
+        r_more = r[before_half]
+        r_less = r[half_index]
+        I_more = intensity[before_half]
+        I_less = intensity[half_index]
+
+        I_half = 0.5
+
+        r_half = r_less - (I_less - I_half) / (I_less - I_more) * (r_less - r_more)
+
+        return r_half
 
 
 def box(imagewidget):
