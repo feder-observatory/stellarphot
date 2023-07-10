@@ -1,29 +1,16 @@
 import functools
 from pathlib import Path
 
-import pandas
-
-import ipywidgets as ipw
-
+import pandas as pd
 import numpy as np
 
 from astropy.table import Table
 from astropy.coordinates import SkyCoord
 from astropy.nddata import CCDData
 from astropy import units as u
-from astropy.coordinates.name_resolve import NameResolveError
-
-
-try:
-    from astrowidgets import ImageWidget
-except ImportError:
-    from astrowidgets.ginga import ImageWidget
 
 from stellarphot.differential_photometry import *
-from stellarphot.io import TessSubmission, TOI, TessTargetFile
 from stellarphot.photometry import *
-from stellarphot.gui_tools.seeing_profile_functions import set_keybindings
-from stellarphot.gui_tools.fits_opener import FitsOpener
 
 
 __all__ = ['read_file', 'set_up', 'crossmatch_APASS2VSX', 'mag_scale',
@@ -49,7 +36,7 @@ def read_file(radec_file):
         Table with target information, including a
         `astropy.coordinates.SkyCoord` column.
     """
-    df = pandas.read_csv(radec_file, names=['RA', 'Dec', 'a', 'b', 'Mag'])
+    df = pd.read_csv(radec_file, names=['RA', 'Dec', 'a', 'b', 'Mag'])
     target_table = Table.from_pandas(df)
     ra = target_table['RA']
     dec = target_table['Dec']
