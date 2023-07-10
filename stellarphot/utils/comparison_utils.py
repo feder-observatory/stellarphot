@@ -9,7 +9,7 @@ from astropy.coordinates import SkyCoord
 from astropy.nddata import CCDData
 from astropy import units as u
 
-from stellarphot.differential_photometry import *
+from stellarphot.utils.catalog_search import find_apass_stars, find_known_variables
 from stellarphot.photometry import *
 
 
