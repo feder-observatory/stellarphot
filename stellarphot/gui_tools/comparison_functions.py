@@ -22,8 +22,8 @@ except ImportError:
 from stellarphot.differential_photometry import *
 from stellarphot.io import TessSubmission, TOI, TessTargetFile
 from stellarphot.photometry import *
-from stellarphot.visualization.seeing_profile_functions import set_keybindings
-from stellarphot.visualization.fits_opener import FitsOpener
+from stellarphot.gui_tools.seeing_profile_functions import set_keybindings
+from stellarphot.gui_tools.fits_opener import FitsOpener
 
 
 __all__ = ['read_file', 'set_up', 'crossmatch_APASS2VSX', 'mag_scale',

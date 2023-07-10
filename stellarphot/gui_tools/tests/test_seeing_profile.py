@@ -6,7 +6,7 @@ from photutils.datasets import make_gaussian_sources_image, make_noise_image
 from astropy.table import Table
 from astrowidgets import ImageWidget
 
-from stellarphot.visualization import seeing_profile_functions as spf
+from stellarphot.gui_tools import seeing_profile_functions as spf
 
 # Make a few round stars
 STARS = Table(dict(amplitude=[1000, 200, 300],

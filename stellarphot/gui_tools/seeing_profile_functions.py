@@ -17,8 +17,8 @@ except ImportError:
 import matplotlib.pyplot as plt
 
 from stellarphot.io import TessSubmission
-from stellarphot.visualization import seeing_plot
-from stellarphot.visualization.fits_opener import FitsOpener
+from stellarphot.gui_tools import seeing_plot
+from stellarphot.gui_tools.fits_opener import FitsOpener
 
 __all__ = ['set_keybindings', 'find_center', 'radial_profile',
            'RadialProfile', 'box', 'SeeingProfileWidget']
