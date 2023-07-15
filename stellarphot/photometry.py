@@ -309,7 +309,7 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
         photometry table.
 
     observatory_location : str
-        Name of the observatory where the images were taken. If not provided,
+        Name of the observatory where the images were taken. If not 'feder',
         the BJD column will not be added to the photometry table.
 
     fwhm_by_fit : bool, optional
