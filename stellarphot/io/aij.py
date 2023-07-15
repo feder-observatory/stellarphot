@@ -392,7 +392,7 @@ def generate_aij_table(table_name, comparison_table):
     by_source_columns = {
         'xcenter': 'X(IJ)',
         'ycenter': 'Y(IJ)',
-        'aperture_net_flux': 'Source-Sky',
+        'aperture_net_counts': 'Source-Sky',
         'aperture_area': 'N_Src_Pixels',
         'noise-aij': 'Source_Error',
         'snr': 'Source_SNR',
