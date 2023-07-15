@@ -466,6 +466,6 @@ class TessTargetFile:
 
 
     def _build_table(self):
-        from stellarphot.visualization.comparison_functions import read_file
+        from stellarphot.utils.comparison_utils import read_file
 
         self.table = read_file(self._path)
