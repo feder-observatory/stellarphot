@@ -21,7 +21,7 @@ def test_calc_noise_source_only(gain, aperture_area):
     expected = np.sqrt(gain * counts)
 
     np.testing.assert_allclose(calculate_noise(gain=gain,
-                                               flux=counts,
+                                               counts=counts,
                                                aperture_area=aperture_area),
                                expected)
 
@@ -103,7 +103,7 @@ def test_calc_noise_messy_case(digit, expected):
     read_noise = 12
 
     np.testing.assert_allclose(
-        calculate_noise(flux=counts,
+        calculate_noise(counts=counts,
                         gain=gain,
                         dark_current_per_sec=dark_current,
                         read_noise=read_noise,

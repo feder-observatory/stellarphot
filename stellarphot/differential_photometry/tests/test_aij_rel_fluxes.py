@@ -51,7 +51,7 @@ def _raw_photometry_table():
                             _repeat(star_dec, n_times), _repeat(fluxes, n_times),
                             _repeat(errors, n_times),
                             _repeat(star_ids, n_times)],
-                      names=['date-obs', 'RA', 'Dec', 'aperture_net_flux',
+                      names=['date-obs', 'RA', 'Dec', 'aperture_net_counts',
                              'noise-aij', 'star_id'])
 
     return expected_flux_ratios, expected_flux_error, raw_table, raw_table[1:4]
@@ -111,22 +111,22 @@ def test_bad_comp_star(bad_thing):
         coord_bad_ra = coord_inp.ra + 3 * u.arcsecond
         input_table['RA'][-1] = coord_bad_ra.degree
     elif bad_thing == 'NaN':
-        input_table['aperture_net_flux'][-1] = np.nan
+        input_table['aperture_net_counts'][-1] = np.nan
 
     output_table = calc_aij_relative_flux(input_table, comp_star,
                                           in_place=False)
 
-    old_total_flux = comp_star['aperture_net_flux'].sum()
-    new_flux = old_total_flux - last_one['aperture_net_flux']
+    old_total_flux = comp_star['aperture_net_counts'].sum()
+    new_flux = old_total_flux - last_one['aperture_net_counts']
     # This works for target stars, i.e. those never in comparison set
     new_expected_flux = old_total_flux / new_flux * expected_flux
 
     # Oh wow, this is terrible....
     # Need to manually calculate for the only two that are still in comparison
-    new_expected_flux[1] = (comp_star['aperture_net_flux'][0] /
-                            comp_star['aperture_net_flux'][1])
-    new_expected_flux[2] = (comp_star['aperture_net_flux'][1] /
-                            comp_star['aperture_net_flux'][0])
+    new_expected_flux[1] = (comp_star['aperture_net_counts'][0] /
+                            comp_star['aperture_net_counts'][1])
+    new_expected_flux[2] = (comp_star['aperture_net_counts'][1] /
+                            comp_star['aperture_net_counts'][0])
 
     new_expected_flux[3] = expected_flux[3]
     if bad_thing == 'NaN':
