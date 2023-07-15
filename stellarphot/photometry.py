@@ -367,16 +367,16 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
     night = Time(ccd.header['DATE-OBS'], scale='utc')
     night.format = 'mjd'
     phot['night'] = int(np.floor(night.value - 0.5))
-    phot['aperture_net_flux'] = (phot['aperture_sum'] -
+    phot['aperture_net_counts'] = (phot['aperture_sum'] -
                                  (phot['aperture_area'] *
                                   phot['sky_per_pix_avg']))
 
     # This can happen, for example, when the object is faint
     # and centroiding is bad.
-    bad_flux = phot['aperture_net_flux'] < 0
+    bad_flux = phot['aperture_net_counts'] < 0
     all_bads = bad_flux | bad_fwhm
 
-    phot['aperture_net_flux'][all_bads] = np.nan
+    phot['aperture_net_counts'][all_bads] = np.nan
 
     if observatory_location.lower() == 'feder':
         phot['BJD'] = find_times(phot['date-obs'][0], phot['exposure'][0],
@@ -384,7 +384,7 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
 
     if camera is not None:
         phot['mag_inst'] = \
-            (-2.5 * np.log10(camera.gain * phot['aperture_net_flux'].value /
+            (-2.5 * np.log10(camera.gain * phot['aperture_net_counts'].value /
                              phot['exposure'].value))
 
     metadata_to_add = ['AIRMASS', 'FILTER']
@@ -580,45 +580,42 @@ def photometry_on_directory(directory_with_images, object_of_interest,
 
     gain = camera.gain
 
+    # Compute and save noise
     noise = calculate_noise(gain=camera.gain, read_noise=camera.read_noise,
                             dark_current_per_sec=camera.dark_current,
-                            flux=all_phot['aperture_net_flux'],
+                            counts=all_phot['aperture_net_counts'],
                             sky_per_pix=all_phot['sky_per_pix_avg'].value,
                             aperture_area=all_phot['aperture_area'],
                             annulus_area=all_phot['annulus_area'],
                             exposure=all_phot['exposure'].value,
                             include_digitization=False)
+    all_phot['noise'] = noise  # Noise in electrons
+    all_phot['noise-aij'] = noise / gain  # Noise in counts
 
-    snr = gain * all_phot['aperture_net_flux'] / noise
-
-    all_phot['mag_error'] = 1.085736205 / snr
-    all_phot['noise'] = noise
-    # AstroImageJ includes a factor of gain in the noise. IMHO it is part of the
-    # flux but, for convenience, here it is
-    all_phot['noise-aij'] = noise / gain
+    # Compute and save SNR
+    snr = gain * all_phot['aperture_net_counts'] / noise
     all_phot['snr'] = snr
+    all_phot['mag_error'] = 1.085736205 / snr
 
     return all_phot
 
 
 def calculate_noise(gain=1.0, read_noise=0.0, dark_current_per_sec=0.0,
-                    flux=0.0, sky_per_pix=0.0,
-                    aperture_area=0, annulus_area=0,
-                    exposure=0,
-                    include_digitization=False):
+                    counts=0.0, sky_per_pix=0.0, aperture_area=0, annulus_area=0,
+                    exposure=0, include_digitization=False):
     """
     Computes the noise in a photometric measurement.
 
-    This function computes the noise (in units of gain) in a photometric measurement using the
+    This function computes the noise (in units of electrons) in a photometric measurement using the
     revised CCD equation from Collins et al (2017) AJ, 153, 77.  The equation is:
 
     .. math::
 
-        \\sigma = \\sqrt{G \\cdot F + A \\cdot \\left(1 + \\frac{A}{B}\\right)\\cdot \\left[ G\\cdot S + D \\cdot t + R^2 + (0.289 G)^2\\right]}
+        \\sigma = \\sqrt{G \\cdot C + A \\cdot \\left(1 + \\frac{A}{B}\\right)\\cdot \\left[ G\\cdot S + D \\cdot t + R^2 + (0.289 G)^2\\right]}
 
-    where :math:`\sigma` is the noise, :math:`G` is the gain, :math:`F` is the flux,
+    where :math:`\sigma` is the noise, :math:`G` is the gain, :math:`C` is the source counts,
     :math:`A` is the aperture area in pixels, :math:`B` is the annulus area in pixels,
-    :math:`S` is the sky per pixel, :math:`D` is the dark current per second,
+    :math:`S` is the sky counts per pixel, :math:`D` is the dark current per second,
     :math:`R` is the read noise, and :math:`t` is exposure time.
 
     Note: The :math:`(0.289 G)^2` term is "digitization noise" and is optional.
@@ -635,11 +632,11 @@ def calculate_noise(gain=1.0, read_noise=0.0, dark_current_per_sec=0.0,
     dark_current_per_sec : float, optional
         Dark current of the CCD in electrons per second.
 
-    flux : float, optional
-        Flux of the source in electrons.
+    counts : float, optional
+        Counts of the source.
 
     sky_per_pix : float, optional
-        Sky per pixel in electrons.
+        Sky per pixel in counts.
 
     aperture_area : int, optional
         Area of the aperture in pixels.
@@ -657,7 +654,7 @@ def calculate_noise(gain=1.0, read_noise=0.0, dark_current_per_sec=0.0,
     -------
 
     noise : float
-        The noise in the photometric measurement.
+        The noise in the photometric measurement in electrons.
     """
 
     try:
@@ -670,8 +667,8 @@ def calculate_noise(gain=1.0, read_noise=0.0, dark_current_per_sec=0.0,
     else:
         area_ratio = aperture_area * (1 + aperture_area / annulus_area)
 
-    # Units in here are an absolute mess
-    poisson_source = gain * flux
+    # Convert counts to electrons
+    poisson_source = gain * counts
 
     try:
         poisson_source = poisson_source.value
