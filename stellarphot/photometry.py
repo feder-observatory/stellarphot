@@ -624,7 +624,7 @@ def calculate_noise(gain=1.0, read_noise=0.0, dark_current_per_sec=0.0,
     ----------
 
     gain : float, optional
-        Gain of the CCD. In units of electrons per DN.
+        Gain of the CCD. In units of electrons per count.
 
     read_noise : float, optional
         Read noise of the CCD in electrons.
@@ -636,7 +636,7 @@ def calculate_noise(gain=1.0, read_noise=0.0, dark_current_per_sec=0.0,
         Counts of the source.
 
     sky_per_pix : float, optional
-        Sky per pixel in counts.
+        Sky per pixel in counts per pixel.
 
     aperture_area : int, optional
         Area of the aperture in pixels.
