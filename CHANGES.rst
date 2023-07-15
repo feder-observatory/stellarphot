@@ -6,6 +6,8 @@ New Features
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
++ Major reorganizaiton of code including moving functions to new modules. [#130]
+
 
 Bug Fixes
 ^^^^^^^^^
