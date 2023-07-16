@@ -20,7 +20,7 @@ __all__ = ['photutils_stellar_photometry',
            'faster_sigma_clip_stats',
            'find_too_close', 'clipped_sky_per_pix_stats',
            'add_to_photometry_table', 'photometry_on_directory',
-           'calculate_noise', 'find_times']
+           'calculate_noise', 'find_bjd']
 
 
 def photutils_stellar_photometry(ccd_image, sources,
@@ -379,7 +379,7 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
     phot['aperture_net_counts'][all_bads] = np.nan
 
     if observatory_location.lower() == 'feder':
-        phot['BJD'] = find_times(phot['date-obs'][0], phot['exposure'][0],
+        phot['BJD'] = find_bjd(phot['date-obs'][0], phot['exposure'][0],
                                  ra=bjd_coords.ra, dec=bjd_coords.dec)
 
     if camera is not None:
@@ -687,7 +687,7 @@ def calculate_noise(gain=1.0, read_noise=0.0, dark_current_per_sec=0.0,
     return np.sqrt(poisson_source + sky + dark + rn_error + digitization)
 
 
-def find_times(phot_column, exposure, ra, dec,
+def find_bjd(phot_column, exposure, ra, dec,
                latitude=46.86678, longitude=263.54672):
     """
     Returns a numpy array of barycentric Julian date times
