@@ -12,7 +12,8 @@ from stellarphot.transit_fitting.io import get_tic_info
 
 __all__ = ['MyValid', 'make_checker','validate_exposure_time',
            'populate_TIC_boxes', 'populate_TOI_boxes', 'exotic_settings_widget',
-           'set_values_from_json_file', 'get_values_from_widget','generate_json_file_name']
+           'set_values_from_json_file', 'get_values_from_widget',
+           'generate_json_file_name']
 
 
 template_types = ['known', 'candidate']
@@ -214,7 +215,8 @@ def populate_TOI_boxes(toi, exotic_widget):
     -------
 
     None
-        Sets values of planetary parameters of `candidate` in ``exotic_widget`` in place.
+        Sets values of planetary parameters of `candidate` in
+        ``exotic_widget`` in place.
     """
     # Match EXOTIC json keys to columns in the result returned from
     # astroquery
