@@ -28,4 +28,6 @@ Reference/API
 .. automodapi:: stellarphot.photometry
 .. automodapi:: stellarphot.source_detection
 .. automodapi:: stellarphot.transit_fitting
+.. automodapi:: stellarphot.transit_fitting.gui
+.. automodapi:: stellarphot.transit_fitting.io
 .. automodapi:: stellarphot.utils

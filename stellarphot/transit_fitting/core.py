@@ -2,10 +2,9 @@ import warnings
 
 import numpy as np
 
-from astropy.modeling.models import Polynomial1D, Gaussian1D, custom_model
+from astropy.modeling.models import custom_model
 from astropy.modeling.fitting import (LevMarLSQFitter,
-                                      _validate_model,
-                                      _convert_input)
+                                      _validate_model)
 
 # Functions below changed from private to public in astropy 5
 try:

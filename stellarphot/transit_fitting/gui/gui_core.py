@@ -6,11 +6,11 @@ import numpy as np
 import ipywidgets as ipw
 from traitlets import observe, Bool
 
-from astroquery.mast import Catalogs
 from astropy.utils.data import get_pkg_data_filename
 
+from stellarphot.transit_fitting.io import get_tic_info
 
-__all__ = ['MyValid', 'get_tic_info', 'make_checker','validate_exposure_time',
+__all__ = ['MyValid', 'make_checker','validate_exposure_time',
            'populate_TIC_boxes', 'populate_TOI_boxes', 'exotic_settings_widget',
            'set_values_from_json_file', 'get_values_from_widget','generate_json_file_name']
 
@@ -72,28 +72,6 @@ class MyValid(ipw.Button):
         else:
             self.style.button_color = 'red'
             self.icon = 'times'
-
-
-def get_tic_info(TIC_ID):
-    """
-    Get the information about this TIC ID from the TESS Input Catalog
-    at MAST.
-
-    Parameters
-    ----------
-
-    TIC_ID : int
-        9 or 10 digit TIC ID number.
-
-    Returns
-    -------
-
-    `astropy.table.Table`
-        Astropy table withinformation about the TIC object.
-
-    """
-    catalog_data = Catalogs.query_criteria(catalog="Tic", ID=TIC_ID)
-    return catalog_data
 
 
 def make_checker(indicator_widget, value_widget):
