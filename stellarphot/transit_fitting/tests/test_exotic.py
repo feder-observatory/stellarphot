@@ -1,4 +1,4 @@
-from stellarphot.analysis.exotic import exotic_settings_widget, get_values_from_widget
+from stellarphot.transit_fitting.exotic import exotic_settings_widget, get_values_from_widget
 
 
 def test_json_has_stuff():

@@ -106,7 +106,7 @@ def make_checker(indicator_widget, value_widget):
     Parameters
     ----------
 
-    indicator_widget : `~stellarphot.analysis.MyValid` widget
+    indicator_widget : `~stellarphot.transit_fitting.gui.MyValid` widget
         The widget that indicates to the user whether or not the value is
         reasonable.
 
@@ -150,7 +150,7 @@ def validate_exposure_time(indicator_widget, value_widget):
 
     Parameters
     ----------
-    indicator_widget : `~stellarphot.analysis.MyValid` widget
+    indicator_widget : `~stellarphot.transit_fitting.gui.MyValid` widget
         The widget that indicates to the user whether or not the value is
         reasonable.
 

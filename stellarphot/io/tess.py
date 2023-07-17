@@ -13,7 +13,7 @@ from astroquery.mast import Catalogs
 
 import requests
 
-from stellarphot.analysis.exotic import get_tic_info
+from stellarphot.transit_fitting.exotic import get_tic_info
 
 __all__ = ["TessSubmission", "TOI", "TessTargetFile"]
 

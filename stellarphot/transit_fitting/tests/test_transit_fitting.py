@@ -5,7 +5,7 @@ import numpy as np
 
 batman = pytest.importorskip('batman')
 
-from stellarphot.analysis.transit_fitting import TransitModelFit
+from stellarphot.transit_fitting.model_fit import TransitModelFit
 
 
 DEFAULT_TESTING_PARAMS = dict(

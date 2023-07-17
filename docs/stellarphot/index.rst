@@ -21,10 +21,11 @@ Reference/API
 =============
 
 .. automodapi:: stellarphot
-.. automodapi:: stellarphot.analysis
 .. automodapi:: stellarphot.core
 .. automodapi:: stellarphot.differential_photometry
+.. automodapi:: stellarphot.gui_tools
 .. automodapi:: stellarphot.io
 .. automodapi:: stellarphot.photometry
 .. automodapi:: stellarphot.source_detection
-.. automodapi:: stellarphot.visualization
+.. automodapi:: stellarphot.transit_fitting
+.. automodapi:: stellarphot.utils
