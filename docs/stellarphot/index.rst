@@ -30,4 +30,5 @@ Reference/API
 .. automodapi:: stellarphot.transit_fitting
 .. automodapi:: stellarphot.transit_fitting.gui
 .. automodapi:: stellarphot.transit_fitting.io
+.. automodapi:: stellarphot.transit_fitting.plotting
 .. automodapi:: stellarphot.utils
