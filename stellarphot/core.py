@@ -309,12 +309,19 @@ class PhotometryData(BaseEnhancedTable):
                         self.data['bjd'] = self.add_bjd_col()
 
                     case 'night':
-                        # Generate integer counter for nights. This should be approximately the same as
-                        # integer MJD for most sites.  However, we have to estimate the time zone based
-                        # on longitude. This is not perfect, but good enough to provide a counter that remains
-                        # constant over the night at each site.
+                        # Generate integer counter for nights. This should be approximately the MJD at noon local
+                        # time just before the evening of the observation.
                         hr_offset = int(self.observatory.lon.value/15)
-                        self.data['night'] = Column(data=np.array(Time(self.data['date-obs']).to_value('mjd')+(hr_offset/24), dtype=int), name='night')
+                        # Compute offset to 12pm Local Time before evening
+                        LocalTime = Time(self.data['date-obs']) + hr_offset
+                        hr = LocalTime.ymdhms.hour
+                        # Compute number of hours to shift to arrive at 12 noon local time
+                        shift_hr = hr.copy()
+                        shift_hr[hr < 12] = shift_hr[hr < 12] + 12
+                        shift_hr[hr >= 12] = shift_hr[hr >= 12] - 12
+                        shift = Column(data = -shift_hr * u.hr - LocalTime.ymdhms.minute * u.min - LocalTime.ymdhms.second*u.s, name='shift')
+                        # Compute MJD at local noon before the evening of this observation
+                        self.data['night'] = Column(data=np.array((Time(self.data['date-obs']) + shift).to_value('mjd'), dtype=int), name='night')
 
                     case 'mag_inst':
                         self.data['mag_inst'] = -2.5 * np.log10(self.camera.gain * self.data['aperture_net_cnts'].value /

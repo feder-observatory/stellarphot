@@ -164,7 +164,7 @@ def test_photometry_data():
     assert phot_data.observatory.lon.unit == u.deg
     assert round(phot_data.observatory.height.value) == 311
     assert phot_data.observatory.height.unit == u.m
-    assert phot_data.data['night'][0] == 59910
+    assert phot_data.data['night'][0] == 59909
     assert type(phot_data.data) == Table
 
     # Checking the BJD computation against Ohio State online calculator for
