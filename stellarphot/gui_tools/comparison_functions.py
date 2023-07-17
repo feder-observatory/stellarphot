@@ -7,7 +7,6 @@ import numpy as np
 
 from astropy.table import Table
 from astropy.coordinates import SkyCoord
-from astropy.nddata import CCDData
 from astropy import units as u
 from astropy.coordinates.name_resolve import NameResolveError
 
@@ -22,7 +21,7 @@ from stellarphot.photometry import *
 from stellarphot.gui_tools.seeing_profile_functions import set_keybindings
 from stellarphot.gui_tools.fits_opener import FitsOpener
 from stellarphot.io import TessSubmission, TOI, TessTargetFile
-from stellarphot.utils.comparison_utils import read_file, set_up, crossmatch_APASS2VSX, mag_scale, in_field
+from stellarphot.utils.comparison_utils import set_up, crossmatch_APASS2VSX, mag_scale, in_field
 
 
 __all__ = ['make_markers', 'wrap', 'ComparisonViewer']

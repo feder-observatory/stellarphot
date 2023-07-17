@@ -3,7 +3,7 @@ import re
 
 import astropy.units as u
 from astropy.coordinates import SkyCoord
-from astropy.table import Table, hstack
+from astropy.table import Table
 
 import numpy as np
 

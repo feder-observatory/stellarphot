@@ -6,7 +6,6 @@ from astroquery.vizier import Vizier
 
 from astropy.coordinates import SkyCoord
 import astropy.units as units
-from astropy.nddata import block_reduce
 
 __all__ = [
     'in_frame',
