@@ -7,7 +7,7 @@ New Features
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-+ Major reorganizaiton of code including moving functions to new modules. [#130]
++ Major reorganizaiton of code including moving functions to new modules. [#130, #133]
 
 
 Bug Fixes
