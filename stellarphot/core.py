@@ -273,8 +273,9 @@ class PhotometryData(BaseEnhancedTable):
         self.passband_map = passband_map.copy()
 
         # Check the time column is correct format and scale
-        if (data['date-obs'][0].scale != 'utc'):
-            raise ValueError(f"data['date-obs'] astropy.time.Time must have scale='utc', not \'{data['date-obs'][0].scale}\'.")
+        try:
+            if (data['date-obs'][0].scale != 'utc'):
+                raise ValueError(f"data['date-obs'] astropy.time.Time must have scale='utc', not \'{data['date-obs'][0].scale}\'.")
         except AttributeError:
             # Happens if first item dosn't have a "scale"
             raise ValueError(f"data['date-obs'] is not column of astropy.time.Time objects.")
