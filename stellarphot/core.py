@@ -318,7 +318,7 @@ class PhotometryData(BaseEnhancedTable):
                         # time just before the evening of the observation.
                         hr_offset = int(self.observatory.lon.value/15)
                         # Compute offset to 12pm Local Time before evening
-                        LocalTime = Time(self.data['date-obs']) + hr_offset
+                        LocalTime = Time(self.data['date-obs']) + hr_offset*u.hr
                         hr = LocalTime.ymdhms.hour
                         # Compute number of hours to shift to arrive at 12 noon local time
                         shift_hr = hr.copy()
