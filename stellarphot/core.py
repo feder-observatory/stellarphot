@@ -97,7 +97,9 @@ class BaseEnhancedTable(BaseTimeSeries):
         will be checked to make sure all columns listed in table_description
         exist and have the right runits. However, additional columns that
         may be present in data but are not listed in table_description will
-        NOT be removed.
+        NOT be removed.  This data is copied, so any changes made during
+        validation will not only affect the data attribute of the instance,
+        the original input data is left unchanged.
 
     Attributes
     ----------
@@ -155,7 +157,10 @@ class PhotometryData(BaseEnhancedTable):
         A description of the CCD used to perform the photometry.
 
     data: `astropy.table.Table`
-        A table containing all the instrumental aperture photometry results.
+        A table containing all the instrumental aperture photometry results
+        to be validated.  This data is copied, so any changes made during
+        validation will not only affect the data attribute of the instance,
+        the original input data is left unchanged.
 
     passband_map: dict, optional (Default: None)
         A dictionary containing instrumental passband names as keys and
