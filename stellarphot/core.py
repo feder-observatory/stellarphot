@@ -268,7 +268,7 @@ class PhotometryData(BaseEnhancedTable):
         # Set attributes describing the observatory and camera as well as corrections to passband names.
         self.observatory = observatory.copy()
         self.camera = camera.copy()
-        self.passband_map = passband_map.copy()
+        self._passband_map = passband_map.copy()
 
         # Check the time column is correct format and scale
         try:
@@ -348,7 +348,7 @@ class PhotometryData(BaseEnhancedTable):
 
     def update_passbands(self):
         # Converts filter names in filter column to AAVSO standard names
-        for orig_pb, aavso_pb in self.passband_map.items():
+        for orig_pb, aavso_pb in self._passband_map.items():
             mask = self['passband'] == orig_pb
             self['passband'][mask] = aavso_pb
 
