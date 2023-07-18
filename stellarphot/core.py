@@ -1,9 +1,6 @@
 from astropy import units as u
 from astropy.table import QTable, Table, Column
-
-from astropy import units as u
 from astropy.coordinates import EarthLocation, SkyCoord
-from astropy.timeseries.core import BaseTimeSeries, autocheck_required_columns
 from astropy.time import Time
 
 import numpy as np
@@ -23,7 +20,7 @@ class Camera:
         times the image data matches the unit of the `read_noise`.
 
     read_noise : `astropy.quantity.Quantity`
-        The read noise of the camera in units of electrons.
+        The read noise of the camera with units
 
     dark_current : `astropy.quantity.Quantity`
         The dark current of the camera in units such that, when multiplied by
@@ -67,12 +64,27 @@ class Camera:
                  read_noise=1.0 * u.electron,
                  dark_current=0.01 * u.electron / u.second):
         super().__init__()
-        self.gain = gain
-        self.read_noise = read_noise
-        self.dark_current = dark_current
+
+        # Check that input has units and if not crap out.
+        if isinstance(gain, u.Quantity):
+            self.gain = gain
+        else:
+            raise TypeError("gain must have units.")
+
+        if isinstance(read_noise, u.Quantity):
+            self.read_noise = read_noise
+        else:
+            raise TypeError("read_noise must have units.")
+
+        if isinstance(dark_current, u.Quantity):
+            self.dark_current = dark_current
+        else:
+            raise TypeError("dark_current must have units.")
 
     def copy(self):
-        return Camera(gain=self.gain, read_noise=self.read_noise, dark_current=self.dark_current)
+        return Camera(gain=self.gain,
+                      read_noise=self.read_noise,
+                      dark_current=self.dark_current)
 
     def __copy__(self):
         return self.copy()
@@ -107,14 +119,15 @@ class BaseEnhancedTable(QTable):
     """
 
     def __init__(self, table_description, data):
-        # Confirm a proper table description is passed (that is dict-like with keys and values)
+        # Confirm a proper table description is passed (that is dict-like with keys and
+        # values)
         try:
             self._table_description = {k: v for k, v in table_description.items()}
         except AttributeError:
             raise TypeError(f"You must provide a dict as table_description (it is type {type(self._table_description)}).")
 
         # Build the data table
-        if not isinstance(data, QTable):
+        if not isinstance(data, Table):
             raise TypeError(f"You must provide an astropy QTable as data (it is type {type(data)}).")
         else:
             # Check the format of the data table matches the table_description by checking
@@ -263,7 +276,7 @@ class PhotometryData(BaseEnhancedTable):
                 raise ValueError(f"data['date-obs'] astropy.time.Time must have scale='utc', not \'{data['date-obs'][0].scale}\'.")
         except AttributeError:
             # Happens if first item dosn't have a "scale"
-            raise ValueError(f"data['date-obs'] is not column of astropy.time.Time objects.")
+            raise ValueError("data['date-obs'] is not column of astropy.time.Time objects.")
 
         # Check for consistency of counts-related columns
         counts_columns = ['aperture_sum', 'annulus_sum', 'sky_per_pix_avg', 'sky_per_pix_med',
@@ -296,7 +309,7 @@ class PhotometryData(BaseEnhancedTable):
 
                     case 'snr':
                         # Since noise in counts, the proper way to compute SNR is sqrt(gain)*counts/noise
-                        self['snr'] = np.sqrt(self.camera.gain) * self['aperture_net_cnts'].value / self['noise'].value
+                        self['snr'] = np.sqrt(self.camera.gain.value) * self['aperture_net_cnts'].value / self['noise'].value
 
                     case 'bjd':
                         self['bjd'] = self.add_bjd_col()
@@ -317,7 +330,7 @@ class PhotometryData(BaseEnhancedTable):
                         self['night'] = Column(data=np.array((Time(self['date-obs']) + shift).to_value('mjd'), dtype=int), name='night')
 
                     case 'mag_inst':
-                        self['mag_inst'] = -2.5 * np.log10(self.camera.gain * self['aperture_net_cnts'].value /
+                        self['mag_inst'] = -2.5 * np.log10(self.camera.gain.value * self['aperture_net_cnts'].value /
                                                     self['exposure'].value)
 
                     case 'mag_error':

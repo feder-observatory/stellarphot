@@ -9,13 +9,21 @@ from stellarphot.core import Camera, BaseEnhancedTable, PhotometryData
 
 
 def test_camera_attributes():
-    gain = 2.0
-    read_noise = 10
-    dark_current = 0.01
+    gain = 2.0 * u.electron / u.adu
+    read_noise = 10 * u.electron
+    dark_current = 0.01 * u.electron / u.second
     c = Camera(gain=gain, read_noise=read_noise, dark_current=dark_current)
     assert c.gain == gain
     assert c.dark_current == dark_current
     assert c.read_noise == read_noise
+
+
+def test_camera_unitscheck():
+    gain = 2.0
+    read_noise = 10
+    dark_current = 0.01
+    with pytest.raises(TypeError):
+        c = Camera(gain=gain, read_noise=read_noise, dark_current=dark_current)
 
 
 # Create several test descriptions for use in base_enhanced_table tests.
@@ -40,7 +48,9 @@ colunits = [None,  u.deg,  u.deg,  u.adu,  u.adu,  u.adu,  u.pix,  u.pix,  u.pix
 testdata = Table(data, names=colnames, dtype=coltypes, units=colunits)
 
 # Define some configuration information assuming Feder telescope
-feder_cg_16m = Camera(gain=1.5, read_noise=10.0, dark_current=0.01)
+feder_cg_16m = Camera(gain = 1.5 * u.electron / u.adu,
+                      read_noise = 10.0 * u.electron,
+                      dark_current=0.01 * u.electron / u.second)
 feder_passbands = {'up':'SU', 'gp':'SG', 'rp':'SR', 'zp':'SZ', 'ip':'SI'}
 feder_obs = EarthLocation(lat = 46.86678,lon=-96.45328, height=311)
 
@@ -123,8 +133,8 @@ def test_base_enhanced_table_blank():
 def test_base_enhanced_table_from_existing_table():
     # Should create a populated dataset properly and display the astropy data
     test_base2 = BaseEnhancedTable(test_descript, testdata)
-    assert len(test_base2.data['ra']) == 1
-    assert len(test_base2.data['dec']) == 1
+    assert len(test_base2['ra']) == 1
+    assert len(test_base2['dec']) == 1
 
 
 def test_base_enhanced_table_no_inputs():
@@ -137,7 +147,7 @@ def test_base_enhanced_table_missing_column():
     # Should raise exception because the RA data is missing from input data
     testdata_nora = testdata.copy()
     testdata_nora.remove_column('ra')
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError):
         test_base = BaseEnhancedTable(test_descript, testdata_nora)
 
 
@@ -155,9 +165,9 @@ def test_photometry_data():
     phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m, passband_map=feder_passbands, data=testphot_clean)
 
     # Check some aspects of that data are sound
-    assert phot_data.camera.gain == 1.5
-    assert phot_data.camera.read_noise == 10.0
-    assert phot_data.camera.dark_current == 0.01
+    assert phot_data.camera.gain == 1.5 *  u.electron / u.adu
+    assert phot_data.camera.read_noise == 10.0 * u.electron
+    assert phot_data.camera.dark_current == 0.01 * u.electron / u.second
     assert phot_data.observatory.lat.value == 46.86678
     assert phot_data.observatory.lat.unit == u.deg
     assert phot_data.observatory.lon.value == -96.45328
@@ -175,7 +185,7 @@ def test_photometry_data():
     # Dec 22 30 20.77733059
     # which had a result of 2459910.775405664 (Uses IDL routine, astropy is SOFA checked).
     # Demand a difference of less than 1/20 of a second.
-    assert (phot_data.data['bjd'][0].value - 2459910.775405664)*86400 < 0.05
+    assert (phot_data['bjd'][0].value - 2459910.775405664)*86400 < 0.05
 
 def test_photometry_badtime():
     with pytest.raises(ValueError):
@@ -194,5 +204,9 @@ def test_photometry_inconsistent_computed_col_exists():
         phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m, passband_map=feder_passbands, data=testphot_goodUnits)
 
     phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m, passband_map=feder_passbands, data=testphot_goodUnits, retain_user_computed=True)
-    assert np.abs(phot_data['snr'][0] - 46.795229859903905) < 1e-6
+    # This keeps a bad user column for 'snr' which has bogus units, so check the units
+    # cause a crash in the math.
+    with pytest.raises(u.core.UnitConversionError):
+        assert np.abs(phot_data['snr'][0] - 46.795229859903905) < 1e-6
+    assert np.abs(phot_data['snr'][0].value - 46.795229859903905) < 1e-6
 
