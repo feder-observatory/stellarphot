@@ -95,7 +95,7 @@ class BaseEnhancedTable(BaseTimeSeries):
     data: `astropy.table.Table`
         A table containing astronomical data of interest.  This table
         will be checked to make sure all columns listed in table_description
-        exist and have the right runits. However, additional columns that
+        exist and have the right units. Additional columns that
         may be present in data but are not listed in table_description will
         NOT be removed.  This data is copied, so any changes made during
         validation will not only affect the data attribute of the instance,
@@ -110,7 +110,7 @@ class BaseEnhancedTable(BaseTimeSeries):
 
     def __init__(self, table_description, data):
         # Handle parameters
-        self._table_description = table_description
+        self._table_description = table_description.copy()
         self.data = data.copy()
 
         # Build the data table
@@ -172,7 +172,22 @@ class PhotometryData(BaseEnhancedTable):
         exist in `data` will be retained.  If False, will throw an error
         if any computed columns already exist in `data`.
 
-    USAGE NOTES: If you input a data file, it MUST contain the following columns
+    Attributes
+    ----------
+    camera: `stellarphot.Camera`
+        A description of the CCD used to perform the photometry.
+
+    data: `astropy.table.Table`
+        A table containing all the instrumental aperture photometry results.
+
+    observatory: `astropy.coordinates.EarthLocation`
+        The location of the observatory.
+
+
+    Notes
+    -----
+
+    The input astropy data table `data` must MUST contain the following columns
     in the following column names with the following units (if applicable).  The
     'consistent count units' simply means it can be any unit for counts, but it
     must be the same for all the columns listed.
@@ -218,17 +233,6 @@ class PhotometryData(BaseEnhancedTable):
     will throw an error a ValueError UNLESS`ignore_computed=True`
     is passed to the initializer, in which case the columns will be
     retained and not replaced with the computed values.
-
-    Attributes
-    ----------
-    camera: `stellarphot.Camera`
-        A description of the CCD used to perform the photometry.
-
-    data: `astropy.table.Table`
-        A table containing all the instrumental aperture photometry results.
-
-    observatory: `astropy.coordinates.EarthLocation`
-        The location of the observatory.
     """
 
     # Define columns in the photo_table and provide information about their type, and units.
@@ -257,20 +261,23 @@ class PhotometryData(BaseEnhancedTable):
         'passband' : None,
         'file' : None
     }
+    # Trigger required column checking in calling BaseEnhancedTable superclass initializer
+    _required_columns = list(phot_descript.keys())
+    _required_columns_enabled = True
+
 
     def __init__(self, observatory, camera, data,  passband_map=None, retain_user_computed=False):
-        # Set metavariables
-        self.observatory = observatory
-        self.camera = camera
-        self.passband_map = passband_map
+        # Set attributes describing the observatory and camera as well as corrections to passband names.
+        self.observatory = observatory.copy()
+        self.camera = camera.copy()
+        self.passband_map = passband_map.copy()
 
-        # Check the time column is correct format.
-        # Correct dtype and class
-        if (data['date-obs'].dtype != object) or (data['date-obs'][0].__class__ != Time):
-            raise ValueError(f"data['date-obs'] is not column of astropy.time.Time objects.")
-        # Correct scale is set for first element
+        # Check the time column is correct format and scale
         if (data['date-obs'][0].scale != 'utc'):
             raise ValueError(f"data['date-obs'] astropy.time.Time must have scale='utc', not \'{data['date-obs'][0].scale}\'.")
+        except AttributeError:
+            # Happens if first item dosn't have a "scale"
+            raise ValueError(f"data['date-obs'] is not column of astropy.time.Time objects.")
 
         # Check for consistency of counts-related columns
         counts_columns = ['aperture_sum', 'annulus_sum', 'sky_per_pix_avg', 'sky_per_pix_med',
@@ -292,7 +299,7 @@ class PhotometryData(BaseEnhancedTable):
         computed_columns = ['aperture_area', 'annulus_area', 'snr', 'bjd', 'night',
                             'mag_inst', 'mag_error']
 
-        # Check if columns exist already, if they do and ignore_computed is False, throw an error
+        # Check if columns exist already, if they do and retain_user_computed is False, throw an error
         for this_col in computed_columns:
             if this_col in self.data.colnames:
                 if not retain_user_computed:
@@ -355,13 +362,6 @@ class PhotometryData(BaseEnhancedTable):
         """
         Returns a astropy column of barycentric Julian date times corresponding to
         the input observations.  It modifies that table in place.
-
-        Parameters
-        ----------
-
-        phot_table: `astropy.table.Table`
-            A stellarphot photometry table.
-
         """
         place = EarthLocation(lat=self.observatory.lat, lon=self.observatory.lon)
 
@@ -377,3 +377,4 @@ class PhotometryData(BaseEnhancedTable):
 
         # Return BJD at midpoint of exposure at each location
         return Time(time_barycenter + self.data['exposure'] / 2, scale='tdb')
+
