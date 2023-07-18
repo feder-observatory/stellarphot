@@ -164,8 +164,7 @@ def test_photometry_data():
     assert phot_data.observatory.lon.unit == u.deg
     assert round(phot_data.observatory.height.value) == 311
     assert phot_data.observatory.height.unit == u.m
-    assert phot_data.data['night'][0] == 59909
-    assert type(phot_data.data) == Table
+    assert phot_data['night'][0] == 59909
 
     # Checking the BJD computation against Ohio State online calculator for
     # UTC 2022 11 27 06 27 29.620
@@ -195,5 +194,5 @@ def test_photometry_inconsistent_computed_col_exists():
         phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m, passband_map=feder_passbands, data=testphot_goodUnits)
 
     phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m, passband_map=feder_passbands, data=testphot_goodUnits, retain_user_computed=True)
-    assert np.abs(phot_data.data['snr'][0] - 46.795229859903905) < 1e-6
+    assert np.abs(phot_data['snr'][0] - 46.795229859903905) < 1e-6
 

@@ -71,28 +71,32 @@ class Camera:
         self.read_noise = read_noise
         self.dark_current = dark_current
 
+    def copy(self):
+        return Camera(gain=self.gain, read_noise=self.read_noise, dark_current=self.dark_current)
 
-@autocheck_required_columns
-class BaseEnhancedTable(BaseTimeSeries):
+    def __copy__(self):
+        return self.copy()
+
+
+class BaseEnhancedTable(QTable):
     """
-    A class to validate an `astropy.table.Table` table of astronomical data during
-    creation.
+    A class to validate an `~astropy.table.QTable` table of astronomical data during
+    creation and store metadata as attributes.
 
-    This is based on the `astropy.timeseries.BaseTimeSeries` class to
-    allow inheriting its ability to have required columns (but not requiring
-    the time column).  We extend this to allow for checking of the units for
-    the columns to match the table_description.
+    This is based on the `~astropy.timeseries.QTable` class. We extend this to
+    allow for checking of the units for the columns to match the table_description,
+    but what this returns is just an `~astropy.table.QTable`.
 
     Parameters
     ----------
 
-    table_description: dict
+    table_description: dict or dict-like
         This is a dictionary where each key is a required table column name
         and the value corresponding to each key is the required dtype
         (can be None).  This is used to check the format of the input data
         table.
 
-    data: `astropy.table.Table`
+    data: `~astropy.table.QTable`
         A table containing astronomical data of interest.  This table
         will be checked to make sure all columns listed in table_description
         exist and have the right units. Additional columns that
@@ -100,52 +104,42 @@ class BaseEnhancedTable(BaseTimeSeries):
         NOT be removed.  This data is copied, so any changes made during
         validation will not only affect the data attribute of the instance,
         the original input data is left unchanged.
-
-    Attributes
-    ----------
-    data: `astropy.table.Table`
-        A table formatted to match the table_description formatting information
-        but containing no data.
     """
 
     def __init__(self, table_description, data):
-        # Handle parameters
-        self._table_description = table_description.copy()
-        self.data = data.copy()
+        # Confirm a proper table description is passed (that is dict-like with keys and values)
+        try:
+            self._table_description = {k: v for k, v in table_description.items()}
+        except AttributeError:
+            raise TypeError(f"You must provide a dict as table_description (it is type {type(self._table_description)}).")
 
         # Build the data table
-        if not isinstance(self.data, Table):
-            raise TypeError(f"You must provide an astropy Table as data (it is type {type(self.data)}).")
+        if not isinstance(data, Table):
+            raise TypeError(f"You must provide an astropy Table as data (it is type {type(data)}).")
         else:
-            # Using the BaseTimeSeries class to handle the data table means required columns
-            # are checked.
-            super().__init__(data=self.data)
-
-            # Check that self.data exists now
-            if self.data is None:
-                raise ValueError(f"self.data should exist at this point, but doesn't, crap.")
-
-            # Confirm a proper table description is passed
-            if not isinstance(self._table_description, dict):
-                raise TypeError(f"You must provide a dict as table_description (it is type {type(self._table_description)}).")
-
             # Check the format of the data table matches the table_description by checking
             # each column listed in table_description exists and is the correct units.
             # NOTE: This ignores any columns not in the table_description, it does not remove them.
             for this_col, this_unit in self._table_description.items():
                 if this_unit is not None:
                     # Check type
-                    if self.data[this_col].unit != this_unit:
-                        raise ValueError(f"data[{this_col}] is of wrong unit (should be {this_unit} but reported as {self.data[this_col].unit}).")
+                    try:
+                        if data[this_col].unit != this_unit:
+                            raise ValueError(f"data['{this_col}'] is of wrong unit (should be {this_unit} but reported as {data[this_col].unit}).")
+                    except KeyError:
+                        raise ValueError(f"data['{this_col}'] is missing from input data.")
+
+            # Using the BaseTimeSeries class to handle the data table means required columns
+            # are checked.
+            super().__init__(data=data)
 
 
 class PhotometryData(BaseEnhancedTable):
     """
-    A base class to hold reduced photometry data that provides the convience
-    of validating the data table is in the proper format including units.
-    This is based on the `astropy.timeseries.BaseTimeSeries` class to allow
-    inheriting its ability to have required columns (but not requiring the
-    time column).
+    A modified `~astropy.table.QTable` to hold reduced photometry data that
+    provides the convience of validating the data table is in the proper
+    format including units.  It returns an `~astropy.table.QTable` with
+    additional attributes describing the observatory and camera.
 
     Parameters
     ----------
@@ -156,11 +150,9 @@ class PhotometryData(BaseEnhancedTable):
     camera: `stellarphot.Camera`
         A description of the CCD used to perform the photometry.
 
-    data: `astropy.table.Table`
+    data: `astropy.table.QTable`
         A table containing all the instrumental aperture photometry results
-        to be validated.  This data is copied, so any changes made during
-        validation will not only affect the data attribute of the instance,
-        the original input data is left unchanged.
+        to be validated.
 
     passband_map: dict, optional (Default: None)
         A dictionary containing instrumental passband names as keys and
@@ -177,9 +169,6 @@ class PhotometryData(BaseEnhancedTable):
     camera: `stellarphot.Camera`
         A description of the CCD used to perform the photometry.
 
-    data: `astropy.table.Table`
-        A table containing all the instrumental aperture photometry results.
-
     observatory: `astropy.coordinates.EarthLocation`
         The location of the observatory.
 
@@ -187,7 +176,7 @@ class PhotometryData(BaseEnhancedTable):
     Notes
     -----
 
-    The input astropy data table `data` must MUST contain the following columns
+    The input `astropy.table.QTable` `data` must MUST contain the following columns
     in the following column names with the following units (if applicable).  The
     'consistent count units' simply means it can be any unit for counts, but it
     must be the same for all the columns listed.
@@ -261,10 +250,6 @@ class PhotometryData(BaseEnhancedTable):
         'passband' : None,
         'file' : None
     }
-    # Trigger required column checking in calling BaseEnhancedTable superclass initializer
-    _required_columns = list(phot_descript.keys())
-    _required_columns_enabled = True
-
 
     def __init__(self, observatory, camera, data,  passband_map=None, retain_user_computed=False):
         # Set attributes describing the observatory and camera as well as corrections to passband names.
@@ -286,15 +271,10 @@ class PhotometryData(BaseEnhancedTable):
         cnts_unit = data[counts_columns[0]].unit
         for this_col in counts_columns[1:]:
             if data[this_col].unit != cnts_unit:
-                raise ValueError(f"data[{this_col}] has inconsistent units with data[{counts_columns[0]}] (should be {cnts_unit} but reported as {data[this_col].unit}).")
+                raise ValueError(f"data['{this_col}'] has inconsistent units with data['{counts_columns[0]}'] (should be {cnts_unit} but reported as {data[this_col].unit}).")
 
-        # Convert input data to self.data object (which will also automatically check
-        # for required columns)
-        super().__init__(self.phot_descript, data=data.copy())
-
-        # Check that self.data exists now
-        if self.data is None:
-            raise ValueError(f"self.data should exist at this point but doesn't, crap.")
+        # Convert input data to QTable (while also checking for required columns)
+        super().__init__(self.phot_descript, data=data)
 
         # Compute additional columns (not done yet)
         computed_columns = ['aperture_area', 'annulus_area', 'snr', 'bjd', 'night',
@@ -302,31 +282,31 @@ class PhotometryData(BaseEnhancedTable):
 
         # Check if columns exist already, if they do and retain_user_computed is False, throw an error
         for this_col in computed_columns:
-            if this_col in self.data.colnames:
+            if this_col in self.colnames:
                 if not retain_user_computed:
                     raise ValueError(f"Computed column '{this_col}' already exist in data.  If you want to keep them, pass retain_user_computed=True to the initializer.")
             else:
                 # Compute the columns that need to be computed (switch requries python 3.10)
                 match this_col:
                     case 'aperture_area':
-                        self.data['aperture_area'] = np.pi * self.data['aperture']**2
+                        self['aperture_area'] = np.pi * self['aperture']**2
 
                     case 'annulus_area':
-                        self.data['annulus_area'] = np.pi * (self.data['annulus_outer']**2 -self.data['annulus_inner']**2)
+                        self['annulus_area'] = np.pi * (self['annulus_outer']**2 -self['annulus_inner']**2)
 
                     case 'snr':
                         # Since noise in counts, the proper way to compute SNR is sqrt(gain)*counts/noise
-                        self.data['snr'] = np.sqrt(self.camera.gain) * self.data['aperture_net_cnts'].value / self.data['noise'].value
+                        self['snr'] = np.sqrt(self.camera.gain) * self['aperture_net_cnts'].value / self['noise'].value
 
                     case 'bjd':
-                        self.data['bjd'] = self.add_bjd_col()
+                        self['bjd'] = self.add_bjd_col()
 
                     case 'night':
                         # Generate integer counter for nights. This should be approximately the MJD at noon local
                         # time just before the evening of the observation.
                         hr_offset = int(self.observatory.lon.value/15)
                         # Compute offset to 12pm Local Time before evening
-                        LocalTime = Time(self.data['date-obs']) + hr_offset*u.hr
+                        LocalTime = Time(self['date-obs']) + hr_offset*u.hr
                         hr = LocalTime.ymdhms.hour
                         # Compute number of hours to shift to arrive at 12 noon local time
                         shift_hr = hr.copy()
@@ -334,15 +314,15 @@ class PhotometryData(BaseEnhancedTable):
                         shift_hr[hr >= 12] = shift_hr[hr >= 12] - 12
                         shift = Column(data = -shift_hr * u.hr - LocalTime.ymdhms.minute * u.min - LocalTime.ymdhms.second*u.s, name='shift')
                         # Compute MJD at local noon before the evening of this observation
-                        self.data['night'] = Column(data=np.array((Time(self.data['date-obs']) + shift).to_value('mjd'), dtype=int), name='night')
+                        self['night'] = Column(data=np.array((Time(self['date-obs']) + shift).to_value('mjd'), dtype=int), name='night')
 
                     case 'mag_inst':
-                        self.data['mag_inst'] = -2.5 * np.log10(self.camera.gain * self.data['aperture_net_cnts'].value /
-                                                    self.data['exposure'].value)
+                        self['mag_inst'] = -2.5 * np.log10(self.camera.gain * self['aperture_net_cnts'].value /
+                                                    self['exposure'].value)
 
                     case 'mag_error':
                         # data['snr'] must be computed first
-                        self.data['mag_inst'] = 1.085736205 / self.data['snr']
+                        self['mag_inst'] = 1.085736205 / self['snr']
 
                     case _:
                         raise ValueError(f"Trying to compute a column ({this_col}), something that should never happen.")
@@ -356,8 +336,8 @@ class PhotometryData(BaseEnhancedTable):
     def update_passbands(self):
         # Converts filter names in filter column to AAVSO standard names
         for orig_pb, aavso_pb in self.passband_map.items():
-            mask = self.data['passband'] == orig_pb
-            self.data['passband'][mask] = aavso_pb
+            mask = self['passband'] == orig_pb
+            self['passband'][mask] = aavso_pb
 
     def add_bjd_col(self):
         """
@@ -367,15 +347,16 @@ class PhotometryData(BaseEnhancedTable):
         place = EarthLocation(lat=self.observatory.lat, lon=self.observatory.lon)
 
         # Convert times at start of each observation to TDB (Barycentric Dynamical Time)
-        times = Time(self.data['date-obs'])
+        times = Time(self['date-obs'])
         times_tdb = times.tdb
         times_tdb.format='jd' # Switch to JD format
 
         # Compute light travel time corrections
-        ip_peg = SkyCoord(ra=self.data['ra'], dec=self.data['dec'], unit='degree')
+        ip_peg = SkyCoord(ra=self['ra'], dec=self['dec'], unit='degree')
         ltt_bary = times.light_travel_time(ip_peg, location=place)
         time_barycenter = times_tdb + ltt_bary
 
         # Return BJD at midpoint of exposure at each location
-        return Time(time_barycenter + self.data['exposure'] / 2, scale='tdb')
+        return Time(time_barycenter + self['exposure'] / 2, scale='tdb')
+
 
