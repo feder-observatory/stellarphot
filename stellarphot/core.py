@@ -373,3 +373,98 @@ class PhotometryData(BaseEnhancedTable):
         return Time(time_barycenter + self['exposure'] / 2, scale='tdb')
 
 
+class CatalogData(BaseEnhancedTable):
+    """
+    A base class to hold astronomical catalog data while performing validation
+    to confirm the minumum required columns ('id', 'ra', and 'dec') are present
+    and have the correct units.
+
+    As a convience function, when the user passes in an astropy table to validate,
+    the user can also pass in a col_rename dict which can be used to rename columns
+    in the data table BEFORE the check that the required columns are present.
+
+    Parameters
+    ----------
+    data: `astropy.table.Table`
+        A table containing all the astronomical catalog data to be validated.
+        This data is copied, so any changes made during validation will not
+        affect the input data, only the data in the class.
+
+    name: str
+        User readable name for the catalog.
+
+    data_source: str
+        User readable designation for the source of the catalog (could be a
+        URL or a journal reference).
+
+    colname_map: dict, optional (Default: None)
+        A dictionary containing old column names as keys and new column
+        names as values.  This is used to automatically update the column
+        names to the desired names BEFORE the validation is performed.
+
+    passband_map: dict, optional (Default: None)
+        A dictionary containing instrumental passband names as keys and
+        AAVSO passband names as values. This is used to automatically
+        update the passband column to AAVSO standard names if desired.
+
+    USAGE NOTES: If you input a data file, it MUST contain the following columns
+    in the following column names with the following units (if applicable).  The
+    'consistent count units' simply means it can be any unit for counts, but it
+    must be the same for all the columns listed.
+
+    name                  unit
+    -----------------     -------
+    id                    None
+    ra                    u.deg
+    dec                   u.deg
+    mag                   None
+    passband              None (if passband_col is provided, this column will be renamed)
+
+    Attributes
+    ----------
+    name: str
+        User readable name for the catalog.
+
+    data_source: str
+        User readable designation for the source of the catalog (could be a
+        URL or a journal reference).
+    """
+
+    # Define columns in the photo_table and provide information about their type, and units.
+    catalog_descript = {
+        'id' : None,
+        'ra' : u.deg,
+        'dec' : u.deg,
+        'mag' : None,
+        'passband' : None
+    }
+
+    def __init__(self, data, name, data_source, colname_map=None, passband_map=None):
+        # Set attributes
+        self.name = str(name)
+        self.data_source = str(data_source)
+        self._colname_map = colname_map
+        self._passband_map = passband_map
+        self._orig_data = data.copy()
+
+        # Rename columns if needed
+        if colname_map is not None:
+            self.update_colnames()
+
+        # Convert input data to QTable (while also checking for required columns)
+        super().__init__(self.catalog_descript, data=self._orig_data)
+
+        # Apply the filter/passband name update
+        if passband_map is not None:
+            self.update_passbands()
+
+    def update_colnames(self):
+        # Change column names as desired
+        for orig_name, new_name in self._colname_map.items():
+            self._orig_data.rename_column(orig_name, new_name)
+
+    def update_passbands(self):
+        # Converts filter names in filter column to AAVSO standard names
+        for orig_pb, aavso_pb in self._passband_map.items():
+            mask = self['passband'] == orig_pb
+            self['passband'][mask] = aavso_pb

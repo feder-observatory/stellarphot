@@ -2,7 +2,6 @@ import pytest
 import numpy as np
 
 from stellarphot.photometry import calculate_noise
-from stellarphot.core import Camera
 
 GAINS = [1.0, 1.5, 2.0]
 

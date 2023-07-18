@@ -3,9 +3,11 @@ import numpy as np
 from astropy import units as u
 from astropy.table import Table, Column
 from astropy.time import Time
+from astropy.io import ascii
 from astropy.coordinates import EarthLocation
+from astropy.utils.data import get_pkg_data_filename
 
-from stellarphot.core import Camera, BaseEnhancedTable, PhotometryData
+from stellarphot.core import Camera, BaseEnhancedTable, PhotometryData, CatalogData
 
 
 def test_camera_attributes():
@@ -123,6 +125,9 @@ testphot_clean = testphot_goodUnits.copy()
 for this_col in computed_columns:
     del testphot_clean[this_col]
 
+# Load test catalog
+test_cat = ascii.read(get_pkg_data_filename('data/test_vsc_table.ecsv'), format='ecsv', fast_reader=False)
+
 
 def test_base_enhanced_table_blank():
     # This should raise error because you are attempting a blank data set
@@ -210,3 +215,25 @@ def test_photometry_inconsistent_computed_col_exists():
         assert np.abs(phot_data['snr'][0] - 46.795229859903905) < 1e-6
     assert np.abs(phot_data['snr'][0].value - 46.795229859903905) < 1e-6
 
+
+def test_catalog_missing_col():
+    # Fails with ValueError due to not having 'ra' column
+    with pytest.raises(ValueError):
+        catalog_dat = CatalogData(data=test_cat, name="VSX", data_source="Vizier")
+
+def test_catalog_colname_map():
+    # Map column names
+    vsx_colname_map = {'Name':'id', 'RAJ2000':'ra', 'DEJ2000':'dec', 'max':'mag', 'n_max':'passband'}
+    catalog_dat = CatalogData(data=test_cat, name="VSX", data_source="Vizier", colname_map=vsx_colname_map)
+
+    assert catalog_dat['id'][0] == 'ASASSN-V J000052.03+002216.6'
+    assert np.abs(catalog_dat['mag'][0].value - 12.660)
+    assert catalog_dat['passband'][0] == 'g'
+
+def test_catalog_bandpassmap():
+    # Map column and bandpass names
+    vsx_colname_map = {'Name':'id', 'RAJ2000':'ra', 'DEJ2000':'dec', 'max':'mag', 'n_max':'passband'}
+    passband_map = {'g' :'SG', 'r':'SR'}
+    catalog_dat = CatalogData(data=test_cat, name="VSX", data_source="Vizier", colname_map=vsx_colname_map, passband_map=passband_map)
+
+    assert catalog_dat['passband'][0] == 'SG'
