@@ -1,5 +1,5 @@
 from astropy import units as u
-from astropy.table import Table, Column
+from astropy.table import QTable, Table, Column
 
 from astropy import units as u
 from astropy.coordinates import EarthLocation, SkyCoord
@@ -114,8 +114,8 @@ class BaseEnhancedTable(QTable):
             raise TypeError(f"You must provide a dict as table_description (it is type {type(self._table_description)}).")
 
         # Build the data table
-        if not isinstance(data, Table):
-            raise TypeError(f"You must provide an astropy Table as data (it is type {type(data)}).")
+        if not isinstance(data, QTable):
+            raise TypeError(f"You must provide an astropy QTable as data (it is type {type(data)}).")
         else:
             # Check the format of the data table matches the table_description by checking
             # each column listed in table_description exists and is the correct units.
