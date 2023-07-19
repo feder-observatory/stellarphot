@@ -20,7 +20,7 @@ __all__ = ['photutils_stellar_photometry',
            'faster_sigma_clip_stats',
            'find_too_close', 'clipped_sky_per_pix_stats',
            'add_to_photometry_table', 'photometry_on_directory',
-           'calculate_noise', 'find_times']
+           'calculate_noise', 'find_bjd']
 
 
 def photutils_stellar_photometry(ccd_image, sources,
@@ -309,7 +309,7 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
         photometry table.
 
     observatory_location : str
-        Name of the observatory where the images were taken. If not provided,
+        Name of the observatory where the images were taken. If not 'feder',
         the BJD column will not be added to the photometry table.
 
     fwhm_by_fit : bool, optional
@@ -379,7 +379,7 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
     phot['aperture_net_counts'][all_bads] = np.nan
 
     if observatory_location.lower() == 'feder':
-        phot['BJD'] = find_times(phot['date-obs'][0], phot['exposure'][0],
+        phot['BJD'] = find_bjd(phot['date-obs'][0], phot['exposure'][0],
                                  ra=bjd_coords.ra, dec=bjd_coords.dec)
 
     if camera is not None:
@@ -687,7 +687,7 @@ def calculate_noise(gain=1.0, read_noise=0.0, dark_current_per_sec=0.0,
     return np.sqrt(poisson_source + sky + dark + rn_error + digitization)
 
 
-def find_times(phot_column, exposure, ra, dec,
+def find_bjd(dates_col, exposure, ra, dec,
                latitude=46.86678, longitude=263.54672):
     """
     Returns a numpy array of barycentric Julian date times
@@ -695,16 +695,16 @@ def find_times(phot_column, exposure, ra, dec,
     Parameters
     ----------
 
-    phot_column : `astropy.table.Column` or numpy array
+    dates_col : `astropy.table.Column` or numpy array
         numpy array or column of observation dates from the photometry table
 
     exposure : float, optional
         exposure time in seconds
 
-    RA : float
+    ra : float
         Right ascension in degree units
 
-    Dec : float
+    dec : float
         Declination  in degree units
 
     latitude : float, optional
@@ -724,7 +724,7 @@ def find_times(phot_column, exposure, ra, dec,
     """
     location = EarthLocation(lat=latitude, lon=longitude)
 
-    times = Time(phot_column, scale='utc', format='isot', location=location)
+    times = Time(dates_col, scale='utc', format='isot', location=location)
     ip_peg = SkyCoord(ra=ra, dec=dec, unit='degree')
     ltt_bary = times.light_travel_time(ip_peg)
     times_tdb = times.tdb
