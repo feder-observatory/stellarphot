@@ -108,7 +108,7 @@ class BaseEnhancedTable(QTable):
         (can be None).  This is used to check the format of the input data
         table.
 
-    data: `~astropy.table.QTable`
+    data: `astropy.table.QTable`
         A table containing astronomical data of interest.  This table
         will be checked to make sure all columns listed in table_description
         exist and have the right units. Additional columns that
@@ -309,7 +309,7 @@ class PhotometryData(BaseEnhancedTable):
                             'mag_inst', 'mag_error']
 
         # Check if columns exist already, if they do and retain_user_computed is False,
-        # throw an error
+        # throw an error.
         for this_col in computed_columns:
             if this_col in self.colnames:
                 if not retain_user_computed:
