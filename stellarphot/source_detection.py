@@ -5,11 +5,9 @@ from astropy.modeling.models import Const2D, Gaussian2D
 from astropy.modeling.fitting import LevMarLSQFitter
 
 from photutils import DAOStarFinder
-from photutils.utils._moments import _moments_central, _moments
 from photutils.morphology import data_properties
 from astropy.nddata.utils import Cutout2D
 from astropy.stats import gaussian_sigma_to_fwhm
-from astropy import units as u
 
 __all__ = ['source_detection', 'compute_fwhm']
 
