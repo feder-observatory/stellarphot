@@ -3,7 +3,7 @@
 
 New Features
 ^^^^^^^^^^^^
-+ Creation of new data classes for handling aperture, photometry, and catalog data in a more consistent way. [#125]
++ Creation of new data classes for handling aperture, photometry, and catalog data in a more consistent way by enforcing validation and certain column names. [#125]
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^

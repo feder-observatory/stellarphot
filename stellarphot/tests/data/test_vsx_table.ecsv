@@ -1,0 +1,148 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - name: OID
+#   datatype: int32
+#   description: '[1/2387607] Internal identifier, can be used to link out to the VSX database (1)'
+#   meta: !!omap
+#   - {ucd: ID_NUMBER}
+#   - {width: 7}
+# - name: n_OID
+#   datatype: string
+#   description: VizieR added column, not part of original data
+#   meta: !!omap
+#   - {ucd: DATA_LINK}
+#   - {_votable_string_dtype: char}
+# - name: Name
+#   datatype: string
+#   description: Variable star identifier
+#   meta: !!omap
+#   - {ucd: ID_MAIN}
+#   - {_votable_string_dtype: char}
+# - name: V
+#   datatype: uint8
+#   description: Variability flag (2) (VarFlag)
+#   meta: !!omap
+#   - {ucd: NOTE}
+#   - {width: 1}
+# - name: Type
+#   datatype: string
+#   description: '? Variability type, ariability type, as in GCVS catalog Variability type (see details of VSX type list)'
+#   meta: !!omap
+#   - {ucd: VAR_CLASS}
+#   - {_votable_string_dtype: char}
+# - name: l_max
+#   datatype: string
+#   description: '? Limit flag on max (LimitFlagOnMax)'
+#   meta: !!omap
+#   - {ucd: CODE_LIMIT}
+#   - {_votable_string_dtype: char}
+# - name: max
+#   unit: mag
+#   datatype: float32
+#   format: '{:7.3f}'
+#   description: '[-6.0/25.2]? Magnitude at maximum, or amplitude (MagMax)'
+#   meta: !!omap
+#   - {ucd: PHOT_MAG_UNDEF}
+#   - {width: 7}
+#   - {precision: '3'}
+#   - values: {'null': .nan}
+# - name: u_max
+#   datatype: string
+#   description: '? Uncertainty flag on max (MaxUncertaintyFlag)'
+#   meta: !!omap
+#   - {ucd: CODE_ERROR}
+#   - {_votable_string_dtype: char}
+# - name: n_max
+#   datatype: string
+#   description: '? Passband on max magnitude (4) (MaxPassband)'
+#   meta: !!omap
+#   - {ucd: NOTE}
+#   - {_votable_string_dtype: char}
+# - name: f_min
+#   datatype: string
+#   description: '? Flag to indicate an amplitude (MinIsAmplitude)'
+#   meta: !!omap
+#   - {ucd: CODE_MISC}
+#   - {_votable_string_dtype: char}
+# - name: l_min
+#   datatype: string
+#   description: '? Limit flag on min (LimitFlagOnMin)'
+#   meta: !!omap
+#   - {ucd: CODE_LIMIT}
+#   - {_votable_string_dtype: char}
+# - name: min
+#   unit: mag
+#   datatype: float32
+#   format: '{:7.3f}'
+#   description: '[-15.75/28.0]? Magnitude at minimum, or amplitude (MagMin)'
+#   meta: !!omap
+#   - {ucd: PHOT_MAG_UNDEF}
+#   - {width: 7}
+#   - {precision: '3'}
+#   - values: {'null': .nan}
+# - name: u_min
+#   datatype: string
+#   description: '? Uncertainty flag on min (MinUncertaintyFlag)'
+#   meta: !!omap
+#   - {ucd: CODE_ERROR}
+#   - {_votable_string_dtype: char}
+# - name: n_min
+#   datatype: string
+#   description: '? Passband on min magnitude (MinPassband)'
+#   meta: !!omap
+#   - {ucd: NOTE}
+#   - {_votable_string_dtype: char}
+# - name: l_Period
+#   datatype: string
+#   description: '? Limit flag on period (3) (LimitFlagOnPeriod)'
+#   meta: !!omap
+#   - {ucd: CODE_LIMIT}
+#   - {_votable_string_dtype: char}
+# - name: Period
+#   unit: d
+#   datatype: float64
+#   format: '{:19.12f}'
+#   description: '[0.0/35320.0]? Period of the variable in days'
+#   meta: !!omap
+#   - {ucd: TIME_PERIOD}
+#   - {width: 19}
+#   - {precision: '12'}
+#   - values: {'null': .nan}
+# - name: u_Period
+#   datatype: string
+#   description: '? Uncertainty flag on Period (3) (PeriodUncertaintyFlag)'
+#   meta: !!omap
+#   - {ucd: CODE_ERROR}
+#   - {_votable_string_dtype: char}
+# - name: Sp
+#   datatype: string
+#   description: '? Spectral type (SpectralType)'
+#   meta: !!omap
+#   - {ucd: SPECT_TYPE_MK}
+#   - {_votable_string_dtype: char}
+# - name: RAJ2000
+#   unit: deg
+#   datatype: float64
+#   format: '{:9.5f}'
+#   description: '[0.0/360.0] Right ascension (J2000)'
+#   meta: !!omap
+#   - {ucd: POS_EQ_RA_MAIN}
+#   - {width: 9}
+#   - {precision: '5'}
+# - name: DEJ2000
+#   unit: deg
+#   datatype: float64
+#   format: '{:9.5f}'
+#   description: '[-89.87/89.44] Declination (J2000)'
+#   meta: !!omap
+#   - {ucd: POS_EQ_DEC_MAIN}
+#   - {width: 9}
+#   - {precision: '5'}
+# meta: {ID: B_vsx_vsx, description: 'Variable Star indeX, Version 2023-06-26', name: B/vsx/vsx}
+# schema: astropy-2.0
+OID n_OID Name V Type l_max max u_max n_max f_min l_min min u_min n_min l_Period Period u_Period Sp RAJ2000 DEJ2000
+2228728 "" "ASASSN-V J000052.03+002216.6" 0 ROT "" 12.66 "" g Y "" 0.19 "" g "" 0.518093 "" "" 0.21652 0.37123
+237725 B "[SIG2010] 75433" 0 RRAB "" 14.17 "" r Y "" 0.81 "" r "" 0.555703 "" "" 0.36142 -0.22898
+26535 B "DQ Psc" 0 SRB "" 6.82 "" Hp "" "" 6.94 "" Hp "" "" "" M2III 359.94371 -0.28011
+621221 B "Romanov V10" 0 UV "" 14.3 "" V "" "" 15.6 "" V "" "" "" "" 359.98958 0.01231

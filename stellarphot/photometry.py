@@ -1,7 +1,6 @@
 import bottleneck as bn
 import numpy as np
-from photutils import (DAOStarFinder, aperture_photometry, CircularAperture,
-                       CircularAnnulus, extract_stars)
+from photutils import (aperture_photometry, CircularAperture, CircularAnnulus)
 from photutils.centroids import centroid_sources
 
 from astropy.coordinates import SkyCoord, EarthLocation
@@ -606,16 +605,18 @@ def calculate_noise(gain=1.0, read_noise=0.0, dark_current_per_sec=0.0,
     """
     Computes the noise in a photometric measurement.
 
-    This function computes the noise (in units of electrons) in a photometric measurement using the
-    revised CCD equation from Collins et al (2017) AJ, 153, 77.  The equation is:
+    This function computes the noise (in units of electrons) in a photometric
+    measurement using the revised CCD equation from Collins et al (2017) AJ, 153, 77.
+    The equation is:
 
     .. math::
 
         \\sigma = \\sqrt{G \\cdot C + A \\cdot \\left(1 + \\frac{A}{B}\\right)\\cdot \\left[ G\\cdot S + D \\cdot t + R^2 + (0.289 G)^2\\right]}
 
-    where :math:`\sigma` is the noise, :math:`G` is the gain, :math:`C` is the source counts,
-    :math:`A` is the aperture area in pixels, :math:`B` is the annulus area in pixels,
-    :math:`S` is the sky counts per pixel, :math:`D` is the dark current per second,
+    where :math:`\sigma` is the noise, :math:`G` is the gain,
+    :math:`C` is the source counts, :math:`A` is the aperture area in pixels,
+    :math:`B` is the annulus area in pixels, :math:`S` is the sky counts per pixel,
+    :math:`D` is the dark current per second,
     :math:`R` is the read noise, and :math:`t` is exposure time.
 
     Note: The :math:`(0.289 G)^2` term is "digitization noise" and is optional.
@@ -708,7 +709,8 @@ def find_bjd(dates_col, exposure, ra, dec,
         Declination  in degree units
 
     latitude : float, optional
-        latitude of the observatory in degrees North, default is for Paul P. Feder Observatory
+        latitude of the observatory in degrees North, default is for Paul P. Feder
+        Observatory
 
     longitude : float, optional
         longitude of the observatory in degree East of Greenwich (0 to 360), default

@@ -5,7 +5,7 @@ from astropy.time import Time
 
 import numpy as np
 
-__all__ = ['Camera', 'BaseEnhancedTable', 'PhotometryData']
+__all__ = ['Camera', 'BaseEnhancedTable', 'PhotometryData', 'CatalogData']
 
 
 class Camera:
@@ -124,26 +124,33 @@ class BaseEnhancedTable(QTable):
         try:
             self._table_description = {k: v for k, v in table_description.items()}
         except AttributeError:
-            raise TypeError(f"You must provide a dict as table_description (it is type {type(self._table_description)}).")
+            raise TypeError("You must provide a dict as table_description (it is type "
+                + f"{type(self._table_description)}).")
 
         # Build the data table
         if not isinstance(data, Table):
-            raise TypeError(f"You must provide an astropy QTable as data (it is type {type(data)}).")
+            raise TypeError("You must provide an astropy QTable as data (it is type "
+                            + f"{type(data)}).")
         else:
-            # Check the format of the data table matches the table_description by checking
-            # each column listed in table_description exists and is the correct units.
-            # NOTE: This ignores any columns not in the table_description, it does not remove them.
+            # Check the format of the data table matches the table_description by
+            # checking each column listed in table_description exists and is the
+            # correct units.
+            # NOTE: This ignores any columns not in the table_description, it
+            # does not remove them.
             for this_col, this_unit in self._table_description.items():
                 if this_unit is not None:
                     # Check type
                     try:
                         if data[this_col].unit != this_unit:
-                            raise ValueError(f"data['{this_col}'] is of wrong unit (should be {this_unit} but reported as {data[this_col].unit}).")
+                            raise ValueError(f"data['{this_col}'] is of wrong unit "
+                                             + f"(should be {this_unit} but reported "
+                                             + f"as {data[this_col].unit}).")
                     except KeyError:
-                        raise ValueError(f"data['{this_col}'] is missing from input data.")
+                        raise ValueError(f"data['{this_col}'] is missing from input "
+                                         + "data.")
 
-            # Using the BaseTimeSeries class to handle the data table means required columns
-            # are checked.
+            # Using the BaseTimeSeries class to handle the data table means required
+            # columns are checked.
             super().__init__(data=data)
 
 
@@ -237,7 +244,8 @@ class PhotometryData(BaseEnhancedTable):
     retained and not replaced with the computed values.
     """
 
-    # Define columns in the photo_table and provide information about their type, and units.
+    # Define columns in the photo_table and provide information about their type, and
+    # units.
     phot_descript = {
         'star_id' : None,
         'ra' : u.deg,
@@ -264,8 +272,10 @@ class PhotometryData(BaseEnhancedTable):
         'file' : None
     }
 
-    def __init__(self, observatory, camera, data,  passband_map=None, retain_user_computed=False):
-        # Set attributes describing the observatory and camera as well as corrections to passband names.
+    def __init__(self, observatory, camera, data,
+                 passband_map=None, retain_user_computed=False):
+        # Set attributes describing the observatory and camera as well as corrections to
+        # passband names.
         self.observatory = observatory.copy()
         self.camera = camera.copy()
         self._passband_map = passband_map.copy()
@@ -273,18 +283,23 @@ class PhotometryData(BaseEnhancedTable):
         # Check the time column is correct format and scale
         try:
             if (data['date-obs'][0].scale != 'utc'):
-                raise ValueError(f"data['date-obs'] astropy.time.Time must have scale='utc', not \'{data['date-obs'][0].scale}\'.")
+                raise ValueError("data['date-obs'] astropy.time.Time must have scale="
+                                 + f"'utc', not \'{data['date-obs'][0].scale}\'.")
         except AttributeError:
             # Happens if first item dosn't have a "scale"
-            raise ValueError("data['date-obs'] is not column of astropy.time.Time objects.")
+            raise ValueError("data['date-obs'] isn't column of astropy.time.Time "
+                             + "entries.")
 
         # Check for consistency of counts-related columns
-        counts_columns = ['aperture_sum', 'annulus_sum', 'sky_per_pix_avg', 'sky_per_pix_med',
-                          'sky_per_pix_std', 'aperture_net_cnts', 'noise']
+        counts_columns = ['aperture_sum', 'annulus_sum', 'sky_per_pix_avg',
+                          'sky_per_pix_med', 'sky_per_pix_std', 'aperture_net_cnts',
+                          'noise']
         cnts_unit = data[counts_columns[0]].unit
         for this_col in counts_columns[1:]:
             if data[this_col].unit != cnts_unit:
-                raise ValueError(f"data['{this_col}'] has inconsistent units with data['{counts_columns[0]}'] (should be {cnts_unit} but reported as {data[this_col].unit}).")
+                raise ValueError(f"data['{this_col}'] has inconsistent units with "
+                                 + f"data['{counts_columns[0]}'] (should be {cnts_unit}"
+                                 + f" but it's {data[this_col].unit}).")
 
         # Convert input data to QTable (while also checking for required columns)
         super().__init__(self.phot_descript, data=data)
@@ -293,52 +308,69 @@ class PhotometryData(BaseEnhancedTable):
         computed_columns = ['aperture_area', 'annulus_area', 'snr', 'bjd', 'night',
                             'mag_inst', 'mag_error']
 
-        # Check if columns exist already, if they do and retain_user_computed is False, throw an error
+        # Check if columns exist already, if they do and retain_user_computed is False,
+        # throw an error
         for this_col in computed_columns:
             if this_col in self.colnames:
                 if not retain_user_computed:
-                    raise ValueError(f"Computed column '{this_col}' already exist in data.  If you want to keep them, pass retain_user_computed=True to the initializer.")
+                    raise ValueError(f"Computed column '{this_col}' already exist in "
+                                     + "data.  If you want to keep them, pass "
+                                     + "retain_user_computed=True to the initializer.")
             else:
-                # Compute the columns that need to be computed (switch requries python 3.10)
+                # Compute the columns that need to be computed (match requries python
+                # >=3.10)
                 match this_col:
                     case 'aperture_area':
                         self['aperture_area'] = np.pi * self['aperture']**2
 
                     case 'annulus_area':
-                        self['annulus_area'] = np.pi * (self['annulus_outer']**2 -self['annulus_inner']**2)
+                        self['annulus_area'] = np.pi * (self['annulus_outer']**2
+                                                        - self['annulus_inner']**2)
 
                     case 'snr':
-                        # Since noise in counts, the proper way to compute SNR is sqrt(gain)*counts/noise
-                        self['snr'] = np.sqrt(self.camera.gain.value) * self['aperture_net_cnts'].value / self['noise'].value
+                        # Since noise in counts, the proper way to compute SNR is
+                        # qrt(gain)*counts/noise
+                        self['snr'] = np.sqrt(self.camera.gain.value) * \
+                            self['aperture_net_cnts'].value / self['noise'].value
 
                     case 'bjd':
                         self['bjd'] = self.add_bjd_col()
 
                     case 'night':
-                        # Generate integer counter for nights. This should be approximately the MJD at noon local
-                        # time just before the evening of the observation.
+                        # Generate integer counter for nights. This should be
+                        # approximately the MJD at noon local before the evening of
+                        # the observation.
                         hr_offset = int(self.observatory.lon.value/15)
                         # Compute offset to 12pm Local Time before evening
                         LocalTime = Time(self['date-obs']) + hr_offset*u.hr
                         hr = LocalTime.ymdhms.hour
-                        # Compute number of hours to shift to arrive at 12 noon local time
+                        # Compute number of hours to shift to arrive at 12 noon local
+                        # time
                         shift_hr = hr.copy()
                         shift_hr[hr < 12] = shift_hr[hr < 12] + 12
                         shift_hr[hr >= 12] = shift_hr[hr >= 12] - 12
-                        shift = Column(data = -shift_hr * u.hr - LocalTime.ymdhms.minute * u.min - LocalTime.ymdhms.second*u.s, name='shift')
-                        # Compute MJD at local noon before the evening of this observation
-                        self['night'] = Column(data=np.array((Time(self['date-obs']) + shift).to_value('mjd'), dtype=int), name='night')
+                        delta = -shift_hr * u.hr - LocalTime.ymdhms.minute * u.min \
+                            - LocalTime.ymdhms.second*u.s
+                        shift = Column(data = delta, name='shift')
+                        # Compute MJD at local noon before the evening of this
+                        # observation
+                        self['night'] = Column(data=np.array((Time(self['date-obs'])
+                                                              + shift).to_value('mjd'),
+                                                             dtype=int), name='night')
 
                     case 'mag_inst':
-                        self['mag_inst'] = -2.5 * np.log10(self.camera.gain.value * self['aperture_net_cnts'].value /
-                                                    self['exposure'].value)
+                        self['mag_inst'] =  -2.5 * \
+                            np.log10(self.camera.gain.value *
+                                     self['aperture_net_cnts'].value /
+                                     self['exposure'].value)
 
                     case 'mag_error':
                         # data['snr'] must be computed first
                         self['mag_inst'] = 1.085736205 / self['snr']
 
                     case _:
-                        raise ValueError(f"Trying to compute a column ({this_col}), something that should never happen.")
+                        raise ValueError(f"Trying to compute column ({this_col}). This "
+                                         + "should never happen.")
 
 
         # Apply the filter/passband name update
@@ -373,3 +405,99 @@ class PhotometryData(BaseEnhancedTable):
         return Time(time_barycenter + self['exposure'] / 2, scale='tdb')
 
 
+class CatalogData(BaseEnhancedTable):
+    """
+    A base class to hold astronomical catalog data while performing validation
+    to confirm the minumum required columns ('id', 'ra', and 'dec') are present
+    and have the correct units.
+
+    As a convience function, when the user passes in an astropy table to validate,
+    the user can also pass in a col_rename dict which can be used to rename columns
+    in the data table BEFORE the check that the required columns are present.
+
+    Parameters
+    ----------
+    data: `astropy.table.Table`
+        A table containing all the astronomical catalog data to be validated.
+        This data is copied, so any changes made during validation will not
+        affect the input data, only the data in the class.
+
+    name: str
+        User readable name for the catalog.
+
+    data_source: str
+        User readable designation for the source of the catalog (could be a
+        URL or a journal reference).
+
+    colname_map: dict, optional (Default: None)
+        A dictionary containing old column names as keys and new column
+        names as values.  This is used to automatically update the column
+        names to the desired names BEFORE the validation is performed.
+
+    passband_map: dict, optional (Default: None)
+        A dictionary containing instrumental passband names as keys and
+        AAVSO passband names as values. This is used to automatically
+        update the passband column to AAVSO standard names if desired.
+
+    USAGE NOTES: If you input a data file, it MUST contain the following columns
+    in the following column names with the following units (if applicable).  The
+    'consistent count units' simply means it can be any unit for counts, but it
+    must be the same for all the columns listed.
+
+    name                  unit
+    -----------------     -------
+    id                    None
+    ra                    u.deg
+    dec                   u.deg
+    mag                   None
+    passband              None
+
+    Attributes
+    ----------
+    name: str
+        User readable name for the catalog.
+
+    data_source: str
+        User readable designation for the source of the catalog (could be a
+        URL or a journal reference).
+    """
+
+    # Define columns in the photo_table and provide information about their type, and
+    # units.
+    catalog_descript = {
+        'id' : None,
+        'ra' : u.deg,
+        'dec' : u.deg,
+        'mag' : None,
+        'passband' : None
+    }
+
+    def __init__(self, data, name, data_source, colname_map=None, passband_map=None):
+        # Set attributes
+        self.name = str(name)
+        self.data_source = str(data_source)
+        self._colname_map = colname_map
+        self._passband_map = passband_map
+        self._orig_data = data.copy()
+
+        # Rename columns if needed
+        if colname_map is not None:
+            self.update_colnames()
+
+        # Convert input data to QTable (while also checking for required columns)
+        super().__init__(self.catalog_descript, data=self._orig_data)
+
+        # Apply the filter/passband name update
+        if passband_map is not None:
+            self.update_passbands()
+
+    def update_colnames(self):
+        # Change column names as desired
+        for orig_name, new_name in self._colname_map.items():
+            self._orig_data.rename_column(orig_name, new_name)
+
+    def update_passbands(self):
+        # Converts filter names in filter column to AAVSO standard names
+        for orig_pb, aavso_pb in self._passband_map.items():
+            mask = self['passband'] == orig_pb
+            self['passband'][mask] = aavso_pb
