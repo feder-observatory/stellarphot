@@ -126,7 +126,7 @@ for this_col in computed_columns:
     del testphot_clean[this_col]
 
 # Load test catalog
-test_cat = ascii.read(get_pkg_data_filename('data/test_vsc_table.ecsv'), format='ecsv', fast_reader=False)
+test_cat = ascii.read(get_pkg_data_filename('data/test_vsx_table.ecsv'), format='ecsv', fast_reader=False)
 
 
 def test_base_enhanced_table_blank():
