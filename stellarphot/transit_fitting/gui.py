@@ -6,13 +6,14 @@ import numpy as np
 import ipywidgets as ipw
 from traitlets import observe, Bool
 
-from astroquery.mast import Catalogs
 from astropy.utils.data import get_pkg_data_filename
 
+from stellarphot.transit_fitting.io import get_tic_info
 
-__all__ = ['MyValid', 'get_tic_info', 'make_checker','validate_exposure_time',
+__all__ = ['MyValid', 'make_checker','validate_exposure_time',
            'populate_TIC_boxes', 'populate_TOI_boxes', 'exotic_settings_widget',
-           'set_values_from_json_file', 'get_values_from_widget','generate_json_file_name']
+           'set_values_from_json_file', 'get_values_from_widget',
+           'generate_json_file_name']
 
 
 template_types = ['known', 'candidate']
@@ -74,28 +75,6 @@ class MyValid(ipw.Button):
             self.icon = 'times'
 
 
-def get_tic_info(TIC_ID):
-    """
-    Get the information about this TIC ID from the TESS Input Catalog
-    at MAST.
-
-    Parameters
-    ----------
-
-    TIC_ID : int
-        9 or 10 digit TIC ID number.
-
-    Returns
-    -------
-
-    `astropy.table.Table`
-        Astropy table withinformation about the TIC object.
-
-    """
-    catalog_data = Catalogs.query_criteria(catalog="Tic", ID=TIC_ID)
-    return catalog_data
-
-
 def make_checker(indicator_widget, value_widget):
     """
     Build an observer that checks TIC number and, if it is a valid
@@ -106,7 +85,7 @@ def make_checker(indicator_widget, value_widget):
     Parameters
     ----------
 
-    indicator_widget : `~stellarphot.analysis.MyValid` widget
+    indicator_widget : `~stellarphot.transit_fitting.gui.MyValid` widget
         The widget that indicates to the user whether or not the value is
         reasonable.
 
@@ -150,7 +129,7 @@ def validate_exposure_time(indicator_widget, value_widget):
 
     Parameters
     ----------
-    indicator_widget : `~stellarphot.analysis.MyValid` widget
+    indicator_widget : `~stellarphot.transit_fitting.gui.MyValid` widget
         The widget that indicates to the user whether or not the value is
         reasonable.
 
@@ -236,7 +215,8 @@ def populate_TOI_boxes(toi, exotic_widget):
     -------
 
     None
-        Sets values of planetary parameters of `candidate` in ``exotic_widget`` in place.
+        Sets values of planetary parameters of `candidate` in
+        ``exotic_widget`` in place.
     """
     # Match EXOTIC json keys to columns in the result returned from
     # astroquery

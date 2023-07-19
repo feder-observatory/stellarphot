@@ -1,6 +1,6 @@
 import bottleneck as bn
 import numpy as np
-from photutils import (aperture_photometry, CircularAperture, CircularAnnulus)
+from photutils import (CircularAnnulus, aperture_photometry, CircularAperture)
 from photutils.centroids import centroid_sources
 
 from astropy.coordinates import SkyCoord, EarthLocation

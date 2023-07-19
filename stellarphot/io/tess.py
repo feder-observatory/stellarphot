@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 import re
 from tempfile import NamedTemporaryFile
@@ -9,11 +9,9 @@ from astropy.time import Time
 from astropy import units as u
 from astropy.utils.data import download_file
 
-from astroquery.mast import Catalogs
-
 import requests
 
-from stellarphot.analysis.exotic import get_tic_info
+from stellarphot.transit_fitting.io import get_tic_info
 
 __all__ = ["TessSubmission", "TOI", "TessTargetFile"]
 
@@ -135,7 +133,6 @@ class TessSubmission:
                 # No star from the object after all
                 fails['tic_id'] = "TIC ID number"
 
-        fail_msg = ""
         fail = []
         for k, v in fails.items():
             fail.append(f"Unable to determine {k}, {v}, from header.")

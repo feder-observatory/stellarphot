@@ -3,10 +3,9 @@ import sys
 import pytest
 import numpy as np
 
+from stellarphot.transit_fitting import TransitModelFit
+
 batman = pytest.importorskip('batman')
-
-from stellarphot.analysis.transit_fitting import TransitModelFit
-
 
 DEFAULT_TESTING_PARAMS = dict(
     t0=2, period=5, duration=0.1,

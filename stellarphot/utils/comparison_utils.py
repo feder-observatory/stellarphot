@@ -1,8 +1,6 @@
-import functools
 from pathlib import Path
 
 import pandas as pd
-import numpy as np
 
 from astropy.table import Table
 from astropy.coordinates import SkyCoord

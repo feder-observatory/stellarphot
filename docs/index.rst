@@ -5,7 +5,7 @@ This is the documentation for stellarphot.
 This is a package for doing stellar photometry that relies on astropy.
 
 .. toctree::
-  :maxdepth: 2
+  :maxdepth: 3
 
   stellarphot/index.rst
 
