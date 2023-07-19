@@ -1,6 +1,5 @@
 from astropy.wcs import WCS
 
-
 def make_wcs():
     wcs = WCS(naxis=2)
     # Numbering of pixels for crpix starts at 1....
