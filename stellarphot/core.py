@@ -5,7 +5,7 @@ from astropy.time import Time
 
 import numpy as np
 
-__all__ = ['Camera', 'BaseEnhancedTable', 'PhotometryData']
+__all__ = ['Camera', 'BaseEnhancedTable', 'PhotometryData', 'CatalogData']
 
 
 class Camera:
