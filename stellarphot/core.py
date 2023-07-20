@@ -148,7 +148,7 @@ class BaseEnhancedTable(QTable):
                     raise TypeError("You must provide a dict as table_description (it "
                         + f"is type {type(self._colname_map)}).")
 
-                self.update_colnames()
+                self._update_colnames()
 
             # Check the format of the data table matches the table_description by
             # checking each column listed in table_description exists and is the
@@ -171,7 +171,7 @@ class BaseEnhancedTable(QTable):
             # columns are checked.
             super().__init__(data=self._orig_data)
 
-    def update_colnames(self):
+    def _update_colnames(self):
         # Change column names as desired, done before validating the columns,
         # which is why we work on _orig_data
         for orig_name, new_name in self._colname_map.items():
@@ -181,7 +181,7 @@ class BaseEnhancedTable(QTable):
                 raise ValueError(f"data['{orig_name}'] is missing from input "
                                          + "data but listed in colname_map!")
 
-    def update_passbands(self):
+    def _update_passbands(self):
         # Converts filter names in filter column to AAVSO standard names
         # Assumes _passband_map is in namespace.
         for orig_pb, aavso_pb in self._passband_map.items():
@@ -284,7 +284,7 @@ class PhotometryData(BaseEnhancedTable):
     retained and not replaced with the computed values.
     """
 
-    # Define columns in the photo_table and provide information about their type, and
+    # Define columns that must be in table and provide information about their type, and
     # units.
     phot_descript = {
         'star_id' : None,
@@ -396,7 +396,7 @@ class PhotometryData(BaseEnhancedTable):
 
         # Apply the filter/passband name update
         if passband_map is not None:
-            self.update_passbands()
+            self._update_passbands()
 
     def add_bjd_col(self):
         """
@@ -476,7 +476,7 @@ class CatalogData(BaseEnhancedTable):
         URL or a journal reference).
     """
 
-    # Define columns in the photo_table and provide information about their type, and
+    # Define columns that must be in table and provide information about their type, and
     # units.
     catalog_descript = {
         'id' : None,
@@ -497,4 +497,4 @@ class CatalogData(BaseEnhancedTable):
 
         # Apply the filter/passband name update
         if passband_map is not None:
-            self.update_passbands()
+            self._update_passbands()
