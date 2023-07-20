@@ -145,8 +145,8 @@ class BaseEnhancedTable(QTable):
                 try:
                     self._colname_map = {k: v for k, v in colname_map.items()}
                 except AttributeError:
-                    raise TypeError("You must provide a dict as table_description (it is type "
-                        + f"{type(self._colname_map)}).")
+                    raise TypeError("You must provide a dict as table_description (it "
+                        + f"is type {type(self._colname_map)}).")
 
                 self.update_colnames()
 
@@ -178,7 +178,7 @@ class BaseEnhancedTable(QTable):
             try:
                 self._orig_data.rename_column(orig_name, new_name)
             except KeyError:
-                raise ValueError(f"data['{this_col}'] is missing from input "
+                raise ValueError(f"data['{orig_name}'] is missing from input "
                                          + "data but listed in colname_map!")
 
     def update_passbands(self):
@@ -252,8 +252,10 @@ class PhotometryData(BaseEnhancedTable):
     fwhm_y                u.pix
     width                 u.pix
     aperture              u.pix
+    aperture_area         u.pix * u.pix
     annulus_inner         u.pix
     annulus_outer         u.pix
+    annulus_area          u.pix * u.pix
     aperture_sum          consistent count units
     annulus_sum           consistent count units
     sky_per_pix_avg       consistent count units
@@ -261,6 +263,9 @@ class PhotometryData(BaseEnhancedTable):
     sky_per_pix_std       consistent count units
     aperture_net_cnts     consistent count units
     noise                 consistent count units
+    snr                   None
+    mag_inst              None
+    mag_error             None
     exposure              u.s
     date-obs              astropy.time.Time with scale='utc'
     airmass               None
@@ -270,13 +275,8 @@ class PhotometryData(BaseEnhancedTable):
     In addition to these required columns, the following columns are computed based
     on the input data during creation.
 
-    aperture_area
-    annulus_area
-    snr
     bjd
     night
-    mag_inst
-    mag_error
 
     If these computed columns already exist in `data` class the class
     will throw an error a ValueError UNLESS`ignore_computed=True`
@@ -296,8 +296,10 @@ class PhotometryData(BaseEnhancedTable):
         'fwhm_y' : u.pix,
         'width' : u.pix,
         'aperture' : u.pix,
+        'aperture_area' : u.pix * u.pix,
         'annulus_inner' : u.pix,
         'annulus_outer' : u.pix,
+        'annulus_area' : u.pix * u.pix,
         'aperture_sum' : None,
         'annulus_sum' : None,
         'sky_per_pix_avg' : None,
@@ -305,6 +307,9 @@ class PhotometryData(BaseEnhancedTable):
         'sky_per_pix_std' : None,
         'aperture_net_cnts' : None,
         'noise' : None,
+        'snr' : None,
+        'mag_inst' : None,
+        'mag_error' : None,
         'exposure' : u.s,
         'date-obs' : None,
         'airmass' : None,
@@ -345,8 +350,7 @@ class PhotometryData(BaseEnhancedTable):
         super().__init__(self.phot_descript, data=data, colname_map=colname_map)
 
         # Compute additional columns (not done yet)
-        computed_columns = ['aperture_area', 'annulus_area', 'snr', 'bjd', 'night',
-                            'mag_inst', 'mag_error']
+        computed_columns = [ 'bjd', 'night']
 
         # Check if columns exist already, if they do and retain_user_computed is False,
         # throw an error.
@@ -360,19 +364,6 @@ class PhotometryData(BaseEnhancedTable):
                 # Compute the columns that need to be computed (match requries python
                 # >=3.10)
                 match this_col:
-                    case 'aperture_area':
-                        self['aperture_area'] = np.pi * self['aperture']**2
-
-                    case 'annulus_area':
-                        self['annulus_area'] = np.pi * (self['annulus_outer']**2
-                                                        - self['annulus_inner']**2)
-
-                    case 'snr':
-                        # Since noise in counts, the proper way to compute SNR is
-                        # qrt(gain)*counts/noise
-                        self['snr'] = np.sqrt(self.camera.gain.value) * \
-                            self['aperture_net_cnts'].value / self['noise'].value
-
                     case 'bjd':
                         self['bjd'] = self.add_bjd_col()
 
@@ -397,16 +388,6 @@ class PhotometryData(BaseEnhancedTable):
                         self['night'] = Column(data=np.array((Time(self['date-obs'])
                                                               + shift).to_value('mjd'),
                                                              dtype=int), name='night')
-
-                    case 'mag_inst':
-                        self['mag_inst'] =  -2.5 * \
-                            np.log10(self.camera.gain.value *
-                                     self['aperture_net_cnts'].value /
-                                     self['exposure'].value)
-
-                    case 'mag_error':
-                        # data['snr'] must be computed first
-                        self['mag_inst'] = 1.085736205 / self['snr']
 
                     case _:
                         raise ValueError(f"Trying to compute column ({this_col}). This "
