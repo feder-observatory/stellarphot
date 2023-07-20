@@ -116,9 +116,16 @@ class BaseEnhancedTable(QTable):
         NOT be removed.  This data is copied, so any changes made during
         validation will not only affect the data attribute of the instance,
         the original input data is left unchanged.
+
+    colname_map: dict, optional (Default: None)
+        A dictionary containing old column names as keys and new column
+        names as values.  This is used to automatically update the column
+        names to the desired names BEFORE the validation is performed.
     """
 
-    def __init__(self, table_description, data):
+    def __init__(self, table_description, data, colname_map=None):
+        self._orig_data = data.copy()
+
         # Confirm a proper table description is passed (that is dict-like with keys and
         # values)
         try:
@@ -132,6 +139,17 @@ class BaseEnhancedTable(QTable):
             raise TypeError("You must provide an astropy QTable as data (it is type "
                             + f"{type(data)}).")
         else:
+            # Rename columns before validation (if needed)
+            if colname_map is not None:
+                # Confirm a proper colname_map is passed
+                try:
+                    self._colname_map = {k: v for k, v in colname_map.items()}
+                except AttributeError:
+                    raise TypeError("You must provide a dict as table_description (it is type "
+                        + f"{type(self._colname_map)}).")
+
+                self.update_colnames()
+
             # Check the format of the data table matches the table_description by
             # checking each column listed in table_description exists and is the
             # correct units.
@@ -141,17 +159,34 @@ class BaseEnhancedTable(QTable):
                 if this_unit is not None:
                     # Check type
                     try:
-                        if data[this_col].unit != this_unit:
+                        if self._orig_data[this_col].unit != this_unit:
                             raise ValueError(f"data['{this_col}'] is of wrong unit "
                                              + f"(should be {this_unit} but reported "
-                                             + f"as {data[this_col].unit}).")
+                                             + f"as {self._orig_data[this_col].unit}).")
                     except KeyError:
                         raise ValueError(f"data['{this_col}'] is missing from input "
                                          + "data.")
 
-            # Using the BaseTimeSeries class to handle the data table means required
+            # Using the QTable class to handle the data table means required
             # columns are checked.
-            super().__init__(data=data)
+            super().__init__(data=self._orig_data)
+
+    def update_colnames(self):
+        # Change column names as desired, done before validating the columns,
+        # which is why we work on _orig_data
+        for orig_name, new_name in self._colname_map.items():
+            try:
+                self._orig_data.rename_column(orig_name, new_name)
+            except KeyError:
+                raise ValueError(f"data['{this_col}'] is missing from input "
+                                         + "data but listed in colname_map!")
+
+    def update_passbands(self):
+        # Converts filter names in filter column to AAVSO standard names
+        # Assumes _passband_map is in namespace.
+        for orig_pb, aavso_pb in self._passband_map.items():
+            mask = self['passband'] == orig_pb
+            self['passband'][mask] = aavso_pb
 
 
 class PhotometryData(BaseEnhancedTable):
@@ -173,6 +208,11 @@ class PhotometryData(BaseEnhancedTable):
     data: `astropy.table.QTable`
         A table containing all the instrumental aperture photometry results
         to be validated.
+
+    colname_map: dict, optional (Default: None)
+        A dictionary containing old column names as keys and new column
+        names as values.  This is used to automatically update the column
+        names to the desired names BEFORE the validation is performed.
 
     passband_map: dict, optional (Default: None)
         A dictionary containing instrumental passband names as keys and
@@ -273,7 +313,7 @@ class PhotometryData(BaseEnhancedTable):
     }
 
     def __init__(self, observatory, camera, data,
-                 passband_map=None, retain_user_computed=False):
+                 colname_map=None, passband_map=None, retain_user_computed=False):
         # Set attributes describing the observatory and camera as well as corrections to
         # passband names.
         self.observatory = observatory.copy()
@@ -302,7 +342,7 @@ class PhotometryData(BaseEnhancedTable):
                                  + f" but it's {data[this_col].unit}).")
 
         # Convert input data to QTable (while also checking for required columns)
-        super().__init__(self.phot_descript, data=data)
+        super().__init__(self.phot_descript, data=data, colname_map=colname_map)
 
         # Compute additional columns (not done yet)
         computed_columns = ['aperture_area', 'annulus_area', 'snr', 'bjd', 'night',
@@ -376,13 +416,6 @@ class PhotometryData(BaseEnhancedTable):
         # Apply the filter/passband name update
         if passband_map is not None:
             self.update_passbands()
-
-
-    def update_passbands(self):
-        # Converts filter names in filter column to AAVSO standard names
-        for orig_pb, aavso_pb in self._passband_map.items():
-            mask = self['passband'] == orig_pb
-            self['passband'][mask] = aavso_pb
 
     def add_bjd_col(self):
         """
@@ -476,28 +509,11 @@ class CatalogData(BaseEnhancedTable):
         # Set attributes
         self.name = str(name)
         self.data_source = str(data_source)
-        self._colname_map = colname_map
         self._passband_map = passband_map
-        self._orig_data = data.copy()
-
-        # Rename columns if needed
-        if colname_map is not None:
-            self.update_colnames()
 
         # Convert input data to QTable (while also checking for required columns)
-        super().__init__(self.catalog_descript, data=self._orig_data)
+        super().__init__(self.catalog_descript, data=data, colname_map=colname_map)
 
         # Apply the filter/passband name update
         if passband_map is not None:
             self.update_passbands()
-
-    def update_colnames(self):
-        # Change column names as desired
-        for orig_name, new_name in self._colname_map.items():
-            self._orig_data.rename_column(orig_name, new_name)
-
-    def update_passbands(self):
-        # Converts filter names in filter column to AAVSO standard names
-        for orig_pb, aavso_pb in self._passband_map.items():
-            mask = self['passband'] == orig_pb
-            self['passband'][mask] = aavso_pb
