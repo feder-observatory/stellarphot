@@ -1,0 +1,48 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: star_id, datatype: int64}
+# - {name: xcenter, unit: pix, datatype: float64}
+# - {name: ycenter, unit: pix, datatype: float64}
+# - {name: aperture, unit: pix, datatype: float64}
+# - {name: annulus_inner, unit: pix, datatype: float64}
+# - {name: annulus_outer, unit: pix, datatype: float64}
+# - {name: ra, unit: deg, datatype: float64}
+# - {name: dec, unit: deg, datatype: float64}
+# meta: !!omap
+# - __serialized_columns__:
+#     annulus_inner:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: &id001 !astropy.units.Unit {unit: pix}
+#       value: !astropy.table.SerializedColumn {name: annulus_inner}
+#     annulus_outer:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
+#       value: !astropy.table.SerializedColumn {name: annulus_outer}
+#     aperture:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
+#       value: !astropy.table.SerializedColumn {name: aperture}
+#     dec:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: &id002 !astropy.units.Unit {unit: deg}
+#       value: !astropy.table.SerializedColumn {name: dec}
+#     ra:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id002
+#       value: !astropy.table.SerializedColumn {name: ra}
+#     xcenter:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
+#       value: !astropy.table.SerializedColumn {name: xcenter}
+#     ycenter:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
+#       value: !astropy.table.SerializedColumn {name: ycenter}
+# schema: astropy-2.0
+star_id xcenter ycenter aperture annulus_inner annulus_outer ra dec
+0 179.88267689095954 808.5079479467544 5.0 10.0 15.0 64.94007338128334 -48.62501010006363
+1 2.8986987407962905 356.6918996977555 5.0 10.0 15.0 344.59308367897984 -76.52509679907699
+2 1145.7212119301291 2786.572233670581 5.0 10.0 15.0 286.07915840871675 -71.54715646023539
+3 800.0865788482392 34.97048198212466 5.0 10.0 15.0 42.019560668286296 63.68251559414114
+4 3465.1979884682514 481.01845477788055 5.0 10.0 15.0 272.3678986858055 -12.641448632197566

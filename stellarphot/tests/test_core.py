@@ -7,7 +7,8 @@ from astropy.io import ascii
 from astropy.coordinates import EarthLocation
 from astropy.utils.data import get_pkg_data_filename
 
-from stellarphot.core import Camera, BaseEnhancedTable, PhotometryData, CatalogData
+from stellarphot.core import (Camera, BaseEnhancedTable, PhotometryData,
+                              CatalogData, AperturesData)
 
 
 def test_camera_attributes():
@@ -139,6 +140,10 @@ for this_col in computed_columns:
 test_cat = ascii.read(get_pkg_data_filename('data/test_vsx_table.ecsv'), format='ecsv',
                       fast_reader=False)
 
+# Load test apertures
+test_ap_data = ascii.read(get_pkg_data_filename('data/test_aperture_table.ecsv'),
+                             format='ecsv',
+                             fast_reader=False)
 
 def test_base_enhanced_table_blank():
     # This should raise error because you are attempting a blank data set
@@ -217,14 +222,14 @@ def test_photometry_inconsistent_count_units():
 def test_photometry_inconsistent_badunits():
     with pytest.raises(ValueError):
         phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m,
-                                   passband_map=feder_passbands, 
+                                   passband_map=feder_passbands,
                                    data=testphot_goodCounts)
 
 
 def test_photometry_inconsistent_computed_col_exists():
     with pytest.raises(ValueError):
         phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m,
-                                   passband_map=feder_passbands, 
+                                   passband_map=feder_passbands,
                                    data=testphot_goodUnits)
 
     phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m,
@@ -245,9 +250,9 @@ def test_catalog_missing_col():
 
 def test_catalog_colname_map():
     # Map column names
-    vsx_colname_map = {'Name':'id', 'RAJ2000':'ra', 'DEJ2000':'dec', 'max':'mag', 
+    vsx_colname_map = {'Name':'id', 'RAJ2000':'ra', 'DEJ2000':'dec', 'max':'mag',
                        'n_max':'passband'}
-    catalog_dat = CatalogData(data=test_cat, name="VSX", data_source="Vizier", 
+    catalog_dat = CatalogData(data=test_cat, name="VSX", data_source="Vizier",
                               colname_map=vsx_colname_map)
 
     assert catalog_dat['id'][0] == 'ASASSN-V J000052.03+002216.6'
@@ -256,10 +261,59 @@ def test_catalog_colname_map():
 
 def test_catalog_bandpassmap():
     # Map column and bandpass names
-    vsx_colname_map = {'Name':'id', 'RAJ2000':'ra', 'DEJ2000':'dec', 'max':'mag', 
+    vsx_colname_map = {'Name':'id', 'RAJ2000':'ra', 'DEJ2000':'dec', 'max':'mag',
                        'n_max':'passband'}
     passband_map = {'g' :'SG', 'r':'SR'}
-    catalog_dat = CatalogData(data=test_cat, name="VSX", data_source="Vizier", 
+    catalog_dat = CatalogData(data=test_cat, name="VSX", data_source="Vizier",
                               colname_map=vsx_colname_map, passband_map=passband_map)
 
     assert catalog_dat['passband'][0] == 'SG'
+
+
+def test_apertures():
+    aper_test = AperturesData(data=test_ap_data, colname_map=None)
+    assert aper_test['star_id'][0] == 0
+    assert int(aper_test['aperture'][2].value) == 5
+    assert int(aper_test['annulus_inner'][3].value) == 10
+    assert (aper_test['annulus_outer'][4].value) == 15
+
+
+def test_apertures_no_skypos():
+    test_ap_data2 = test_ap_data.copy()
+    del test_ap_data2['ra']
+    del test_ap_data2['dec']
+    aper_test = AperturesData(data=test_ap_data2, colname_map=None)
+    assert aper_test['star_id'][0] == 0
+    assert int(aper_test['aperture'][2].value) == 5
+    assert int(aper_test['annulus_inner'][3].value) == 10
+    assert (aper_test['annulus_outer'][4].value) == 15
+    assert np.isnan(aper_test['ra'][4])
+    assert np.isnan(aper_test['dec'][2])
+
+
+def test_apertures_no_imgpos():
+    test_ap_data3 = test_ap_data.copy()
+    del test_ap_data3['xcenter']
+    del test_ap_data3['ycenter']
+    aper_test = AperturesData(data=test_ap_data3, colname_map=None)
+    assert aper_test['star_id'][0] == 0
+    assert int(aper_test['aperture'][2].value) == 5
+    assert int(aper_test['annulus_inner'][3].value) == 10
+    assert (aper_test['annulus_outer'][4].value) == 15
+    assert np.isnan(aper_test['xcenter'][4])
+    assert np.isnan(aper_test['ycenter'][2])
+
+
+def test_apertures_missing_cols():
+    test_ap_data4 = test_ap_data.copy()
+    del test_ap_data4['ra']
+    del test_ap_data4['dec']
+    del test_ap_data4['xcenter']
+    del test_ap_data4['ycenter']
+    with pytest.raises(ValueError):
+        aper_test = AperturesData(data=test_ap_data4, colname_map=None)
+
+    test_ap_data5 = test_ap_data.copy()
+    del test_ap_data5['aperture']
+    with pytest.raises(ValueError):
+        aper_test = AperturesData(data=test_ap_data5, colname_map=None)
