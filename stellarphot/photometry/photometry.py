@@ -274,7 +274,8 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
                             bjd_coords=None, observatory_location=None,
                             fwhm_by_fit=True):
     """
-    Calculate several columns for photometry table.
+    Calculate several columns for photometry table which are appended to the
+    input phot.
 
     Parameters
     ----------
@@ -315,12 +316,6 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
         If ``True``, the FWHM will be calculated by fitting a Gaussian to
         the star. If ``False``, the FWHM will be calculated by finding the
         second moments of the light distribution. Default is ``True``.
-
-    Returns
-    -------
-
-    None
-        The input table is modified in place.
     """
     phot.rename_column('aperture_sum_0', 'aperture_sum')
     phot['aperture_sum'].unit = u.adu
@@ -423,18 +418,18 @@ def photometry_on_directory(directory_with_images, object_of_interest,
         sources, in degrees. The second should be the declination of
         the sources, in degrees.
 
-    aperture_rad : int
+    aperture_rad : float
         Radius of the aperture to use when performing photometry.
 
-    inner_annulus : int
+    inner_annulus : float
         Inner radius of annulus to use in for performing local sky
         subtraction.
 
-    outer_annulus : int
+    outer_annulus : float
         Outer radius of annulus to use in for performing local sky
         subtraction.
 
-    max_adu : int
+    max_adu : float
         Maximum allowed pixel value before a source is considered
         saturated.
 
@@ -443,18 +438,6 @@ def photometry_on_directory(directory_with_images, object_of_interest,
 
     camera : `~stellarphot.Camera`
         Camera object which has gain, read noise and dark current set.
-
-    gain : float
-        Gain, in electrons/ADU, of the camera that took the image. The gain
-        is used in calculating the instrumental magnitude.
-
-    read_noise : float
-        Read noise of the camera in electrons. Used in the CCD equation
-        to calculate error.
-
-    dark_current : float
-        Dark current, in electron/sec. Used in the CCD equation
-        to calculate error.
 
     bjd_coords : `astropy.coordinates.SkyCoord`
         Coordinates of the object of interest in the Barycentric Julian Date

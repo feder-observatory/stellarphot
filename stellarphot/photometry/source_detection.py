@@ -141,7 +141,10 @@ def compute_fwhm(ccd, sources, fwhm_estimate=5,
 
 def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
                      threshold=10.0, find_fwhm=True,
-                     sky_per_pix_avg=None):
+                     sky_per_pix_avg=None,
+                     add_apertures=True, aperture_method='fixed',
+                     aperture=5, aperture_fac=1.5,
+                     annulus_gap=5, annulus_thickness=5):
     """
     Returns an astropy table containing the position of sources
     within the image identified using `photutils.DAOStarFinder` algorithm.
@@ -152,41 +155,81 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
     ccd : `astropy.nddata.CCDData`
         The CCD Image array.
 
-    fwhm : float, optional
-        Full-width half-max of stars in the image.
+    fwhm : float, optional (default=8)
+        Initial estimate of full-width half-max of stars in the image,
+        in pixels.
 
-    sigma : float, optional.
+    sigma : float, optional. (default=3.0)
         The number of standard deviations to use as the lower and
         upper clipping limit.
 
-    iters : int, optional
+    iters : int, optional (default=5)
         The number of iterations to perform sigma clipping
 
-    threshold : float, optional.
+    threshold : float, optional. (default=10.0)
         The absolute image value above which to select sources.
 
-    find_fwhm : bool, optional
+    find_fwhm : bool, optional (default=True)
         If ``True``, estimate the FWHM of each source by fitting a 2D Gaussian
         to it. If ``False``, estimate the FWHM of each source by computing
         the second moments of its light distribution.
 
-    sky_per_pix_avg : float or array-like of float
-        Sky background to subtract before centroiding.
+    sky_per_pix_avg : float or array-like of float or None, optional (default=None)
+        Sky background to subtract before centroiding.   Only used if compute_apertures
+        is ``True``.
+
+    add_apertures : bool, optional (default=True)
+        If ``True``, add the aperture sizes for each source.  If ``False``,
+        aperture and annulus columns are left with NaN values.
+
+    aperture_method : 'fixed' or 'fwhm', optional (default='fixed')
+        Method to use for determining the aperture size.  If 'fixed',
+        used the fixed aperture size given by ``aperture``.  If 'fwhm',
+        use the ``aperture_fac` times the average FWHM of the sources as
+        determined by ``find_fwhm`` and ``compute_fwhm``.  If ``find_fwhm``
+        is ``False``, this choice will use ``fwhm`` as the FWHM for all sources.
+
+    aperture : int, optional (default=5)
+        Aperture radius in pixels if ``compute_apertures`` is ``True`` and
+        ``aperture_method`` is 'fixed'. Ignored otherwise.
+
+    aperture_fac : float, optional (default=1.5)
+        Multiplicative factor to scale the average FWHM to get the aperture if
+        ``compute_apertures`` is ``True`` and ``aperture_method`` is 'fwhm'.
+        Ignored otherwise.
+
+    annulus gap : int, optional (default=5)
+        The gap between the aperture and the inner edge of the annulus for
+        aperture photometry.  Ignored if ``compute_apertures`` is ``False``.
+
+    annulus_thickness : int, optional (default=5)
+        The radial thickness of the annulus for aperture photometry.
+        Ignored if ``compute_apertures`` is ``False``.
 
     Returns
     -------
 
-    sources: `astropy.table.Table`
+    sources: `stellardev.AperturesData`
         A table of the positions of sources in the image.  If `find_fwhm` is
-        ``True``, includes a column called ``FWHM``.
+        ``True``, includes columns for `fwhm_x`, `fwhm_y, and `width`.  If
+        `add_apertures` is ``False``. the columns for `aperture`, `annulus_inner`,
+        and `annulus_outer` are left with NaN values.  If the input CCDData
+        object has WCS information, the columns `ra` and `dec` are also
+        populated, otherwise they are set to NaN.
     """
+
+    # Identify sources using DAOStarFinder
     mean, median, std = sigma_clipped_stats(ccd, sigma=sigma, maxiters=iters)
     daofind = DAOStarFinder(fwhm=fwhm, threshold=threshold * std)
     sources = daofind(ccd - median)
     print(sources)
+
+    # If requested, compute the FWHM of each source
     if find_fwhm:
         x, y = compute_fwhm(ccd, sources, fwhm_estimate=fwhm,
                             x_column='xcentroid', y_column='ycentroid',
                             sky_per_pix_avg=sky_per_pix_avg)
-        sources['FWHM'] = (x + y) / 2
+        sources['fwhm_x'] = x * u.pix
+        sources['fwhm_y'] = y * u.pix
+        sources['width'] = u.pix * (x + y) / 2 # Average of x and y FWHM
     return sources
