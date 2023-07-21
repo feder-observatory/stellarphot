@@ -75,10 +75,14 @@ def test_detect_source_number_location():
     fake_image = FakeImage()
     sources = fake_image.sources
     print(sources)
+    # Pass only one value for the sky background for source detection
+    sky_per_pix = sources['sky_per_pix_avg'].mean()
     found_sources = source_detection(fake_image.image,
                                      fwhm=2 * sources['x_stddev'].mean(),
-                                     threshold=10,
-                                     sky_per_pix_avg=sources['sky_per_pix_avg'])
+                                     threshold=10, add_apertures=True,
+                                     aperture = 5,
+                                     annulus_gap = 5, annulus_thickness = 5,
+                                     sky_per_pix_avg=sky_per_pix)
     # Sort by flux so we can reliably match them
     sources.sort('amplitude')
     found_sources.sort('flux')

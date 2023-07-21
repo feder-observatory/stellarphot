@@ -206,7 +206,7 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
         ``compute_apertures`` is ``True`` and ``aperture_method`` is 'fwhm'.
         Ignored otherwise.
 
-    annulus gap : int, optional (default=5)
+    annulus_gap : int, optional (default=5)
         The gap between the aperture and the inner edge of the annulus for
         aperture photometry.  Ignored if ``compute_apertures`` is ``False``.
 
