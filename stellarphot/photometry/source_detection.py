@@ -195,7 +195,7 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
         used the fixed aperture size given by ``aperture``.  If 'fwhm',
         use the ``aperture_fac` times the average FWHM of the sources as
         determined by ``find_fwhm`` and ``compute_fwhm``.  If ``find_fwhm``
-        is ``False``, this choice will use ``fwhm`` as the FWHM for all sources.
+        is ``False``, function will use ``fwhm`` as the FWHM for all sources.
 
     aperture : int, optional (default=5)
         Aperture radius in pixels if ``compute_apertures`` is ``True`` and
@@ -235,7 +235,8 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
 
     # Identify sources applying DAOStarFinder to a "sky subtracted"
     # image.
-    print(f"source_detection: threshold set to {threshold}* standard deviation ({std:.4f})")
+    print(f"source_detection: threshold set to {threshold}* standard deviation "
+          f"({std:.4f})")
     daofind = DAOStarFinder(fwhm=fwhm, threshold = threshold * std)
     sources = daofind(ccd - sky_per_pix_avg)
     src_cnt = len(sources)
@@ -244,7 +245,8 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
 
     # If image as WCS, compute RA and Dec of each source
     try:
-        sources['ra'], sources['dec'] = ccd.wcs.all_pix2world(sources['xcentroid'], sources['ycentroid'], 0)
+        sources['ra'], sources['dec'] = ccd.wcs.all_pix2world(sources['xcentroid'],
+                                                              sources['ycentroid'], 0)
     except AttributeError:
         # No WCS, so add empty columns
         sources['ra'] = np.nan * np.ones(src_cnt)
@@ -273,13 +275,18 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
     # Add apertures for each source
     if add_apertures:
         if aperture_method == 'fixed':
-            sources['aperture'] = aperture * np.ones(src_cnt)
+            aperture = aperture 
         elif aperture_method == 'fwhm':
-            sources['aperture'] = aperture_fac * sources['width'] * np.ones(src_cnt)
+            aperture = aperture_fac
         else:
-            raise ValueError(f"source_detection: aperture_method {aperture_method} not recognized")
-        sources['annulus_inner'] = aperture + annulus_gap * np.ones(src_cnt)
-        sources['annulus_outer'] = sources['annulus_inner'] + annulus_thickness * np.ones(src_cnt)
+            raise ValueError(f"source_detection: aperture_method {aperture_method} not"
+                             "recognized")
+        annulus_inner = aperture + annulus_gap
+        annulus_outer = annulus_inner + annulus_thickness
+    else: # Leave aperture/annulus entry empty
+        aperture = None
+        annulus_inner = None
+        annulus_outer = None
 
     # Convert sources to ApertureData object by adding
     # unirs to the columns
@@ -298,8 +305,9 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
     colnamemap = {'id' : 'star_id',
                   'xcentroid' : 'xcenter',
                   'ycentroid' : 'ycenter'}
-    
-    ap_data = AperturesData(sources, colname_map=colnamemap)
+
+    ap_data = AperturesData(sources, aperture=aperture, annulus_inner=annulus_inner,
+                            annulus_outer=annulus_outer, colname_map=colnamemap)
     return ap_data
 
 
