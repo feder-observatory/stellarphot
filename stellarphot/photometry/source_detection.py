@@ -226,9 +226,16 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
         populated, otherwise they are set to NaN.
     """
 
+    # If user uses units for fwhm or sky_per_pix_avg, convert to value
+    if isinstance(sky_per_pix_avg, u.Quantity):
+        sky_per_pix_avg = sky_per_pix_avg.value
+    if isinstance(fwhm, u.Quantity):
+        fwhm = fwhm.value
+
     # Get statistics of the input image (and use them to
     # estimate the sky background if not provided)
     mean, median, std = sigma_clipped_stats(ccd, sigma=sigma, maxiters=iters)
+    print(f"source_detection: mean={mean:.4f}, median={median:.4f}, std={std:.4f}")
     if sky_per_pix_avg is None:
         sky_per_pix_avg = mean
         print(f"source_detection: sky_per_pix_avg set to {sky_per_pix_avg:.4f}")
@@ -237,8 +244,11 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
     # image.
     print(f"source_detection: threshold set to {threshold}* standard deviation "
           f"({std:.4f})")
-    daofind = DAOStarFinder(fwhm=fwhm, threshold = threshold * std)
-    sources = daofind(ccd - sky_per_pix_avg)
+    print(f"source_detection: Assuming fwm of {fwhm} for DAOStarFinder")
+    daofind = DAOStarFinder(fwhm = fwhm, threshold = threshold * std)
+    sources = daofind(ccd - mean)
+    # daofind should be run on background subtracted image
+    # (fails, or at least returns garbage, if sky_per_pix_avg is too low)
     src_cnt = len(sources)
     print(f"source_detection: {src_cnt} sources identified.")
     #print(sources)
@@ -277,9 +287,11 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
         if aperture_method == 'fixed':
             aperture = aperture
         elif aperture_method == 'fwhm':
-            masked_data = np.ma.masked_array(sources['width'].data, np.isnan(sources['width'].data))
+            masked_data = np.ma.masked_array(sources['width'].data,
+                                             np.isnan(sources['width'].data))
             avg_fwhm = np.ma.average(masked_data)
-            print(f"source_detection: average fwhm is {avg_fwhm}, setting aperture to {aperture_fac}*{avg_fwhm}")
+            print(f"source_detection: average fwhm is {avg_fwhm}, setting aperture to "
+                  f"{aperture_fac}*{avg_fwhm}")
             aperture = avg_fwhm * aperture_fac
         else:
             raise ValueError(f"source_detection: aperture_method {aperture_method} not"
@@ -299,6 +311,9 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
         'dec' : u.deg,
         'xcentroid' : u.pix,
         'ycentroid' : u.pix,
+        'fwhm_x' : u.pix,
+        'fwhm_y' : u.pix,
+        'width' : u.pix
     }
     sources = Table(data=sources, units=units_dict)
     # Rename columns to match ApertureData
