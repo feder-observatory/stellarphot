@@ -594,6 +594,9 @@ class AperturesData(BaseEnhancedTable):
                     + f"is type {type(self._colname_map)}).")
 
             self._update_colnames(self._colname_map, self._data)
+            
+            # No need to repeat this
+            self._colname_map = None
         else:
             self._colname_map = None
 
@@ -617,7 +620,7 @@ class AperturesData(BaseEnhancedTable):
         # Convert input data to QTable (while also checking for required columns)
         super().__init__(self.aperture_descript,
                          data=self._data,
-                         colname_map=self._colname_map)
+                         colname_map=None)
 
         # Purge unneeded data
         del self._data
