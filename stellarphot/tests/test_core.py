@@ -100,7 +100,7 @@ testphot_goodCounts = testphot_goodTime.copy()
 for this_col in counts_columns:
     testphot_goodCounts[this_col].unit = u.adu
 
-# Fix all the units
+# Fix all the units for PhotometryData
 phot_descript = {
     'star_id' : None,
     'ra' : u.deg,
@@ -270,6 +270,11 @@ def test_catalog_bandpassmap():
     assert catalog_dat['passband'][0] == 'SG'
 
 
+# Define an aperture/annuli
+aperture = 5 * u.pixel
+annulus_inner = 10 * u.pixel
+annulus_outer = 15 * u.pixel
+
 def test_apertures():
     aper_test = AperturesData(data=test_ap_data, colname_map=None)
     assert aper_test['star_id'][0] == 0
@@ -314,6 +319,27 @@ def test_apertures_missing_cols():
         aper_test = AperturesData(data=test_ap_data4, colname_map=None)
 
     test_ap_data5 = test_ap_data.copy()
-    del test_ap_data5['aperture']
+    del test_ap_data5['star_id']
     with pytest.raises(ValueError):
         aper_test = AperturesData(data=test_ap_data5, colname_map=None)
+
+
+def test_apertures_bad_apertures():
+    with pytest.raises(TypeError):
+        aper_test = AperturesData(data=test_ap_data, aperture = aperture.value,
+                                  colname_map=None)
+    with pytest.raises(TypeError):
+        aper_test = AperturesData(data=test_ap_data,
+                                  annulus_inner = annulus_inner.value, colname_map=None)
+    with pytest.raises(TypeError):
+        aper_test = AperturesData(data=test_ap_data,
+                                  annulus_outer = annulus_outer.value, colname_map=None)
+
+
+def test_apertures_stored_apertures():
+    aper_test = AperturesData(data=test_ap_data, aperture = aperture,
+                              annulus_inner = annulus_inner,
+                              annulus_outer = annulus_outer, colname_map=None)
+    assert aper_test.aperture == aperture
+    assert aper_test.annulus_inner == annulus_inner
+    assert aper_test.annulus_outer == annulus_outer
