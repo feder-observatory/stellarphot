@@ -275,9 +275,12 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
     # Add apertures for each source
     if add_apertures:
         if aperture_method == 'fixed':
-            aperture = aperture 
+            aperture = aperture
         elif aperture_method == 'fwhm':
-            aperture = aperture_fac
+            masked_data = np.ma.masked_array(sources['width'].data, np.isnan(sources['width'].data))
+            avg_fwhm = np.ma.average(masked_data)
+            print(f"source_detection: average fwhm is {avg_fwhm}, setting aperture to {aperture_fac}*{avg_fwhm}")
+            aperture = avg_fwhm * aperture_fac
         else:
             raise ValueError(f"source_detection: aperture_method {aperture_method} not"
                              "recognized")
@@ -296,9 +299,6 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
         'dec' : u.deg,
         'xcentroid' : u.pix,
         'ycentroid' : u.pix,
-        'aperture' : u.pix,
-        'annulus_inner' : u.pix,
-        'annulus_outer' : u.pix,
     }
     sources = Table(data=sources, units=units_dict)
     # Rename columns to match ApertureData
@@ -306,8 +306,10 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
                   'xcentroid' : 'xcenter',
                   'ycentroid' : 'ycenter'}
 
-    ap_data = AperturesData(sources, aperture=aperture, annulus_inner=annulus_inner,
-                            annulus_outer=annulus_outer, colname_map=colnamemap)
+    ap_data = AperturesData(sources, aperture=aperture*u.pixel,
+                            annulus_inner=annulus_inner*u.pixel,
+                            annulus_outer=annulus_outer*u.pixel,
+                            colname_map=colnamemap)
     return ap_data
 
 
