@@ -110,7 +110,6 @@ class BaseEnhancedTable(QTable):
         (can be None).  This is used to check the format of the input data
         table.  Columns will be output in the order of the keys in the dictionary
         with any additional columns tacked on the end. 
-        otherwise the key order is not guaranteed.
 
     data: `astropy.table.QTable`
         A table containing astronomical data of interest.  This table
