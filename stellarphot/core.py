@@ -94,12 +94,12 @@ class Camera:
 
 class BaseEnhancedTable(QTable):
     """
-    A class to validate an `~astropy.table.QTable` table of astronomical data during
+    A class to validate an `astropy.table.QTable` table of astronomical data during
     creation and store metadata as attributes.
 
-    This is based on the `~astropy.timeseries.QTable` class. We extend this to
+    This is based on the `astropy.timeseries.QTable` class. We extend this to
     allow for checking of the units for the columns to match the table_description,
-    but what this returns is just an `~astropy.table.QTable`.
+    but what this returns is just an `astropy.table.QTable`.
 
     Parameters
     ----------
@@ -128,6 +128,7 @@ class BaseEnhancedTable(QTable):
     """
 
     def __init__(self, table_description, data, colname_map=None):
+        # Make copy of input data
         orig_data = data.copy()
 
         # Confirm a proper table description is passed (that is dict-like with keys and
@@ -156,7 +157,7 @@ class BaseEnhancedTable(QTable):
                 self._update_colnames(self._colname_map,orig_data)
 
             # Validate the columns
-            self._validate_columns(orig_data, self._table_description)
+            self._validate_columns(orig_data)
 
             # Revise column order to be in the order listed in table_description
             # with unlisted columns tacked on the end
@@ -171,13 +172,13 @@ class BaseEnhancedTable(QTable):
             super().__init__(data=orig_data)
 
 
-    def _validate_columns(self, data, description):
+    def _validate_columns(self, data):
         # Check the format of the data table matches the table_description by
         # checking each column listed in table_description exists and is the
         # correct units.
         # NOTE: This ignores any columns not in the table_description, it
         # does not remove them.
-        for this_col, this_unit in description.items():
+        for this_col, this_unit in self._table_description.items():
             if this_unit is not None:
                 # Check type
                 try:
@@ -237,7 +238,7 @@ class PhotometryData(BaseEnhancedTable):
     colname_map: dict, optional (Default: None)
         A dictionary containing old column names as keys and new column
         names as values.  This is used to automatically update the column
-        names to the desired names BEFORE the validation is performed.
+        names to the desired names before the validation is performed.
 
     passband_map: dict, optional (Default: None)
         A dictionary containing instrumental passband names as keys and
@@ -375,7 +376,7 @@ class PhotometryData(BaseEnhancedTable):
         super().__init__(self.phot_descript, data=data, colname_map=colname_map)
 
         # Compute additional columns (not done yet)
-        computed_columns = [ 'bjd', 'night']
+        computed_columns = ['bjd', 'night']
 
         # Check if columns exist already, if they do and retain_user_computed is False,
         # throw an error.
@@ -445,7 +446,7 @@ class PhotometryData(BaseEnhancedTable):
 
 class CatalogData(BaseEnhancedTable):
     """
-    A base class to hold astronomical catalog data while performing validation
+    A class to hold astronomical catalog data while performing validation
     to confirm the minumum required columns ('id', 'ra', and 'dec') are present
     and have the correct units.
 
@@ -526,7 +527,7 @@ class CatalogData(BaseEnhancedTable):
 
 class AperturesData(BaseEnhancedTable):
     """
-    A base class to hold information on the selected apertures to pass to
+    A class to hold information on the selected apertures to pass to
     aperture photometry routines.
 
     Parameters
@@ -550,7 +551,10 @@ class AperturesData(BaseEnhancedTable):
         names as values.  This is used to automatically update the column
         names to the desired names BEFORE the validation is performed.
 
-    USAGE NOTES: If you input a data file, it MUST contain the following columns
+    NOTES
+    -----
+
+    If you input a data file, it MUST contain the following columns
     in the following column names with the following units (if applicable).  The
     'consistent count units' simply means it can be any unit for counts, but it
     must be the same for all the columns listed.
