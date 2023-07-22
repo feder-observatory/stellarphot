@@ -109,8 +109,7 @@ class BaseEnhancedTable(QTable):
         and the value corresponding to each key is the required dtype
         (can be None).  This is used to check the format of the input data
         table.  Columns will be output in the order of the keys in the dictionary
-        with any additional columns tacked on the end. This requires python >=3.7
-        otherwise the key order is not guaranteed.
+        with any additional columns tacked on the end. 
 
     data: `astropy.table.QTable`
         A table containing astronomical data of interest.  This table
