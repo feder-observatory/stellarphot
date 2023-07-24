@@ -232,8 +232,10 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
     if isinstance(fwhm, u.Quantity):
         fwhm = fwhm.value
 
-    # Get statistics of the input image (and use them to
-    # estimate the sky background if not provided)
+    # Get statistics of the input image (and use them to estimate the sky background
+    # if not provided).  Using clipped stats should hopefully get rid of any
+    # bright stars that might be in the image, so the mean should be a good
+    # estimate of the sky background.
     mean, median, std = sigma_clipped_stats(ccd, sigma=sigma, maxiters=iters)
     print(f"source_detection: mean={mean:.4f}, median={median:.4f}, std={std:.4f}")
     if sky_per_pix_avg is None:
@@ -244,9 +246,9 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
     # image.
     print(f"source_detection: threshold set to {threshold}* standard deviation "
           f"({std:.4f})")
-    print(f"source_detection: Assuming fwm of {fwhm} for DAOStarFinder")
+    print(f"source_detection: Assuming fwhm of {fwhm} for DAOStarFinder")
     daofind = DAOStarFinder(fwhm = fwhm, threshold = threshold * std)
-    sources = daofind(ccd - mean)
+    sources = daofind(ccd - sky_per_pix_avg)
     # daofind should be run on background subtracted image
     # (fails, or at least returns garbage, if sky_per_pix_avg is too low)
     src_cnt = len(sources)

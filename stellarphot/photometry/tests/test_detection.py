@@ -34,7 +34,8 @@ class FakeImage:
         self._noise = make_noise_image(self._stars.shape,
                                        mean=self.mean_noise,
                                        stddev=noise_dev)
-        self._sources['sky_per_pix_avg'] = noise_dev
+        # Sky background per pixel should be the mean level of the noise.
+        self._sources['sky_per_pix_avg'] = self.mean_noise
 
     @property
     def sources(self):
