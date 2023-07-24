@@ -145,7 +145,7 @@ def compute_fwhm(ccd, sources, fwhm_estimate=5,
 
 def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
                      threshold=10.0, find_fwhm=True,
-                     sky_per_pix_avg=0):
+                     sky_per_pix_avg=0, padding=0):
     """
     Returns an SourceListData object containing the position of sources
     within the image identified using `photutils.DAOStarFinder` algorithm.
@@ -182,6 +182,10 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
         it will be estimated using the mean of the sigma_clipped_stats
         of the image.
 
+    padding : int, optional (default=0)
+        Distance from the edge of the image to ignore when searching for
+        sources.
+
     Returns
     -------
 
@@ -213,13 +217,24 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
     print(f"source_detection: threshold set to {threshold}* standard deviation "
           f"({std:.4f})")
     print(f"source_detection: Assuming fwhm of {fwhm} for DAOStarFinder")
-    daofind = DAOStarFinder(fwhm = fwhm, threshold = threshold * std)
-    sources = daofind(ccd - sky_per_pix_avg)
     # daofind should be run on background subtracted image
     # (fails, or at least returns garbage, if sky_per_pix_avg is too low)
+    daofind = DAOStarFinder(fwhm = fwhm, threshold = threshold * std)
+    sources = daofind(ccd - sky_per_pix_avg)
+
+    # Identify sources near the edge of the image and remove them
+    # from the source list.
+    padding_smt = ""
+    if (padding > 0):
+        src_cnt0 = len(sources)
+        y_lim, x_lim = ccd.shape
+        keep = ((sources['xcentroid'].value >= padding) & (sources['ycentroid'].value >= padding) &
+                (sources['xcentroid'].value < x_lim-padding) & (sources['ycentroid'].value < y_lim-padding))
+        sources = sources[keep]
+        padding_smt = f" (after removing {src_cnt0-len(sources)} sources near the edge)"
+
     src_cnt = len(sources)
-    print(f"source_detection: {src_cnt} sources identified.")
-    #print(sources)
+    print(f"source_detection: {src_cnt} sources identified{padding_smt}.")
 
     # If image as WCS, compute RA and Dec of each source
     try:

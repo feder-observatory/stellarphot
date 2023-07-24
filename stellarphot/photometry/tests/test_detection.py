@@ -102,6 +102,25 @@ def test_detect_source_number_location():
                                    rtol=1e-5, atol=0.05)
 
 
+def test_detect_source_with_padding():
+    """
+    Make sure we detect the sources in the input table....
+    """
+    fake_image = FakeImage()
+    sources = QTable(fake_image.sources, units={'x_mean':u.pixel, 'y_mean':u.pixel,
+                                                'x_stddev':u.pixel, 'y_stddev':u.pixel})
+    # print(sources)
+    # Pass only one value for the sky background for source detection
+    sky_per_pix = sources['sky_per_pix_avg'].mean()
+    found_sources = source_detection(fake_image.image,
+                                     fwhm=2 * sources['x_stddev'].mean(),
+                                     threshold=10,
+                                     sky_per_pix_avg=sky_per_pix, padding=50)
+
+    # Did we drop one source because it was too close to the edge?
+    assert len(sources) - 1 == len(found_sources)
+
+
 ##
 ## Disabled BOTH FINAL TESTS until photutils_stellar_photometry re-written
 ## to access source_detection output properly.
