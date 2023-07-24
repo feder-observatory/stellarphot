@@ -81,7 +81,7 @@ photcoltypes = ['int', 'float', 'float', 'float', 'float', 'float', 'float', 'fl
 photcolunits = [None, u.pix, u.pix, u.adu, None, u.deg, u.deg, u.adu, u.adu, u.adu,
                 None, None, None, u.pix, u.pix*u.pix, u.pix, u.pix, u.pix*u.pix, u.s,
                 None, None, u.adu, None, None, None, None, None, None, None,
-                u.electrons, None, u.adu]
+                u.electron, None, u.adu]
 
 # Define initial bad table
 testphot_data = Table(photdata, names=photcolnames, dtype=photcoltypes,
@@ -95,7 +95,7 @@ testphot_goodTime['date-obs'] = Column(data=Time(testphot_goodTime['date-obs'],
 
 # Fix the units for the counts-related columns
 counts_columns = ['aperture_sum', 'annulus_sum', 'sky_per_pix_avg', 'sky_per_pix_med',
-                          'sky_per_pix_std', 'aperture_net_cnts', 'noise']
+                          'sky_per_pix_std', 'aperture_net_cnts', 'noise_cnts']
 testphot_goodCounts = testphot_goodTime.copy()
 for this_col in counts_columns:
     testphot_goodCounts[this_col].unit = u.adu
@@ -120,7 +120,7 @@ phot_descript = {
     'sky_per_pix_std' : None,
     'aperture_net_cnts' : None,
     'noise_cnts' : None,
-    'noise_electrons' : u.electrons,
+    'noise_electrons' : u.electron,
     'exposure' : u.second,
     'date-obs' : None,
     'airmass' : None,

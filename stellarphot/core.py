@@ -289,7 +289,7 @@ class PhotometryData(BaseEnhancedTable):
     sky_per_pix_std       consistent count units
     aperture_net_cnts     consistent count units
     noise_cnts            consistent count units
-    noise_electrons       u.electrons
+    noise_electrons       u.electron
     snr                   None
     mag_inst              None
     mag_error             None
@@ -334,7 +334,7 @@ class PhotometryData(BaseEnhancedTable):
         'sky_per_pix_std' : None,
         'aperture_net_cnts' : None,
         'noise_cnts' : None,
-        'noise_electrons' : u.electrons,
+        'noise_electrons' : u.electron,
         'snr' : None,
         'mag_inst' : None,
         'mag_error' : None,
