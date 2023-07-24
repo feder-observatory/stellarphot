@@ -138,7 +138,8 @@ class BaseEnhancedTable(QTable):
         # Check data before copying to avoid recusive loop and non-QTable
         # data input.
         if not isinstance(data, Table) or isinstance(data, BaseEnhancedTable):
-            raise TypeError("You must provide an astropy Table as data (input data is "
+            raise TypeError("You must provide an astropy Table and NOT a "
+                            "BaseEnhancedTable as data (input data is "
                             f"type {type(data)}).")
         else:
             # Copy data before potential modification
@@ -343,18 +344,13 @@ class PhotometryData(BaseEnhancedTable):
     }
 
     def __init__(self, observatory, camera, data,
-                 colname_map=None, passband_map=None, retain_user_computed=False, 
+                 colname_map=None, passband_map=None, retain_user_computed=False,
                  **kwargs):
         # Set attributes describing the observatory and camera as well as corrections to
         # passband names.
         self.observatory = observatory.copy()
         self.camera = camera.copy()
         self._passband_map = passband_map.copy()
-
-        # Check data before copying to avoid recusive loop and non-QTable
-        # data input.
-        if not isinstance(data, Table) or isinstance(data, BaseEnhancedTable):
-            raise TypeError("You must provide an astropy Table as data.")
 
         # Check the time column is correct format and scale
         try:
@@ -517,17 +513,12 @@ class CatalogData(BaseEnhancedTable):
         'passband' : None
     }
 
-    def __init__(self, data, name, data_source, colname_map=None, passband_map=None, 
+    def __init__(self, data, name, data_source, colname_map=None, passband_map=None,
                  **kwargs):
         # Set attributes
         self.name = str(name)
         self.data_source = str(data_source)
         self._passband_map = passband_map
-
-        # Check data before copying to avoid recusive loop and non-QTable
-        # data input.
-        if not isinstance(data, Table) or isinstance(data, BaseEnhancedTable):
-            raise TypeError("You must provide an astropy Table as data.")
 
         # Convert input data to QTable (while also checking for required columns)
         super().__init__(self.catalog_descript, data=data, colname_map=colname_map,
@@ -602,7 +593,8 @@ class SourceListData(BaseEnhancedTable):
         # Check data before copying to avoid recusive loop and non-QTable
         # data input.
         if not isinstance(data, Table) or isinstance(data, BaseEnhancedTable):
-            raise TypeError("You must provide an astropy Table as data.")
+            raise TypeError("You must provide an astropy Table (and not a "
+                            "BaseEnhancedTable) as data.")
 
         # Process inputs and save as needed
         data = data.copy()
