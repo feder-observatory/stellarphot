@@ -8,7 +8,7 @@ from astropy.coordinates import EarthLocation
 from astropy.utils.data import get_pkg_data_filename
 
 from stellarphot.core import (Camera, BaseEnhancedTable, PhotometryData,
-                              CatalogData, AperturesData)
+                              CatalogData, SourceListData)
 
 
 def test_camera_attributes():
@@ -141,7 +141,7 @@ test_cat = ascii.read(get_pkg_data_filename('data/test_vsx_table.ecsv'), format=
                       fast_reader=False)
 
 # Load test apertures
-test_ap_data = ascii.read(get_pkg_data_filename('data/test_aperture_table.ecsv'),
+test_sl_data = ascii.read(get_pkg_data_filename('data/test_sourcelist.ecsv'),
                              format='ecsv',
                              fast_reader=False)
 
@@ -270,76 +270,42 @@ def test_catalog_bandpassmap():
     assert catalog_dat['passband'][0] == 'SG'
 
 
-# Define an aperture/annuli
-aperture = 5 * u.pixel
-annulus_inner = 10 * u.pixel
-annulus_outer = 15 * u.pixel
-
-def test_apertures():
-    aper_test = AperturesData(data=test_ap_data, colname_map=None)
-    assert aper_test['star_id'][0] == 0
-    assert int(aper_test['aperture'][2].value) == 5
-    assert int(aper_test['annulus_inner'][3].value) == 10
-    assert (aper_test['annulus_outer'][4].value) == 15
+def test_sourcelist():
+    sl_test = SourceListData(data=test_sl_data, colname_map=None)
+    assert sl_test['star_id'][0] == 0
 
 
-def test_apertures_no_skypos():
-    test_ap_data2 = test_ap_data.copy()
-    del test_ap_data2['ra']
-    del test_ap_data2['dec']
-    aper_test = AperturesData(data=test_ap_data2, colname_map=None)
-    assert aper_test['star_id'][0] == 0
-    assert int(aper_test['aperture'][2].value) == 5
-    assert int(aper_test['annulus_inner'][3].value) == 10
-    assert (aper_test['annulus_outer'][4].value) == 15
-    assert np.isnan(aper_test['ra'][4])
-    assert np.isnan(aper_test['dec'][2])
+def test_sourcelist_no_skypos():
+    test_sl_data2 = test_sl_data.copy()
+    del test_sl_data2['ra']
+    del test_sl_data2['dec']
+    sl_test = SourceListData(data=test_sl_data2, colname_map=None)
+    assert sl_test['star_id'][0] == 0
+    assert np.isnan(sl_test['ra'][4])
+    assert np.isnan(sl_test['dec'][2])
 
 
-def test_apertures_no_imgpos():
-    test_ap_data3 = test_ap_data.copy()
-    del test_ap_data3['xcenter']
-    del test_ap_data3['ycenter']
-    aper_test = AperturesData(data=test_ap_data3, colname_map=None)
-    assert aper_test['star_id'][0] == 0
-    assert int(aper_test['aperture'][2].value) == 5
-    assert int(aper_test['annulus_inner'][3].value) == 10
-    assert (aper_test['annulus_outer'][4].value) == 15
-    assert np.isnan(aper_test['xcenter'][4])
-    assert np.isnan(aper_test['ycenter'][2])
+def test_sourcelist_no_imgpos():
+    test_sl_data3 = test_sl_data.copy()
+    del test_sl_data3['xcenter']
+    del test_sl_data3['ycenter']
+    sl_test = SourceListData(data=test_sl_data3, colname_map=None)
+    assert sl_test['star_id'][0] == 0
+    assert np.isnan(sl_test['xcenter'][4])
+    assert np.isnan(sl_test['ycenter'][2])
 
 
-def test_apertures_missing_cols():
-    test_ap_data4 = test_ap_data.copy()
-    del test_ap_data4['ra']
-    del test_ap_data4['dec']
-    del test_ap_data4['xcenter']
-    del test_ap_data4['ycenter']
+def test_sourcelist_missing_cols():
+    test_sl_data4 = test_sl_data.copy()
+    del test_sl_data4['ra']
+    del test_sl_data4['dec']
+    del test_sl_data4['xcenter']
+    del test_sl_data4['ycenter']
     with pytest.raises(ValueError):
-        aper_test = AperturesData(data=test_ap_data4, colname_map=None)
+        sl_test = SourceListData(data=test_sl_data4, colname_map=None)
 
-    test_ap_data5 = test_ap_data.copy()
-    del test_ap_data5['star_id']
+    test_sl_data5 = test_sl_data.copy()
+    del test_sl_data5['star_id']
     with pytest.raises(ValueError):
-        aper_test = AperturesData(data=test_ap_data5, colname_map=None)
+        sl_test = SourceListData(data=test_sl_data5, colname_map=None)
 
-
-def test_apertures_bad_apertures():
-    with pytest.raises(TypeError):
-        aper_test = AperturesData(data=test_ap_data, aperture = aperture.value,
-                                  colname_map=None)
-    with pytest.raises(TypeError):
-        aper_test = AperturesData(data=test_ap_data,
-                                  annulus_inner = annulus_inner.value, colname_map=None)
-    with pytest.raises(TypeError):
-        aper_test = AperturesData(data=test_ap_data,
-                                  annulus_outer = annulus_outer.value, colname_map=None)
-
-
-def test_apertures_stored_apertures():
-    aper_test = AperturesData(data=test_ap_data, aperture = aperture,
-                              annulus_inner = annulus_inner,
-                              annulus_outer = annulus_outer, colname_map=None)
-    assert aper_test.aperture == aperture
-    assert aper_test.annulus_inner == annulus_inner
-    assert aper_test.annulus_outer == annulus_outer
