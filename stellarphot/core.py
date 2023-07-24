@@ -126,7 +126,7 @@ class BaseEnhancedTable(QTable):
         names to the desired names BEFORE the validation is performed.
     """
 
-    def __init__(self, table_description, data, colname_map=None):
+    def __init__(self, table_description, data, colname_map=None, **kwargs):
         # Make copy of input data
         orig_data = data.copy()
 
@@ -168,7 +168,7 @@ class BaseEnhancedTable(QTable):
 
             # Using the QTable class to handle the data table means required
             # columns are checked.
-            super().__init__(data=orig_data)
+            super().__init__(data=orig_data, **kwargs)
 
 
     def _validate_columns(self, data):
@@ -343,7 +343,8 @@ class PhotometryData(BaseEnhancedTable):
     }
 
     def __init__(self, observatory, camera, data,
-                 colname_map=None, passband_map=None, retain_user_computed=False):
+                 colname_map=None, passband_map=None, retain_user_computed=False, 
+                 **kwargs):
         # Set attributes describing the observatory and camera as well as corrections to
         # passband names.
         self.observatory = observatory.copy()
@@ -372,7 +373,8 @@ class PhotometryData(BaseEnhancedTable):
                                  f" but it's {data[this_col].unit}).")
 
         # Convert input data to QTable (while also checking for required columns)
-        super().__init__(self.phot_descript, data=data, colname_map=colname_map)
+        super().__init__(self.phot_descript, data=data, colname_map=colname_map,
+                         **kwargs)
 
         # Compute additional columns (not done yet)
         computed_columns = ['bjd', 'night']
@@ -510,14 +512,16 @@ class CatalogData(BaseEnhancedTable):
         'passband' : None
     }
 
-    def __init__(self, data, name, data_source, colname_map=None, passband_map=None):
+    def __init__(self, data, name, data_source, colname_map=None, passband_map=None, 
+                 **kwargs):
         # Set attributes
         self.name = str(name)
         self.data_source = str(data_source)
         self._passband_map = passband_map
 
         # Convert input data to QTable (while also checking for required columns)
-        super().__init__(self.catalog_descript, data=data, colname_map=colname_map)
+        super().__init__(self.catalog_descript, data=data, colname_map=colname_map,
+                         **kwargs)
 
         # Apply the filter/passband name update
         if passband_map is not None:
@@ -605,7 +609,7 @@ class AperturesData(BaseEnhancedTable):
     }
 
     def __init__(self, data, aperture=None, annulus_inner=None, annulus_outer=None,
-                 colname_map=None):
+                 colname_map=None, **kwargs):
         # Process inputs and save as needed
         data = data.copy()
         if aperture is not None:
@@ -666,4 +670,4 @@ class AperturesData(BaseEnhancedTable):
                                               unit=self.aperture_descript[this_col])
 
         # Convert input data to QTable (while also checking for required columns)
-        super().__init__(self.aperture_descript, data=data, colname_map=None)
+        super().__init__(self.aperture_descript, data=data, colname_map=None, **kwargs)
