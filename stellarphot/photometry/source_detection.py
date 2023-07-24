@@ -240,7 +240,7 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
     try:
         # Retrieve the RA and Dec of each source as SKyCoord objects, then convert to
         # arrays of floats to add to table
-        skypos = ccd.wcs.pixel_to_world(sources['xcentroid'], sources['ycentroid'], 0)
+        skypos = ccd.wcs.pixel_to_world(sources['xcentroid'], sources['ycentroid'])
         sources['ra'] = skypos.ra.value
         sources['dec'] = skypos.dec.value
     except AttributeError:
@@ -269,7 +269,7 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
         sources['width'] = np.nan * np.ones(src_cnt)
 
     # Convert sources to SourceListData object by adding
-    # unirs to the columns
+    # units to the columns
     units_dict = {
         'id' : None,
         'ra' : u.deg,
