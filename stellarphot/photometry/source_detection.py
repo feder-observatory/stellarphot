@@ -238,8 +238,11 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
 
     # If image as WCS, compute RA and Dec of each source
     try:
-        sources['ra'], sources['dec'] = ccd.wcs.all_pix2world(sources['xcentroid'],
-                                                              sources['ycentroid'], 0)
+        # Retrieve the RA and Dec of each source as SKyCoord objects, then convert to
+        # arrays of floats to add to table
+        skypos = ccd.wcs.pixel_to_world(sources['xcentroid'], sources['ycentroid'], 0)
+        sources['ra'] = skypos.ra.value
+        sources['dec'] = skypos.dec.value
     except AttributeError:
         # No WCS, so add empty columns
         sources['ra'] = np.nan * np.ones(src_cnt)
