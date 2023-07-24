@@ -73,14 +73,14 @@ photcolnames = ['id', 'xcenter', 'ycenter', 'aperture_sum', 'annulus_sum', 'ra',
                 'fwhm_y', 'width', 'aperture', 'aperture_area', 'annulus_inner',
                 'annulus_outer', 'annulus_area', 'exposure', 'date-obs', 'night',
                 'aperture_net_cnts', 'bjd', 'mag_inst', 'airmass', 'passband', 'file',
-                'star_id', 'mag_error', 'noise', 'noise-aij', 'snr']
+                'star_id', 'mag_error', 'noise_electrons', 'noise_cnts', 'snr']
 photcoltypes = ['int', 'float', 'float', 'float', 'float', 'float', 'float', 'float',
                 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float',
                 'float', 'float', 'float', 'str', 'int', 'float', 'float', 'float',
                 'float', 'str', 'str', 'int', 'float', 'float', 'float', 'float']
 photcolunits = [None, u.pix, u.pix, u.adu, None, u.deg, u.deg, u.adu, u.adu, u.adu,
                 None, None, None, u.pix, u.pix*u.pix, u.pix, u.pix, u.pix*u.pix, u.s,
-                None, None, u.adu, None, None, None, None, None, None, None, None,
+                None, None, u.adu, None, None, None, None, None, None, None, u.electrons,
                 None, u.adu]
 
 # Define initial bad table
@@ -119,8 +119,9 @@ phot_descript = {
     'sky_per_pix_med' : None,
     'sky_per_pix_std' : None,
     'aperture_net_cnts' : None,
-    'noise' : None,
-    'exposure' : u.s,
+    'noise_cnts' : None,
+    'noise_electrons' : u.electrons,
+    'exposure' : u.second,
     'date-obs' : None,
     'airmass' : None,
     'passband' : None,

@@ -589,18 +589,24 @@ def calculate_noise(gain=1.0, read_noise=0.0, dark_current_per_sec=0.0,
     Computes the noise in a photometric measurement.
 
     This function computes the noise (in units of electrons) in a photometric
-    measurement using the revised CCD equation from Collins et al (2017) AJ, 153, 77.
+    measurement using the revised CCD equation from Collins et al (2017) AJ, 153, 77
+    who based their expression on the one originally proposed for SNR by 
+    Merline, W. J., & Howell, S. B. 1995, Experimental Astronomy, 6, 163.
+    
     The equation is:
 
     .. math::
 
-        \\sigma = \\sqrt{G \\cdot C + A \\cdot \\left(1 + \\frac{A}{B}\\right)\\cdot \\left[ G\\cdot S + D \\cdot t + R^2 + (0.289 G)^2\\right]}
+        \\sigma = \\sqrt{G \\cdot N_C + A \\cdot \\left(1 + \\frac{A}{B}\\right)\\cdot \\left[ G\\cdot S + D \\cdot t + R^2 + (0.289 G)^2\\right]}
 
     where :math:`\sigma` is the noise, :math:`G` is the gain,
-    :math:`C` is the source counts, :math:`A` is the aperture area in pixels,
-    :math:`B` is the annulus area in pixels, :math:`S` is the sky counts per pixel,
-    :math:`D` is the dark current per second,
-    :math:`R` is the read noise, and :math:`t` is exposure time.
+    :math:`N_C` is the source counts (which is photon/electron counts divided by gain), 
+    :math:`A` is the aperture area in pixels,
+    :math:`B` is the annulus area in pixels,
+    :math:`S` is the sky counts per pixel,
+    :math:`D` is the dark current in electrons per second,
+    :math:`R` is the read noise in electrons per pixel per read, 
+    and :math:`t` is exposure time in seconds.
 
     Note: The :math:`(0.289 G)^2` term is "digitization noise" and is optional.
 

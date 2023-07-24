@@ -288,7 +288,8 @@ class PhotometryData(BaseEnhancedTable):
     sky_per_pix_med       consistent count units
     sky_per_pix_std       consistent count units
     aperture_net_cnts     consistent count units
-    noise                 consistent count units
+    noise_cnts            consistent count units
+    noise_electrons       u.electrons
     snr                   None
     mag_inst              None
     mag_error             None
@@ -332,11 +333,12 @@ class PhotometryData(BaseEnhancedTable):
         'sky_per_pix_med' : None,
         'sky_per_pix_std' : None,
         'aperture_net_cnts' : None,
-        'noise' : None,
+        'noise_cnts' : None,
+        'noise_electrons' : u.electrons,
         'snr' : None,
         'mag_inst' : None,
         'mag_error' : None,
-        'exposure' : u.s,
+        'exposure' : u.second,
         'date-obs' : None,
         'airmass' : None,
         'passband' : None,
@@ -365,7 +367,7 @@ class PhotometryData(BaseEnhancedTable):
         # Check for consistency of counts-related columns
         counts_columns = ['aperture_sum', 'annulus_sum', 'sky_per_pix_avg',
                           'sky_per_pix_med', 'sky_per_pix_std', 'aperture_net_cnts',
-                          'noise']
+                          'noise_cnts']
         cnts_unit = data[counts_columns[0]].unit
         for this_col in counts_columns[1:]:
             if data[this_col].unit != cnts_unit:
