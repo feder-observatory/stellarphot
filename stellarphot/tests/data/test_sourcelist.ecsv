@@ -1,0 +1,33 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: star_id, datatype: int64}
+# - {name: xcenter, unit: pix, datatype: float64}
+# - {name: ycenter, unit: pix, datatype: float64}
+# - {name: ra, unit: deg, datatype: float64}
+# - {name: dec, unit: deg, datatype: float64}
+# meta: !!omap
+# - __serialized_columns__:
+#     dec:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: &id001 !astropy.units.Unit {unit: deg}
+#       value: !astropy.table.SerializedColumn {name: dec}
+#     ra:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
+#       value: !astropy.table.SerializedColumn {name: ra}
+#     xcenter:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: &id002 !astropy.units.Unit {unit: pix}
+#       value: !astropy.table.SerializedColumn {name: xcenter}
+#     ycenter:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id002
+#       value: !astropy.table.SerializedColumn {name: ycenter}
+# schema: astropy-2.0
+star_id xcenter ycenter ra dec
+0 2767.5755630359868 606.6676226425102 13.874355505453678 83.61197616875543
+1 115.29836531820808 1690.3916482644734 116.3080284264283 12.457591278851908
+2 1464.5182129181928 2609.522318686974 134.83970244623873 3.719980178365631
+3 1068.2497290677127 2854.2378446694192 21.374460074623457 83.22138855598362
+4 474.59012633402125 1350.7301716943416 104.10051278959939 61.686089310007844

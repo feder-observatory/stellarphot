@@ -34,7 +34,8 @@ class FakeImage:
         self._noise = make_noise_image(self._stars.shape,
                                        mean=self.mean_noise,
                                        stddev=noise_dev)
-        self._sources['sky_per_pix_avg'] = noise_dev
+        # Sky background per pixel should be the mean level of the noise.
+        self._sources['sky_per_pix_avg'] = self.mean_noise
 
     @property
     def sources(self):
@@ -75,14 +76,12 @@ def test_detect_source_number_location():
     fake_image = FakeImage()
     sources = QTable(fake_image.sources, units={'x_mean':u.pixel, 'y_mean':u.pixel,
                                                 'x_stddev':u.pixel, 'y_stddev':u.pixel})
-    print(sources)
+    # print(sources)
     # Pass only one value for the sky background for source detection
     sky_per_pix = sources['sky_per_pix_avg'].mean()
     found_sources = source_detection(fake_image.image,
                                      fwhm=2 * sources['x_stddev'].mean(),
-                                     threshold=10, add_apertures=True,
-                                     aperture = 5,
-                                     annulus_gap = 5, annulus_thickness = 5,
+                                     threshold=10,
                                      sky_per_pix_avg=sky_per_pix)
     # Sort by flux so we can reliably match them
     sources.sort('amplitude')
@@ -101,6 +100,25 @@ def test_detect_source_number_location():
                                                              + inp['y_stddev']) / 2,
                                    out['width'],
                                    rtol=1e-5, atol=0.05)
+
+
+def test_detect_source_with_padding():
+    """
+    Make sure we detect the sources in the input table....
+    """
+    fake_image = FakeImage()
+    sources = QTable(fake_image.sources, units={'x_mean':u.pixel, 'y_mean':u.pixel,
+                                                'x_stddev':u.pixel, 'y_stddev':u.pixel})
+    # print(sources)
+    # Pass only one value for the sky background for source detection
+    sky_per_pix = sources['sky_per_pix_avg'].mean()
+    found_sources = source_detection(fake_image.image,
+                                     fwhm=2 * sources['x_stddev'].mean(),
+                                     threshold=10,
+                                     sky_per_pix_avg=sky_per_pix, padding=50)
+
+    # Did we drop one source because it was too close to the edge?
+    assert len(sources) - 1 == len(found_sources)
 
 
 ##

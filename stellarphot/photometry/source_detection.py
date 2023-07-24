@@ -11,7 +11,7 @@ from photutils.morphology import data_properties
 from astropy.nddata.utils import Cutout2D
 from astropy.stats import gaussian_sigma_to_fwhm
 
-from stellarphot.core import AperturesData
+from stellarphot.core import SourceListData
 
 __all__ = ['source_detection', 'compute_fwhm']
 
@@ -145,14 +145,12 @@ def compute_fwhm(ccd, sources, fwhm_estimate=5,
 
 def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
                      threshold=10.0, find_fwhm=True,
-                     sky_per_pix_avg=0,
-                     add_apertures=True, aperture_method='fixed',
-                     aperture=5, aperture_fac=1.5,
-                     annulus_gap=5, annulus_thickness=5):
+                     sky_per_pix_avg=0, padding=0):
     """
-    Returns an ApertureData object containing the position of sources
-    within the image identified using `photutils.DAOStarFinder` algorithm
-    as well as apertures for each source.
+    Returns an SourceListData object containing the position of sources
+    within the image identified using `photutils.DAOStarFinder` algorithm.
+    It can also compute the FWHM of each source by fitting a 2D Gaussian
+    which can be useful for choosing a useful aperture size for photometry.
 
     Parameters
     ----------
@@ -184,46 +182,18 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
         it will be estimated using the mean of the sigma_clipped_stats
         of the image.
 
-    add_apertures : bool, optional (default=True)
-        If ``True``, add the aperture sizes for each source.  If ``False``,
-        aperture and annulus columns are left with NaN values, which makes
-        the resulting ApertureData structure not terribly useful unless you
-        just want to idenify sources and not later perform aperture photometry.
-
-    aperture_method : 'fixed' or 'fwhm', optional (default='fixed')
-        Method to use for determining the aperture size.  If 'fixed',
-        used the fixed aperture size given by ``aperture``.  If 'fwhm',
-        use the ``aperture_fac` times the average FWHM of the sources as
-        determined by ``find_fwhm`` and ``compute_fwhm``.  If ``find_fwhm``
-        is ``False``, function will use ``fwhm`` as the FWHM for all sources.
-
-    aperture : int, optional (default=5)
-        Aperture radius in pixels if ``compute_apertures`` is ``True`` and
-        ``aperture_method`` is 'fixed'. Ignored otherwise.
-
-    aperture_fac : float, optional (default=1.5)
-        Multiplicative factor to scale the average FWHM to get the aperture if
-        ``compute_apertures`` is ``True`` and ``aperture_method`` is 'fwhm'.
-        Ignored otherwise.
-
-    annulus_gap : int, optional (default=5)
-        The gap between the aperture and the inner edge of the annulus for
-        aperture photometry.  Ignored if ``compute_apertures`` is ``False``.
-
-    annulus_thickness : int, optional (default=5)
-        The radial thickness of the annulus for aperture photometry.
-        Ignored if ``compute_apertures`` is ``False``.
+    padding : int, optional (default=0)
+        Distance from the edge of the image to ignore when searching for
+        sources.
 
     Returns
     -------
 
-    sources: `stellardev.AperturesData`
+    sources: `stellardev.SourceListData`
         A table of the positions of sources in the image.  If `find_fwhm` is
         ``True``, includes columns for `fwhm_x`, `fwhm_y, and `width`.  If
-        `add_apertures` is ``False``. the columns for `aperture`, `annulus_inner`,
-        and `annulus_outer` are left with NaN values.  If the input CCDData
-        object has WCS information, the columns `ra` and `dec` are also
-        populated, otherwise they are set to NaN.
+        the input CCDData object has WCS information, the columns `ra` and
+        `dec` are also populated, otherwise they are set to NaN.
     """
 
     # If user uses units for fwhm or sky_per_pix_avg, convert to value
@@ -232,8 +202,10 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
     if isinstance(fwhm, u.Quantity):
         fwhm = fwhm.value
 
-    # Get statistics of the input image (and use them to
-    # estimate the sky background if not provided)
+    # Get statistics of the input image (and use them to estimate the sky background
+    # if not provided).  Using clipped stats should hopefully get rid of any
+    # bright stars that might be in the image, so the mean should be a good
+    # estimate of the sky background.
     mean, median, std = sigma_clipped_stats(ccd, sigma=sigma, maxiters=iters)
     print(f"source_detection: mean={mean:.4f}, median={median:.4f}, std={std:.4f}")
     if sky_per_pix_avg is None:
@@ -244,19 +216,33 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
     # image.
     print(f"source_detection: threshold set to {threshold}* standard deviation "
           f"({std:.4f})")
-    print(f"source_detection: Assuming fwm of {fwhm} for DAOStarFinder")
-    daofind = DAOStarFinder(fwhm = fwhm, threshold = threshold * std)
-    sources = daofind(ccd - mean)
+    print(f"source_detection: Assuming fwhm of {fwhm} for DAOStarFinder")
     # daofind should be run on background subtracted image
     # (fails, or at least returns garbage, if sky_per_pix_avg is too low)
+    daofind = DAOStarFinder(fwhm = fwhm, threshold = threshold * std)
+    sources = daofind(ccd - sky_per_pix_avg)
+
+    # Identify sources near the edge of the image and remove them
+    # from the source list.
+    padding_smt = ""
+    if (padding > 0):
+        src_cnt0 = len(sources)
+        y_lim, x_lim = ccd.shape
+        keep = ((sources['xcentroid'].value >= padding) & (sources['ycentroid'].value >= padding) &
+                (sources['xcentroid'].value < x_lim-padding) & (sources['ycentroid'].value < y_lim-padding))
+        sources = sources[keep]
+        padding_smt = f" (after removing {src_cnt0-len(sources)} sources near the edge)"
+
     src_cnt = len(sources)
-    print(f"source_detection: {src_cnt} sources identified.")
-    #print(sources)
+    print(f"source_detection: {src_cnt} sources identified{padding_smt}.")
 
     # If image as WCS, compute RA and Dec of each source
     try:
-        sources['ra'], sources['dec'] = ccd.wcs.all_pix2world(sources['xcentroid'],
-                                                              sources['ycentroid'], 0)
+        # Retrieve the RA and Dec of each source as SKyCoord objects, then convert to
+        # arrays of floats to add to table
+        skypos = ccd.wcs.pixel_to_world(sources['xcentroid'], sources['ycentroid'])
+        sources['ra'] = skypos.ra.value
+        sources['dec'] = skypos.dec.value
     except AttributeError:
         # No WCS, so add empty columns
         sources['ra'] = np.nan * np.ones(src_cnt)
@@ -282,29 +268,8 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
         sources['fwhm_y'] = np.nan * np.ones(src_cnt)
         sources['width'] = np.nan * np.ones(src_cnt)
 
-    # Add apertures for each source
-    if add_apertures:
-        if aperture_method == 'fixed':
-            aperture = aperture
-        elif aperture_method == 'fwhm':
-            masked_data = np.ma.masked_array(sources['width'].data,
-                                             np.isnan(sources['width'].data))
-            avg_fwhm = np.ma.average(masked_data)
-            print(f"source_detection: average fwhm is {avg_fwhm}, setting aperture to "
-                  f"{aperture_fac}*{avg_fwhm}")
-            aperture = avg_fwhm * aperture_fac
-        else:
-            raise ValueError(f"source_detection: aperture_method {aperture_method} not"
-                             "recognized")
-        annulus_inner = aperture + annulus_gap
-        annulus_outer = annulus_inner + annulus_thickness
-    else: # Leave aperture/annulus entry empty
-        aperture = None
-        annulus_inner = None
-        annulus_outer = None
-
-    # Convert sources to ApertureData object by adding
-    # unirs to the columns
+    # Convert sources to SourceListData object by adding
+    # units to the columns
     units_dict = {
         'id' : None,
         'ra' : u.deg,
@@ -316,15 +281,12 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
         'width' : u.pix
     }
     sources = Table(data=sources, units=units_dict)
-    # Rename columns to match ApertureData
+    # Rename columns to match SourceListData
     colnamemap = {'id' : 'star_id',
                   'xcentroid' : 'xcenter',
                   'ycentroid' : 'ycenter'}
 
-    ap_data = AperturesData(sources, aperture=aperture*u.pixel,
-                            annulus_inner=annulus_inner*u.pixel,
-                            annulus_outer=annulus_outer*u.pixel,
-                            colname_map=colnamemap)
-    return ap_data
+    sl_data = SourceListData(sources, colname_map=colnamemap)
+    return sl_data
 
 

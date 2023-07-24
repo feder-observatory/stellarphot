@@ -8,7 +8,7 @@ from astropy.coordinates import EarthLocation
 from astropy.utils.data import get_pkg_data_filename
 
 from stellarphot.core import (Camera, BaseEnhancedTable, PhotometryData,
-                              CatalogData, AperturesData)
+                              CatalogData, SourceListData)
 
 
 def test_camera_attributes():
@@ -73,15 +73,15 @@ photcolnames = ['id', 'xcenter', 'ycenter', 'aperture_sum', 'annulus_sum', 'ra',
                 'fwhm_y', 'width', 'aperture', 'aperture_area', 'annulus_inner',
                 'annulus_outer', 'annulus_area', 'exposure', 'date-obs', 'night',
                 'aperture_net_cnts', 'bjd', 'mag_inst', 'airmass', 'passband', 'file',
-                'star_id', 'mag_error', 'noise', 'noise-aij', 'snr']
+                'star_id', 'mag_error', 'noise_electrons', 'noise_cnts', 'snr']
 photcoltypes = ['int', 'float', 'float', 'float', 'float', 'float', 'float', 'float',
                 'float', 'float', 'float', 'float', 'float', 'float', 'float', 'float',
                 'float', 'float', 'float', 'str', 'int', 'float', 'float', 'float',
                 'float', 'str', 'str', 'int', 'float', 'float', 'float', 'float']
 photcolunits = [None, u.pix, u.pix, u.adu, None, u.deg, u.deg, u.adu, u.adu, u.adu,
                 None, None, None, u.pix, u.pix*u.pix, u.pix, u.pix, u.pix*u.pix, u.s,
-                None, None, u.adu, None, None, None, None, None, None, None, None,
-                None, u.adu]
+                None, None, u.adu, None, None, None, None, None, None, None,
+                u.electron, None, u.adu]
 
 # Define initial bad table
 testphot_data = Table(photdata, names=photcolnames, dtype=photcoltypes,
@@ -95,7 +95,7 @@ testphot_goodTime['date-obs'] = Column(data=Time(testphot_goodTime['date-obs'],
 
 # Fix the units for the counts-related columns
 counts_columns = ['aperture_sum', 'annulus_sum', 'sky_per_pix_avg', 'sky_per_pix_med',
-                          'sky_per_pix_std', 'aperture_net_cnts', 'noise']
+                          'sky_per_pix_std', 'aperture_net_cnts', 'noise_cnts']
 testphot_goodCounts = testphot_goodTime.copy()
 for this_col in counts_columns:
     testphot_goodCounts[this_col].unit = u.adu
@@ -119,8 +119,9 @@ phot_descript = {
     'sky_per_pix_med' : None,
     'sky_per_pix_std' : None,
     'aperture_net_cnts' : None,
-    'noise' : None,
-    'exposure' : u.s,
+    'noise_cnts' : None,
+    'noise_electrons' : u.electron,
+    'exposure' : u.second,
     'date-obs' : None,
     'airmass' : None,
     'passband' : None,
@@ -141,7 +142,7 @@ test_cat = ascii.read(get_pkg_data_filename('data/test_vsx_table.ecsv'), format=
                       fast_reader=False)
 
 # Load test apertures
-test_ap_data = ascii.read(get_pkg_data_filename('data/test_aperture_table.ecsv'),
+test_sl_data = ascii.read(get_pkg_data_filename('data/test_sourcelist.ecsv'),
                              format='ecsv',
                              fast_reader=False)
 
@@ -181,6 +182,18 @@ def test_base_enhanced_table_missing_badunits():
         test_base = BaseEnhancedTable(bad_ra_descript, testdata)
 
 
+def test_base_enhanced_table_recursive():
+    # Should create a populated dataset properly and display the astropy data
+    test_base2 = BaseEnhancedTable(test_descript, testdata)
+    assert len(test_base2['ra']) == 1
+    assert len(test_base2['dec']) == 1
+
+
+    # Attempt recursive call
+    with pytest.raises(TypeError):
+        test_base3 = BaseEnhancedTable(test_descript, test_base2)
+
+
 def test_photometry_data():
     # Create photometry data instance
     phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m,
@@ -209,15 +222,29 @@ def test_photometry_data():
     # Demand a difference of less than 1/20 of a second.
     assert (phot_data['bjd'][0].value - 2459910.775405664)*86400 < 0.05
 
+
+def test_photometry_recursive():
+    # Create photometry data instance
+    phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m,
+                               passband_map=feder_passbands, data=testphot_clean)
+
+    # Attempt recursive call
+    with pytest.raises(TypeError):
+        phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m,
+                               passband_map=feder_passbands, data=phot_data)
+
+
 def test_photometry_badtime():
     with pytest.raises(ValueError):
         phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m,
                                    passband_map=feder_passbands, data=testphot_data)
 
+
 def test_photometry_inconsistent_count_units():
     with pytest.raises(ValueError):
         phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m,
                                    passband_map=feder_passbands, data=testphot_goodTime)
+
 
 def test_photometry_inconsistent_badunits():
     with pytest.raises(ValueError):
@@ -259,6 +286,7 @@ def test_catalog_colname_map():
     assert np.abs(catalog_dat['mag'][0].value - 12.660)
     assert catalog_dat['passband'][0] == 'g'
 
+
 def test_catalog_bandpassmap():
     # Map column and bandpass names
     vsx_colname_map = {'Name':'id', 'RAJ2000':'ra', 'DEJ2000':'dec', 'max':'mag',
@@ -270,76 +298,64 @@ def test_catalog_bandpassmap():
     assert catalog_dat['passband'][0] == 'SG'
 
 
-# Define an aperture/annuli
-aperture = 5 * u.pixel
-annulus_inner = 10 * u.pixel
-annulus_outer = 15 * u.pixel
+def test_catalog_recursive():
+    # Construct good objects
+    vsx_colname_map = {'Name':'id', 'RAJ2000':'ra', 'DEJ2000':'dec', 'max':'mag',
+                       'n_max':'passband'}
+    catalog_dat = CatalogData(data=test_cat, name="VSX", data_source="Vizier",
+                              colname_map=vsx_colname_map)
 
-def test_apertures():
-    aper_test = AperturesData(data=test_ap_data, colname_map=None)
-    assert aper_test['star_id'][0] == 0
-    assert int(aper_test['aperture'][2].value) == 5
-    assert int(aper_test['annulus_inner'][3].value) == 10
-    assert (aper_test['annulus_outer'][4].value) == 15
-
-
-def test_apertures_no_skypos():
-    test_ap_data2 = test_ap_data.copy()
-    del test_ap_data2['ra']
-    del test_ap_data2['dec']
-    aper_test = AperturesData(data=test_ap_data2, colname_map=None)
-    assert aper_test['star_id'][0] == 0
-    assert int(aper_test['aperture'][2].value) == 5
-    assert int(aper_test['annulus_inner'][3].value) == 10
-    assert (aper_test['annulus_outer'][4].value) == 15
-    assert np.isnan(aper_test['ra'][4])
-    assert np.isnan(aper_test['dec'][2])
+    # Attempt recursive call
+    with pytest.raises(TypeError):
+        catalog_dat2 = CatalogData(data=catalog_dat, name="VSX", data_source="Vizier",
+                              colname_map=vsx_colname_map)
 
 
-def test_apertures_no_imgpos():
-    test_ap_data3 = test_ap_data.copy()
-    del test_ap_data3['xcenter']
-    del test_ap_data3['ycenter']
-    aper_test = AperturesData(data=test_ap_data3, colname_map=None)
-    assert aper_test['star_id'][0] == 0
-    assert int(aper_test['aperture'][2].value) == 5
-    assert int(aper_test['annulus_inner'][3].value) == 10
-    assert (aper_test['annulus_outer'][4].value) == 15
-    assert np.isnan(aper_test['xcenter'][4])
-    assert np.isnan(aper_test['ycenter'][2])
+def test_sourcelist():
+    sl_test = SourceListData(data=test_sl_data, colname_map=None)
+    assert sl_test['star_id'][0] == 0
 
 
-def test_apertures_missing_cols():
-    test_ap_data4 = test_ap_data.copy()
-    del test_ap_data4['ra']
-    del test_ap_data4['dec']
-    del test_ap_data4['xcenter']
-    del test_ap_data4['ycenter']
+def test_sourcelist_no_skypos():
+    test_sl_data2 = test_sl_data.copy()
+    del test_sl_data2['ra']
+    del test_sl_data2['dec']
+    sl_test = SourceListData(data=test_sl_data2, colname_map=None)
+    assert sl_test['star_id'][0] == 0
+    assert np.isnan(sl_test['ra'][4])
+    assert np.isnan(sl_test['dec'][2])
+
+
+def test_sourcelist_no_imgpos():
+    test_sl_data3 = test_sl_data.copy()
+    del test_sl_data3['xcenter']
+    del test_sl_data3['ycenter']
+    sl_test = SourceListData(data=test_sl_data3, colname_map=None)
+    assert sl_test['star_id'][0] == 0
+    assert np.isnan(sl_test['xcenter'][4])
+    assert np.isnan(sl_test['ycenter'][2])
+
+
+def test_sourcelist_missing_cols():
+    test_sl_data4 = test_sl_data.copy()
+    del test_sl_data4['ra']
+    del test_sl_data4['dec']
+    del test_sl_data4['xcenter']
+    del test_sl_data4['ycenter']
     with pytest.raises(ValueError):
-        aper_test = AperturesData(data=test_ap_data4, colname_map=None)
+        sl_test = SourceListData(data=test_sl_data4, colname_map=None)
 
-    test_ap_data5 = test_ap_data.copy()
-    del test_ap_data5['star_id']
+    test_sl_data5 = test_sl_data.copy()
+    del test_sl_data5['star_id']
     with pytest.raises(ValueError):
-        aper_test = AperturesData(data=test_ap_data5, colname_map=None)
+        sl_test = SourceListData(data=test_sl_data5, colname_map=None)
+        
 
+def test_sourcelist_recursive():
+    # Create pgood sourcelist data instance
+    sl_test = SourceListData(data=test_sl_data, colname_map=None)
+    assert sl_test['star_id'][0] == 0
 
-def test_apertures_bad_apertures():
+    # Attempt recursive call
     with pytest.raises(TypeError):
-        aper_test = AperturesData(data=test_ap_data, aperture = aperture.value,
-                                  colname_map=None)
-    with pytest.raises(TypeError):
-        aper_test = AperturesData(data=test_ap_data,
-                                  annulus_inner = annulus_inner.value, colname_map=None)
-    with pytest.raises(TypeError):
-        aper_test = AperturesData(data=test_ap_data,
-                                  annulus_outer = annulus_outer.value, colname_map=None)
-
-
-def test_apertures_stored_apertures():
-    aper_test = AperturesData(data=test_ap_data, aperture = aperture,
-                              annulus_inner = annulus_inner,
-                              annulus_outer = annulus_outer, colname_map=None)
-    assert aper_test.aperture == aperture
-    assert aper_test.annulus_inner == annulus_inner
-    assert aper_test.annulus_outer == annulus_outer
+        sl_test2 = SourceListData(data=sl_test, colname_map=None)

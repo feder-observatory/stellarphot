@@ -7,7 +7,7 @@ from astropy.time import Time
 import numpy as np
 
 __all__ = ['Camera', 'BaseEnhancedTable', 'PhotometryData', 'CatalogData',
-           'AperturesData']
+           'SourceListData']
 
 
 class Camera:
@@ -126,10 +126,7 @@ class BaseEnhancedTable(QTable):
         names to the desired names BEFORE the validation is performed.
     """
 
-    def __init__(self, table_description, data, colname_map=None):
-        # Make copy of input data
-        orig_data = data.copy()
-
+    def __init__(self, table_description, data, colname_map=None, **kwargs):
         # Confirm a proper table description is passed (that is dict-like with keys and
         # values)
         try:
@@ -138,11 +135,16 @@ class BaseEnhancedTable(QTable):
             raise TypeError("You must provide a dict as table_description (input "
                 f"table_description is type {type(self._table_description)}).")
 
-        # Build the data table
-        if not isinstance(data, Table):
-            raise TypeError("You must provide an astropy Table as data (input data is "
+        # Check data before copying to avoid recusive loop and non-QTable
+        # data input.
+        if not isinstance(data, Table) or isinstance(data, BaseEnhancedTable):
+            raise TypeError("You must provide an astropy Table and NOT a "
+                            "BaseEnhancedTable as data (input data is "
                             f"type {type(data)}).")
         else:
+            # Copy data before potential modification
+            data = data.copy()
+
             # Rename columns before validation (if needed)
             if colname_map is not None:
                 # Confirm a proper colname_map is passed
@@ -153,22 +155,21 @@ class BaseEnhancedTable(QTable):
                                     "(input table_description is type "
                                     f"{type(self._table_description)}).")
 
-                self._update_colnames(self._colname_map,orig_data)
+                self._update_colnames(self._colname_map, data)
 
             # Validate the columns
-            self._validate_columns(orig_data)
+            self._validate_columns(data)
 
             # Revise column order to be in the order listed in table_description
             # with unlisted columns tacked on the end
             order_col_list = list(self._table_description.keys())
-            for col in orig_data.colnames:
+            for col in data.colnames:
                 if col not in order_col_list:
                     order_col_list.append(col)
-            orig_data = orig_data[order_col_list]
+            data = data[order_col_list]
 
-            # Using the QTable class to handle the data table means required
-            # columns are checked.
-            super().__init__(data=orig_data)
+            # Call QTable initializer to finish up
+            super().__init__(data=data, **kwargs)
 
 
     def _validate_columns(self, data):
@@ -287,7 +288,8 @@ class PhotometryData(BaseEnhancedTable):
     sky_per_pix_med       consistent count units
     sky_per_pix_std       consistent count units
     aperture_net_cnts     consistent count units
-    noise                 consistent count units
+    noise_cnts            consistent count units
+    noise_electrons       u.electron
     snr                   None
     mag_inst              None
     mag_error             None
@@ -331,11 +333,12 @@ class PhotometryData(BaseEnhancedTable):
         'sky_per_pix_med' : None,
         'sky_per_pix_std' : None,
         'aperture_net_cnts' : None,
-        'noise' : None,
+        'noise_cnts' : None,
+        'noise_electrons' : u.electron,
         'snr' : None,
         'mag_inst' : None,
         'mag_error' : None,
-        'exposure' : u.s,
+        'exposure' : u.second,
         'date-obs' : None,
         'airmass' : None,
         'passband' : None,
@@ -343,7 +346,8 @@ class PhotometryData(BaseEnhancedTable):
     }
 
     def __init__(self, observatory, camera, data,
-                 colname_map=None, passband_map=None, retain_user_computed=False):
+                 colname_map=None, passband_map=None, retain_user_computed=False,
+                 **kwargs):
         # Set attributes describing the observatory and camera as well as corrections to
         # passband names.
         self.observatory = observatory.copy()
@@ -363,7 +367,7 @@ class PhotometryData(BaseEnhancedTable):
         # Check for consistency of counts-related columns
         counts_columns = ['aperture_sum', 'annulus_sum', 'sky_per_pix_avg',
                           'sky_per_pix_med', 'sky_per_pix_std', 'aperture_net_cnts',
-                          'noise']
+                          'noise_cnts']
         cnts_unit = data[counts_columns[0]].unit
         for this_col in counts_columns[1:]:
             if data[this_col].unit != cnts_unit:
@@ -372,7 +376,8 @@ class PhotometryData(BaseEnhancedTable):
                                  f" but it's {data[this_col].unit}).")
 
         # Convert input data to QTable (while also checking for required columns)
-        super().__init__(self.phot_descript, data=data, colname_map=colname_map)
+        super().__init__(self.phot_descript, data=data, colname_map=colname_map,
+                         **kwargs)
 
         # Compute additional columns (not done yet)
         computed_columns = ['bjd', 'night']
@@ -510,40 +515,34 @@ class CatalogData(BaseEnhancedTable):
         'passband' : None
     }
 
-    def __init__(self, data, name, data_source, colname_map=None, passband_map=None):
+    def __init__(self, data, name, data_source, colname_map=None, passband_map=None,
+                 **kwargs):
         # Set attributes
         self.name = str(name)
         self.data_source = str(data_source)
         self._passband_map = passband_map
 
         # Convert input data to QTable (while also checking for required columns)
-        super().__init__(self.catalog_descript, data=data, colname_map=colname_map)
+        super().__init__(self.catalog_descript, data=data, colname_map=colname_map,
+                         **kwargs)
 
         # Apply the filter/passband name update
         if passband_map is not None:
             self._update_passbands()
 
 
-class AperturesData(BaseEnhancedTable):
+class SourceListData(BaseEnhancedTable):
     """
-    A class to hold information on the selected apertures to pass to
-    aperture photometry routines.
+    A class to hold information on the source lists to pass to
+    aperture photometry routines.  It verifies either image-based
+    locations (x/y) or sky-based locations (ra/dec) exist.
 
     Parameters
     ----------
     data: `astropy.table.Table`
-        A table containing all the apertures data to be validated.
+        A table containing all the source list data to be validated.
         This data is copied, so any changes made during validation will not
         affect the input data, only the data in the class.
-
-    aperture : `astroy.Quantity`, optional (Default: None)
-        The radius of the aperture in pixels (assuming it is fixed).
-
-    annulus_inner : `astroy.Quantity`, optional (Default: None)
-        The inner radius of the annulus in pixels (assuming it is fixed).
-
-    annulus_outer : `astroy.Quantity`, optional (Default: None)
-        The outer radius of the annulus in pixels (assuming it is fixed).
 
     colname_map: dict, optional (Default: None)
         A dictionary containing old column names as keys and new column
@@ -576,27 +575,15 @@ class AperturesData(BaseEnhancedTable):
     xcenter               u.pix
     ycenter               u.pix
 
-    to define the locations of the apertures.  If one locaton pair
-    is provided but not the other, the missing columns will be added but
-    assigned NaN values.  It is ok to provide both sky and image location, but
-    no validation is done to ensure they are consistent.
-
-    Attributes
-    ----------
-
-    aperture : `astroy.Quantity`, optional (Default: None)
-        The radius of the aperture in pixels (assuming it is fixed).
-
-    annulus_inner : `astroy.Quantity`, optional (Default: None)
-        The inner radius of the annulus in pixels (assuming it is fixed).
-
-    annulus_outer : `astroy.Quantity`, optional (Default: None)
-        The outer radius of the annulus in pixels (assuming it is fixed).
+    to define the locations of the sources.  If one locaton pair is provided but not
+    the other, the missing columns will be added but assigned NaN values.  It is ok
+    to provide both sky and image location, but no validation is done to ensure they
+    are consistent.
     """
 
     # Define columns that must be in table and provide information about their type, and
     # units.
-    aperture_descript = {
+    sourcelist_descript = {
         'star_id' : None,
         'ra' : u.deg,
         'dec' : u.deg,
@@ -604,33 +591,15 @@ class AperturesData(BaseEnhancedTable):
         'ycenter' : u.pix
     }
 
-    def __init__(self, data, aperture=None, annulus_inner=None, annulus_outer=None,
-                 colname_map=None):
+    def __init__(self, data, colname_map=None, **kwargs):
+        # Check data before copying to avoid recusive loop and non-QTable
+        # data input.
+        if not isinstance(data, Table) or isinstance(data, BaseEnhancedTable):
+            raise TypeError("You must provide an astropy Table (and not a "
+                            "BaseEnhancedTable) as data.")
+
         # Process inputs and save as needed
         data = data.copy()
-        if aperture is not None:
-            if isinstance(aperture, u.Quantity):
-                self.aperture = aperture.copy()
-            else:
-                raise TypeError("aperture must have units.")
-        else:
-            self.aperture = None
-
-        if annulus_inner is not None:
-            if isinstance(annulus_inner, u.Quantity):
-                self.annulus_inner = annulus_inner.copy()
-            else:
-                raise TypeError("annulus_inner must have units.")
-        else:
-            self.annulus_inner = None
-
-        if annulus_outer is not None:
-            if isinstance(annulus_outer, u.Quantity):
-                self.annulus_outer = annulus_outer.copy()
-            else:
-                raise TypeError("annulus_outer must have units.")
-        else:
-            self.annulus_outer = None
 
         # Rename columns before checking for ra/dec or xcenter/ycenter
         # columns being missing.
@@ -663,7 +632,7 @@ class AperturesData(BaseEnhancedTable):
             if (this_col not in data.colnames):
                 data[this_col] = Column(data=np.full(len(data), np.nan),
                                               name=this_col,
-                                              unit=self.aperture_descript[this_col])
+                                              unit=self.sourcelist_descript[this_col])
 
         # Convert input data to QTable (while also checking for required columns)
-        super().__init__(self.aperture_descript, data=data, colname_map=None)
+        super().__init__(self.sourcelist_descript, data=data, colname_map=None, **kwargs)
