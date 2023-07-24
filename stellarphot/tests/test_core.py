@@ -181,6 +181,18 @@ def test_base_enhanced_table_missing_badunits():
         test_base = BaseEnhancedTable(bad_ra_descript, testdata)
 
 
+def test_base_enhanced_table_recursive():
+    # Should create a populated dataset properly and display the astropy data
+    test_base2 = BaseEnhancedTable(test_descript, testdata)
+    assert len(test_base2['ra']) == 1
+    assert len(test_base2['dec']) == 1
+
+
+    # Attempt recursive call
+    with pytest.raises(TypeError):
+        test_base3 = BaseEnhancedTable(test_descript, test_base2)
+
+
 def test_photometry_data():
     # Create photometry data instance
     phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m,
@@ -209,15 +221,29 @@ def test_photometry_data():
     # Demand a difference of less than 1/20 of a second.
     assert (phot_data['bjd'][0].value - 2459910.775405664)*86400 < 0.05
 
+
+def test_photometry_recursive():
+    # Create photometry data instance
+    phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m,
+                               passband_map=feder_passbands, data=testphot_clean)
+
+    # Attempt recursive call
+    with pytest.raises(TypeError):
+        phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m,
+                               passband_map=feder_passbands, data=phot_data)
+
+
 def test_photometry_badtime():
     with pytest.raises(ValueError):
         phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m,
                                    passband_map=feder_passbands, data=testphot_data)
 
+
 def test_photometry_inconsistent_count_units():
     with pytest.raises(ValueError):
         phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m,
                                    passband_map=feder_passbands, data=testphot_goodTime)
+
 
 def test_photometry_inconsistent_badunits():
     with pytest.raises(ValueError):
@@ -259,6 +285,7 @@ def test_catalog_colname_map():
     assert np.abs(catalog_dat['mag'][0].value - 12.660)
     assert catalog_dat['passband'][0] == 'g'
 
+
 def test_catalog_bandpassmap():
     # Map column and bandpass names
     vsx_colname_map = {'Name':'id', 'RAJ2000':'ra', 'DEJ2000':'dec', 'max':'mag',
@@ -268,6 +295,19 @@ def test_catalog_bandpassmap():
                               colname_map=vsx_colname_map, passband_map=passband_map)
 
     assert catalog_dat['passband'][0] == 'SG'
+
+
+def test_catalog_recursive():
+    # Construct good objects
+    vsx_colname_map = {'Name':'id', 'RAJ2000':'ra', 'DEJ2000':'dec', 'max':'mag',
+                       'n_max':'passband'}
+    catalog_dat = CatalogData(data=test_cat, name="VSX", data_source="Vizier",
+                              colname_map=vsx_colname_map)
+
+    # Attempt recursive call
+    with pytest.raises(TypeError):
+        catalog_dat2 = CatalogData(data=catalog_dat, name="VSX", data_source="Vizier",
+                              colname_map=vsx_colname_map)
 
 
 def test_sourcelist():
@@ -308,4 +348,13 @@ def test_sourcelist_missing_cols():
     del test_sl_data5['star_id']
     with pytest.raises(ValueError):
         sl_test = SourceListData(data=test_sl_data5, colname_map=None)
+        
 
+def test_sourcelist_recursive():
+    # Create pgood sourcelist data instance
+    sl_test = SourceListData(data=test_sl_data, colname_map=None)
+    assert sl_test['star_id'][0] == 0
+
+    # Attempt recursive call
+    with pytest.raises(TypeError):
+        sl_test2 = SourceListData(data=sl_test, colname_map=None)

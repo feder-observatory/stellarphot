@@ -127,9 +127,6 @@ class BaseEnhancedTable(QTable):
     """
 
     def __init__(self, table_description, data, colname_map=None, **kwargs):
-        # Make copy of input data
-        orig_data = data.copy()
-
         # Confirm a proper table description is passed (that is dict-like with keys and
         # values)
         try:
@@ -138,11 +135,15 @@ class BaseEnhancedTable(QTable):
             raise TypeError("You must provide a dict as table_description (input "
                 f"table_description is type {type(self._table_description)}).")
 
-        # Build the data table
-        if not isinstance(data, Table):
+        # Check data before copying to avoid recusive loop and non-QTable
+        # data input.
+        if not isinstance(data, Table) or isinstance(data, BaseEnhancedTable):
             raise TypeError("You must provide an astropy Table as data (input data is "
                             f"type {type(data)}).")
         else:
+            # Copy data before potential modification
+            data = data.copy()
+
             # Rename columns before validation (if needed)
             if colname_map is not None:
                 # Confirm a proper colname_map is passed
@@ -153,22 +154,21 @@ class BaseEnhancedTable(QTable):
                                     "(input table_description is type "
                                     f"{type(self._table_description)}).")
 
-                self._update_colnames(self._colname_map,orig_data)
+                self._update_colnames(self._colname_map, data)
 
             # Validate the columns
-            self._validate_columns(orig_data)
+            self._validate_columns(data)
 
             # Revise column order to be in the order listed in table_description
             # with unlisted columns tacked on the end
             order_col_list = list(self._table_description.keys())
-            for col in orig_data.colnames:
+            for col in data.colnames:
                 if col not in order_col_list:
                     order_col_list.append(col)
-            orig_data = orig_data[order_col_list]
+            data = data[order_col_list]
 
-            # Using the QTable class to handle the data table means required
-            # columns are checked.
-            super().__init__(data=orig_data, **kwargs)
+            # Call QTable initializer to finish up
+            super().__init__(data=data, **kwargs)
 
 
     def _validate_columns(self, data):
@@ -351,6 +351,11 @@ class PhotometryData(BaseEnhancedTable):
         self.camera = camera.copy()
         self._passband_map = passband_map.copy()
 
+        # Check data before copying to avoid recusive loop and non-QTable
+        # data input.
+        if not isinstance(data, Table) or isinstance(data, BaseEnhancedTable):
+            raise TypeError("You must provide an astropy Table as data.")
+
         # Check the time column is correct format and scale
         try:
             if (data['date-obs'][0].scale != 'utc'):
@@ -519,6 +524,11 @@ class CatalogData(BaseEnhancedTable):
         self.data_source = str(data_source)
         self._passband_map = passband_map
 
+        # Check data before copying to avoid recusive loop and non-QTable
+        # data input.
+        if not isinstance(data, Table) or isinstance(data, BaseEnhancedTable):
+            raise TypeError("You must provide an astropy Table as data.")
+
         # Convert input data to QTable (while also checking for required columns)
         super().__init__(self.catalog_descript, data=data, colname_map=colname_map,
                          **kwargs)
@@ -589,6 +599,11 @@ class SourceListData(BaseEnhancedTable):
     }
 
     def __init__(self, data, colname_map=None, **kwargs):
+        # Check data before copying to avoid recusive loop and non-QTable
+        # data input.
+        if not isinstance(data, Table) or isinstance(data, BaseEnhancedTable):
+            raise TypeError("You must provide an astropy Table as data.")
+
         # Process inputs and save as needed
         data = data.copy()
 
