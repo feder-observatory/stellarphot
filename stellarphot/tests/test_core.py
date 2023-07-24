@@ -80,8 +80,8 @@ photcoltypes = ['int', 'float', 'float', 'float', 'float', 'float', 'float', 'fl
                 'float', 'str', 'str', 'int', 'float', 'float', 'float', 'float']
 photcolunits = [None, u.pix, u.pix, u.adu, None, u.deg, u.deg, u.adu, u.adu, u.adu,
                 None, None, None, u.pix, u.pix*u.pix, u.pix, u.pix, u.pix*u.pix, u.s,
-                None, None, u.adu, None, None, None, None, None, None, None, u.electrons,
-                None, u.adu]
+                None, None, u.adu, None, None, None, None, None, None, None,
+                u.electrons, None, u.adu]
 
 # Define initial bad table
 testphot_data = Table(photdata, names=photcolnames, dtype=photcoltypes,
