@@ -1,25 +1,104 @@
 import bottleneck as bn
 import numpy as np
+
+from astropy import units as u
+from astropy.coordinates import SkyCoord, EarthLocation
+from astropy.nddata import CCDData, NoOverlapError
+from astropy.stats import sigma_clipped_stats
+from astropy.table import vstack
+from astropy.time import Time
+
 from photutils import (CircularAnnulus, aperture_photometry, CircularAperture)
 from photutils.centroids import centroid_sources
 
-from astropy.coordinates import SkyCoord, EarthLocation
-from astropy.table import vstack
-from astropy import units as u
-from astropy.time import Time
-
 from ccdproc import ImageFileCollection
 
-from astropy.stats import sigma_clipped_stats
-from astropy.nddata import NoOverlapError
-
+from stellarphot import Camera, PhotometryData, SourceListData
 from .source_detection import compute_fwhm
 
-__all__ = ['photutils_stellar_photometry',
+__all__ = ['single_image_photometry',
+           'photutils_stellar_photometry',
            'faster_sigma_clip_stats',
            'find_too_close', 'clipped_sky_per_pix_stats',
            'add_to_photometry_table', 'photometry_on_directory',
            'calculate_noise', 'find_bjd']
+
+
+def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
+                            aperture_radius, inner_annulus, outer_annulus,
+                            reject_background_outliers=True):
+    """
+    Perform aperture photometry on a single image, with an options for estimating
+    the local background from an annulus around the aperture.
+
+    Parameters
+    ----------
+    ccd_image : `astropy.nddata.CCDData`
+        Image on which to perform aperture photometry.
+
+    sourcelist : `stellarphot.SourceList`
+        Table of extracted sources with positions in terms of pixel coordinates OR
+        RA/Dec coordinates. If both positions provided, pixel coordinates will be used.
+        For RA/Dec coordinates to be used, the image must have a valid WCS.
+
+    camera : `stellarphot.Camera`
+        Camera object which has gain, read noise and dark current set.
+
+    observatory_location : `astropy.coordinates.EarthLocation`
+        Location of the observatory where the images were taken.  Used for calculating
+        the BJD.
+
+    aperture_radius : int
+        Radius of aperture(s) in pixels.
+
+    inner_annulus : int
+        Inner radius of the annulus in pixels.
+
+    outer_annulus : int
+        Outer radius of the annulus in pixels.
+
+    reject_background_outliers : bool, optional
+        If ``True``, sigma clip the pixels in the annulus to reject outlying
+        pixels (e.g. like stars in the annulus)
+
+    Returns
+    -------
+    phot_table : `stellarphot.PhotometryData`
+        Photometry data for all the locations in which aperture photometry was
+        performed.  This may be a subset of the sources in the sourcelist if
+        locations were too close to the edge of the image or to each other for
+        successful apeture photometry.
+
+    """
+
+    ### Check that the input parameters are valid
+    if not isinstance(ccd_image, CCDData):
+        raise TypeError("ccd_image must be a CCDData object")
+    if not isinstance(sourcelist, SourceListData):
+        raise TypeError("sourcelist must be a SourceListData object")
+    if not isinstance(camera, Camera):
+        raise TypeError("camera must be a Camera object")
+    if not isinstance(observatory_location, EarthLocation):
+        raise TypeError("observatory_location must be a EarthLocation object")
+
+    # Check for valid aperture/annulus radii (non-overlapping, etc.)
+    if inner_annulus >= outer_annulus:
+        raise ValueError("outer_annulus must be greater than inner_annulus")
+    if aperture_radius >= inner_annulus:
+        raise ValueError("inner_radius must be greater than aperture_radius")
+
+    # If only RA/Dec provided, convert to pixel coordinates using ccd_image WCS
+    if sourcelist.has_ra_dec and not sourcelist.has_x_y:
+        # If image as WCS, compute RA and Dec of each source
+        try:
+            # Retrieve the RA and Dec of each source as SKyCoord objects, then convert to
+            # arrays of floats to add to table
+            skypos = ccd.wcs.pixel_to_world(sourcelist['ra'], sourcelist['dec'])
+            sourcelist['x'] = skypos.ra.value
+            sourcelist['y'] = skypos.dec.value
+        except AttributeError:
+            # No WCS, error out
+            raise ValueError("ccd_image must have a valid WCS to use RA/Dec coordinates")
 
 
 def photutils_stellar_photometry(ccd_image, sources,
@@ -32,7 +111,7 @@ def photutils_stellar_photometry(ccd_image, sources,
 
     Parameters
     ----------
-    ccd_image : `ccdproc.CCDData`
+    ccd_image : `astropy.nddata.CCDData`
         Image on which to perform aperture photometry.
 
     sources : `astropy.table.Table`
