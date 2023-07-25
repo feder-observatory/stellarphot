@@ -337,20 +337,24 @@ def test_sourcelist_no_skypos():
     test_sl_data2 = test_sl_data.copy()
     del test_sl_data2['ra']
     del test_sl_data2['dec']
-
+    sl_test = SourceListData(input_data=test_sl_data2, colname_map=None)
     assert sl_test['star_id'][0] == 0
     assert np.isnan(sl_test['ra'][4])
     assert np.isnan(sl_test['dec'][2])
+    assert sl_test.has_ra_dec == False
+    assert sl_test.has_x_y == True
 
 
 def test_sourcelist_no_imgpos():
     test_sl_data3 = test_sl_data.copy()
     del test_sl_data3['xcenter']
     del test_sl_data3['ycenter']
-
+    sl_test = SourceListData(input_data=test_sl_data3, colname_map=None)
     assert sl_test['star_id'][0] == 0
     assert np.isnan(sl_test['xcenter'][4])
     assert np.isnan(sl_test['ycenter'][2])
+    assert sl_test.has_ra_dec == True
+    assert sl_test.has_x_y == False
 
 
 def test_sourcelist_missing_cols():
@@ -365,9 +369,7 @@ def test_sourcelist_missing_cols():
     test_sl_data5 = test_sl_data.copy()
     del test_sl_data5['star_id']
     with pytest.raises(ValueError):
-
         sl_test = SourceListData(input_data=test_sl_data5, colname_map=None)
-
 
 def test_sourcelist_recursive():
     # Create good sourcelist data instance
