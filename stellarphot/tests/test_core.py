@@ -84,6 +84,52 @@ feder_cg_16m = Camera(gain = 1.5 * u.electron / u.adu,
 feder_passbands = {'up':'SU', 'gp':'SG', 'rp':'SR', 'zp':'SZ', 'ip':'SI'}
 feder_obs = EarthLocation(lat = 46.86678,lon=-96.45328, height=311)
 
+
+def test_base_enhanced_table_blank():
+    # This should just return a blank BaseEnhancedTable
+    test_base = BaseEnhancedTable()
+    assert isinstance(test_base, BaseEnhancedTable)
+    assert len(test_base) == 0
+
+
+def test_base_enhanced_table_from_existing_table():
+    # Should create a populated dataset properly and display the astropy data
+    test_base2 = BaseEnhancedTable(table_description=test_descript, input_data=testdata)
+    assert len(test_base2['ra']) == 1
+    assert len(test_base2['dec']) == 1
+
+
+def test_base_enhanced_table_missing_column():
+    # Should raise exception because the RA data is missing from input data
+    testdata_nora = testdata.copy()
+    testdata_nora.remove_column('ra')
+    with pytest.raises(ValueError):
+        test_base = BaseEnhancedTable(table_description=test_descript,
+                                      input_data=testdata_nora)
+
+
+def test_base_enhanced_table_missing_badunits():
+    # This will fail due to RA being in units of hours
+    bad_ra_descript = test_descript.copy()
+    bad_ra_descript[1,2] = u.hr
+
+    with pytest.raises(ValueError):
+        test_base = BaseEnhancedTable(table_description=bad_ra_descript,
+                                      input_data=testdata)
+
+
+def test_base_enhanced_table_recursive():
+    # Should create a populated dataset properly and display the astropy data
+    test_base2 = BaseEnhancedTable(table_description=test_descript, input_data=testdata)
+    assert len(test_base2['ra']) == 1
+    assert len(test_base2['dec']) == 1
+
+    # Attempt recursive call
+    with pytest.raises(TypeError):
+        test_base3 = BaseEnhancedTable(table_description=test_descript,
+                                       input_data=test_base2)
+
+
 # Define a realistic table of photometry data (a bit corrupted)
 photdata = np.array([[1, 2049.145245206124, 2054.0849947477964, 109070.60831212997,
                       154443.9371254444, 78.17278712191924, 22.505771480719375,
@@ -162,60 +208,6 @@ computed_columns = ['bjd', 'night']
 testphot_clean = testphot_goodUnits.copy()
 for this_col in computed_columns:
     del testphot_clean[this_col]
-
-# Load test catalog
-test_cat = ascii.read(get_pkg_data_filename('data/test_vsx_table.ecsv'), format='ecsv',
-                      fast_reader=False)
-
-# Load test apertures
-test_sl_data = ascii.read(get_pkg_data_filename('data/test_sourcelist.ecsv'),
-                             format='ecsv',
-                             fast_reader=False)
-
-
-def test_base_enhanced_table_blank():
-    # This should just return a blank BaseEnhancedTable
-    test_base = BaseEnhancedTable()
-    assert isinstance(test_base, BaseEnhancedTable)
-    assert len(test_base) == 0
-
-
-def test_base_enhanced_table_from_existing_table():
-    # Should create a populated dataset properly and display the astropy data
-    test_base2 = BaseEnhancedTable(table_description=test_descript, input_data=testdata)
-    assert len(test_base2['ra']) == 1
-    assert len(test_base2['dec']) == 1
-
-
-def test_base_enhanced_table_missing_column():
-    # Should raise exception because the RA data is missing from input data
-    testdata_nora = testdata.copy()
-    testdata_nora.remove_column('ra')
-    with pytest.raises(ValueError):
-        test_base = BaseEnhancedTable(table_description=test_descript,
-                                      input_data=testdata_nora)
-
-
-def test_base_enhanced_table_missing_badunits():
-    # This will fail due to RA being in units of hours
-    bad_ra_descript = test_descript.copy()
-    bad_ra_descript[1,2] = u.hr
-
-    with pytest.raises(ValueError):
-        test_base = BaseEnhancedTable(table_description=bad_ra_descript,
-                                      input_data=testdata)
-
-
-def test_base_enhanced_table_recursive():
-    # Should create a populated dataset properly and display the astropy data
-    test_base2 = BaseEnhancedTable(table_description=test_descript, input_data=testdata)
-    assert len(test_base2['ra']) == 1
-    assert len(test_base2['dec']) == 1
-
-    # Attempt recursive call
-    with pytest.raises(TypeError):
-        test_base3 = BaseEnhancedTable(table_description=test_descript,
-                                       input_data=test_base2)
 
 
 def test_photometry_blank():
@@ -304,6 +296,11 @@ def test_photometry_inconsistent_computed_col_exists():
     assert np.abs(phot_data['snr'][0].value - 46.795229859903905) < 1e-6
 
 
+# Load test catalog
+test_cat = ascii.read(get_pkg_data_filename('data/test_vsx_table.ecsv'), format='ecsv',
+                      fast_reader=False)
+
+
 def test_catalog_missing_col():
     # Fails with ValueError due to not having 'ra' column
     with pytest.raises(ValueError):
@@ -351,6 +348,12 @@ def test_catalog_recursive():
     with pytest.raises(TypeError):
         catalog_dat2 = CatalogData(input_data=catalog_dat, catalog_name="VSX",
                                    catalog_source="Vizier", colname_map=vsx_colname_map)
+
+
+# Load test apertures
+test_sl_data = ascii.read(get_pkg_data_filename('data/test_sourcelist.ecsv'),
+                             format='ecsv',
+                             fast_reader=False)
 
 
 def test_sourcelist():
