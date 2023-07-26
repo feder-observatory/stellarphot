@@ -213,7 +213,7 @@ for this_col in computed_columns:
 def test_photometry_blank():
     # This should just return a blank PhotometryData
     test_base = PhotometryData()
-    assert type(test_base) == PhotometryData
+    assert isinstance(test_base, PhotometryData)
     assert len(test_base) == 0
 
 
@@ -223,16 +223,16 @@ def test_photometry_data():
                                passband_map=feder_passbands, input_data=testphot_clean)
 
     # Check some aspects of that data are sound
-    assert phot_data.gain == 1.5 *  u.electron / u.adu
-    assert phot_data.read_noise == 10.0 * u.electron
-    assert phot_data.dark_current == 0.01 * u.electron / u.second
-    assert phot_data.lat.value == 46.86678
-    assert phot_data.lat.unit == u.deg
-    assert phot_data.lon.value == -96.45328
-    assert phot_data.lon.unit == u.deg
-    assert phot_data.pixel_scale == 0.563 * u.arcsec / u.pix
-    assert round(phot_data.height.value) == 311
-    assert phot_data.height.unit == u.m
+    assert phot_data.camera.gain == 1.5 *  u.electron / u.adu
+    assert phot_data.camera.read_noise == 10.0 * u.electron
+    assert phot_data.camera.dark_current == 0.01 * u.electron / u.second
+    assert phot_data.camera.pixel_scale == 0.563 * u.arcsec / u.pix
+    assert phot_data.observatory.lat.value == 46.86678
+    assert phot_data.observatory.lat.unit == u.deg
+    assert phot_data.observatory.lon.value == -96.45328
+    assert phot_data.observatory.lon.unit == u.deg
+    assert round(phot_data.observatory.height.value) == 311
+    assert phot_data.observatory.height.unit == u.m
     assert phot_data['night'][0] == 59909
 
     # Checking the BJD computation against Ohio State online calculator for
@@ -245,6 +245,25 @@ def test_photometry_data():
     # which returned 2459910.775405664 (Uses custom IDL, astropy is SOFA checked).
     # Demand a difference of less than 1/20 of a second.
     assert (phot_data['bjd'][0].value - 2459910.775405664)*86400 < 0.05
+
+
+def test_photometry_slicing():
+    # Create photometry data instance
+    phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m,
+                               passband_map=feder_passbands, input_data=testphot_clean)
+
+    # Test slicing works as expected, leaving attributes intact
+    just_cols = phot_data[['ra','dec']]
+    assert just_cols.camera.gain == 1.5 *  u.electron / u.adu
+    assert just_cols.camera.read_noise == 10.0 * u.electron
+    assert just_cols.camera.dark_current == 0.01 * u.electron / u.second
+    assert just_cols.camera.pixel_scale == 0.563 * u.arcsec / u.pix
+    assert just_cols.observatory.lat.value == 46.86678
+    assert just_cols.observatory.lat.unit == u.deg
+    assert just_cols.observatory.lon.value == -96.45328
+    assert just_cols.observatory.lon.unit == u.deg
+    assert round(just_cols.observatory.height.value) == 311
+    assert just_cols.observatory.height.unit == u.m
 
 
 def test_photometry_recursive():

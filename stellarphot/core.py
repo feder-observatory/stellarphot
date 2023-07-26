@@ -119,13 +119,6 @@ class BaseEnhancedTable(QTable):
     Parameters
     ----------
 
-    table_description: dict or dict-like (Default: None)
-        This is a dictionary where each key is a required table column name
-        and the value corresponding to each key is the required dtype
-        (can be None).  This is used to check the format of the input data
-        table.  Columns will be output in the order of the keys in the dictionary
-        with any additional columns tacked on the end.
-
     input_data: `astropy.table.QTable` (Default: None)
         A table containing astronomical data of interest.  This table
         will be checked to make sure all columns listed in table_description
@@ -134,6 +127,13 @@ class BaseEnhancedTable(QTable):
         NOT be removed.  This data is copied, so any changes made during
         validation will not only affect the data attribute of the instance,
         the original input data is left unchanged.
+
+    table_description: dict or dict-like (Default: None)
+        This is a dictionary where each key is a required table column name
+        and the value corresponding to each key is the required dtype
+        (can be None).  This is used to check the format of the input data
+        table.  Columns will be output in the order of the keys in the dictionary
+        with any additional columns tacked on the end.
 
     colname_map: dict, optional (Default: None)
         A dictionary containing old column names as keys and new column
@@ -149,12 +149,12 @@ class BaseEnhancedTable(QTable):
     validation of the inputs is performed and the resulting table is returned.
     """
 
-    def __init__(self, table_description=None, input_data=None, colname_map=None,
+    def __init__(self, *args, input_data=None, table_description=None, colname_map=None,
                  **kwargs):
         if (table_description is None) and (input_data is None):
             # Assume user is trying to create an empty table and let QTable
             # handle it
-            super().__init__(**kwargs)
+            super().__init__(*args, **kwargs)
         else:
             # Confirm a proper table description is passed (that is dict-like with keys
             # and values)
@@ -201,7 +201,6 @@ class BaseEnhancedTable(QTable):
             # Call QTable initializer to finish up
             super().__init__(data=data, **kwargs)
 
-
     def _validate_columns(self, data):
         # Check the format of the data table matches the table_description by
         # checking each column listed in table_description exists and is the
@@ -225,7 +224,6 @@ class BaseEnhancedTable(QTable):
                 except KeyError:
                     raise ValueError(f"data['{this_col}'] is missing from input "
                                      "data.")
-
 
     def _update_colnames(self, colname_map, data):
         # Change column names as desired, done before validating the columns,
@@ -256,15 +254,15 @@ class PhotometryData(BaseEnhancedTable):
     Parameters
     ----------
 
+    input_data: `astropy.table.QTable`, optional (Default: None)
+        A table containing all the instrumental aperture photometry results
+        to be validated.
+
     observatory: `astropy.coordinates.EarthLocation`, optional (Default: None)
         The location of the observatory.
 
     camera: `stellarphot.Camera`, optional (Default: None)
         A description of the CCD used to perform the photometry.
-
-    input_data: `astropy.table.QTable`, optional (Default: None)
-        A table containing all the instrumental aperture photometry results
-        to be validated.
 
     colname_map: dict, optional (Default: None)
         A dictionary containing old column names as keys and new column
@@ -283,28 +281,11 @@ class PhotometryData(BaseEnhancedTable):
 
     Attributes
     ----------
-    gain : float
-        The gain of the camera in units such that the unit of the product `gain`
-        times the image data matches the unit of the `read_noise`.
+    camera: `stellarphot.Camera`
+        A description of the CCD used to perform the photometry.
 
-    read_noise : float
-        The read noise of the camera with units.
-
-    dark_current : float
-        The dark current of the camera in units such that, when multiplied by
-        exposure time, the unit matches the unit of the `read_noise`.
-
-    pixel_scale : float
-        The pixel scale of the camera in units of arcseconds per pixel.
-
-    lat: float
-        The location of the observatory in degrees North.
-
-    lon: float
-        The location of the observatory in degrees East.
-
-    height: float
-        Altitute of the observatory in meters.
+    observatory: `astropy.coordinates.EarthLocation`
+        The location of the observatory.
 
     Notes
     -----
@@ -395,21 +376,20 @@ class PhotometryData(BaseEnhancedTable):
     observatory = None
     camera = None
 
-    def __init__(self, observatory=None, camera=None, input_data=None,
+    def __init__(self, *args, input_data=None, observatory=None, camera=None,
                  colname_map=None, passband_map=None, retain_user_computed=False,
                  **kwargs):
         if (observatory is None) and (camera is None) and (input_data is None):
-            super().__init__(**kwargs)
+            super().__init__(*args, **kwargs)
         else:
-            # Save passband filter name mapping
-            self._passband_map = passband_map.copy()
-
             # Perform input validation
             if not isinstance(observatory, EarthLocation):
                 raise TypeError("observatory must be an "
-                                "astropy.coordinates.EarthLocation object.")
+                                "astropy.coordinates.EarthLocation object instead "
+                                f"of type {type(observatory)}.")
             if not isinstance(camera, Camera):
-                raise TypeError("camera must be a stellarphot.Camera object.")
+                raise TypeError("camera must be a stellarphot.Camera object instead "
+                                f"of type {type(camera)}.")
 
             # Check the time column is correct format and scale
             try:
@@ -423,9 +403,8 @@ class PhotometryData(BaseEnhancedTable):
                                  "astropy.time.Time entries.")
 
             # Convert input data to QTable (while also checking for required columns)
-            super().__init__(table_description=self.phot_descript,
-                             input_data=input_data, colname_map=colname_map,
-                            **kwargs)
+            super().__init__(input_data=input_data, table_description=self.phot_descript,
+                             colname_map=colname_map, **kwargs)
 
             # Add the TableAttributes directly to meta (and adding attribute
             # functions below) since using TableAttributes results in a
@@ -499,7 +478,9 @@ class PhotometryData(BaseEnhancedTable):
 
             # Apply the filter/passband name update
             if passband_map is not None:
+                self._passband_map = passband_map.copy()
                 self._update_passbands()
+
 
     def add_bjd_col(self, observatory):
         """
@@ -521,32 +502,16 @@ class PhotometryData(BaseEnhancedTable):
         return Time(time_barycenter + self['exposure'] / 2, scale='tdb')
 
     @property
-    def lat(self):
-        return self.meta['lat']
+    def camera(self):
+        return Camera(gain=self.meta['gain'],
+                      read_noise=self.meta['read_noise'],
+                      dark_current=self.meta['dark_current'],
+                      pixel_scale=self.meta['pixel_scale'])
 
     @property
-    def lon(self):
-        return self.meta['lon']
-
-    @property
-    def height(self):
-        return self.meta['height']
-
-    @property
-    def gain(self):
-        return self.meta['gain']
-
-    @property
-    def read_noise(self):
-        return self.meta['read_noise']
-
-    @property
-    def dark_current(self):
-        return self.meta['dark_current']
-
-    @property
-    def pixel_scale(self):
-        return self.meta['pixel_scale']
+    def observatory(self):
+        return EarthLocation(lat=self.meta['lat'], lon=self.meta['lon'],
+                             height=self.meta['height'])
 
 class CatalogData(BaseEnhancedTable):
     """
@@ -581,6 +546,15 @@ class CatalogData(BaseEnhancedTable):
         A dictionary containing instrumental passband names as keys and
         AAVSO passband names as values. This is used to automatically
         update the passband column to AAVSO standard names if desired.
+
+    Attributes
+    ----------
+    catalog_name: str
+        User readable name for the catalog.
+
+    catalog_source: str
+        User readable designation for the source of the catalog (could be a
+        URL or a journal reference).
 
     Notes
     -----
@@ -619,11 +593,10 @@ class CatalogData(BaseEnhancedTable):
     catalog_name = None
     catalog_source = None
 
-    def __init__(self, input_data=None, catalog_name=None, catalog_source=None,
-                 colname_map=None, passband_map=None,
-                 **kwargs):
+    def __init__(self, *args, input_data=None, catalog_name=None, catalog_source=None,
+                 colname_map=None, passband_map=None, **kwargs):
         if (input_data is None) and (catalog_name is None) and (catalog_source is None):
-            super().__init__(**kwargs)
+            super().__init__(*args, **kwargs)
         else:
             self._passband_map = passband_map
 
@@ -640,12 +613,13 @@ class CatalogData(BaseEnhancedTable):
                 self.meta['catalog_name'] = str(catalog_name)
                 self.meta['catalog_source'] = str(catalog_source)
 
+                # Apply the filter/passband name update
+                if passband_map is not None:
+                    self._passband_map = passband_map.copy()
+                    self._update_passbands()
+
             else:
                 raise ValueError("You must provide input_data to CatalogData.")
-
-            # Apply the filter/passband name update
-            if passband_map is not None:
-                self._update_passbands()
 
     @property
     def catalog_name(self):
@@ -723,9 +697,9 @@ class SourceListData(BaseEnhancedTable):
         'ycenter' : u.pix
     }
 
-    def __init__(self, input_data=None, colname_map=None, **kwargs):
+    def __init__(self, *args, input_data=None, colname_map=None, **kwargs):
         if (input_data is None):
-            super().__init__(**kwargs)
+            super().__init__(*args, **kwargs)
         else:
             # Check data before copying to avoid recusive loop and non-QTable
             # data input.
