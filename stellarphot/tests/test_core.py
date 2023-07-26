@@ -205,15 +205,15 @@ def test_photometry_data():
                                passband_map=feder_passbands, input_data=testphot_clean)
 
     # Check some aspects of that data are sound
-    assert phot_data.camera.gain == 1.5 *  u.electron / u.adu
-    assert phot_data.camera.read_noise == 10.0 * u.electron
-    assert phot_data.camera.dark_current == 0.01 * u.electron / u.second
-    assert phot_data.observatory.lat.value == 46.86678
-    assert phot_data.observatory.lat.unit == u.deg
-    assert phot_data.observatory.lon.value == -96.45328
-    assert phot_data.observatory.lon.unit == u.deg
-    assert round(phot_data.observatory.height.value) == 311
-    assert phot_data.observatory.height.unit == u.m
+    assert phot_data.gain == 1.5 *  u.electron / u.adu
+    assert phot_data.read_noise == 10.0 * u.electron
+    assert phot_data.dark_current == 0.01 * u.electron / u.second
+    assert phot_data.lat.value == 46.86678
+    assert phot_data.lat.unit == u.deg
+    assert phot_data.lon.value == -96.45328
+    assert phot_data.lon.unit == u.deg
+    assert round(phot_data.height.value) == 311
+    assert phot_data.height.unit == u.m
     assert phot_data['night'][0] == 59909
 
     # Checking the BJD computation against Ohio State online calculator for
@@ -388,3 +388,6 @@ def test_sourcelist_slicing():
     assert slicing_test['star_id'][1] == 2
     assert slicing_test['xcenter'][0] == sl_test['xcenter'][1]
     assert slicing_test['xcenter'][1] == sl_test['xcenter'][2]
+    # Checking attributes survive slicing
+    assert slicing_test.has_ra_dec == True
+    assert slicing_test.has_x_y == True

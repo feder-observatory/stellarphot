@@ -1,5 +1,5 @@
 from astropy import units as u
-from astropy.table import QTable, Table, Column
+from astropy.table import QTable, Table, TableAttribute, Column
 from astropy.coordinates import EarthLocation, SkyCoord
 from astropy.time import Time
 
@@ -22,7 +22,7 @@ class Camera:
         times the image data matches the unit of the `read_noise`.
 
     read_noise : `astropy.quantity.Quantity`
-        The read noise of the camera with units
+        The read noise of the camera with units.
 
     dark_current : `astropy.quantity.Quantity`
         The dark current of the camera in units such that, when multiplied by
@@ -268,12 +268,25 @@ class PhotometryData(BaseEnhancedTable):
 
     Attributes
     ----------
-    camera: `stellarphot.Camera`
-        A description of the CCD used to perform the photometry.
+    gain : float
+        The gain of the camera in units such that the unit of the product `gain`
+        times the image data matches the unit of the `read_noise`.
 
-    observatory: `astropy.coordinates.EarthLocation`
-        The location of the observatory.
+    read_noise : float
+        The read noise of the camera with units.
 
+    dark_current : float
+        The dark current of the camera in units such that, when multiplied by
+        exposure time, the unit matches the unit of the `read_noise`.
+
+    lat: float
+        The location of the observatory in degrees North.
+
+    lon: float
+        The location of the observatory in degrees East.
+
+    height: float
+        Altitute of the observatory in meters.
 
     Notes
     -----
@@ -369,12 +382,16 @@ class PhotometryData(BaseEnhancedTable):
                  **kwargs):
         if (observatory is None) and (camera is None) and (input_data is None):
             super().__init__(**kwargs)
-        else: # Perform input validation
-            # Set attributes describing the observatory and camera as well as
-            # corrections to passband names.
-            self.observatory = observatory.copy()
-            self.camera = camera.copy()
+        else:
+            # Save passband filter name mapping
             self._passband_map = passband_map.copy()
+
+            # Perform input validation
+            if not isinstance(observatory, EarthLocation):
+                raise TypeError("observatory must be an "
+                                "astropy.coordinates.EarthLocation object.")
+            if not isinstance(camera, Camera):
+                raise TypeError("camera must be a stellarphot.Camera object.")
 
             # Check the time column is correct format and scale
             try:
@@ -391,6 +408,17 @@ class PhotometryData(BaseEnhancedTable):
             super().__init__(table_description=self.phot_descript,
                              input_data=input_data, colname_map=colname_map,
                             **kwargs)
+
+            # Add the TableAttributes directly to meta (and adding attribute
+            # functions below) since using TableAttributes results in a
+            # inability to access the values to due a
+            # AttributeError: 'TableAttribute' object has no attribute 'name'
+            self.meta['lat'] = observatory.lat
+            self.meta['lon'] = observatory.lon
+            self.meta['height'] = observatory.height
+            self.meta['gain'] = camera.gain
+            self.meta['read_noise'] = camera.read_noise
+            self.meta['dark_current'] = camera.dark_current
 
             # Check for consistency of counts-related columns
             counts_columns = ['aperture_sum', 'annulus_sum', 'sky_per_pix_avg',
@@ -420,13 +448,13 @@ class PhotometryData(BaseEnhancedTable):
                     # python>=3.10)
                     match this_col:
                         case 'bjd':
-                            self['bjd'] = self.add_bjd_col()
+                            self['bjd'] = self.add_bjd_col(observatory)
 
                         case 'night':
                             # Generate integer counter for nights. This should be
                             # approximately the MJD at noon local before the evening of
                             # the observation.
-                            hr_offset = int(self.observatory.lon.value/15)
+                            hr_offset = int(observatory.lon.value/15)
                             # Compute offset to 12pm Local Time before evening
                             LocalTime = Time(self['date-obs']) + hr_offset*u.hr
                             hr = LocalTime.ymdhms.hour
@@ -454,12 +482,11 @@ class PhotometryData(BaseEnhancedTable):
             if passband_map is not None:
                 self._update_passbands()
 
-    def add_bjd_col(self):
+    def add_bjd_col(self, observatory):
         """
         Returns a astropy column of barycentric Julian date times corresponding to
         the input observations.  It modifies that table in place.
         """
-        place = EarthLocation(lat=self.observatory.lat, lon=self.observatory.lon)
 
         # Convert times at start of each observation to TDB (Barycentric Dynamical Time)
         times = Time(self['date-obs'])
@@ -468,12 +495,35 @@ class PhotometryData(BaseEnhancedTable):
 
         # Compute light travel time corrections
         ip_peg = SkyCoord(ra=self['ra'], dec=self['dec'], unit='degree')
-        ltt_bary = times.light_travel_time(ip_peg, location=place)
+        ltt_bary = times.light_travel_time(ip_peg, location=observatory)
         time_barycenter = times_tdb + ltt_bary
 
         # Return BJD at midpoint of exposure at each location
         return Time(time_barycenter + self['exposure'] / 2, scale='tdb')
 
+    @property
+    def lat(self):
+        return self.meta['lat']
+
+    @property
+    def lon(self):
+        return self.meta['lon']
+
+    @property
+    def height(self):
+        return self.meta['height']
+
+    @property
+    def gain(self):
+        return self.meta['gain']
+
+    @property
+    def read_noise(self):
+        return self.meta['read_noise']
+
+    @property
+    def dark_current(self):
+        return self.meta['dark_current']
 
 class CatalogData(BaseEnhancedTable):
     """
@@ -552,9 +602,6 @@ class CatalogData(BaseEnhancedTable):
         if (input_data is None) and (catalog_name is None) and (catalog_source is None):
             super().__init__(**kwargs)
         else:
-            # Set attributes
-            self.catalog_name = str(catalog_name)
-            self.catalog_source = str(catalog_source)
             self._passband_map = passband_map
 
             if (input_data is not None):
@@ -563,12 +610,27 @@ class CatalogData(BaseEnhancedTable):
                 super().__init__(table_description=self.catalog_descript,
                                 input_data=input_data,
                                 colname_map=colname_map, **kwargs)
+                # Add the TableAttributes directly to meta (and adding attribute
+                # functions below) since using TableAttributes results in a
+                # inability to access the values to due a
+                # AttributeError: 'TableAttribute' object has no attribute 'name'
+                self.meta['catalog_name'] = str(catalog_name)
+                self.meta['catalog_source'] = str(catalog_source)
+
             else:
                 raise ValueError("You must provide input_data to CatalogData.")
 
             # Apply the filter/passband name update
             if passband_map is not None:
                 self._update_passbands()
+
+    @property
+    def catalog_name(self):
+        return self.meta['catalog_name']
+
+    @property
+    def catalog_source(self):
+        return self.meta['catalog_source']
 
 
 class SourceListData(BaseEnhancedTable):
@@ -669,16 +731,16 @@ class SourceListData(BaseEnhancedTable):
                 self._colname_map = None
 
             # Check if RA/Dec or xcenter/ycenter are missing
-            self.has_ra_dec = True
-            self.has_x_y = True
+            self.meta['has_ra_dec'] = True
+            self.meta['has_x_y'] = True
             nosky_pos = ('ra' not in data.colnames or
                         'dec' not in data.colnames)
             noimg_pos = ('xcenter' not in data.colnames or
                         'ycenter' not in data.colnames)
             if nosky_pos:
-                self.has_ra_dec = False
+                self.meta['has_ra_dec'] = False
             if noimg_pos:
-                self.has_x_y = False
+                self.meta['has_x_y'] = False
 
             if (nosky_pos and noimg_pos):
                 raise ValueError("data must have either sky (ra, dec) or "+
@@ -695,3 +757,11 @@ class SourceListData(BaseEnhancedTable):
             # Convert input data to QTable (while also checking for required columns)
             super().__init__(table_description=self.sourcelist_descript,
                              input_data=data, colname_map=None, **kwargs)
+
+    @property
+    def has_ra_dec(self):
+        return self.meta['has_ra_dec']
+
+    @property
+    def has_x_y(self):
+        return self.meta['has_x_y']
