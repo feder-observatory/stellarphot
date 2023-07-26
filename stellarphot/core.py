@@ -1,5 +1,5 @@
 from astropy import units as u
-from astropy.table import QTable, Table, Column
+from astropy.table import QTable, Table, TableAttribute, Column
 from astropy.coordinates import EarthLocation, SkyCoord
 from astropy.time import Time
 

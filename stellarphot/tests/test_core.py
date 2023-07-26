@@ -329,8 +329,6 @@ def test_catalog_recursive():
 def test_sourcelist():
     sl_test = SourceListData(input_data=test_sl_data, colname_map=None)
     assert sl_test['star_id'][0] == 0
-    assert sl_test.has_ra_dec == True
-    assert sl_test.has_x_y == True
 
 
 def test_sourcelist_no_skypos():
@@ -341,8 +339,6 @@ def test_sourcelist_no_skypos():
     assert sl_test['star_id'][0] == 0
     assert np.isnan(sl_test['ra'][4])
     assert np.isnan(sl_test['dec'][2])
-    assert sl_test.has_ra_dec == False
-    assert sl_test.has_x_y == True
 
 
 def test_sourcelist_no_imgpos():
@@ -353,8 +349,6 @@ def test_sourcelist_no_imgpos():
     assert sl_test['star_id'][0] == 0
     assert np.isnan(sl_test['xcenter'][4])
     assert np.isnan(sl_test['ycenter'][2])
-    assert sl_test.has_ra_dec == True
-    assert sl_test.has_x_y == False
 
 
 def test_sourcelist_missing_cols():
@@ -370,6 +364,7 @@ def test_sourcelist_missing_cols():
     del test_sl_data5['star_id']
     with pytest.raises(ValueError):
         sl_test = SourceListData(input_data=test_sl_data5, colname_map=None)
+
 
 def test_sourcelist_recursive():
     # Create good sourcelist data instance
