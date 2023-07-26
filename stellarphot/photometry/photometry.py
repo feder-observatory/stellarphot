@@ -11,6 +11,8 @@ from astropy.time import Time
 from photutils.aperture import CircularAnnulus, aperture_photometry, CircularAperture
 from photutils.centroids import centroid_sources
 
+from scipy.spatial.distance import cdist
+
 from ccdproc import ImageFileCollection
 
 from stellarphot import Camera, PhotometryData, SourceListData
@@ -27,6 +29,8 @@ __all__ = ['single_image_photometry',
 def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
                             aperture_radius, inner_annulus, outer_annulus,
                             shift_tolerance, max_adu,
+                            include_dig_noise=True,
+                            reject_too_close=True,
                             passband_map=None,
                             reject_background_outliers=True,
                             fwhm_by_fit=True, fname=None):
@@ -77,6 +81,15 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     max_adu : float
         Maximum allowed pixel value before a source is considered saturated.
 
+    reject_too_close : bool, optional (Default: True)
+        If ``True``, any sources that are closer than twice the aperture radius
+        are rejected.  If ``False``, all sources in field are used.
+
+    include_dig_noise : bool, optional (Default: True)
+        If ``True``, include the digitization noise in the calculation of the
+        noise for each observation.  If ``False``, only the Poisson noise from
+        the source and the sky will be included.
+
     passband_map: dict, optional (Default: None)
         A dictionary containing instrumental passband names as keys and
         AAVSO passband names as values. This is used to rename the passband
@@ -120,7 +133,8 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     if aperture_radius >= inner_annulus:
         raise ValueError("inner_radius must be greater than aperture_radius")
     if (shift_tolerance<=0):
-        raise ValueError("shift_tolerance must be greater than 0 (should be on order of FWHM)")
+        raise ValueError("shift_tolerance must be greater than 0 (should be on order "
+                         "of FWHM)")
     if (max_adu<=0):
         raise ValueError("max_adu must be greater than 0")
 
@@ -134,6 +148,24 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     ra = sourcelist['ra'].value
     dec = sourcelist['dec'].value
     src_cnt = len(sourcelist)
+
+    # Reject sources that are within an aperture diameter of each other.
+    too_close = find_too_close(sourcelist, aperture_radius,
+                               pixel_scale=camera.pixel_scale)
+    too_close_cnt = np.sum(too_close)
+    non_overlap = ~too_close
+    print(f"single_image_photometry: {too_close_cnt} of {src_cnt} sources within "
+                "2 aperture radii of nearest neighbor", end="")
+    if reject_too_close:
+        # Remove sources too close together
+        star_ids = star_ids[non_overlap]
+        xs = xs[non_overlap]
+        ys = ys[non_overlap]
+        ra = ra[non_overlap]
+        dec = dec[non_overlap]
+        print(" ... removed them.")
+    else:
+        print(" ... keeping them.")
 
     # Remove all source positions too close to edges of image (where the annulus would
     # extend beyond the image boundaries).
@@ -149,17 +181,20 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     ys = ys[in_bounds]
     ra = ra[in_bounds]
     dec = dec[in_bounds]
-    in_cnt = (in_bounds == True).sum()
-    out_cnt = (out_of_bounds == True).sum()
-    print(f"single_image_photometry: {in_cnt} sources in bounds ({out_cnt} out of bounds) of {src_cnt} original sources.")
+    in_cnt = np.sum(in_bounds)
+    out_cnt = np.sum(out_of_bounds)
+    print(f"single_image_photometry: {in_cnt} sources kept of {src_cnt} original "
+          f"sources ({out_cnt} sources too close to image edge).")
 
     # If RA/Dec are available attempt to use them to determine the source positions
     if sourcelist.has_ra_dec and not sourcelist.has_x_y:
         try:
-            imgpos = ccd_image.wcs.world_to_pixel(SkyCoord(ra, dec, unit=u.deg, frame='icrs'))
-            # Recentroid the sources using the WCS-derived positions (this is particularly
-            # useful is processing multiple images of the same field and just passing the
-            # same sourcelist when calling single_image_photometry on each image.
+            imgpos = ccd_image.wcs.world_to_pixel(SkyCoord(ra, dec, unit=u.deg,
+                                                           frame='icrs'))
+            # Recentroid the sources using the WCS-derived positions (this is
+            # particularly useful is processing multiple images of the same field
+            # and just passing the same sourcelist when calling single_image_photometry
+            # on each image.
             try:
                 xcen, ycen = centroid_sources(ccd_image.data,
                                             imgpos[0],
@@ -288,7 +323,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
                             aperture_area=photom['aperture_area'].value,
                             annulus_area=photom['annulus_area'].value,
                             exposure=photom['exposure'].value,
-                            include_digitization=True)
+                            include_digitization=include_dig_noise)
     photom['noise_electrons'] = noise  # Noise in electrons
     photom['noise_cnts'] = noise / camera.gain.value  # Noise in counts
 
@@ -480,23 +515,27 @@ def faster_sigma_clip_stats(data, sigma=5, iters=5, axis=None):
             bn.nanstd(data, axis=axis))
 
 
-def find_too_close(star_locs, aperture_rad, pixel_scale=0.563):
+def find_too_close(sourcelist, aperture_rad, pixel_scale=None):
     """
     Identify sources that are closer together than twice the aperture radius.
+
+    If 'xcenter' and 'ycenter' are available in the sourcelist (as determined by
+    the value of sourcelist.has_x_y), they are used to determine separation of sources
+    in units of pixels, otherwise if only ra/dec are available, the pixel_scale
+    is necessary to determine the separation.
 
     Parameters
     ----------
 
-    star_locs : tuple of numpy array
-        The first entry in the tuple should be the right ascension of the
-        sources, in degrees. The second should be the declination of
-        the sources, in degrees.
+    sourcelist : `stellarphot.SourceListData`
+        A list of sources with x/y and/or RA/Dec coordinates.
 
     aperture_rad : int
         Radius of the aperture, in pixels.
 
-    pixel_scale : float, optional
-        Pixel scale of the image in arcsec/pixel
+    pixel_scale : float, optional (Default: None)
+        Pixel scale of the image in arcsec/pixel. Only required
+        if x/y coordinates are NOT provided.
 
     Returns
     -------
@@ -505,11 +544,26 @@ def find_too_close(star_locs, aperture_rad, pixel_scale=0.563):
         Array the same length as the RA/Dec that is ``True`` where the sources
         are closer than two aperture radii, ``False`` otherwise.
     """
-    star_coords = SkyCoord(ra=star_locs[0], dec=star_locs[1],
+    if not isinstance(sourcelist, SourceListData):
+        raise TypeError("sourcelist must be of type SourceListData not "
+                        f"{type(sourcelist)}")
+
+    if sourcelist.has_x_y:
+        x, y = sourcelist['xcenter'], sourcelist['ycenter']
+        # Find the pixel distance to the nearest neighbor for each source
+        dist_mat = cdist(np.array([x, y]).T, np.array([x, y]).T, metric='euclidean')
+        np.fill_diagonal(dist_mat, np.inf)
+        # Return array with True where the distance is less than twice the aperture 
+        # radius
+        return (dist_mat.min(0) < 2 * aperture_rad)
+    elif sourcelist.has_ra_dec:
+        star_coords = SkyCoord(ra=sourcelist['ra'], dec=sourcelist['dec'],
                            frame='icrs', unit='degree')
-    idxc, d2d, d3d = star_coords.match_to_catalog_sky(star_coords,
-                                                      nthneighbor=2)
-    return d2d < (aperture_rad * 2 * 0.563 * u.arcsec)
+        idxc, d2d, d3d = star_coords.match_to_catalog_sky(star_coords,
+                                                        nthneighbor=2)
+        return (d2d < (aperture_rad * 2 * pixel_scale * u.arcsec))
+    else:
+        raise ValueError("sourcelist must have x/y or ra/dec coordinates")
 
 
 def clipped_sky_per_pix_stats(data, annulus, sigma=5, iters=5):

@@ -1,7 +1,10 @@
 import pytest
 import numpy as np
+from astropy.io import ascii
+from astropy.utils.data import get_pkg_data_filename
 
-from stellarphot.photometry import calculate_noise
+from stellarphot.photometry import calculate_noise, find_too_close
+from stellarphot.core import SourceListData
 
 GAINS = [1.0, 1.5, 2.0]
 
@@ -113,3 +116,48 @@ def test_calc_noise_messy_case(digit, expected):
                         include_digitization=digit),
         expected
     )
+
+
+def test_find_too_close():
+    # Load test sourcelist into memory
+    test_sl_data = ascii.read(get_pkg_data_filename('data/test_corner.ecsv'),
+                                format='ecsv',
+                                fast_reader=False)
+
+    # Create no sky position sourcelist
+    test_sl_data_nosky = test_sl_data.copy()
+    test_sl_data_nosky.remove_column('ra')
+    test_sl_data_nosky.remove_column('dec')
+
+    # Create no image position sourcelist
+    test_sl_data_noimgpos = test_sl_data.copy()
+    test_sl_data_noimgpos.remove_column('xcenter')
+    test_sl_data_noimgpos.remove_column('ycenter')
+
+    # Create SourceListData objects
+    sl_test = SourceListData(input_data=test_sl_data, colname_map=None)
+    sl_test_nosky = SourceListData(input_data=test_sl_data_nosky, colname_map=None)
+    sl_test_noimgpos = SourceListData(input_data=test_sl_data_noimgpos, colname_map=None)
+
+    assert sl_test.has_ra_dec == True
+    assert sl_test.has_x_y == True
+    assert sl_test_nosky.has_ra_dec == False
+    assert sl_test_nosky.has_x_y == True
+    assert sl_test_noimgpos.has_ra_dec == True
+    assert sl_test_noimgpos.has_x_y == False
+
+    # Test full positions available
+    ap_in_asec = 5
+    feder_scale = 0.563
+    aperture_rad = ap_in_asec / feder_scale
+
+    rejects = find_too_close(sl_test, aperture_rad, pixel_scale=feder_scale)
+    assert np.sum(rejects) == 5
+
+    # Test only sky positions available
+    rejects = find_too_close(sl_test_noimgpos, aperture_rad, pixel_scale=feder_scale)
+    assert np.sum(rejects) == 5
+
+    # Test only image positions available
+    rejects = find_too_close(sl_test_nosky, aperture_rad, pixel_scale=feder_scale)
+    assert np.sum(rejects) == 5

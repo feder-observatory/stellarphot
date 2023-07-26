@@ -403,7 +403,8 @@ class PhotometryData(BaseEnhancedTable):
                                  "astropy.time.Time entries.")
 
             # Convert input data to QTable (while also checking for required columns)
-            super().__init__(input_data=input_data, table_description=self.phot_descript,
+            super().__init__(input_data=input_data,
+                             table_description=self.phot_descript,
                              colname_map=colname_map, **kwargs)
 
             # Add the TableAttributes directly to meta (and adding attribute
