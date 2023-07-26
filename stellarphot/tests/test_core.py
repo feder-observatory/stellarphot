@@ -15,18 +15,43 @@ def test_camera_attributes():
     gain = 2.0 * u.electron / u.adu
     read_noise = 10 * u.electron
     dark_current = 0.01 * u.electron / u.second
-    c = Camera(gain=gain, read_noise=read_noise, dark_current=dark_current)
+    pixel_scale = 0.563 * u.arcsec / u.pix
+    c = Camera(gain=gain,
+               read_noise=read_noise,
+               dark_current=dark_current,
+               pixel_scale=pixel_scale)
     assert c.gain == gain
     assert c.dark_current == dark_current
     assert c.read_noise == read_noise
+    assert c.pixel_scale == pixel_scale
 
 
 def test_camera_unitscheck():
-    gain = 2.0
-    read_noise = 10
-    dark_current = 0.01
+    gain = 2.0 * u.electron / u.adu
+    read_noise = 10 * u.electron
+    dark_current = 0.01 * u.electron / u.second
+    pixel_scale = 0.563 * u.arcsec / u.pix
+
     with pytest.raises(TypeError):
-        c = Camera(gain=gain, read_noise=read_noise, dark_current=dark_current)
+        c = Camera(gain=gain.value,
+                read_noise=read_noise,
+                dark_current=dark_current,
+                pixel_scale=pixel_scale)
+    with pytest.raises(TypeError):
+        c = Camera(gain=gain,
+                read_noise=read_noise.value,
+                dark_current=dark_current,
+                pixel_scale=pixel_scale)
+    with pytest.raises(TypeError):
+        c = Camera(gain=gain,
+                read_noise=read_noise,
+                dark_current=dark_current.value,
+                pixel_scale=pixel_scale)
+    with pytest.raises(TypeError):
+        c = Camera(gain=gain,
+                read_noise=read_noise,
+                dark_current=dark_current,
+                pixel_scale=pixel_scale.value)
 
 
 # Create several test descriptions for use in base_enhanced_table tests.
@@ -54,7 +79,8 @@ testdata = Table(data, names=colnames, dtype=coltypes, units=colunits)
 # Define some configuration information assuming Feder telescope
 feder_cg_16m = Camera(gain = 1.5 * u.electron / u.adu,
                       read_noise = 10.0 * u.electron,
-                      dark_current=0.01 * u.electron / u.second)
+                      dark_current=0.01 * u.electron / u.second,
+                      pixel_scale = 0.563 * u.arcsec / u.pix)
 feder_passbands = {'up':'SU', 'gp':'SG', 'rp':'SR', 'zp':'SZ', 'ip':'SI'}
 feder_obs = EarthLocation(lat = 46.86678,lon=-96.45328, height=311)
 
@@ -212,6 +238,7 @@ def test_photometry_data():
     assert phot_data.lat.unit == u.deg
     assert phot_data.lon.value == -96.45328
     assert phot_data.lon.unit == u.deg
+    assert phot_data.pixel_scale == 0.563 * u.arcsec / u.pix
     assert round(phot_data.height.value) == 311
     assert phot_data.height.unit == u.m
     assert phot_data['night'][0] == 59909

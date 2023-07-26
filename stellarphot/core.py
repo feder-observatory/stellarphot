@@ -28,6 +28,9 @@ class Camera:
         The dark current of the camera in units such that, when multiplied by
         exposure time, the unit matches the unit of the `read_noise`.
 
+    pixel_scale : `astropy.quantity.Quantity`
+        The pixel scale of the camera in units of arcseconds per pixel.
+
     Attributes
     ----------
 
@@ -42,6 +45,9 @@ class Camera:
         The dark current of the camera in units such that, when multiplied
         by exposure time, the unit matches the unit of the `read_noise`.
 
+    pixel_scale : `astropy.quantity.Quantity`
+        The pixel scale of the camera in units of arcseconds per pixel.
+
     Notes
     -----
     The gain, read noise, and dark current are all assumed to be constant
@@ -53,18 +59,22 @@ class Camera:
     >>> from stellarphot import Camera
     >>> camera = Camera(gain=1.0 * u.electron / u.adu,
     ...                 read_noise=1.0 * u.electron,
-    ...                 dark_current=0.01 * u.electron / u.second)
+    ...                 dark_current=0.01 * u.electron / u.second,
+    ...                 pixel_scale=0.563 * u.arcsec / u.pixel)
     >>> camera.gain
     <Quantity 1. electron / adu>
     >>> camera.read_noise
     <Quantity 1. electron>
     >>> camera.dark_current
     <Quantity 0.01 electron / s>
+    >>> camera.pixel_scale
+    <Quantity 0.563 arcsec / pix>
 
     """
     def __init__(self, gain=1.0 * u.electron / u.adu,
                  read_noise=1.0 * u.electron,
-                 dark_current=0.01 * u.electron / u.second):
+                 dark_current=0.01 * u.electron / u.second,
+                 pixel_scale=1.0 * u.arcsec / u.pixel):
         super().__init__()
 
         # Check that input has units and if not crap out.
@@ -82,11 +92,16 @@ class Camera:
             self.dark_current = dark_current
         else:
             raise TypeError("dark_current must have units.")
+        if isinstance(pixel_scale, u.Quantity):
+            self.pixel_scale = pixel_scale
+        else:
+            raise TypeError("pixel_scale must have units.")
 
     def copy(self):
         return Camera(gain=self.gain,
                       read_noise=self.read_noise,
-                      dark_current=self.dark_current)
+                      dark_current=self.dark_current,
+                      pixel_scale=self.pixel_scale)
 
     def __copy__(self):
         return self.copy()
@@ -279,6 +294,9 @@ class PhotometryData(BaseEnhancedTable):
         The dark current of the camera in units such that, when multiplied by
         exposure time, the unit matches the unit of the `read_noise`.
 
+    pixel_scale : float
+        The pixel scale of the camera in units of arcseconds per pixel.
+
     lat: float
         The location of the observatory in degrees North.
 
@@ -419,6 +437,7 @@ class PhotometryData(BaseEnhancedTable):
             self.meta['gain'] = camera.gain
             self.meta['read_noise'] = camera.read_noise
             self.meta['dark_current'] = camera.dark_current
+            self.meta['pixel_scale'] = camera.pixel_scale
 
             # Check for consistency of counts-related columns
             counts_columns = ['aperture_sum', 'annulus_sum', 'sky_per_pix_avg',
@@ -467,7 +486,7 @@ class PhotometryData(BaseEnhancedTable):
                                 - LocalTime.ymdhms.second*u.s
                             shift = Column(data = delta, name='shift')
                             # Compute MJD at local noon before the evening of this
-                            # observation
+                            # observation.
                             self['night'] = Column(data=
                                                    np.array((Time(self['date-obs'])
                                                              + shift).to_value('mjd'),
@@ -524,6 +543,10 @@ class PhotometryData(BaseEnhancedTable):
     @property
     def dark_current(self):
         return self.meta['dark_current']
+
+    @property
+    def pixel_scale(self):
+        return self.meta['pixel_scale']
 
 class CatalogData(BaseEnhancedTable):
     """
@@ -731,16 +754,16 @@ class SourceListData(BaseEnhancedTable):
                 self._colname_map = None
 
             # Check if RA/Dec or xcenter/ycenter are missing
-            self.meta['has_ra_dec'] = True
-            self.meta['has_x_y'] = True
+            ra_dec_present = True
+            x_y_present = True
             nosky_pos = ('ra' not in data.colnames or
                         'dec' not in data.colnames)
             noimg_pos = ('xcenter' not in data.colnames or
                         'ycenter' not in data.colnames)
             if nosky_pos:
-                self.meta['has_ra_dec'] = False
+                ra_dec_present = False
             if noimg_pos:
-                self.meta['has_x_y'] = False
+                x_y_present = False
 
             if (nosky_pos and noimg_pos):
                 raise ValueError("data must have either sky (ra, dec) or "+
@@ -757,6 +780,8 @@ class SourceListData(BaseEnhancedTable):
             # Convert input data to QTable (while also checking for required columns)
             super().__init__(table_description=self.sourcelist_descript,
                              input_data=data, colname_map=None, **kwargs)
+            self.meta['has_ra_dec'] = ra_dec_present
+            self.meta['has_x_y'] = x_y_present
 
     @property
     def has_ra_dec(self):
