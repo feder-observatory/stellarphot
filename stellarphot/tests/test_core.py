@@ -150,7 +150,7 @@ test_sl_data = ascii.read(get_pkg_data_filename('data/test_sourcelist.ecsv'),
 def test_base_enhanced_table_blank():
     # This should just return a blank BaseEnhancedTable
     test_base = BaseEnhancedTable()
-    assert type(test_base) == BaseEnhancedTable
+    assert isinstance(test_base, BaseEnhancedTable)
     assert len(test_base) == 0
 
 

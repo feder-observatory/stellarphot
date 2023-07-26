@@ -156,35 +156,35 @@ class BaseEnhancedTable(QTable):
                 raise TypeError("You must provide an astropy Table and NOT a "
                                 "BaseEnhancedTable as input_data (currently of "
                                 f"type {type(input_data)}).")
-            else:
-                # Copy data before potential modification
-                data = input_data.copy()
 
-                # Rename columns before validation (if needed)
-                if colname_map is not None:
-                    # Confirm a proper colname_map is passed
-                    try:
-                        self._colname_map = {k: v for k, v in colname_map.items()}
-                    except AttributeError:
-                        raise TypeError("You must provide a dict as table_description "
-                                        "(input table_description is type "
-                                        f"{type(self._table_description)}).")
+            # Copy data before potential modification
+            data = input_data.copy()
 
-                    self._update_colnames(self._colname_map, data)
+            # Rename columns before validation (if needed)
+            if colname_map is not None:
+                # Confirm a proper colname_map is passed
+                try:
+                    self._colname_map = {k: v for k, v in colname_map.items()}
+                except AttributeError:
+                    raise TypeError("You must provide a dict as table_description "
+                                    "(input table_description is type "
+                                    f"{type(self._table_description)}).")
 
-                # Validate the columns
-                self._validate_columns(data)
+                self._update_colnames(self._colname_map, data)
 
-                # Revise column order to be in the order listed in table_description
-                # with unlisted columns tacked on the end
-                order_col_list = list(self._table_description.keys())
-                for col in data.colnames:
-                    if col not in order_col_list:
-                        order_col_list.append(col)
-                data = data[order_col_list]
+            # Validate the columns
+            self._validate_columns(data)
 
-                # Call QTable initializer to finish up
-                super().__init__(data=data, **kwargs)
+            # Revise column order to be in the order listed in table_description
+            # with unlisted columns tacked on the end
+            order_col_list = list(self._table_description.keys())
+            for col in data.colnames:
+                if col not in order_col_list:
+                    order_col_list.append(col)
+            data = data[order_col_list]
+
+            # Call QTable initializer to finish up
+            super().__init__(data=data, **kwargs)
 
 
     def _validate_columns(self, data):
@@ -241,13 +241,13 @@ class PhotometryData(BaseEnhancedTable):
     Parameters
     ----------
 
-    observatory: `astropy.coordinates.EarthLocation` (Default: None)
+    observatory: `astropy.coordinates.EarthLocation`, optional (Default: None)
         The location of the observatory.
 
-    camera: `stellarphot.Camera` (Default: None)
+    camera: `stellarphot.Camera`, optional (Default: None)
         A description of the CCD used to perform the photometry.
 
-    input_data: `astropy.table.QTable` (Default: None)
+    input_data: `astropy.table.QTable`, optional (Default: None)
         A table containing all the instrumental aperture photometry results
         to be validated.
 
@@ -487,15 +487,15 @@ class CatalogData(BaseEnhancedTable):
 
     Parameters
     ----------
-    input_data: `astropy.table.Table` (default: None)
+    input_data: `astropy.table.Table`, optional (Default: None)
         A table containing all the astronomical catalog data to be validated.
         This data is copied, so any changes made during validation will not
         affect the input data, only the data in the class.
 
-    catalog_name: str (default: None)
+    catalog_name: str, optional (Default: None)
         User readable name for the catalog.
 
-    catalog_source: str (default: None)
+    catalog_source: str, optional (Default: None)
         User readable designation for the source of the catalog (could be a
         URL or a journal reference).
 
@@ -511,8 +511,8 @@ class CatalogData(BaseEnhancedTable):
 
     Notes
     -----
-    For validation of inputs, you must provide input_data, name, and
-    data_source.  If you do not, an empty table will be returned.
+    For validation of inputs, you must provide input_data, catalog_name, and
+    catalog_source.  If you do not, an empty table will be returned.
 
     input_data MUST contain the following columns with the following units:
 
@@ -579,7 +579,7 @@ class SourceListData(BaseEnhancedTable):
 
     Parameters
     ----------
-    data: `astropy.table.Table` (Default: None)
+    input_data: `astropy.table.Table`, optional (Default: None)
         A table containing all the source list data to be validated.
         This data is copied, so any changes made during validation will not
         affect the input data, only the data in the class.
