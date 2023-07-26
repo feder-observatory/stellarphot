@@ -8,7 +8,7 @@ from astropy.stats import sigma_clipped_stats
 from astropy.table import vstack, Column
 from astropy.time import Time
 
-from photutils.aperture import (CircularAnnulus, aperture_photometry, CircularAperture)
+from photutils.aperture import CircularAnnulus, aperture_photometry, CircularAperture
 from photutils.centroids import centroid_sources
 
 from ccdproc import ImageFileCollection
