@@ -5,10 +5,10 @@ from astropy import units as u
 from astropy.coordinates import SkyCoord, EarthLocation
 from astropy.nddata import CCDData, NoOverlapError
 from astropy.stats import sigma_clipped_stats
-from astropy.table import vstack
+from astropy.table import vstack, Column
 from astropy.time import Time
 
-from photutils import (CircularAnnulus, aperture_photometry, CircularAperture)
+from photutils.aperture import (CircularAnnulus, aperture_photometry, CircularAperture)
 from photutils.centroids import centroid_sources
 
 from ccdproc import ImageFileCollection
@@ -26,10 +26,16 @@ __all__ = ['single_image_photometry',
 
 def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
                             aperture_radius, inner_annulus, outer_annulus,
-                            reject_background_outliers=True):
+                            shift_tolerance, max_adu,
+                            reject_background_outliers=True,
+                            fwhm_by_fit=True, fname=None):
     """
     Perform aperture photometry on a single image, with an options for estimating
-    the local background from an annulus around the aperture.
+    the local background from an annulus around the aperture.  If the sky positions
+    of the sources are in the sourcelist and not the image positions (x,y), then
+    the function will compute the image positions from the sky positions using the
+    WCS of the image.  It assumes the input sky positions are in decimal degree units
+    and in the ICRS frame.
 
     Parameters
     ----------
@@ -57,21 +63,45 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     outer_annulus : int
         Outer radius of the annulus in pixels.
 
-    reject_background_outliers : bool, optional
+    shift_tolerance : float
+        If the image position needs to be computed using WCS, then computed
+        impage positions are refined by afterward centroiding the sources.
+        This reflects the tolerance in pixels for the shift between the
+        the computed positions and the refined positions, in pixels.  Since we
+        would not expect the shift to be more than the FWHM, a measured FWHM
+        might be a good value to provide here.
+
+    max_adu : float
+        Maximum allowed pixel value before a source is considered saturated.
+
+    reject_background_outliers : bool, optional (default: True)
         If ``True``, sigma clip the pixels in the annulus to reject outlying
         pixels (e.g. like stars in the annulus)
 
+    fwhm_by_fit : bool, optional (default: True)
+        If ``True``, the FWHM will be calculated by fitting a Gaussian to
+        the star. If ``False``, the FWHM will be calculated by finding the
+        second moments of the light distribution. Default is ``True``.
+
+    fname : str, optional
+        Name of the image file on which photometry is being performed.
+
+
     Returns
     -------
+
     phot_table : `stellarphot.PhotometryData`
         Photometry data for all the locations in which aperture photometry was
         performed.  This may be a subset of the sources in the sourcelist if
         locations were too close to the edge of the image or to each other for
         successful apeture photometry.
 
+    out_of_bounds : list
+        This of the star_ids of the sources that fell outside the image and did not
+        have photometry performed.
     """
 
-    ### Check that the input parameters are valid
+    # Check that the input parameters are valid
     if not isinstance(ccd_image, CCDData):
         raise TypeError("ccd_image must be a CCDData object")
     if not isinstance(sourcelist, SourceListData):
@@ -80,25 +110,164 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
         raise TypeError("camera must be a Camera object")
     if not isinstance(observatory_location, EarthLocation):
         raise TypeError("observatory_location must be a EarthLocation object")
-
-    # Check for valid aperture/annulus radii (non-overlapping, etc.)
     if inner_annulus >= outer_annulus:
         raise ValueError("outer_annulus must be greater than inner_annulus")
     if aperture_radius >= inner_annulus:
         raise ValueError("inner_radius must be greater than aperture_radius")
+    if (shift_tolerance<=0):
+        raise ValueError("shift_tolerance must be greater than 0 (should be on order of FWHM)")
+    if (max_adu<=0):
+        raise ValueError("max_adu must be greater than 0")
 
-    # If only RA/Dec provided, convert to pixel coordinates using ccd_image WCS
+    # Set hot pixels to NaN
+    ccd_image.data[ccd_image.data > max_adu] = np.nan
+
+    # Extract necessary values from sourcelist structure
+    star_ids = sourcelist['star_id'].value
+    xs = sourcelist['xcenter'].value
+    ys = sourcelist['ycenter'].value
+    ra = sourcelist['ra'].value
+    dec = sourcelist['dec'].value
+    src_cnt = len(sourcelist)
+
+    # Remove all source positions too close to edges of image (where the annulus would
+    # extend beyond the image boundaries).
+    padding = outer_annulus
+    out_of_bounds = ( (xs < padding) | (xs > (ccd_image.shape[1] - padding)) |
+                    (ys < padding) | (ys  > (ccd_image.shape[0] - padding)) )
+    in_bounds = ~out_of_bounds
+    # Track the out of bounds sources
+    out_of_bounds_sources = star_ids[out_of_bounds]
+    # Remove sources too close to the edges
+    star_ids = star_ids[in_bounds]
+    xs = xs[in_bounds]
+    ys = ys[in_bounds]
+    ra = ra[in_bounds]
+    dec = dec[in_bounds]
+    in_cnt = (in_bounds == True).sum()
+    out_cnt = (out_of_bounds == True).sum()
+    print(f"single_image_photometry: {in_cnt} sources in bounds ({out_cnt} out of bounds) of {src_cnt} original sources.")
+
+    # If RA/Dec are available attempt to use them to determine the source positions
     if sourcelist.has_ra_dec and not sourcelist.has_x_y:
-        # If image as WCS, compute RA and Dec of each source
+        skypos = SkyCoord(ra, dec)
         try:
-            # Retrieve the RA and Dec of each source as SKyCoord objects, then convert to
-            # arrays of floats to add to table
-            skypos = ccd.wcs.pixel_to_world(sourcelist['ra'], sourcelist['dec'])
-            sourcelist['x'] = skypos.ra.value
-            sourcelist['y'] = skypos.dec.value
+            imgpos = ccd_image.wcs.world_to_pixel(SkyCoord(ra, dec, unit=u.deg, frame='icrs'))
+            # Recentroid the sources using the WCS-derived positions (this is particularly
+            # useful is processing multiple images of the same field and just passing the
+            # same sourcelist when calling single_image_photometry on each image.
+            try:
+                xcen, ycen = centroid_sources(ccd_image.data,
+                                            imgpos[0],
+                                            imgpos[1],
+                                            box_size=2 * aperture + 1)
+                # Calculate offset between centroid in this image and the positions
+                # based on input RA/Dec.
+                center_diff = np.sqrt((xs - xcen)**2 + (ys - ycen)**2)
+
+                # The center really shouldn't move more than about the fwhm, could
+                # rework this in the future to use that instead.
+                too_much_shift = center_diff > shift_tolerance
+
+                # If the shift is too large, use the WCS-derived positions instead
+                # (these sources are probably too faint for centroiding to work well)
+                xcen[too_much_shift] = xs[too_much_shift]
+                ycen[too_much_shift] = ys[too_much_shift]
+                xs, ys = xcen, ycen
+            except NoOverlapError:
+                print('single_image_photometry: determining new centroid failed... SKIPPING THIS IMAGE!')
+                # continue
+                raise ValueError("Crap")
         except AttributeError:
-            # No WCS, error out
-            raise ValueError("ccd_image must have a valid WCS to use RA/Dec coordinates")
+            # No WCS
+            print("single_image_photometry: ccd_image must have a valid WCS to use "
+                    "RA/Dec ... SKIPPING THIS IMAGE!")
+            # continue
+            raise ValueError("Crap")
+
+    # Define apertures and annuli for the aperture photometry
+    aper_locs = np.array([xs, ys]).T
+    apers = CircularAperture(aper_locs, r=aperture_radius)
+    anuls = CircularAnnulus(aper_locs, r_in=inner_annulus, r_out=outer_annulus)
+
+    # Perform the aperture photometry
+    photom = aperture_photometry(ccd_image.data, (apers, anuls),
+                                mask=ccd_image.mask, method='center')
+
+    # Add source ids to the photometry table
+    photom['star_id'] = star_ids
+
+    # Add various CCD image parameters to the photometry table
+    if fname is not None:
+        photom['file'] = fname
+    photom['exposure'] = [ccd_image.header['exposure']] * len(photom) * u.second
+    photom['date-obs'] = Column(data=Time([ccd_image.header['DATE-OBS']] * len(photom),
+                                format='isot', scale='utc'), name='date-obs')
+    metadata_to_add = ['AIRMASS', 'FILTER']
+    for meta in metadata_to_add:
+        photom[meta.lower()] = [ccd_image.header[meta]] * len(photom)
+
+    # Save aperture and annulus information
+    photom.rename_column('aperture_sum_0', 'aperture_sum')
+    photom.rename_column('aperture_sum_1', 'annulus_sum')
+    photom['aperture'] = apers.r * u.pixel
+    photom['aperture_area'] = apers.area * u.pixel * u.pixel
+    photom['annulus_inner'] = anuls.r_in * u.pixel
+    photom['annulus_outer'] = anuls.r_out * u.pixel
+    photom['annulus_area'] = anuls.area  * u.pixel * u.pixel
+
+    print('single_image_photometry: computing clipped sky stats ...')
+    try:
+        avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
+                clipped_sky_per_pix_stats(ccd_image, anuls)
+    except AttributeError:
+        print('single_image_photometry: BAD ANNULUS!')
+        avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
+            np.nan, np.nan, np.nan
+    photom['sky_per_pix_avg'] = avg_sky_per_pix
+    photom['sky_per_pix_med'] = med_sky_per_pix
+    photom['sky_per_pix_std'] = std_sky_per_pix
+    print('                          ...DONE computing clipped sky stats')
+    photom['aperture_net_counts'] = (photom['aperture_sum'].value -
+                                    (photom['aperture_area'].value *
+                                    photom['sky_per_pix_avg'].value))
+
+    # fix units on sums
+    photom['aperture_sum'].unit = photom['sky_per_pix_avg'].unit
+    photom['annulus_sum'].unit = photom['sky_per_pix_avg'].unit
+    photom['aperture_net_counts'].unit = photom['sky_per_pix_avg'].unit
+
+    # Fit the FWHM of the sources
+    print('single_image_photometry: fitting fwhm of all sources ...')
+    fwhm_x, fwhm_y = compute_fwhm(ccd_image, photom, fit=fwhm_by_fit)
+    print('                          ...DONE fitting fwhm of all sources')
+
+    # Deal with bad FWHM values
+    bad_fwhm = (fwhm_x<1) | (fwhm_y<1) # Set bad values to NaN now
+    fwhm_x[bad_fwhm] = np.nan
+    fwhm_y[bad_fwhm] = np.nan
+    photom['fwhm_x'] = fwhm_x * u.pixel
+    photom['fwhm_y'] = fwhm_y * u.pixel
+    photom['width'] = ((fwhm_x + fwhm_y) / 2) * u.pixel
+
+    # Deal with bad counts
+    # This can happen, for example, when the object is faint
+    # and centroiding is bad.
+    bad_cnts = photom['aperture_net_counts'].value < 0
+    all_bads = bad_cnts | bad_fwhm
+    photom['aperture_net_counts'][all_bads] = np.nan
+
+    # Compute instrumental magnitudes
+    photom['mag_inst'] = \
+        (-2.5 * np.log10(camera.gain.value * photom['aperture_net_counts'].value /
+                            photom['exposure'].value))
+
+    # TO DO
+    # - filter for too close sources
+    # - Convert to PhotometryData object
+    #   (this will add 'night' and 'bjd' columns)
+
+    return photom, out_of_bounds_sources
 
 
 def photutils_stellar_photometry(ccd_image, sources,
@@ -684,7 +853,7 @@ def calculate_noise(gain=1.0, read_noise=0.0, dark_current_per_sec=0.0,
     :math:`B` is the annulus area in pixels,
     :math:`S` is the sky counts per pixel,
     :math:`D` is the dark current in electrons per second,
-    :math:`R` is the read noise in electrons per pixel per read, 
+    :math:`R` is the read noise in electrons per pixel per read,
     and :math:`t` is exposure time in seconds.
 
     Note: The :math:`(0.289 G)^2` term is "digitization noise" and is optional.
