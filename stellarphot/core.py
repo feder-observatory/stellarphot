@@ -589,6 +589,14 @@ class SourceListData(BaseEnhancedTable):
         names as values.  This is used to automatically update the column
         names to the desired names BEFORE the validation is performed.
 
+    Attributes
+    ----------
+    has_ra_dec: bool
+        True if the table has sky-based locations (ra/dec), False otherwise.
+
+    has_x_y: bool
+        True if the table has image-based locations (x/y), False otherwise.
+
     Notes
     -----
     For validation of inputs, you must provide input_data, if you do not,
@@ -661,10 +669,17 @@ class SourceListData(BaseEnhancedTable):
                 self._colname_map = None
 
             # Check if RA/Dec or xcenter/ycenter are missing
+            self.has_ra_dec = True
+            self.has_x_y = True
             nosky_pos = ('ra' not in data.colnames or
                         'dec' not in data.colnames)
             noimg_pos = ('xcenter' not in data.colnames or
                         'ycenter' not in data.colnames)
+            if nosky_pos:
+                self.has_ra_dec = False
+            if noimg_pos:
+                self.has_x_y = False
+
             if (nosky_pos and noimg_pos):
                 raise ValueError("data must have either sky (ra, dec) or "+
                                 "image (xcenter, ycenter) position.")
