@@ -146,23 +146,19 @@ test_sl_data = ascii.read(get_pkg_data_filename('data/test_sourcelist.ecsv'),
                              format='ecsv',
                              fast_reader=False)
 
+
 def test_base_enhanced_table_blank():
-    # This should raise error because you are attempting a blank data set
-    with pytest.raises(TypeError):
-        test_base = BaseEnhancedTable(test_descript)
+    # This should just return a blank BaseEnhancedTable
+    test_base = BaseEnhancedTable()
+    assert isinstance(test_base, BaseEnhancedTable)
+    assert len(test_base) == 0
 
 
 def test_base_enhanced_table_from_existing_table():
     # Should create a populated dataset properly and display the astropy data
-    test_base2 = BaseEnhancedTable(test_descript, testdata)
+    test_base2 = BaseEnhancedTable(table_description=test_descript, input_data=testdata)
     assert len(test_base2['ra']) == 1
     assert len(test_base2['dec']) == 1
-
-
-def test_base_enhanced_table_no_inputs():
-    # Should raise exception because no inputs are passed
-    with pytest.raises(TypeError):
-        test_base = BaseEnhancedTable()
 
 
 def test_base_enhanced_table_missing_column():
@@ -170,7 +166,8 @@ def test_base_enhanced_table_missing_column():
     testdata_nora = testdata.copy()
     testdata_nora.remove_column('ra')
     with pytest.raises(ValueError):
-        test_base = BaseEnhancedTable(test_descript, testdata_nora)
+        test_base = BaseEnhancedTable(table_description=test_descript,
+                                      input_data=testdata_nora)
 
 
 def test_base_enhanced_table_missing_badunits():
@@ -179,36 +176,44 @@ def test_base_enhanced_table_missing_badunits():
     bad_ra_descript[1,2] = u.hr
 
     with pytest.raises(ValueError):
-        test_base = BaseEnhancedTable(bad_ra_descript, testdata)
+        test_base = BaseEnhancedTable(table_description=bad_ra_descript,
+                                      input_data=testdata)
 
 
 def test_base_enhanced_table_recursive():
     # Should create a populated dataset properly and display the astropy data
-    test_base2 = BaseEnhancedTable(test_descript, testdata)
+    test_base2 = BaseEnhancedTable(table_description=test_descript, input_data=testdata)
     assert len(test_base2['ra']) == 1
     assert len(test_base2['dec']) == 1
 
-
     # Attempt recursive call
     with pytest.raises(TypeError):
-        test_base3 = BaseEnhancedTable(test_descript, test_base2)
+        test_base3 = BaseEnhancedTable(table_description=test_descript,
+                                       input_data=test_base2)
+
+
+def test_photometry_blank():
+    # This should just return a blank PhotometryData
+    test_base = PhotometryData()
+    assert type(test_base) == PhotometryData
+    assert len(test_base) == 0
 
 
 def test_photometry_data():
     # Create photometry data instance
     phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m,
-                               passband_map=feder_passbands, data=testphot_clean)
+                               passband_map=feder_passbands, input_data=testphot_clean)
 
     # Check some aspects of that data are sound
-    assert phot_data.camera.gain == 1.5 *  u.electron / u.adu
-    assert phot_data.camera.read_noise == 10.0 * u.electron
-    assert phot_data.camera.dark_current == 0.01 * u.electron / u.second
-    assert phot_data.observatory.lat.value == 46.86678
-    assert phot_data.observatory.lat.unit == u.deg
-    assert phot_data.observatory.lon.value == -96.45328
-    assert phot_data.observatory.lon.unit == u.deg
-    assert round(phot_data.observatory.height.value) == 311
-    assert phot_data.observatory.height.unit == u.m
+    assert phot_data.gain == 1.5 *  u.electron / u.adu
+    assert phot_data.read_noise == 10.0 * u.electron
+    assert phot_data.dark_current == 0.01 * u.electron / u.second
+    assert phot_data.lat.value == 46.86678
+    assert phot_data.lat.unit == u.deg
+    assert phot_data.lon.value == -96.45328
+    assert phot_data.lon.unit == u.deg
+    assert round(phot_data.height.value) == 311
+    assert phot_data.height.unit == u.m
     assert phot_data['night'][0] == 59909
 
     # Checking the BJD computation against Ohio State online calculator for
@@ -226,41 +231,44 @@ def test_photometry_data():
 def test_photometry_recursive():
     # Create photometry data instance
     phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m,
-                               passband_map=feder_passbands, data=testphot_clean)
+                               passband_map=feder_passbands, input_data=testphot_clean)
 
     # Attempt recursive call
     with pytest.raises(TypeError):
         phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m,
-                               passband_map=feder_passbands, data=phot_data)
+                               passband_map=feder_passbands, input_data=phot_data)
 
 
 def test_photometry_badtime():
     with pytest.raises(ValueError):
         phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m,
-                                   passband_map=feder_passbands, data=testphot_data)
+                                   passband_map=feder_passbands,
+                                   input_data=testphot_data)
 
 
 def test_photometry_inconsistent_count_units():
     with pytest.raises(ValueError):
         phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m,
-                                   passband_map=feder_passbands, data=testphot_goodTime)
+                                   passband_map=feder_passbands,
+                                   input_data=testphot_goodTime)
 
 
 def test_photometry_inconsistent_badunits():
     with pytest.raises(ValueError):
         phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m,
                                    passband_map=feder_passbands,
-                                   data=testphot_goodCounts)
+                                   input_data=testphot_goodCounts)
 
 
 def test_photometry_inconsistent_computed_col_exists():
     with pytest.raises(ValueError):
         phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m,
                                    passband_map=feder_passbands,
-                                   data=testphot_goodUnits)
+                                   input_data=testphot_goodUnits)
 
     phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m,
-                               passband_map=feder_passbands, data=testphot_goodUnits,
+                               passband_map=feder_passbands,
+                               input_data=testphot_goodUnits,
                                retain_user_computed=True)
     # This keeps a bad user column for 'snr' which has bogus units, so check the units
     # cause a crash in the math.
@@ -272,19 +280,23 @@ def test_photometry_inconsistent_computed_col_exists():
 def test_catalog_missing_col():
     # Fails with ValueError due to not having 'ra' column
     with pytest.raises(ValueError):
-        catalog_dat = CatalogData(data=test_cat, name="VSX", data_source="Vizier")
+        catalog_dat = CatalogData(input_data=test_cat, catalog_name="VSX",
+                                  catalog_source="Vizier")
 
 
 def test_catalog_colname_map():
     # Map column names
     vsx_colname_map = {'Name':'id', 'RAJ2000':'ra', 'DEJ2000':'dec', 'max':'mag',
                        'n_max':'passband'}
-    catalog_dat = CatalogData(data=test_cat, name="VSX", data_source="Vizier",
+    catalog_dat = CatalogData(input_data=test_cat, catalog_name="VSX",
+                              catalog_source="Vizier",
                               colname_map=vsx_colname_map)
 
     assert catalog_dat['id'][0] == 'ASASSN-V J000052.03+002216.6'
     assert np.abs(catalog_dat['mag'][0].value - 12.660)
     assert catalog_dat['passband'][0] == 'g'
+    assert catalog_dat.catalog_name == 'VSX'
+    assert catalog_dat.catalog_source == 'Vizier'
 
 
 def test_catalog_bandpassmap():
@@ -292,27 +304,30 @@ def test_catalog_bandpassmap():
     vsx_colname_map = {'Name':'id', 'RAJ2000':'ra', 'DEJ2000':'dec', 'max':'mag',
                        'n_max':'passband'}
     passband_map = {'g' :'SG', 'r':'SR'}
-    catalog_dat = CatalogData(data=test_cat, name="VSX", data_source="Vizier",
-                              colname_map=vsx_colname_map, passband_map=passband_map)
+    catalog_dat = CatalogData(input_data=test_cat, catalog_name="VSX",
+                              catalog_source="Vizier", colname_map=vsx_colname_map,
+                              passband_map=passband_map)
 
     assert catalog_dat['passband'][0] == 'SG'
+    assert catalog_dat.catalog_name == 'VSX'
+    assert catalog_dat.catalog_source == 'Vizier'
 
 
 def test_catalog_recursive():
     # Construct good objects
     vsx_colname_map = {'Name':'id', 'RAJ2000':'ra', 'DEJ2000':'dec', 'max':'mag',
                        'n_max':'passband'}
-    catalog_dat = CatalogData(data=test_cat, name="VSX", data_source="Vizier",
-                              colname_map=vsx_colname_map)
+    catalog_dat = CatalogData(input_data=test_cat, catalog_name="VSX",
+                              catalog_source="Vizier", colname_map=vsx_colname_map)
 
     # Attempt recursive call
     with pytest.raises(TypeError):
-        catalog_dat2 = CatalogData(data=catalog_dat, name="VSX", data_source="Vizier",
-                              colname_map=vsx_colname_map)
+        catalog_dat2 = CatalogData(input_data=catalog_dat, catalog_name="VSX",
+                                   catalog_source="Vizier", colname_map=vsx_colname_map)
 
 
 def test_sourcelist():
-    sl_test = SourceListData(data=test_sl_data, colname_map=None)
+    sl_test = SourceListData(input_data=test_sl_data, colname_map=None)
     assert sl_test['star_id'][0] == 0
 
 
@@ -320,7 +335,7 @@ def test_sourcelist_no_skypos():
     test_sl_data2 = test_sl_data.copy()
     del test_sl_data2['ra']
     del test_sl_data2['dec']
-    sl_test = SourceListData(data=test_sl_data2, colname_map=None)
+    sl_test = SourceListData(input_data=test_sl_data2, colname_map=None)
     assert sl_test['star_id'][0] == 0
     assert np.isnan(sl_test['ra'][4])
     assert np.isnan(sl_test['dec'][2])
@@ -330,7 +345,7 @@ def test_sourcelist_no_imgpos():
     test_sl_data3 = test_sl_data.copy()
     del test_sl_data3['xcenter']
     del test_sl_data3['ycenter']
-    sl_test = SourceListData(data=test_sl_data3, colname_map=None)
+    sl_test = SourceListData(input_data=test_sl_data3, colname_map=None)
     assert sl_test['star_id'][0] == 0
     assert np.isnan(sl_test['xcenter'][4])
     assert np.isnan(sl_test['ycenter'][2])
@@ -343,19 +358,36 @@ def test_sourcelist_missing_cols():
     del test_sl_data4['xcenter']
     del test_sl_data4['ycenter']
     with pytest.raises(ValueError):
-        sl_test = SourceListData(data=test_sl_data4, colname_map=None)
+        sl_test = SourceListData(input_data=test_sl_data4, colname_map=None)
 
     test_sl_data5 = test_sl_data.copy()
     del test_sl_data5['star_id']
     with pytest.raises(ValueError):
-        sl_test = SourceListData(data=test_sl_data5, colname_map=None)
-        
+        sl_test = SourceListData(input_data=test_sl_data5, colname_map=None)
+
 
 def test_sourcelist_recursive():
-    # Create pgood sourcelist data instance
-    sl_test = SourceListData(data=test_sl_data, colname_map=None)
+    # Create good sourcelist data instance
+    sl_test = SourceListData(input_data=test_sl_data, colname_map=None)
     assert sl_test['star_id'][0] == 0
 
     # Attempt recursive call
     with pytest.raises(TypeError):
-        sl_test2 = SourceListData(data=sl_test, colname_map=None)
+        sl_test2 = SourceListData(input_data=sl_test, colname_map=None)
+
+
+def test_sourcelist_slicing():
+    # Create good sourcelist data instance
+    sl_test = SourceListData(input_data=test_sl_data, colname_map=None)
+
+    # Test slicing works as expected
+    slicing_test = sl_test[:][1:3]
+
+    # compare this slice to the original data table passed in
+    assert slicing_test['star_id'][0] == 1
+    assert slicing_test['star_id'][1] == 2
+    assert slicing_test['xcenter'][0] == sl_test['xcenter'][1]
+    assert slicing_test['xcenter'][1] == sl_test['xcenter'][2]
+    # Checking attributes survive slicing
+    assert slicing_test.has_ra_dec == True
+    assert slicing_test.has_x_y == True
