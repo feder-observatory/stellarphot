@@ -15,18 +15,43 @@ def test_camera_attributes():
     gain = 2.0 * u.electron / u.adu
     read_noise = 10 * u.electron
     dark_current = 0.01 * u.electron / u.second
-    c = Camera(gain=gain, read_noise=read_noise, dark_current=dark_current)
+    pixel_scale = 0.563 * u.arcsec / u.pix
+    c = Camera(gain=gain,
+               read_noise=read_noise,
+               dark_current=dark_current,
+               pixel_scale=pixel_scale)
     assert c.gain == gain
     assert c.dark_current == dark_current
     assert c.read_noise == read_noise
+    assert c.pixel_scale == pixel_scale
 
 
 def test_camera_unitscheck():
-    gain = 2.0
-    read_noise = 10
-    dark_current = 0.01
+    gain = 2.0 * u.electron / u.adu
+    read_noise = 10 * u.electron
+    dark_current = 0.01 * u.electron / u.second
+    pixel_scale = 0.563 * u.arcsec / u.pix
+
     with pytest.raises(TypeError):
-        c = Camera(gain=gain, read_noise=read_noise, dark_current=dark_current)
+        c = Camera(gain=gain.value,
+                read_noise=read_noise,
+                dark_current=dark_current,
+                pixel_scale=pixel_scale)
+    with pytest.raises(TypeError):
+        c = Camera(gain=gain,
+                read_noise=read_noise.value,
+                dark_current=dark_current,
+                pixel_scale=pixel_scale)
+    with pytest.raises(TypeError):
+        c = Camera(gain=gain,
+                read_noise=read_noise,
+                dark_current=dark_current.value,
+                pixel_scale=pixel_scale)
+    with pytest.raises(TypeError):
+        c = Camera(gain=gain,
+                read_noise=read_noise,
+                dark_current=dark_current,
+                pixel_scale=pixel_scale.value)
 
 
 # Create several test descriptions for use in base_enhanced_table tests.
@@ -54,9 +79,56 @@ testdata = Table(data, names=colnames, dtype=coltypes, units=colunits)
 # Define some configuration information assuming Feder telescope
 feder_cg_16m = Camera(gain = 1.5 * u.electron / u.adu,
                       read_noise = 10.0 * u.electron,
-                      dark_current=0.01 * u.electron / u.second)
+                      dark_current=0.01 * u.electron / u.second,
+                      pixel_scale = 0.563 * u.arcsec / u.pix)
 feder_passbands = {'up':'SU', 'gp':'SG', 'rp':'SR', 'zp':'SZ', 'ip':'SI'}
 feder_obs = EarthLocation(lat = 46.86678,lon=-96.45328, height=311)
+
+
+def test_base_enhanced_table_blank():
+    # This should just return a blank BaseEnhancedTable
+    test_base = BaseEnhancedTable()
+    assert isinstance(test_base, BaseEnhancedTable)
+    assert len(test_base) == 0
+
+
+def test_base_enhanced_table_from_existing_table():
+    # Should create a populated dataset properly and display the astropy data
+    test_base2 = BaseEnhancedTable(table_description=test_descript, input_data=testdata)
+    assert len(test_base2['ra']) == 1
+    assert len(test_base2['dec']) == 1
+
+
+def test_base_enhanced_table_missing_column():
+    # Should raise exception because the RA data is missing from input data
+    testdata_nora = testdata.copy()
+    testdata_nora.remove_column('ra')
+    with pytest.raises(ValueError):
+        test_base = BaseEnhancedTable(table_description=test_descript,
+                                      input_data=testdata_nora)
+
+
+def test_base_enhanced_table_missing_badunits():
+    # This will fail due to RA being in units of hours
+    bad_ra_descript = test_descript.copy()
+    bad_ra_descript[1,2] = u.hr
+
+    with pytest.raises(ValueError):
+        test_base = BaseEnhancedTable(table_description=bad_ra_descript,
+                                      input_data=testdata)
+
+
+def test_base_enhanced_table_recursive():
+    # Should create a populated dataset properly and display the astropy data
+    test_base2 = BaseEnhancedTable(table_description=test_descript, input_data=testdata)
+    assert len(test_base2['ra']) == 1
+    assert len(test_base2['dec']) == 1
+
+    # Attempt recursive call
+    with pytest.raises(TypeError):
+        test_base3 = BaseEnhancedTable(table_description=test_descript,
+                                       input_data=test_base2)
+
 
 # Define a realistic table of photometry data (a bit corrupted)
 photdata = np.array([[1, 2049.145245206124, 2054.0849947477964, 109070.60831212997,
@@ -137,65 +209,11 @@ testphot_clean = testphot_goodUnits.copy()
 for this_col in computed_columns:
     del testphot_clean[this_col]
 
-# Load test catalog
-test_cat = ascii.read(get_pkg_data_filename('data/test_vsx_table.ecsv'), format='ecsv',
-                      fast_reader=False)
-
-# Load test apertures
-test_sl_data = ascii.read(get_pkg_data_filename('data/test_sourcelist.ecsv'),
-                             format='ecsv',
-                             fast_reader=False)
-
-
-def test_base_enhanced_table_blank():
-    # This should just return a blank BaseEnhancedTable
-    test_base = BaseEnhancedTable()
-    assert isinstance(test_base, BaseEnhancedTable)
-    assert len(test_base) == 0
-
-
-def test_base_enhanced_table_from_existing_table():
-    # Should create a populated dataset properly and display the astropy data
-    test_base2 = BaseEnhancedTable(table_description=test_descript, input_data=testdata)
-    assert len(test_base2['ra']) == 1
-    assert len(test_base2['dec']) == 1
-
-
-def test_base_enhanced_table_missing_column():
-    # Should raise exception because the RA data is missing from input data
-    testdata_nora = testdata.copy()
-    testdata_nora.remove_column('ra')
-    with pytest.raises(ValueError):
-        test_base = BaseEnhancedTable(table_description=test_descript,
-                                      input_data=testdata_nora)
-
-
-def test_base_enhanced_table_missing_badunits():
-    # This will fail due to RA being in units of hours
-    bad_ra_descript = test_descript.copy()
-    bad_ra_descript[1,2] = u.hr
-
-    with pytest.raises(ValueError):
-        test_base = BaseEnhancedTable(table_description=bad_ra_descript,
-                                      input_data=testdata)
-
-
-def test_base_enhanced_table_recursive():
-    # Should create a populated dataset properly and display the astropy data
-    test_base2 = BaseEnhancedTable(table_description=test_descript, input_data=testdata)
-    assert len(test_base2['ra']) == 1
-    assert len(test_base2['dec']) == 1
-
-    # Attempt recursive call
-    with pytest.raises(TypeError):
-        test_base3 = BaseEnhancedTable(table_description=test_descript,
-                                       input_data=test_base2)
-
 
 def test_photometry_blank():
     # This should just return a blank PhotometryData
     test_base = PhotometryData()
-    assert type(test_base) == PhotometryData
+    assert isinstance(test_base, PhotometryData)
     assert len(test_base) == 0
 
 
@@ -205,15 +223,16 @@ def test_photometry_data():
                                passband_map=feder_passbands, input_data=testphot_clean)
 
     # Check some aspects of that data are sound
-    assert phot_data.gain == 1.5 *  u.electron / u.adu
-    assert phot_data.read_noise == 10.0 * u.electron
-    assert phot_data.dark_current == 0.01 * u.electron / u.second
-    assert phot_data.lat.value == 46.86678
-    assert phot_data.lat.unit == u.deg
-    assert phot_data.lon.value == -96.45328
-    assert phot_data.lon.unit == u.deg
-    assert round(phot_data.height.value) == 311
-    assert phot_data.height.unit == u.m
+    assert phot_data.camera.gain == 1.5 *  u.electron / u.adu
+    assert phot_data.camera.read_noise == 10.0 * u.electron
+    assert phot_data.camera.dark_current == 0.01 * u.electron / u.second
+    assert phot_data.camera.pixel_scale == 0.563 * u.arcsec / u.pix
+    assert phot_data.observatory.lat.value == 46.86678
+    assert phot_data.observatory.lat.unit == u.deg
+    assert phot_data.observatory.lon.value == -96.45328
+    assert phot_data.observatory.lon.unit == u.deg
+    assert round(phot_data.observatory.height.value) == 311
+    assert phot_data.observatory.height.unit == u.m
     assert phot_data['night'][0] == 59909
 
     # Checking the BJD computation against Ohio State online calculator for
@@ -226,6 +245,25 @@ def test_photometry_data():
     # which returned 2459910.775405664 (Uses custom IDL, astropy is SOFA checked).
     # Demand a difference of less than 1/20 of a second.
     assert (phot_data['bjd'][0].value - 2459910.775405664)*86400 < 0.05
+
+
+def test_photometry_slicing():
+    # Create photometry data instance
+    phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m,
+                               passband_map=feder_passbands, input_data=testphot_clean)
+
+    # Test slicing works as expected, leaving attributes intact
+    just_cols = phot_data[['ra','dec']]
+    assert just_cols.camera.gain == 1.5 *  u.electron / u.adu
+    assert just_cols.camera.read_noise == 10.0 * u.electron
+    assert just_cols.camera.dark_current == 0.01 * u.electron / u.second
+    assert just_cols.camera.pixel_scale == 0.563 * u.arcsec / u.pix
+    assert just_cols.observatory.lat.value == 46.86678
+    assert just_cols.observatory.lat.unit == u.deg
+    assert just_cols.observatory.lon.value == -96.45328
+    assert just_cols.observatory.lon.unit == u.deg
+    assert round(just_cols.observatory.height.value) == 311
+    assert just_cols.observatory.height.unit == u.m
 
 
 def test_photometry_recursive():
@@ -277,6 +315,11 @@ def test_photometry_inconsistent_computed_col_exists():
     assert np.abs(phot_data['snr'][0].value - 46.795229859903905) < 1e-6
 
 
+# Load test catalog
+test_cat = ascii.read(get_pkg_data_filename('data/test_vsx_table.ecsv'), format='ecsv',
+                      fast_reader=False)
+
+
 def test_catalog_missing_col():
     # Fails with ValueError due to not having 'ra' column
     with pytest.raises(ValueError):
@@ -324,6 +367,12 @@ def test_catalog_recursive():
     with pytest.raises(TypeError):
         catalog_dat2 = CatalogData(input_data=catalog_dat, catalog_name="VSX",
                                    catalog_source="Vizier", colname_map=vsx_colname_map)
+
+
+# Load test apertures
+test_sl_data = ascii.read(get_pkg_data_filename('data/test_sourcelist.ecsv'),
+                             format='ecsv',
+                             fast_reader=False)
 
 
 def test_sourcelist():
