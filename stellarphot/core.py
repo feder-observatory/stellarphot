@@ -731,16 +731,16 @@ class SourceListData(BaseEnhancedTable):
                 self._colname_map = None
 
             # Check if RA/Dec or xcenter/ycenter are missing
-            self.meta['has_ra_dec'] = True
-            self.meta['has_x_y'] = True
+            ra_dec_present = True
+            x_y_present = True
             nosky_pos = ('ra' not in data.colnames or
                         'dec' not in data.colnames)
             noimg_pos = ('xcenter' not in data.colnames or
                         'ycenter' not in data.colnames)
             if nosky_pos:
-                self.meta['has_ra_dec'] = False
+                ra_dec_present = False
             if noimg_pos:
-                self.meta['has_x_y'] = False
+                x_y_present = False
 
             if (nosky_pos and noimg_pos):
                 raise ValueError("data must have either sky (ra, dec) or "+
@@ -757,6 +757,8 @@ class SourceListData(BaseEnhancedTable):
             # Convert input data to QTable (while also checking for required columns)
             super().__init__(table_description=self.sourcelist_descript,
                              input_data=data, colname_map=None, **kwargs)
+            self.meta['has_ra_dec'] = ra_dec_present
+            self.meta['has_x_y'] = x_y_present
 
     @property
     def has_ra_dec(self):
