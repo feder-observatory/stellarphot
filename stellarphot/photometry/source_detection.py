@@ -286,7 +286,7 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
                   'xcentroid' : 'xcenter',
                   'ycentroid' : 'ycenter'}
 
-    sl_data = SourceListData(sources, colname_map=colnamemap)
+    sl_data = SourceListData(input_data=sources, colname_map=colnamemap)
     return sl_data
 
 
