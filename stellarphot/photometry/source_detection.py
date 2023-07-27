@@ -228,7 +228,10 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
     # daofind should be run on background subtracted image
     # (fails, or at least returns garbage, if sky_per_pix_avg is too low)
     daofind = DAOStarFinder(fwhm = fwhm, threshold = threshold * std)
-    sources = daofind(ccd - sky_per_pix_avg)
+    if isinstance(ccd, CCDData):
+        sources = daofind(ccd.data - sky_per_pix_avg)
+    else:
+        sources = daofind(ccd - sky_per_pix_avg)
 
     # Identify sources near the edge of the image and remove them
     # from the source list.
