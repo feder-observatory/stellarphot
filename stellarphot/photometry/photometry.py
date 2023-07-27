@@ -444,14 +444,18 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     return photom_data, dropped_sources
 
 
-def multi_image_photometry(directory_with_images, object_of_interest,
-                            sourcelist, aperture_rad,
-                            inner_annulus, outer_annulus,
-                            max_adu, star_ids,
-                            camera,
-                            bjd_coords=None,
-                            observatory_location=None,
-                            fwhm_by_fit=True):
+def multi_image_photometry(directory_with_images,
+                           object_of_interest,
+                           sourcelist, camera,
+                           observatory_location,
+                           aperture_radius,
+                           inner_annulus, outer_annulus,
+                           shift_tolerance, max_adu,
+                           include_dig_noise=True,
+                           reject_too_close=True,
+                           reject_background_outliers=True,
+                           passband_map=None,
+                           fwhm_by_fit=True):
     """
     Perform aperture photometry on a directory of images.
 
@@ -476,7 +480,14 @@ def multi_image_photometry(directory_with_images, object_of_interest,
         RA/Dec coordinates.  The x/y coordinates in the sourcelist will be ignored,
         WCS derived x/y positions based on sky positions will be computed each image.
 
-    aperture_rad : float
+    camera : `stellarphot.Camera`
+        Camera object which has gain, read noise and dark current set.
+
+    observatory_location : `astropy.coordinates.EarthLocation`
+        Location of the observatory where the images were taken.  Used for calculating
+        the BJD.
+
+    aperture_radius : float
         Radius of the aperture to use when performing photometry.
 
     inner_annulus : float
@@ -487,18 +498,38 @@ def multi_image_photometry(directory_with_images, object_of_interest,
         Outer radius of annulus to use in for performing local sky
         subtraction.
 
+    shift_tolerance : float
+        Since source positions need to be computed on each image using
+        the sky position and WCS, the computed x/y positions are refined
+        afterward by centroiding the sources.  This setting constrols
+        the tolerance in pixels for the shift between the the computed
+        positions and the refined positions, in pixels.  The expected
+        shift shift should not be more than the FWHM, so a measured FWHM
+        might be a good value to provide here.
+
     max_adu : float
-        Maximum allowed pixel value before a source is considered
-        saturated.
+        Maximum allowed pixel value before a source is considered saturated.
 
-    camera : `stellarphot.Camera`
-        Camera object which has gain, read noise and dark current set.
+    reject_background_outliers : bool, optional (Default: True)
+        If ``True``, sigma clip the pixels in the annulus to reject outlying
+        pixels (e.g. like stars in the annulus)
 
-    observatory_location : `astropy.coordinates.EarthLocation`
-        Location of the observatory where the images were taken.  Used for calculating
-        the BJD.
+    reject_too_close : bool, optional (Default: True)
+        If ``True``, any sources that are closer than twice the aperture radius
+        are rejected.  If ``False``, all sources in field are used.
 
-    fwhm_by_fit : bool, optional
+    include_dig_noise : bool, optional (Default: True)
+        If ``True``, include the digitization noise in the calculation of the
+        noise for each observation.  If ``False``, only the Poisson noise from
+        the source and the sky will be included.
+
+    passband_map: dict, optional (Default: None)
+        A dictionary containing instrumental passband names as keys and
+        AAVSO passband names as values. This is used to rename the passband
+        entries in the output photometry table to be AAVSO standard versus
+        whatever is in the source list.
+
+    fwhm_by_fit : bool, optional (default: True)
         If ``True``, the FWHM will be calculated by fitting a Gaussian to
         the star. If ``False``, the FWHM will be calculated by finding the
         second order moments of the light distribution. Default is ``True``.
@@ -507,14 +538,88 @@ def multi_image_photometry(directory_with_images, object_of_interest,
     -------
 
     phot_table : `stellarphot.PhotometryData`
-        Photometry data for all the locations in which aperture photometry was
-        performed.  This may be a subset of the sources in the sourcelist if
-        locations were too close to the edge of any one image or to each other
-        for successful apeture photometry.
+        Photometry data for all the sources on which aperture photometry was
+        performed in all the images. This may be a subset of the sources in
+        the sourcelist if locations were too close to the edge of any one image
+        or to each other for successful apeture photometry.
 
     """
 
+    # Initialize lists to track all PhotometryData objects and all dropped sources
+    phots = []
+    missing_sources = []
 
+    # Copy source list before modifying it (to avoid modifying original list)
+    sourcelist = sourcelist.copy()
+    sourcelist.drop_x_y()
+    if not sourcelist.has_ra_dec:
+        raise ValueError("multi_image_photometry: sourcelist must have RA/Dec "
+                         "coordinates to use this function.")
+
+    ##
+    ## Process all the individual files
+    ##
+
+    # Build image file collection
+    ifc = ImageFileCollection(directory_with_images)
+
+    for this_ccd, this_fname in ifc.ccds(object=object_of_interest, return_fname=True):
+        print(f"multi_image_photometry: Processing image {this_fname}")
+        if this_ccd.wcs is None:
+            print('                        .... SKIPPING THIS IMAGE, NO WCS')
+            continue
+
+        # Call single_image_photometry on each image
+        print("multi_image_photometry: calling single_image_photometry ...")
+        this_phot, this_missing_sources = \
+            single_image_photometry(this_ccd, sourcelist, camera, observatory_location,
+                                    aperture_radius, inner_annulus, outer_annulus,
+                                    shift_tolerance, max_adu,
+                                    include_dig_noise=include_dig_noise,
+                                    reject_too_close=reject_too_close,
+                                    reject_background_outliers=reject_background_outliers,
+                                    passband_map=passband_map,
+                                    fwhm_by_fit=fwhm_by_fit, fname=this_fname)
+        print("multi_image_photometry: Done with single_image_photometry for "
+              f"{this_fname}")
+
+        # Extend the list of missing stars
+        missing_sources.extend(this_missing_sources)
+
+        # And add the final table to the list of tables
+        phots.append(this_phot)
+
+    ##
+    ## Done processing individual images, now combine them into one table
+    ##
+
+    # Combine all of the individual photometry tables into one
+    all_phot = vstack(phots)
+
+    # Build a list of all the unique star_ids in the sourcelist
+    # that were eliminated on at least one image
+    uniques = set()
+    for miss in missing_sources:
+        uniques.update(set(miss))
+
+    # Purge the photometry table of all sources that were eliminated
+    # on at least one image
+    starid_to_remove = sorted([u for u in uniques if u in all_phot['star_id']])
+    # add index to PhotometryData to speed up removal
+    all_phot.add_index('star_id')
+    # Remove the starid for objects not observed in every image
+    if starid_to_remove:
+        bad_rows = all_phot.loc_indices[starid_to_remove]
+        try:
+            bad_rows = list(bad_rows)
+        except TypeError:
+            bad_rows = [bad_rows]
+        all_phot.remove_indices('star_id')
+        all_phot.remove_rows(sorted(bad_rows))
+    # Drop index from PhotometryData to save memory
+    all_phot.remove_indices('star_id')
+
+    return all_phot
 
 
 def faster_sigma_clip_stats(data, sigma=5, iters=5, axis=None):
