@@ -317,9 +317,9 @@ class PhotometryData(BaseEnhancedTable):
     annulus_area          u.pix * u.pix
     aperture_sum          consistent count units
     annulus_sum           consistent count units
-    sky_per_pix_avg       consistent count units
-    sky_per_pix_med       consistent count units
-    sky_per_pix_std       consistent count units
+    sky_per_pix_avg       consistent count units (per pixel sqauared)
+    sky_per_pix_med       consistent count units (per pixel sqauared)
+    sky_per_pix_std       consistent count units (per pixel sqauared)
     aperture_net_cnts     consistent count units
     noise_cnts            consistent count units
     noise_electrons       u.electron
@@ -424,15 +424,26 @@ class PhotometryData(BaseEnhancedTable):
             self.meta['pixel_scale'] = camera.pixel_scale
 
             # Check for consistency of counts-related columns
-            counts_columns = ['aperture_sum', 'annulus_sum', 'sky_per_pix_avg',
-                            'sky_per_pix_med', 'sky_per_pix_std', 'aperture_net_cnts',
-                            'noise_cnts']
+            counts_columns = ['aperture_sum', 'annulus_sum', 'aperture_net_cnts',
+                              'noise_cnts']
+            counts_per_pixel_sqr_columns = ['sky_per_pix_avg', 'sky_per_pix_med',
+                                            'sky_per_pix_std']
             cnts_unit = self[counts_columns[0]].unit
             for this_col in counts_columns[1:]:
                 if input_data[this_col].unit != cnts_unit:
                     raise ValueError(f"input_data['{this_col}'] has inconsistent units "
                                     f"with input_data['{counts_columns[0]}'] (should "
                                     f"be {cnts_unit} but it's "
+                                    f"{input_data[this_col].unit}).")
+            for this_col in counts_per_pixel_sqr_columns:
+                if cnts_unit is None:
+                    persqrunit = u.pixel**-2
+                else:
+                    persqrunit = cnts_unit * u.pixel**-2
+                if input_data[this_col].unit != persqrunit:
+                    raise ValueError(f"input_data['{this_col}'] has inconsistent units "
+                                    f"with input_data['{counts_columns[0]}'] (should "
+                                    f"be {persqrunit} but it's "
                                     f"{input_data[this_col].unit}).")
 
             # Compute additional columns (not done yet)
