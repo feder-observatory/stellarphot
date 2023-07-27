@@ -106,6 +106,14 @@ class Camera:
     def __copy__(self):
         return self.copy()
 
+    def __str__(self):
+        return f"Camera(gain={self.gain}, read_noise={self.read_noise}, " \
+                f"dark_current={self.dark_current}, pixel_scale={self.pixel_scale})"
+
+    def __repr__(self):
+        return f"Camera(gain={self.gain}, read_noise={self.read_noise}, " \
+                f"dark_current={self.dark_current}, pixel_scale={self.pixel_scale})"
+
 
 class BaseEnhancedTable(QTable):
     """
