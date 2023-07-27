@@ -118,7 +118,22 @@ class AAVSOExtendedFileFormat:
     def software(self):
         return self._software
 
-    def set_data_column(self, data, column_map, star_id=None):
+    def set_data_columns(self, data, column_map, star_id=None):
+        """
+        Set the data columns from an astropy table.
+
+        Parameters
+        ----------
+
+        data : `astropy.table.Table`
+            Table containing the data to be written to the file.
+        column_map : dict
+            Dictionary mapping the column names in the table to the column names
+            in the file.
+        star_id : str, optional
+            ID of the star to be written to the file. If not provided, all stars
+            in the table will be written to the file.
+        """
         if star_id is not None:
             use_data = data[data['id'] == star_id]
         else:
