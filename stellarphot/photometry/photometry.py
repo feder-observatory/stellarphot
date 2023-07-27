@@ -444,6 +444,79 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     return photom_data, dropped_sources
 
 
+def multi_image_photometry(directory_with_images, object_of_interest,
+                            sourcelist, aperture_rad,
+                            inner_annulus, outer_annulus,
+                            max_adu, star_ids,
+                            camera,
+                            bjd_coords=None,
+                            observatory_location=None,
+                            fwhm_by_fit=True):
+    """
+    Perform aperture photometry on a directory of images.
+
+    Parameters
+    ----------
+
+    directory_with_images : str
+        Folder containing the images on which to do photometry. Photometry
+        will only be done on images that contain the ``object_of_interest``.
+        All images *must* have WCS headers and the following headers: OBJECT,
+        DATE-OBS, an exposure time header (which can be any of the following: EXPOSURE,
+        EXPTIME, TELAPSE, ELAPTIME, ONTIME, or LIVETIME), and FILTER.  If AIRMASS is
+        available it will be added to `phot_table`.
+
+    object_of_interest : str
+        Name of the object of interest. The only files on which photometry
+        will be done are those whose header contains the keyword ``OBJECT``
+        whose value is ``object_of_interest``.
+
+    sourcelist : `stellarphot.SourceList`
+        Table of extracted sources with positions in terms of pixel coordinates and
+        RA/Dec coordinates.  The x/y coordinates in the sourcelist will be ignored,
+        WCS derived x/y positions based on sky positions will be computed each image.
+
+    aperture_rad : float
+        Radius of the aperture to use when performing photometry.
+
+    inner_annulus : float
+        Inner radius of annulus to use in for performing local sky
+        subtraction.
+
+    outer_annulus : float
+        Outer radius of annulus to use in for performing local sky
+        subtraction.
+
+    max_adu : float
+        Maximum allowed pixel value before a source is considered
+        saturated.
+
+    camera : `stellarphot.Camera`
+        Camera object which has gain, read noise and dark current set.
+
+    observatory_location : `astropy.coordinates.EarthLocation`
+        Location of the observatory where the images were taken.  Used for calculating
+        the BJD.
+
+    fwhm_by_fit : bool, optional
+        If ``True``, the FWHM will be calculated by fitting a Gaussian to
+        the star. If ``False``, the FWHM will be calculated by finding the
+        second order moments of the light distribution. Default is ``True``.
+
+    Returns
+    -------
+
+    phot_table : `stellarphot.PhotometryData`
+        Photometry data for all the locations in which aperture photometry was
+        performed.  This may be a subset of the sources in the sourcelist if
+        locations were too close to the edge of any one image or to each other
+        for successful apeture photometry.
+
+    """
+
+
+
+
 def faster_sigma_clip_stats(data, sigma=5, iters=5, axis=None):
     """
     Calculate sigma clipped stats quickly using NaNs instead of masking
@@ -597,125 +670,99 @@ def clipped_sky_per_pix_stats(data, annulus, sigma=5, iters=5):
             std_sky_per_pix * data.unit)
 
 
-def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
-                            star_ids=None, camera=None,
-                            bjd_coords=None, observatory_location=None,
-                            fwhm_by_fit=True):
+def calculate_noise(gain=1.0, read_noise=0.0, dark_current_per_sec=0.0,
+                    counts=0.0, sky_per_pix=0.0, aperture_area=0, annulus_area=0,
+                    exposure=0, include_digitization=False):
     """
-    Calculate several columns for photometry table which are appended to the
-    input phot.
+    Computes the noise in a photometric measurement.
+
+    This function computes the noise (in units of electrons) in a photometric
+    measurement using the revised CCD equation from Collins et al (2017) AJ, 153, 77
+    who based their expression on the one originally proposed for SNR by
+    Merline, W. J., & Howell, S. B. 1995, Experimental Astronomy, 6, 163.
+
+    The equation is:
+
+    .. math::
+
+        \\sigma = \\sqrt{G \\cdot N_C + A \\cdot \\left(1 + \\frac{A}{B}\\right)\\cdot \\left[ G\\cdot S + D \\cdot t + R^2 + (0.289 G)^2\\right]}
+
+    where :math:`\sigma` is the noise, :math:`G` is the gain,
+    :math:`N_C` is the source counts (which is photon/electron counts divided by gain),
+    :math:`A` is the aperture area in pixels,
+    :math:`B` is the annulus area in pixels,
+    :math:`S` is the sky counts per pixel,
+    :math:`D` is the dark current in electrons per second,
+    :math:`R` is the read noise in electrons per pixel per read,
+    and :math:`t` is exposure time in seconds.
+
+    Note: The :math:`(0.289 G)^2` term is "digitization noise" and is optional.
 
     Parameters
     ----------
 
-    phot : `astropy.table.Table`
-        An astropy Table with raw photometry data in it (generated by
-        `photutils.aperture_photometry`).
-
-    ccd : `astropy.nddata.CCDData`
-        Image on which photometry is being done.
-
-    annulus : `photutils.CircularAnnulus`
-        One or more annulus (of any shape) from photutils.
-
-    apertures : `photutils.CircularAperture`
-        One or more apertures (of any shape) from photutils.
-
-    fname : str, optional
-        Name of the image file on which photometry is being performed.
-
-    star_ids : str or int, optional
-        ID for each of the sources.
-
     gain : float, optional
-        Gain, in electrons/ADU, of the camera that took the image. The gain
-        is used in calculating the instrumental magnitude.
+        Gain of the CCD. In units of electrons per count.
 
-    bjd_coords : `astropy.coordinates.SkyCoord`
-        Coordinates of the object of interest in the Barycentric Julian Date
-        frame. If not provided, the BJD column will not be added to the
-        photometry table.
+    read_noise : float, optional
+        Read noise of the CCD in electrons.
 
-    observatory_location : str
-        Name of the observatory where the images were taken. If not 'feder',
-        the BJD column will not be added to the photometry table.
+    dark_current_per_sec : float, optional
+        Dark current of the CCD in electrons per second.
 
-    fwhm_by_fit : bool, optional
-        If ``True``, the FWHM will be calculated by fitting a Gaussian to
-        the star. If ``False``, the FWHM will be calculated by finding the
-        second moments of the light distribution. Default is ``True``.
+    counts : float, optional
+        Counts of the source.
+
+    sky_per_pix : float, optional
+        Sky per pixel in counts per pixel.
+
+    aperture_area : int, optional
+        Area of the aperture in pixels.
+
+    annulus_area : int, optional
+        Area of the annulus in pixels.
+
+    exposure : int, optional
+        Exposure time in seconds.
+
+    include_digitization : bool, optional
+        Whether to include the digitization noise. Defaults to False.
+
+    Returns
+    -------
+
+    noise : float
+        The noise in the photometric measurement in electrons.
     """
-    phot.rename_column('aperture_sum_0', 'aperture_sum')
-    phot['aperture_sum'].unit = u.adu
-    phot.rename_column('aperture_sum_1', 'annulus_sum')
-    star_locs = ccd.wcs.all_pix2world(phot['xcenter'], phot['ycenter'], 0)
-    star_coords = SkyCoord(ra=star_locs[0], dec=star_locs[1],
-                           frame='icrs', unit='degree')
-    phot['RA'] = star_coords.ra
-    phot['Dec'] = star_coords.dec
-    print('        ...calculating clipped sky stats')
+
     try:
-        avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
-            clipped_sky_per_pix_stats(ccd, annulus)
+        no_annulus = (annulus_area == 0).all()
     except AttributeError:
-        print('BAD ANNULUS!')
-        avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
-            np.nan, np.nan, np.nan
-    print('        ...DONE calculating clipped sky stats')
+        no_annulus = annulus_area == 0
 
-    phot['sky_per_pix_avg'] = avg_sky_per_pix
-    phot['sky_per_pix_med'] = med_sky_per_pix
-    phot['sky_per_pix_std'] = std_sky_per_pix
-    # Add width x/y:
-    # Make small table with renamed columns
-    fwhm_x, fwhm_y = compute_fwhm(ccd, phot, fit=fwhm_by_fit)
+    if no_annulus:
+        area_ratio = aperture_area
+    else:
+        area_ratio = aperture_area * (1 + aperture_area / annulus_area)
 
-    # Set bad values to NaN now
-    bad_fwhm = (fwhm_x < 0) | (fwhm_y < 0)
-    fwhm_x[bad_fwhm] = np.nan
-    fwhm_y[bad_fwhm] = np.nan
+    # Convert counts to electrons
+    poisson_source = gain * counts
 
-    phot['fwhm_x'] = fwhm_x
-    phot['fwhm_y'] = fwhm_y
-    phot['width'] = (fwhm_x + fwhm_y) / 2
+    try:
+        poisson_source = poisson_source.value
+    except AttributeError:
+        pass
 
-    phot['aperture'] = apertures.r * u.pixel
-    phot['aperture_area'] = apertures.area  # * u.pixel * u.pixel
-    phot['annulus_inner'] = annulus.r_in * u.pixel
-    phot['annulus_outer'] = annulus.r_out * u.pixel
-    phot['annulus_area'] = annulus.area  # * u.pixel * u.pixel
-    phot['exposure'] = [ccd.header['exposure']] * len(phot) * u.second
-    phot['date-obs'] = [ccd.header['DATE-OBS']] * len(phot)
-    night = Time(ccd.header['DATE-OBS'], scale='utc')
-    night.format = 'mjd'
-    phot['night'] = int(np.floor(night.value - 0.5))
-    phot['aperture_net_counts'] = (phot['aperture_sum'] -
-                                 (phot['aperture_area'] *
-                                  phot['sky_per_pix_avg']))
+    sky = area_ratio * gain * sky_per_pix
+    dark = area_ratio * dark_current_per_sec * exposure
+    rn_error = area_ratio * read_noise ** 2
 
-    # This can happen, for example, when the object is faint
-    # and centroiding is bad.
-    bad_flux = phot['aperture_net_counts'] < 0
-    all_bads = bad_flux | bad_fwhm
+    digitization = 0.0
 
-    phot['aperture_net_counts'][all_bads] = np.nan
+    if include_digitization:
+        digitization = area_ratio * (gain * 0.289) ** 2
 
-    if observatory_location.lower() == 'feder':
-        phot['BJD'] = find_bjd(phot['date-obs'][0], phot['exposure'][0],
-                                 ra=bjd_coords.ra, dec=bjd_coords.dec)
-
-    if camera is not None:
-        phot['mag_inst'] = \
-            (-2.5 * np.log10(camera.gain * phot['aperture_net_counts'].value /
-                             phot['exposure'].value))
-
-    metadata_to_add = ['AIRMASS', 'FILTER']
-    for meta in metadata_to_add:
-        phot[meta.lower()] = [ccd.header[meta]] * len(phot)
-    if fname:
-        phot['file'] = fname
-    if star_ids is not None:
-        phot['star_id'] = star_ids
+    return np.sqrt(poisson_source + sky + dark + rn_error + digitization)
 
 
 def photometry_on_directory(directory_with_images, object_of_interest,
@@ -944,29 +991,35 @@ def calculate_noise(camera=None, counts=0.0, sky_per_pix=0.0,
         The camera object that contains the gain, read noise and dark current
         of the CCD.
 
-    counts : float, optional
-        Counts of the source.
+    annulus : `photutils.CircularAnnulus`
+        One or more annulus (of any shape) from photutils.
 
-    sky_per_pix : float, optional
-        Sky per pixel in counts per pixel.
+    apertures : `photutils.CircularAperture`
+        One or more apertures (of any shape) from photutils.
 
-    aperture_area : int, optional
-        Area of the aperture in pixels.
+    fname : str, optional
+        Name of the image file on which photometry is being performed.
 
-    annulus_area : int, optional
-        Area of the annulus in pixels.
+    star_ids : str or int, optional
+        ID for each of the sources.
 
-    exposure : int, optional
-        Exposure time in seconds.
+    gain : float, optional
+        Gain, in electrons/ADU, of the camera that took the image. The gain
+        is used in calculating the instrumental magnitude.
 
-    include_digitization : bool, optional
-        Whether to include the digitization noise. Defaults to False.
+    bjd_coords : `astropy.coordinates.SkyCoord`
+        Coordinates of the object of interest in the Barycentric Julian Date
+        frame. If not provided, the BJD column will not be added to the
+        photometry table.
 
-    Returns
-    -------
+    observatory_location : str
+        Name of the observatory where the images were taken. If not 'feder',
+        the BJD column will not be added to the photometry table.
 
-    noise : float
-        The noise in the photometric measurement in electrons.
+    fwhm_by_fit : bool, optional
+        If ``True``, the FWHM will be calculated by fitting a Gaussian to
+        the star. If ``False``, the FWHM will be calculated by finding the
+        second moments of the light distribution. Default is ``True``.
     """
     if camera is None:
         raise ValueError("camera must be provided")
@@ -979,33 +1032,67 @@ def calculate_noise(camera=None, counts=0.0, sky_per_pix=0.0,
     read_noise = camera.read_noise.value
 
     try:
-        no_annulus = (annulus_area == 0).all()
+        avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
+            clipped_sky_per_pix_stats(ccd, annulus)
     except AttributeError:
-        no_annulus = annulus_area == 0
+        print('BAD ANNULUS!')
+        avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
+            np.nan, np.nan, np.nan
+    print('        ...DONE calculating clipped sky stats')
 
-    if no_annulus:
-        area_ratio = aperture_area
-    else:
-        area_ratio = aperture_area * (1 + aperture_area / annulus_area)
+    phot['sky_per_pix_avg'] = avg_sky_per_pix
+    phot['sky_per_pix_med'] = med_sky_per_pix
+    phot['sky_per_pix_std'] = std_sky_per_pix
+    # Add width x/y:
+    # Make small table with renamed columns
+    fwhm_x, fwhm_y = compute_fwhm(ccd, phot, fit=fwhm_by_fit)
 
-    # Convert counts to electrons
-    poisson_source = gain * counts
+    # Set bad values to NaN now
+    bad_fwhm = (fwhm_x < 0) | (fwhm_y < 0)
+    fwhm_x[bad_fwhm] = np.nan
+    fwhm_y[bad_fwhm] = np.nan
 
-    try:
-        poisson_source = poisson_source.value
-    except AttributeError:
-        pass
+    phot['fwhm_x'] = fwhm_x
+    phot['fwhm_y'] = fwhm_y
+    phot['width'] = (fwhm_x + fwhm_y) / 2
 
-    sky = area_ratio * gain * sky_per_pix
-    dark = area_ratio * dark_current_per_sec * exposure
-    rn_error = area_ratio * read_noise ** 2
+    phot['aperture'] = apertures.r * u.pixel
+    phot['aperture_area'] = apertures.area  # * u.pixel * u.pixel
+    phot['annulus_inner'] = annulus.r_in * u.pixel
+    phot['annulus_outer'] = annulus.r_out * u.pixel
+    phot['annulus_area'] = annulus.area  # * u.pixel * u.pixel
+    phot['exposure'] = [ccd.header['exposure']] * len(phot) * u.second
+    phot['date-obs'] = [ccd.header['DATE-OBS']] * len(phot)
+    night = Time(ccd.header['DATE-OBS'], scale='utc')
+    night.format = 'mjd'
+    phot['night'] = int(np.floor(night.value - 0.5))
+    phot['aperture_net_counts'] = (phot['aperture_sum'] -
+                                 (phot['aperture_area'] *
+                                  phot['sky_per_pix_avg']))
 
-    digitization = 0.0
+    # This can happen, for example, when the object is faint
+    # and centroiding is bad.
+    bad_flux = phot['aperture_net_counts'] < 0
+    all_bads = bad_flux | bad_fwhm
 
-    if include_digitization:
-        digitization = area_ratio * (gain * 0.289) ** 2
+    phot['aperture_net_counts'][all_bads] = np.nan
 
-    return np.sqrt(poisson_source + sky + dark + rn_error + digitization)
+    if observatory_location.lower() == 'feder':
+        phot['BJD'] = find_bjd(phot['date-obs'][0], phot['exposure'][0],
+                                 ra=bjd_coords.ra, dec=bjd_coords.dec)
+
+    if camera is not None:
+        phot['mag_inst'] = \
+            (-2.5 * np.log10(camera.gain * phot['aperture_net_counts'].value /
+                             phot['exposure'].value))
+
+    metadata_to_add = ['AIRMASS', 'FILTER']
+    for meta in metadata_to_add:
+        phot[meta.lower()] = [ccd.header[meta]] * len(phot)
+    if fname:
+        phot['file'] = fname
+    if star_ids is not None:
+        phot['star_id'] = star_ids
 
 
 def find_bjd(dates_col, exposure, ra, dec,
