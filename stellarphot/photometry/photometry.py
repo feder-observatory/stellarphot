@@ -121,9 +121,9 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
         locations were too close to the edge of the image or to each other for
         successful apeture photometry.
 
-    out_of_bounds : list
-        This of the star_ids of the sources that fell outside the image and did not
-        have photometry performed.
+    dropped_sources : list
+        This of the star_ids of the sources that fell outside the image or were
+        too close together and did not have photometry performed.
     """
 
     # Check that the input parameters are valid
@@ -160,6 +160,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     src_cnt = len(sourcelist)
 
     # Reject sources that are within an aperture diameter of each other.
+    dropped_sources = []
     too_close = find_too_close(sourcelist, aperture_radius,
                                pixel_scale=camera.pixel_scale)
     too_close_cnt = np.sum(too_close)
@@ -167,6 +168,8 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     print(f"single_image_photometry: {too_close_cnt} of {src_cnt} sources within "
                 "2 aperture radii of nearest neighbor", end="")
     if reject_too_close:
+        # Track dropped sources due to being too close together
+        dropped_sources.extend(star_ids[too_close].tolist())
         # Remove sources too close together
         star_ids = star_ids[non_overlap]
         xs = xs[non_overlap]
@@ -183,8 +186,8 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     out_of_bounds = ( (xs < padding) | (xs > (ccd_image.shape[1] - padding)) |
                     (ys < padding) | (ys  > (ccd_image.shape[0] - padding)) )
     in_bounds = ~out_of_bounds
-    # Track the out of bounds sources
-    out_of_bounds_sources = star_ids[out_of_bounds]
+    # Track dropped sources due to out of bounds positions
+    dropped_sources.extend(star_ids[out_of_bounds].tolist())
     # Remove sources too close to the edges
     star_ids = star_ids[in_bounds]
     xs = xs[in_bounds]
@@ -398,7 +401,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     photom_data = PhotometryData(observatory=observatory_location, camera=camera,
                                 input_data=photom, passband_map=passband_map)
 
-    return photom_data, out_of_bounds_sources
+    return photom_data, np.array(dropped_sources)
 
 
 def faster_sigma_clip_stats(data, sigma=5, iters=5, axis=None):
