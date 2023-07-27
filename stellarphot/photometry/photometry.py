@@ -85,6 +85,10 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     max_adu : float
         Maximum allowed pixel value before a source is considered saturated.
 
+    reject_background_outliers : bool, optional (Default: True)
+        If ``True``, sigma clip the pixels in the annulus to reject outlying
+        pixels (e.g. like stars in the annulus)
+
     reject_too_close : bool, optional (Default: True)
         If ``True``, any sources that are closer than twice the aperture radius
         are rejected.  If ``False``, all sources in field are used.
@@ -306,28 +310,45 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     # Save aperture and annulus information
     photom.rename_column('aperture_sum_0', 'aperture_sum')
     photom.rename_column('aperture_sum_1', 'annulus_sum')
+    photom['aperture_sum'].unit = ccd_image.unit
+    photom['annulus_sum'].unit = ccd_image.unit
     photom['aperture'] = apers.r * u.pixel
     photom['aperture_area'] = apers.area * u.pixel * u.pixel
     photom['annulus_inner'] = anuls.r_in * u.pixel
     photom['annulus_outer'] = anuls.r_out * u.pixel
     photom['annulus_area'] = anuls.area  * u.pixel * u.pixel
 
-    print('single_image_photometry: computing clipped sky stats ...')
-    try:
-        avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
-                clipped_sky_per_pix_stats(ccd_image, anuls)
-    except AttributeError:
-        print('single_image_photometry: BAD ANNULUS, stats set to np.nan!')
-        avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
-            np.nan, np.nan, np.nan
-    photom['sky_per_pix_avg'] = avg_sky_per_pix
-    photom['sky_per_pix_med'] = med_sky_per_pix
-    photom['sky_per_pix_std'] = std_sky_per_pix
-    print('                          ...DONE computing clipped sky stats')
+    if reject_background_outliers:
+        print('single_image_photometry: computing clipped sky stats ...')
+        try:
+            avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
+                    clipped_sky_per_pix_stats(ccd_image, anuls)
+        except AttributeError:
+            print('single_image_photometry: BAD ANNULUS, stats set to np.nan!')
+            avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
+                np.nan, np.nan, np.nan
+        photom['sky_per_pix_avg'] = avg_sky_per_pix * u.pixel**-2
+        photom['sky_per_pix_med'] = med_sky_per_pix * u.pixel**-2
+        photom['sky_per_pix_std'] = std_sky_per_pix * u.pixel**-2
+        print('                          ...DONE computing clipped sky stats')
+    else: # Don't reject outliers (but why would you do this?)
+        print("single_image_photometry: WARNING: Computing sky per pixel without "
+              "clipping (set reject_background_outliers=True to clip).")
+        med_pp = []
+        std_pp = []
+        for mask in anuls.to_mask():
+            annulus_data = mask.cutout(ccd_image)
+            med_pp.append(np.median(annulus_data))
+            std_pp.append(np.std(annulus_data))
+        photom['sky_per_pix_avg'] = photom['annulus_sum'] / photom['annulus_area']
+        photom['sky_per_pix_med'] = np.array(med_pp) * ccd_image.unit * u.pixel**-2
+        photom['sky_per_pix_std'] = np.array(std_pp) * ccd_image.unit * u.pixel**-2
+
     # Compute counts using clipped stats on sky per pixel
     photom['aperture_net_cnts'] = (photom['aperture_sum'].value -
                                     (photom['aperture_area'].value *
                                     photom['sky_per_pix_avg'].value))
+    photom['aperture_net_cnts'].unit = ccd_image.unit
 
     # Fit the FWHM of the sources
     print('single_image_photometry: fitting fwhm of all sources ...')
@@ -360,7 +381,9 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
                             exposure=photom['exposure'].value,
                             include_digitization=include_dig_noise)
     photom['noise_electrons'] = noise  # Noise in electrons
+    photom['noise_electrons'].unit = u.electron
     photom['noise_cnts'] = noise / camera.gain.value  # Noise in counts
+    photom['noise_cnts'].unit = ccd_image.unit
 
     # Compute and save SNR
     snr = camera.gain.value * photom['aperture_net_cnts'] / noise
@@ -371,13 +394,6 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     photom['mag_inst'] = \
         (-2.5 * np.log10(camera.gain.value * photom['aperture_net_cnts'].value /
                             photom['exposure'].value))
-
-    # Set units on photometry related terms
-    photom['noise_electrons'].unit = u.electron
-    photom['noise_cnts'].unit = photom['sky_per_pix_avg'].unit
-    photom['aperture_sum'].unit = photom['sky_per_pix_avg'].unit
-    photom['annulus_sum'].unit = photom['sky_per_pix_avg'].unit
-    photom['aperture_net_cnts'].unit = photom['sky_per_pix_avg'].unit
 
     # Create PhotometryData object to return
     photom_data = PhotometryData(observatory=observatory_location, camera=camera,

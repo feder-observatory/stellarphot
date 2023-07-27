@@ -1,56 +1,13 @@
 import numpy as np
 import pytest
 
-from astropy.utils.data import get_pkg_data_filename
-from astropy.table import Table, QTable
+from astropy.table import QTable
 from astropy.stats import gaussian_sigma_to_fwhm
 from astropy import units as u
 
-from photutils.datasets import make_gaussian_sources_image, make_noise_image
+from stellarphot.photometry import (source_detection, compute_fwhm)
 
-from stellarphot.photometry import (source_detection, compute_fwhm,
-                                    photutils_stellar_photometry)
-
-
-class FakeImage:
-    """
-    Creates a fake image with a set of sources using the datafile stored
-    at `data/test_sources.csv`.
-
-    Parameters
-    ----------
-
-    noise_dev : float, optional
-        The standard deviation of the noise in the image.
-    """
-    def __init__(self, noise_dev=1.0):
-        self.image_shape = [400, 500]
-        data_file = get_pkg_data_filename('data/test_sources.csv')
-        self._sources = Table.read(data_file)
-        self.mean_noise = self.sources['amplitude'].max() / 100
-        self.noise_dev = noise_dev
-        self._stars = make_gaussian_sources_image(self.image_shape,
-                                                  self.sources)
-        self._noise = make_noise_image(self._stars.shape,
-                                       mean=self.mean_noise,
-                                       stddev=noise_dev)
-        # Sky background per pixel should be the mean level of the noise.
-        self._sources['sky_per_pix_avg'] = self.mean_noise
-
-    @property
-    def sources(self):
-        """
-        Return the table of sources used to create the fake image.
-        """
-        return self._sources
-
-    @property
-    def image(self):
-        """
-        Return the fake image.
-        """
-        return self._stars + self._noise
-
+from fake_image import FakeImage
 
 @pytest.mark.parametrize('units', [u.pixel, None])
 def test_compute_fwhm(units):
@@ -122,8 +79,8 @@ def test_detect_source_with_padding():
 
 
 ##
-## Disabled BOTH FINAL TESTS until photutils_stellar_photometry re-written
-## to access source_detection output properly.
+## Disabled BOTH FINAL TESTS until new single_image_photometry
+## is implemented.  Also moved tests to test_photometry.py
 ##
 # def test_aperture_photometry_no_outlier_rejection():
 #     fake_image = FakeImage()
@@ -148,7 +105,7 @@ def test_detect_source_with_padding():
 #         This expected flux is correct IF there were no noise. With noise, the
 #         standard deviation in the sum of the noise within in the aperture is
 #         n_pix_in_aperture times the single-pixel standard deviation.
-        
+
 #         We could require that the result be within some reasonable
 #         number of those expected variations or we could count up the
 #         actual number of background counts at each of the source

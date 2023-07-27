@@ -1,13 +1,18 @@
 import pytest
 import numpy as np
+
+from astropy import units as u
+from astropy.coordinates import EarthLocation
 from astropy.io import ascii
 from astropy.utils.data import get_pkg_data_filename
 
-from stellarphot.photometry import calculate_noise, find_too_close
-from stellarphot.core import SourceListData
+from stellarphot.photometry import (calculate_noise, find_too_close,
+                                    source_detection, single_image_photometry)
+from stellarphot.core import Camera, SourceListData
+
+from fake_image import FakeCCDImage
 
 GAINS = [1.0, 1.5, 2.0]
-
 
 def test_calc_noise_defaults():
     # If we put in nothing we should get zero back
@@ -137,14 +142,15 @@ def test_find_too_close():
     # Create SourceListData objects
     sl_test = SourceListData(input_data=test_sl_data, colname_map=None)
     sl_test_nosky = SourceListData(input_data=test_sl_data_nosky, colname_map=None)
-    sl_test_noimgpos = SourceListData(input_data=test_sl_data_noimgpos, colname_map=None)
+    sl_test_noimgpos = SourceListData(input_data=test_sl_data_noimgpos,
+                                      colname_map=None)
 
-    assert sl_test.has_ra_dec == True
-    assert sl_test.has_x_y == True
-    assert sl_test_nosky.has_ra_dec == False
-    assert sl_test_nosky.has_x_y == True
-    assert sl_test_noimgpos.has_ra_dec == True
-    assert sl_test_noimgpos.has_x_y == False
+    assert sl_test.has_ra_dec is True
+    assert sl_test.has_x_y is True
+    assert sl_test_nosky.has_ra_dec is False
+    assert sl_test_nosky.has_x_y is True
+    assert sl_test_noimgpos.has_ra_dec is True
+    assert sl_test_noimgpos.has_x_y is False
 
     # Test full positions available
     ap_in_asec = 5
@@ -161,3 +167,129 @@ def test_find_too_close():
     # Test only image positions available
     rejects = find_too_close(sl_test_nosky, aperture_rad, pixel_scale=feder_scale)
     assert np.sum(rejects) == 5
+
+# Constants for the following tests
+shift_tolerance = 6
+max_adu = 60000
+fake_camera = Camera(gain = 1.0*u.electron/u.adu,
+                     read_noise = 0*u.electron,
+                     dark_current = 0.1*u.electron/u.second,
+                     pixel_scale = 1*u.arcsec/u.pixel)
+fake_obs = EarthLocation(lat = 0*u.deg,
+                         lon = 0*u.deg,
+                         height = 0*u.m)
+
+def test_aperture_photometry_no_outlier_rejection():
+    fake_CCDimage = FakeCCDImage()
+    sources = fake_CCDimage.sources
+    aperture = sources['aperture'][0]
+    inner_annulus = 2 * aperture
+    outer_annulus = 3 * aperture
+    found_sources = source_detection(fake_CCDimage,
+                                    fwhm=sources['x_stddev'].mean(),
+                                    threshold=10)
+    phot, missing_sources = single_image_photometry(fake_CCDimage,
+                                                    found_sources,
+                                                    fake_camera,
+                                                    fake_obs,
+                                                    aperture, inner_annulus,
+                                                    outer_annulus,
+                                                    shift_tolerance,
+                                                    max_adu,
+                                                    include_dig_noise=True,
+                                                    reject_too_close=False,
+                                                    reject_background_outliers=False)
+
+    phot.sort('aperture_sum')
+    sources.sort('amplitude')
+    found_sources.sort('flux')
+
+    for inp, out in zip(sources, phot):
+        stdev = inp['x_stddev']
+        expected_flux = (inp['amplitude'] * 2 * np.pi *
+                            stdev**2 *
+                            (1 - np.exp(-aperture**2 / (2 * stdev**2))))
+        # This expected flux is correct IF there were no noise. With noise, the
+        # standard deviation in the sum of the noise within in the aperture is
+        # n_pix_in_aperture times the single-pixel standard deviation.
+
+        # We could require that the result be within some reasonable
+        # number of those expected variations or we could count up the
+        # actual number of background counts at each of the source
+        # positions.
+
+        # Here we just check whether any difference is consistent with
+        # less than the expected one sigma deviation.
+        assert (np.abs(expected_flux - out['aperture_net_cnts'].value) <
+                np.pi * aperture**2 * fake_CCDimage.noise_dev)
+
+
+@pytest.mark.parametrize('reject', [True, False])
+def test_aperture_photometry_with_outlier_rejection(reject):
+    """
+    Insert some really large pixel values in the annulus and check that
+    the photometry is correct when outliers are rejected and is
+    incorrect when outliers are not rejected.
+    """
+    fake_CCDimage = FakeCCDImage()
+    sources = fake_CCDimage.sources
+    aperture = sources['aperture'][0]
+    inner_annulus = 2 * aperture
+    outer_annulus = 3 * aperture
+    image = fake_CCDimage.data
+
+    found_sources = source_detection(fake_CCDimage,
+                                    fwhm=sources['x_stddev'].mean(),
+                                    threshold=10)
+
+    # Add some large pixel values to the annulus for each source.
+    # adding these moves the average pixel value by quite a bit,
+    # so we'll only get the correct net flux if these are removed.
+    for source in fake_CCDimage.sources:
+        center_px = (int(source['x_mean']), int(source['y_mean']))
+        begin = center_px[0] + inner_annulus + 1
+        end = begin + (outer_annulus - inner_annulus - 1)
+        # Yes, x and y are deliberately reversed below.
+        image[center_px[1], begin:end] = 100 * fake_CCDimage.mean_noise
+
+    phot, missing_sources = single_image_photometry(fake_CCDimage,
+                                                    found_sources,
+                                                    fake_camera,
+                                                    fake_obs,
+                                                    aperture, inner_annulus,
+                                                    outer_annulus,
+                                                    shift_tolerance,
+                                                    max_adu,
+                                                    include_dig_noise=True,
+                                                    reject_too_close=False,
+                                                    reject_background_outliers=reject)
+
+    phot.sort('aperture_sum')
+    sources.sort('amplitude')
+    found_sources.sort('flux')
+
+    for inp, out in zip(sources, phot):
+        stdev = inp['x_stddev']
+        expected_flux = (inp['amplitude'] * 2 * np.pi *
+                         stdev**2 *
+                         (1 - np.exp(-aperture**2 / (2 * stdev**2))))
+        # This expected flux is correct IF there were no noise. With noise, the
+        # standard deviation in the sum of the noise within in the aperture is
+        # n_pix_in_aperture times the single-pixel standard deviation.
+        #
+
+        expected_deviation = np.pi * aperture**2 * fake_CCDimage.noise_dev
+        # We could require that the result be within some reasonable
+        # number of those expected variations or we could count up the
+        # actual number of background counts at each of the source
+        # positions.
+
+        # Here we just check whether any difference is consistent with
+        # less than the expected one sigma deviation.
+        if reject:
+            assert (np.abs(expected_flux - out['aperture_net_cnts'].value) <
+                    expected_deviation)
+        else:
+            with pytest.raises(AssertionError):
+                assert (np.abs(expected_flux - out['aperture_net_cnts'].value) <
+                        expected_deviation)
