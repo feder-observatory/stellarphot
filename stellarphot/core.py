@@ -256,7 +256,9 @@ class PhotometryData(BaseEnhancedTable):
 
     input_data: `astropy.table.QTable`, optional (Default: None)
         A table containing all the instrumental aperture photometry results
-        to be validated.
+        to be validated.  Note: It is allowed for the 'ra' and 'dec' columns
+        to have np.nan values, but if they do, the 'bjd' column will not be
+        computed and will also be left with 'np.nan'.
 
     observatory: `astropy.coordinates.EarthLocation`, optional (Default: None)
         The location of the observatory.
@@ -293,8 +295,10 @@ class PhotometryData(BaseEnhancedTable):
     if you do not, an empty table will be returned.
 
     To be accepted as valid, the  `input_data` must MUST contain the following columns
-    with the following units.  The 'consistent count units' simply means it can be any
-    unit, but it must be the same for all the 'consistent count units' columns.
+    with the following units.  The data in those columns is NOT validated, the values in
+    those columns could be invalid.  Furthermore, the 'consistent count units' below
+    simply means it can be any unit, but it must be the same for all the columns with
+    'consistent count units'.
 
     name                  unit
     -----------------     -------
@@ -328,10 +332,10 @@ class PhotometryData(BaseEnhancedTable):
     passband              None
     file                  None
 
-    In addition to these required columns, the following columns are computed based
+    In addition to these required columns, the following columns are created based
     on the input data during creation.
 
-    bjd
+    bjd    (only if ra and dec are all real numbers, otherwise set to np.nan)
     night
 
     If these computed columns already exist in `data` class the class
@@ -489,18 +493,24 @@ class PhotometryData(BaseEnhancedTable):
         the input observations.  It modifies that table in place.
         """
 
-        # Convert times at start of each observation to TDB (Barycentric Dynamical Time)
-        times = Time(self['date-obs'])
-        times_tdb = times.tdb
-        times_tdb.format='jd' # Switch to JD format
+        if (np.isnan(np.sum(self['ra'])) or np.isnan(np.sum(self['dec']))):
+            print("WARNING: BJD could not be computed in output PhotometryData object "
+                  "because some RA or Dec values are missing.")
+            return np.full(len(self), np.nan)
+        else:
+            # Convert times at start of each observation to TDB (Barycentric Dynamical
+            # Time)
+            times = Time(self['date-obs'])
+            times_tdb = times.tdb
+            times_tdb.format='jd' # Switch to JD format
 
-        # Compute light travel time corrections
-        ip_peg = SkyCoord(ra=self['ra'], dec=self['dec'], unit='degree')
-        ltt_bary = times.light_travel_time(ip_peg, location=observatory)
-        time_barycenter = times_tdb + ltt_bary
+            # Compute light travel time corrections
+            ip_peg = SkyCoord(ra=self['ra'], dec=self['dec'], unit='degree')
+            ltt_bary = times.light_travel_time(ip_peg, location=observatory)
+            time_barycenter = times_tdb + ltt_bary
 
-        # Return BJD at midpoint of exposure at each location
-        return Time(time_barycenter + self['exposure'] / 2, scale='tdb')
+            # Return BJD at midpoint of exposure at each location
+            return Time(time_barycenter + self['exposure'] / 2, scale='tdb')
 
     @property
     def camera(self):
