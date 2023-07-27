@@ -19,7 +19,6 @@ from stellarphot import Camera, PhotometryData, SourceListData
 from .source_detection import compute_fwhm
 
 __all__ = ['single_image_photometry',
-           'photutils_stellar_photometry',
            'faster_sigma_clip_stats',
            'find_too_close', 'clipped_sky_per_pix_stats',
            'add_to_photometry_table', 'photometry_on_directory',
