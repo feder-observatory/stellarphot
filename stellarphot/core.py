@@ -732,9 +732,14 @@ class SourceListData(BaseEnhancedTable):
             ra_dec_present = True
             x_y_present = True
             nosky_pos = ('ra' not in data.colnames or
-                        'dec' not in data.colnames)
+                        'dec' not in data.colnames or
+                        np.isnan(data['ra'].value).all() or
+                        np.isnan(data['dec'].value).all())
             noimg_pos = ('xcenter' not in data.colnames or
-                        'ycenter' not in data.colnames)
+                        'ycenter' not in data.colnames or
+                        np.isnan(data['xcenter'].value).all() or
+                        np.isnan(data['ycenter'].value).all())
+
             if nosky_pos:
                 ra_dec_present = False
             if noimg_pos:
