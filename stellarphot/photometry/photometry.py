@@ -105,7 +105,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
         the star. If ``False``, the FWHM will be calculated by finding the
         second moments of the light distribution. Default is ``True``.
 
-    fname : str, optional
+    fname : str, optional ()
         Name of the image file on which photometry is being performed.
 
 
@@ -260,6 +260,8 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     # Add various CCD image parameters to the photometry table
     if fname is not None:
         photom['file'] = fname
+    else:
+        photom['file'] = [''] * len(photom)
 
     # Search for exposure keyword in header and set exposure if found
     exp_kw = ["EXPOSURE", "EXPTIME", "TELAPSE", "ELAPTIME", "ONTIME", "LIVETIME"]
@@ -274,7 +276,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
                          f"keywords ({format(', '.join(exp_kw))}) found in the header "
                          "... SKIPPING THIS IMAGE!")
     else:
-        photom['exposure'] = [ccd_image.header[matched_kw[0]]] * len(photom) * u.second
+        photom['exposure'] = [ccd_image.header[matched_kw]] * len(photom) * u.second
 
     try:
         photom['date-obs'] = Column(data=Time([ccd_image.header['DATE-OBS']]
