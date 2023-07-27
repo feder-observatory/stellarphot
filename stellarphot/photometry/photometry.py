@@ -45,9 +45,13 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     Parameters
     ----------
     ccd_image : `astropy.nddata.CCDData`
-        Image on which to perform aperture photometry.  It should have AIRMASS and
-        FILTER keywords in the header.  It must also have a WCS header associated with
-        it if you want to use sky positions as inputs.
+        Image on which to perform aperture photometry.  It's headers must contain
+        DATE-OBS, exposure time (which can be any of the following: EXPOSURE,
+        EXPTIME, TELAPSE, ELAPTIME, ONTIME, or LIVETIME), and FILTER.  If AIRMASS is
+        available it will be added to `phot_table`.  This image  must also have
+        a WCS header associated with it if you want to use sky positions as inputs.  If
+        impage (x/y) positions are used, no WCS header will br required, but the output
+        `phot_table` will have 'ra', 'dec', and 'bjd' columns with only np.nan values.
 
     sourcelist : `stellarphot.SourceList`
         Table of extracted sources with positions in terms of pixel coordinates OR
@@ -121,13 +125,16 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
 
     # Check that the input parameters are valid
     if not isinstance(ccd_image, CCDData):
-        raise TypeError("ccd_image must be a CCDData object")
+        raise TypeError("ccd_image must be a CCDData object, but it is "
+                        f"{type(ccd_image)}")
     if not isinstance(sourcelist, SourceListData):
-        raise TypeError("sourcelist must be a SourceListData object")
+        raise TypeError("sourcelist must be a SourceListData object, but it is "
+                        f"{type(sourcelist)}")
     if not isinstance(camera, Camera):
-        raise TypeError("camera must be a Camera object")
+        raise TypeError(f"camera must be a Camera object, but it is {type(camera)}")
     if not isinstance(observatory_location, EarthLocation):
-        raise TypeError("observatory_location must be a EarthLocation object")
+        raise TypeError("observatory_location must be a EarthLocation object, but it "
+                        f"is {type(observatory_location)}")
     if inner_annulus >= outer_annulus:
         raise ValueError("outer_annulus must be greater than inner_annulus")
     if aperture_radius >= inner_annulus:
@@ -214,14 +221,12 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
                 ycen[too_much_shift] = ys[too_much_shift]
                 xs, ys = xcen, ycen
             except NoOverlapError:
-                print("single_image_photometry: determining new centroid failed... "
-                      "SKIPPING THIS IMAGE!")
-                return None, None
+                raise NoOverlapError("single_image_photometry: Determining new "
+                                     "centroid failed ... SKIPPING THIS IMAGE!")
         except AttributeError:
             # No WCS
-            print("single_image_photometry: ccd_image must have a valid WCS to use "
-                    "RA/Dec ... SKIPPING THIS IMAGE!")
-            return None, None
+            raise ValueError("single_image_photometry: ccd_image must have a valid WCS "
+                    "to use RA/Dec ... SKIPPING THIS IMAGE!")
 
     # Compute RA/Dec if not already provided
     if not sourcelist.has_ra_dec:
@@ -255,17 +260,45 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     # Add various CCD image parameters to the photometry table
     if fname is not None:
         photom['file'] = fname
-    photom['exposure'] = [ccd_image.header['exposure']] * len(photom) * u.second
-    photom['date-obs'] = Column(data=Time([ccd_image.header['DATE-OBS']] * len(photom),
-                                format='isot', scale='utc'), name='date-obs')
-    metadata_to_add = ['AIRMASS', 'FILTER']
-    for meta in metadata_to_add:
-        try:
-            photom[meta.lower()] = [ccd_image.header[meta]] * len(photom)
-        except KeyError:
-            print(f"single_image_photometry: {meta} not found in CCD image header ... "
-                  "SKIPPING THIS IMAGE!")
-            return None, None
+
+    # Search for exposure keyword in header and set exposure if found
+    exp_kw = ["EXPOSURE", "EXPTIME", "TELAPSE", "ELAPTIME", "ONTIME", "LIVETIME"]
+    matched_kw = None
+    for kw in exp_kw:
+        if kw in ccd_image.header:
+            matched_kw = kw
+            break
+
+    if matched_kw is None:
+        raise ValueError("single_image_photometry: None of the allowed exposure "
+                         f"keywords ({format(', '.join(exp_kw))}) found in the header "
+                         "... SKIPPING THIS IMAGE!")
+    else:
+        photom['exposure'] = [ccd_image.header[matched_kw[0]]] * len(photom) * u.second
+
+    try:
+        photom['date-obs'] = Column(data=Time([ccd_image.header['DATE-OBS']]
+                                              * len(photom),
+                                    format='isot', scale='utc'), name='date-obs')
+    except KeyError:
+        raise ValueError("single_image_photometry: 'DATE-OBS' not found in CCD image "
+                         "header ... SKIPPING THIS IMAGE!")
+
+    # Check for airmass keyword in header and set 'airmass' if found,
+    # but accept it may not be available
+    try:
+        photom['airmass'] = [ccd_image.header['AIRMASS']] * len(photom)
+    except KeyError:
+        print("single_image_photometry: 'AIRMASS' not found in CCD "
+                            "image header ... setting to NaN!")
+        photom['airmass'] = [np.nan] * len(photom)
+
+    # Check for filter keyword in header and set 'filter' if found
+    try:
+        photom['filter'] = [ccd_image.header['FILTER']] * len(photom)
+    except KeyError:
+        raise ValueError("single_image_photometry: 'FILTER' not found in CCD "
+                            "image header ... SKIPPING THIS IMAGE!")
     photom.rename_column('filter', 'passband')
 
     # Save aperture and annulus information
@@ -282,7 +315,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
         avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
                 clipped_sky_per_pix_stats(ccd_image, anuls)
     except AttributeError:
-        print('single_image_photometry: BAD ANNULUS!')
+        print('single_image_photometry: BAD ANNULUS, stats set to np.nan!')
         avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
             np.nan, np.nan, np.nan
     photom['sky_per_pix_avg'] = avg_sky_per_pix
@@ -347,9 +380,6 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     # Create PhotometryData object to return
     photom_data = PhotometryData(observatory=observatory_location, camera=camera,
                                 input_data=photom, passband_map=passband_map)
-
-    # TO DO
-    # - filter for too close sources
 
     return photom_data, out_of_bounds_sources
 
@@ -951,7 +981,7 @@ def calculate_noise(gain=1.0, read_noise=0.0, dark_current_per_sec=0.0,
         \\sigma = \\sqrt{G \\cdot N_C + A \\cdot \\left(1 + \\frac{A}{B}\\right)\\cdot \\left[ G\\cdot S + D \\cdot t + R^2 + (0.289 G)^2\\right]}
 
     where :math:`\sigma` is the noise, :math:`G` is the gain,
-    :math:`N_C` is the source counts (which is photon/electron counts divided by gain), 
+    :math:`N_C` is the source counts (which is photon/electron counts divided by gain),
     :math:`A` is the aperture area in pixels,
     :math:`B` is the annulus area in pixels,
     :math:`S` is the sky counts per pixel,
