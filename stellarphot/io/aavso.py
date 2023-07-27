@@ -13,6 +13,80 @@ __all__ = [
 
 @dataclass
 class AAVSOExtendedFileFormat:
+    """
+    A class to represent a file in AAVSO extended format.
+
+    Parameters
+    ----------
+    obscode : str
+        The observer's code.
+
+    Attributes
+    ----------
+    obscode : str
+        The observer's code.
+    type : str
+        The type of observation. Defaults to 'EXTENDED'.
+    software : str
+        The software used to generate the file. Defaults to 'stellarphot'.
+
+    delim : str
+        The delimiter used in the file. Defaults to ','.
+
+    date_format : str
+        The format of the date. Defaults to 'JD'.
+
+    date : `astropy.table.Column`
+        The date/time of the observation in the format `date_format`.
+
+    obstype : str
+        The type of observation. Defaults to 'CCD'.
+
+    magnitude : `astropy.table.Column`
+        The magnitude of the observation.
+
+    magerr : `astropy.table.Column`
+        The error in the magnitude of the observation.
+
+    filter : `astropy.table.Column`
+        The filter/band used for the observation. Must be one of the AAVSO passbands.
+
+    kmag : `astropy.table.Column`
+        The magnitude of the check star.
+
+    cmag : `astropy.table.Column`
+        The magnitude of the comparison star.
+
+    ensemble : bool
+        Whether the observation is an ensemble observation. Defaults to False.
+
+    group : int
+        The group number of the ensemble observation. Defaults to 0.
+
+    trans : str
+        Whether the observation is a transformed observation. Defaults to 'NO'.
+
+    chart : str
+        The chart used for the observation. Defaults to ''.
+
+    notes : str
+        Notes about the observation. Defaults to ''.
+
+    starid : str
+        The AUID of the star. Defaults to ''.
+
+    cname : str
+        The AUID of the comparison star. Defaults to ''.
+
+    kname : str
+        The AUID of the check star. Defaults to ''.
+
+    airmass : `astropy.table.Column`
+        The airmass of the observation.
+
+    mtype : str
+        The type of magnitude. Defaults to 'STD'.
+    """
     obscode : str
     _type: str = 'EXTENDED'
     _software: str = 'stellarphot'
