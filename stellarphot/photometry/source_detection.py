@@ -1,10 +1,11 @@
 import numpy as np
 
-from astropy.stats import sigma_clipped_stats
+from astropy import units as u
 from astropy.modeling.models import Const2D, Gaussian2D
 from astropy.modeling.fitting import LevMarLSQFitter
+from astropy.nddata import CCDData
+from astropy.stats import sigma_clipped_stats
 from astropy.table import Table
-from astropy import units as u
 
 from photutils.detection import DAOStarFinder
 from photutils.morphology import data_properties
@@ -155,8 +156,9 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
     Parameters
     ----------
 
-    ccd : `astropy.nddata.CCDData`
-        The CCD Image array.
+    ccd : `numpy.ndarray` or `astropy.nddata.CCDData`
+        This is the 2-D array of the image to be analyzed.  If
+        a CCDData object is passed, its data attribute will be used.
 
     fwhm : float, optional (default=8)
         Initial estimate of full-width half-max of stars in the image,
@@ -195,6 +197,9 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
         the input CCDData object has WCS information, the columns `ra` and
         `dec` are also populated, otherwise they are set to NaN.
     """
+    # if image is a CCDData object, extract the data array
+    if not isinstance(ccd, CCDData) and not isinstance(ccd, np.ndarray):
+        raise ValueError("ccd must be a numpy array or CCDData object")
 
     # If user uses units for fwhm or sky_per_pix_avg, convert to value
     if isinstance(sky_per_pix_avg, u.Quantity):
@@ -206,8 +211,11 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
     # if not provided).  Using clipped stats should hopefully get rid of any
     # bright stars that might be in the image, so the mean should be a good
     # estimate of the sky background.
+    print("source_detection: You may see a warning about invalid values in the "
+          "input image.  This is expected if any pixels are saturated and can be "
+          "ignored.")
     mean, median, std = sigma_clipped_stats(ccd, sigma=sigma, maxiters=iters)
-    print(f"source_detection: mean={mean:.4f}, median={median:.4f}, std={std:.4f}")
+    print(f"source_detection: sigma_clipped_stats mean={mean:.4f}, median={median:.4f}, std={std:.4f}")
     if sky_per_pix_avg is None:
         sky_per_pix_avg = mean
         print(f"source_detection: sky_per_pix_avg set to {sky_per_pix_avg:.4f}")
