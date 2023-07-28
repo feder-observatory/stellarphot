@@ -608,28 +608,30 @@ def multi_image_photometry(directory_with_images,
     # Attributes should survive intact assume all have same camera and observatory.
     all_phot = vstack(phots)
 
-    # Build a list of all the unique star_ids in the sourcelist
+    # Build a set of all the unique star_ids in the sourcelist
     # that were eliminated on at least one image
-    uniques = set()
-    for miss in missing_sources:
-        uniques.update(set(miss))
+    if len(missing_sources) > 0:
+        if len(missing_sources) > 1:
+            uniques = set(missing_sources)
+        else:
+            uniques = set([missing_sources])
 
-    # Purge the photometry table of all sources that were eliminated
-    # on at least one image
-    starid_to_remove = sorted([u for u in uniques if u in all_phot['star_id']])
-    # add index to PhotometryData to speed up removal
-    all_phot.add_index('star_id')
-    # Remove the starid for objects not observed in every image
-    if starid_to_remove:
-        bad_rows = all_phot.loc_indices[starid_to_remove]
-        try:
-            bad_rows = list(bad_rows)
-        except TypeError:
-            bad_rows = [bad_rows]
+        # Purge the photometry table of all sources that were eliminated
+        # on at least one image
+        starid_to_remove = sorted([u for u in uniques if u in all_phot['star_id']])
+        # add index to PhotometryData to speed up removal
+        all_phot.add_index('star_id')
+        # Remove the starid for objects not observed in every image
+        if starid_to_remove:
+            bad_rows = all_phot.loc_indices[starid_to_remove]
+            try:
+                bad_rows = list(bad_rows)
+            except TypeError:
+                bad_rows = [bad_rows]
+            all_phot.remove_indices('star_id')
+            all_phot.remove_rows(sorted(bad_rows))
+        # Drop index from PhotometryData to save memory
         all_phot.remove_indices('star_id')
-        all_phot.remove_rows(sorted(bad_rows))
-    # Drop index from PhotometryData to save memory
-    all_phot.remove_indices('star_id')
 
     return all_phot
 

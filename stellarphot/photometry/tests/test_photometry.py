@@ -242,7 +242,6 @@ def test_aperture_photometry_no_outlier_rejection():
 
     phot.sort('aperture_sum')
     sources.sort('amplitude')
-    found_sources.sort('flux')
 
     for inp, out in zip(sources, phot):
         stdev = inp['x_stddev']
@@ -307,7 +306,6 @@ def test_aperture_photometry_with_outlier_rejection(reject):
 
     phot.sort('aperture_sum')
     sources.sort('amplitude')
-    found_sources.sort('flux')
 
     for inp, out in zip(sources, phot):
         stdev = inp['x_stddev']
@@ -334,3 +332,93 @@ def test_aperture_photometry_with_outlier_rejection(reject):
             with pytest.raises(AssertionError):
                 assert (np.abs(expected_flux - out['aperture_net_cnts'].value) <
                         expected_deviation)
+
+
+def test_photometry_on_directory():
+    # Generate fake CCDData objects and write them to a temporary directory,
+    # then run multi_file_photometry() on that directory.
+    fake_images = [FakeCCDImage()]
+
+    # Create additional images, each in a different position.
+    num_files = 5
+    for i in range(num_files-1):
+        angle = 2*np.pi/(num_files-1) * i
+        rad = 50
+        dx, dy = rad*np.cos(angle), rad*np.sin(angle)
+        fake_images.append( shift_FakeCCDImage(fake_images[0], dx, dy) )
+
+    filters = ['U', 'B', 'V', 'R', 'I']
+    for i in range(num_files):
+        fake_images[i].header['FILTER'] = filters[i]
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Come up with Filenames
+        temp_file_names = [Path(temp_dir) /
+                            f"tempfile_{i:02d}.fits" for i in range(1, num_files + 1)]
+        # Write the CCDData objects to files
+        for i, image in enumerate(fake_images):
+            image.write(temp_file_names[i])
+
+        object_name = fake_images[0].header['OBJECT']
+        sources = fake_images[0].sources
+        aperture = sources['aperture'][0]
+        inner_annulus = 2 * aperture
+        outer_annulus = 3 * aperture
+
+        # Generate the sourcelist
+        found_sources = source_detection(fake_images[0],
+                                        fwhm=fake_images[0].sources['x_stddev'].mean(),
+                                        threshold=10)
+
+        phot_data = multi_image_photometry(temp_dir,
+                                object_name,
+                                found_sources,
+                                fake_camera,
+                                fake_obs,
+                                aperture,
+                                inner_annulus, outer_annulus,
+                                shift_tolerance, max_adu, fwhm_estimate,
+                                include_dig_noise=True,
+                                reject_too_close=True,
+                                reject_background_outliers=True,
+                                passband_map=None,
+                                fwhm_by_fit=True)
+
+    # For following assertion to be true, rad must be small enough that
+    # no source lies within outer_annulus of the edge of an image.
+    assert len(phot_data) == num_files*len(found_sources)
+
+    # Sort all data by amount of signal
+    sources.sort('amplitude')
+    found_sources.sort('flux')
+
+    # Get noise level from the first image
+    noise_dev = fake_images[0].noise_dev
+
+    for fnd, inp in zip(found_sources, sources):
+        star_id_chk = fnd['star_id']
+        # Select the rows in phot_data that correspond to the current star
+        # and compute the average of the aperture sums.
+        selected_rows = phot_data[phot_data['star_id'] == star_id_chk]
+        obs_avg_net_cnts = np.average(selected_rows['aperture_net_cnts'].value)
+
+        stdev = inp['x_stddev']
+        expected_flux = (inp['amplitude'] * 2 * np.pi *
+                            stdev**2 *
+                            (1 - np.exp(-aperture**2 / (2 * stdev**2))))
+        # This expected flux is correct IF there were no noise. With noise, the
+        # standard deviation in the sum of the noise within in the aperture is
+        # n_pix_in_aperture times the single-pixel standard deviation.
+        #
+
+        expected_deviation = np.pi * aperture**2 * noise_dev
+
+        # We could require that the result be within some reasonable
+        # number of those expected variations or we could count up the
+        # actual number of background counts at each of the source
+        # positions.
+
+        # Here we just check whether any difference is consistent with
+        # less than the expected one sigma deviation.
+        assert (np.abs(expected_flux - obs_avg_net_cnts) <
+                np.pi * aperture**2 * noise_dev)
