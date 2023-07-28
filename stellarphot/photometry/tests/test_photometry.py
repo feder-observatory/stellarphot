@@ -171,6 +171,7 @@ def test_find_too_close():
 # Constants for the following tests
 shift_tolerance = 6
 max_adu = 60000
+fwhm_estimate = 5
 fake_camera = Camera(gain = 1.0*u.electron/u.adu,
                      read_noise = 0*u.electron,
                      dark_current = 0.1*u.electron/u.second,
@@ -195,7 +196,7 @@ def test_aperture_photometry_no_outlier_rejection():
                                                     aperture, inner_annulus,
                                                     outer_annulus,
                                                     shift_tolerance,
-                                                    max_adu,
+                                                    max_adu, fwhm_estimate,
                                                     include_dig_noise=True,
                                                     reject_too_close=False,
                                                     reject_background_outliers=False)
@@ -259,7 +260,7 @@ def test_aperture_photometry_with_outlier_rejection(reject):
                                                     aperture, inner_annulus,
                                                     outer_annulus,
                                                     shift_tolerance,
-                                                    max_adu,
+                                                    max_adu, fwhm_estimate,
                                                     include_dig_noise=True,
                                                     reject_too_close=False,
                                                     reject_background_outliers=reject)
