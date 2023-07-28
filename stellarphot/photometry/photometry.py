@@ -450,7 +450,7 @@ def multi_image_photometry(directory_with_images,
                            observatory_location,
                            aperture_radius,
                            inner_annulus, outer_annulus,
-                           shift_tolerance, max_adu,
+                           shift_tolerance, max_adu, fwhm_estimate,
                            include_dig_noise=True,
                            reject_too_close=True,
                            reject_background_outliers=True,
@@ -509,6 +509,11 @@ def multi_image_photometry(directory_with_images,
 
     max_adu : float
         Maximum allowed pixel value before a source is considered saturated.
+
+    fwhm_estimate : float
+        Initial estimate of the FWHM in pixels for sources in the image.
+        This is used to determine the size of the box used to fit the FWHM
+        (which is 5 times the FWHM estimate in width).
 
     reject_background_outliers : bool, optional (Default: True)
         If ``True``, sigma clip the pixels in the annulus to reject outlying
@@ -576,7 +581,7 @@ def multi_image_photometry(directory_with_images,
                 single_image_photometry(this_ccd, sourcelist,
                                         camera, observatory_location,
                                         aperture_radius, inner_annulus, outer_annulus,
-                                        shift_tolerance, max_adu,
+                                        shift_tolerance, max_adu, fwhm_estimate,
                                         include_dig_noise=include_dig_noise,
                                         reject_too_close=reject_too_close,
                                         reject_background_outliers=reject_background_outliers,
@@ -584,7 +589,7 @@ def multi_image_photometry(directory_with_images,
                                         fwhm_by_fit=fwhm_by_fit, fname=this_fname,
                                         logline="    >")
             print("  Done with single_image_photometry for "
-                f"{this_fname}")
+                f"{this_fname}\n\n")
 
             # Extend the list of missing stars
             missing_sources.extend(this_missing_sources)
