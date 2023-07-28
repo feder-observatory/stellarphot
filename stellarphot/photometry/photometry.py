@@ -15,7 +15,7 @@ from stellarphot import Camera, PhotometryData, SourceListData
 
 from .source_detection import compute_fwhm
 
-__all__ = ['single_image_photometry',
+__all__ = ['single_image_photometry', 'multi_image_photometry',
            'faster_sigma_clip_stats',
            'find_too_close', 'clipped_sky_per_pix_stats',
            'add_to_photometry_table', 'photometry_on_directory',
@@ -591,7 +591,7 @@ def multi_image_photometry(directory_with_images,
 
             # And add the final table to the list of tables
             phots.append(this_phot)
-        except Exception as e:
+        except (ValueError, TypeError, NoOverlapError) as e:
             # If there was an error, print it and move on to the next image
             print(f"    > {type(e).__name__}: {str(e)} ... SKIPPING THIS IMAGE!!!")
 
@@ -695,7 +695,7 @@ def find_too_close(sourcelist, aperture_rad, pixel_scale=None):
     aperture_rad : int
         Radius of the aperture, in pixels.
 
-    pixel_scale : float, optional (Default: None)
+    pixel_scale : `float, optional` (Default: None)
         Pixel scale of the image in arcsec/pixel. Only required
         if x/y coordinates are NOT provided.
 
@@ -708,7 +708,10 @@ def find_too_close(sourcelist, aperture_rad, pixel_scale=None):
     """
     if not isinstance(sourcelist, SourceListData):
         raise TypeError("sourcelist must be of type SourceListData not "
-                        f"{type(sourcelist)}")
+                        f"'{type(sourcelist)}'")
+
+    if not isinstance(pixel_scale, float):
+        raise TypeError(f"pixel_scale must be a float not '{type(pixel_scale)}'")
 
     if sourcelist.has_x_y:
         x, y = sourcelist['xcenter'], sourcelist['ycenter']
@@ -719,6 +722,9 @@ def find_too_close(sourcelist, aperture_rad, pixel_scale=None):
         # radius
         return (dist_mat.min(0) < 2 * aperture_rad)
     elif sourcelist.has_ra_dec:
+        if (pixel_scale is None):
+            raise ValueError("pixel_scale must be provided if x/y coordinates are "
+                             "not available in the sourcelist.")
         star_coords = SkyCoord(ra=sourcelist['ra'], dec=sourcelist['dec'],
                            frame='icrs', unit='degree')
         idxc, d2d, d3d = star_coords.match_to_catalog_sky(star_coords,
