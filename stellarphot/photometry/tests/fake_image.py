@@ -95,14 +95,11 @@ class FakeCCDImage(CCDData):
 def shift_FakeCCDImage(ccd_data, x_shift, y_shift):
     """
     Create a test CCD image based on the first test image with the central
-    positions shifted by the given amount.  As a warning, the image gets
-    'rolled' so that data shifting off the right edge of the image will
-    wrap around to the left edge, and data shifting off the top edge of
-    the image will wrap around to the bottom edge.  To prevent this an
-    error is thrown if any of the sources are shifted off the edge of the
-    image.
+    positions shifted by the given amount.  To prevent any sources being
+    shifted off the edge of the image, an error is thrown if this is
+    happening.
 
-    This shift is done by updating the WCS information in the CCDData
+    WCS information in the CCDData is also updated to reflect the shift.
 
     Parameters:
         ccd_data : `FakeCCDImage`
@@ -132,12 +129,6 @@ def shift_FakeCCDImage(ccd_data, x_shift, y_shift):
     ra_center_shifted, dec_center_shifted = \
         shifted_wcs.all_pix2world((shifted_ccd_data.data.shape[1]) / 2 + x_shift,
                                   (shifted_ccd_data.data.shape[0]) / 2 + y_shift, 0)
-    # Roll the image (warning, will wrap source around edges of image)
-    shifted_ccd_data.data = np.roll(shifted_ccd_data.data, (-y_shift, -x_shift), axis=(0,1))
-
-    # Update the new RA and Dec center in the shifted WCS
-    shifted_wcs.wcs.crval = [ra_center_shifted, dec_center_shifted]
-    shifted_ccd_data.wcs = shifted_wcs
 
     # Shift source positions
     shifted_ccd_data.sources['x_mean'] -= x_shift
@@ -149,5 +140,17 @@ def shift_FakeCCDImage(ccd_data, x_shift, y_shift):
          (np.any(shifted_ccd_data.sources['y_mean'] < 0)) |
          (np.any(shifted_ccd_data.sources['y_mean'] > shifted_ccd_data.data.shape[0])) ):
         raise ValueError('Sources shifted off the edge of the image.')
+
+    # Update the new RA and Dec center in the shifted WCS
+    shifted_wcs.wcs.crval = [ra_center_shifted, dec_center_shifted]
+    shifted_ccd_data.wcs = shifted_wcs
+
+    # Make image
+    srcs = make_gaussian_sources_image(shifted_ccd_data.image_shape,
+                                       shifted_ccd_data.sources)
+    background = make_noise_image(srcs.shape,
+                                  mean=shifted_ccd_data.mean_noise,
+                                  stddev=shifted_ccd_data.noise_dev)
+    shifted_ccd_data.data = srcs + background
 
     return shifted_ccd_data
