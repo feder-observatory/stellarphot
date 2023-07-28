@@ -27,12 +27,13 @@ __all__ = ['single_image_photometry',
 
 def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
                             aperture_radius, inner_annulus, outer_annulus,
-                            shift_tolerance, max_adu,
+                            shift_tolerance, max_adu, fwhm_estimate,
                             include_dig_noise=True,
                             reject_too_close=True,
-                            passband_map=None,
                             reject_background_outliers=True,
-                            fwhm_by_fit=True, fname=None):
+                            passband_map=None,
+                            fwhm_by_fit=True, fname=None, 
+                            logline="single_image_photometry:"):
     """
     Perform aperture photometry on a single image, with an options for estimating
     the local background from sigma clipped stats of the counts in an annulus around
@@ -74,15 +75,20 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
         Outer radius of the annulus in pixels.
 
     shift_tolerance : float
-        If the image position needs to be computed using WCS, then computed
-        impage positions are refined by afterward centroiding the sources.
+        If the x/y position needs to be computed using WCS, then computed
+        x/y positions are refined by afterward centroiding the sources.
         This reflects the tolerance in pixels for the shift between the
-        the computed positions and the refined positions, in pixels.  Since we
-        would not expect the shift to be more than the FWHM, a measured FWHM
-        might be a good value to provide here.
+        the computed positions and the refined positions, in pixels.
+        The expected shift shift should not be more than the FWHM, so a
+        measured FWHM might be a good value to provide here.
 
     max_adu : float
         Maximum allowed pixel value before a source is considered saturated.
+
+    fwhm_estimate : float
+        Initial estimate of the FWHM in pixels for sources in the image.
+        This is used to determine the size of the box used to fit the FWHM
+        (which is 5 times the FWHM estimate in width).
 
     reject_background_outliers : bool, optional (Default: True)
         If ``True``, sigma clip the pixels in the annulus to reject outlying
@@ -111,6 +117,8 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     fname : str, optional ()
         Name of the image file on which photometry is being performed.
 
+    logline : str, optional (Default: "single_image_photometry:")
+        String to prepend to all log messages.
 
     Returns
     -------
@@ -129,27 +137,29 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     # Check that the input parameters are valid
     if not isinstance(ccd_image, CCDData):
         raise TypeError("ccd_image must be a CCDData object, but it is "
-                        f"{type(ccd_image)}")
+                        f"'{type(ccd_image)}'.")
     if not isinstance(sourcelist, SourceListData):
         raise TypeError("sourcelist must be a SourceListData object, but it is "
-                        f"{type(sourcelist)}")
+                        f"'{type(sourcelist)}'.")
     if not isinstance(camera, Camera):
-        raise TypeError(f"camera must be a Camera object, but it is {type(camera)}")
+        raise TypeError(f"camera must be a Camera object, but it is '{type(camera)}'.")
     if not isinstance(observatory_location, EarthLocation):
         raise TypeError("observatory_location must be a EarthLocation object, but it "
-                        f"is {type(observatory_location)}")
+                        f"is '{type(observatory_location)}'.")
     if inner_annulus >= outer_annulus:
-        raise ValueError("outer_annulus must be greater than inner_annulus")
+        raise ValueError(f"outer_annulus ({outer_annulus}) must be greater than "
+                         f"inner_annulus ({inner_annulus}).")
     if aperture_radius >= inner_annulus:
-        raise ValueError("inner_radius must be greater than aperture_radius")
+        raise ValueError(f"aperture_radius ({aperture_radius}) must be greater than "
+                         f"inner_annulus ({inner_annulus}).")
     if (shift_tolerance<=0):
-        raise ValueError("shift_tolerance must be greater than 0 (should be on order "
-                         "of FWHM)")
+        raise ValueError(f"shift_tolerance ({shift_tolerance}) must be greater than 0 "
+                         "(should be on order of FWHM).")
     if (max_adu<=0):
-        raise ValueError("max_adu must be greater than 0")
+        raise ValueError(f"max_adu ({max_adu}) must be greater than 0.")
 
-    # Set hot pixels to NaN
-    ccd_image.data[ccd_image.data > max_adu] = np.nan
+    # # Set hot pixels to NaN
+    # ccd_image.data[ccd_image.data > max_adu] = np.nan
 
     # Extract necessary values from sourcelist structure
     star_ids = sourcelist['star_id'].value
@@ -159,14 +169,28 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     dec = sourcelist['dec'].value
     src_cnt = len(sourcelist)
 
+    # If RA/Dec are available attempt to use them to determine the source positions
+    if sourcelist.has_ra_dec and not sourcelist.has_x_y:
+        try:
+            imgpos = ccd_image.wcs.world_to_pixel(SkyCoord(ra, dec, unit=u.deg,
+                                                           frame='icrs'))
+            xs, ys = imgpos[0], imgpos[1]
+        except AttributeError:
+            # No WCS
+            raise ValueError("ccd_image must have a valid WCS to use RA/Dec!")
+
     # Reject sources that are within an aperture diameter of each other.
     dropped_sources = []
-    too_close = find_too_close(sourcelist, aperture_radius,
-                               pixel_scale=camera.pixel_scale)
+    try:
+        too_close = find_too_close(sourcelist, aperture_radius,
+                                pixel_scale=camera.pixel_scale.value)
+    except Exception as e:
+        # Any failure here is BAD, so raise an error
+        raise RuntimeError(f"Call to find_too_close() returned {type(e).__name__}: {str(e)}")
     too_close_cnt = np.sum(too_close)
     non_overlap = ~too_close
-    print(f"single_image_photometry: {too_close_cnt} of {src_cnt} sources within "
-                "2 aperture radii of nearest neighbor", end="")
+    print(f"{logline} {too_close_cnt} of {src_cnt} sources within 2 aperture radii of "
+          "nearest neighbor", end="")
     if reject_too_close:
         # Track dropped sources due to being too close together
         dropped_sources.extend(star_ids[too_close].tolist())
@@ -196,43 +220,35 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     dec = dec[in_bounds]
     in_cnt = np.sum(in_bounds)
     out_cnt = np.sum(out_of_bounds)
-    print(f"single_image_photometry: {in_cnt} sources kept of {src_cnt} original "
-          f"sources ({out_cnt} sources too close to image edge).")
+    print(f"{logline} {in_cnt} sources kept of {src_cnt} original sources ({out_cnt} "
+          "sources too close to image edge).")
 
-    # If RA/Dec are available attempt to use them to determine the source positions
+    # If we are using x/y positions previously obtained from the ra/dec positions and
+    # WCS, then recentroid the sources to refine the positions. This is
+    # particularly useful is processing multiple images of the same field
+    # and just passing the same sourcelist when calling single_image_photometry
+    # on each image.
     if sourcelist.has_ra_dec and not sourcelist.has_x_y:
         try:
-            imgpos = ccd_image.wcs.world_to_pixel(SkyCoord(ra, dec, unit=u.deg,
-                                                           frame='icrs'))
-            # Recentroid the sources using the WCS-derived positions (this is
-            # particularly useful is processing multiple images of the same field
-            # and just passing the same sourcelist when calling single_image_photometry
-            # on each image.
-            try:
-                xcen, ycen = centroid_sources(ccd_image.data,
-                                            imgpos[0],
-                                            imgpos[1],
-                                            box_size=2 * aperture_radius + 1)
-                # Calculate offset between centroid in this image and the positions
-                # based on input RA/Dec.
-                center_diff = np.sqrt((xs - xcen)**2 + (ys - ycen)**2)
+            xcen, ycen = centroid_sources(ccd_image.data, xs, ys,
+                                        box_size=2 * aperture_radius + 1)
+            # Calculate offset between centroid in this image and the positions
+            # based on input RA/Dec.
+            center_diff = np.sqrt((xs - xcen)**2 + (ys - ycen)**2)
 
-                # The center really shouldn't move more than about the fwhm, could
-                # rework this in the future to use that instead.
-                too_much_shift = center_diff > shift_tolerance
+            # The center really shouldn't move more than about the fwhm, could
+            # rework this in the future to use that instead.
+            too_much_shift = center_diff > shift_tolerance
 
-                # If the shift is too large, use the WCS-derived positions instead
-                # (these sources are probably too faint for centroiding to work well)
-                xcen[too_much_shift] = xs[too_much_shift]
-                ycen[too_much_shift] = ys[too_much_shift]
-                xs, ys = xcen, ycen
-            except NoOverlapError:
-                raise NoOverlapError("single_image_photometry: Determining new "
-                                     "centroid failed ... SKIPPING THIS IMAGE!")
-        except AttributeError:
-            # No WCS
-            raise ValueError("single_image_photometry: ccd_image must have a valid WCS "
-                    "to use RA/Dec ... SKIPPING THIS IMAGE!")
+            # If the shift is too large, use the WCS-derived positions instead
+            # (these sources are probably too faint for centroiding to work well)
+            xcen[too_much_shift] = xs[too_much_shift]
+            ycen[too_much_shift] = ys[too_much_shift]
+            xs, ys = xcen, ycen
+        except NoOverlapError:
+            raise NoOverlapError("Determining new centroid failed!")
+        except Exception as e:
+            raise RuntimeError(f"Call to centroid_sources() returned {type(e).__name__}: {str(e)}")
 
     # Compute RA/Dec if not already provided
     if not sourcelist.has_ra_dec:
@@ -278,9 +294,8 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
             break
 
     if matched_kw is None:
-        raise ValueError("single_image_photometry: None of the allowed exposure "
-                         f"keywords ({format(', '.join(exp_kw))}) found in the header "
-                         "... SKIPPING THIS IMAGE!")
+        raise ValueError(f"None of the allowed exposure keywords "
+                         f"({format(', '.join(exp_kw))}) found in the header!")
     else:
         photom['exposure'] = [ccd_image.header[matched_kw]] * len(photom) * u.second
 
@@ -289,15 +304,14 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
                                               * len(photom),
                                     format='isot', scale='utc'), name='date-obs')
     except KeyError:
-        raise ValueError("single_image_photometry: 'DATE-OBS' not found in CCD image "
-                         "header ... SKIPPING THIS IMAGE!")
+        raise ValueError("'DATE-OBS' not found in CCD image header!")
 
     # Check for airmass keyword in header and set 'airmass' if found,
     # but accept it may not be available
     try:
         photom['airmass'] = [ccd_image.header['AIRMASS']] * len(photom)
     except KeyError:
-        print("single_image_photometry: 'AIRMASS' not found in CCD "
+        print(f"{logline} 'AIRMASS' not found in CCD "
                             "image header ... setting to NaN!")
         photom['airmass'] = [np.nan] * len(photom)
 
@@ -305,8 +319,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     try:
         photom['filter'] = [ccd_image.header['FILTER']] * len(photom)
     except KeyError:
-        raise ValueError("single_image_photometry: 'FILTER' not found in CCD "
-                            "image header ... SKIPPING THIS IMAGE!")
+        raise ValueError("'FILTER' not found in CCD image header!")
     photom.rename_column('filter', 'passband')
 
     # Save aperture and annulus information
@@ -322,21 +335,21 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     photom['annulus_area'] = anuls.area  * u.pixel
 
     if reject_background_outliers:
-        print('single_image_photometry: computing clipped sky stats ...')
+        print(f"{logline} computing clipped sky stats ...")
         try:
             avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
                     clipped_sky_per_pix_stats(ccd_image, anuls)
         except AttributeError:
-            print('single_image_photometry: BAD ANNULUS, stats set to np.nan!')
+            print(f"{logline} BAD ANNULUS, stats set to np.nan!")
             avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
                 np.nan, np.nan, np.nan
         photom['sky_per_pix_avg'] = avg_sky_per_pix * u.pixel**-1
         photom['sky_per_pix_med'] = med_sky_per_pix * u.pixel**-1
         photom['sky_per_pix_std'] = std_sky_per_pix * u.pixel**-1
-        print('                          ...DONE computing clipped sky stats')
+        print("                          ...DONE computing clipped sky stats")
     else: # Don't reject outliers (but why would you do this?)
-        print("single_image_photometry: WARNING: Computing sky per pixel without "
-              "clipping (set reject_background_outliers=True to clip).")
+        print(f"{logline} WARNING: Computing sky per pixel without clipping (set "
+              "reject_background_outliers=True to clip).")
         med_pp = []
         std_pp = []
         for mask in anuls.to_mask():
@@ -354,9 +367,9 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     photom['aperture_net_cnts'].unit = ccd_image.unit
 
     # Fit the FWHM of the sources
-    print('single_image_photometry: fitting fwhm of all sources ...')
-    fwhm_x, fwhm_y = compute_fwhm(ccd_image, photom, fit=fwhm_by_fit)
-    print('                          ...DONE fitting fwhm of all sources')
+    print(f"{logline} fitting fwhm of all sources ...")
+    fwhm_x, fwhm_y = compute_fwhm(ccd_image, photom, fwhm_estimate=fwhm_estimate, fit=fwhm_by_fit)
+    print("                          ...DONE fitting fwhm of all sources")
 
     # Deal with bad FWHM values
     bad_fwhm = (fwhm_x<1) | (fwhm_y<1) # Set bad values to NaN now
@@ -402,7 +415,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     photom_data = PhotometryData(observatory=observatory_location, camera=camera,
                                 input_data=photom, passband_map=passband_map)
 
-    return photom_data, np.array(dropped_sources)
+    return photom_data, dropped_sources
 
 
 def faster_sigma_clip_stats(data, sigma=5, iters=5, axis=None):
