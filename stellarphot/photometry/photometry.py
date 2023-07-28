@@ -570,30 +570,37 @@ def multi_image_photometry(directory_with_images,
             continue
 
         # Call single_image_photometry on each image
-        print("multi_image_photometry: calling single_image_photometry ...")
-        this_phot, this_missing_sources = \
-            single_image_photometry(this_ccd, sourcelist, camera, observatory_location,
-                                    aperture_radius, inner_annulus, outer_annulus,
-                                    shift_tolerance, max_adu,
-                                    include_dig_noise=include_dig_noise,
-                                    reject_too_close=reject_too_close,
-                                    reject_background_outliers=reject_background_outliers,
-                                    passband_map=passband_map,
-                                    fwhm_by_fit=fwhm_by_fit, fname=this_fname)
-        print("multi_image_photometry: Done with single_image_photometry for "
-              f"{this_fname}")
+        try:
+            print("  Calling single_image_photometry ...")
+            this_phot, this_missing_sources = \
+                single_image_photometry(this_ccd, sourcelist,
+                                        camera, observatory_location,
+                                        aperture_radius, inner_annulus, outer_annulus,
+                                        shift_tolerance, max_adu,
+                                        include_dig_noise=include_dig_noise,
+                                        reject_too_close=reject_too_close,
+                                        reject_background_outliers=reject_background_outliers,
+                                        passband_map=passband_map,
+                                        fwhm_by_fit=fwhm_by_fit, fname=this_fname,
+                                        logline="    >")
+            print("  Done with single_image_photometry for "
+                f"{this_fname}")
 
-        # Extend the list of missing stars
-        missing_sources.extend(this_missing_sources)
+            # Extend the list of missing stars
+            missing_sources.extend(this_missing_sources)
 
-        # And add the final table to the list of tables
-        phots.append(this_phot)
+            # And add the final table to the list of tables
+            phots.append(this_phot)
+        except Exception as e:
+            # If there was an error, print it and move on to the next image
+            print(f"    > {type(e).__name__}: {str(e)} ... SKIPPING THIS IMAGE!!!")
 
     ##
     ## Done processing individual images, now combine them into one table
     ##
 
-    # Combine all of the individual photometry tables into one
+    # Combine all of the individual photometry tables into one.
+    # Attributes should survive intact assume all have same camera and observatory.
     all_phot = vstack(phots)
 
     # Build a list of all the unique star_ids in the sourcelist
