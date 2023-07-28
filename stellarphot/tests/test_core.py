@@ -151,7 +151,7 @@ photcoltypes = ['int', 'float', 'float', 'float', 'float', 'float', 'float', 'fl
                 'float', 'float', 'float', 'str', 'int', 'float', 'float', 'float',
                 'float', 'str', 'str', 'int', 'float', 'float', 'float', 'float']
 photcolunits = [None, u.pix, u.pix, u.adu, None, u.deg, u.deg, u.adu, u.adu, u.adu,
-                None, None, None, u.pix, u.pix*u.pix, u.pix, u.pix, u.pix*u.pix, u.s,
+                None, None, None, u.pix, u.pix, u.pix, u.pix, u.pix, u.s,
                 None, None, u.adu, None, None, None, None, None, None, None,
                 u.electron, None, u.adu]
 
@@ -203,7 +203,7 @@ counts_per_pixel_sqr_columns = ['sky_per_pix_avg', 'sky_per_pix_med',
 for this_col in counts_columns:
     testphot_goodUnits[this_col].unit = u.adu
 for this_col in counts_per_pixel_sqr_columns:
-    testphot_goodUnits[this_col].unit = u.adu * u.pixel**-2
+    testphot_goodUnits[this_col].unit = u.adu * u.pixel**-1
 
 # Remove calculated columns from the test data to produce clean data
 computed_columns = ['bjd', 'night']

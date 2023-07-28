@@ -319,15 +319,15 @@ class PhotometryData(BaseEnhancedTable):
     fwhm_y                u.pix
     width                 u.pix
     aperture              u.pix
-    aperture_area         u.pix * u.pix
+    aperture_area         u.pix
     annulus_inner         u.pix
     annulus_outer         u.pix
-    annulus_area          u.pix * u.pix
+    annulus_area          u.pix
     aperture_sum          consistent count units
     annulus_sum           consistent count units
-    sky_per_pix_avg       consistent count units (per pixel sqauared)
-    sky_per_pix_med       consistent count units (per pixel sqauared)
-    sky_per_pix_std       consistent count units (per pixel sqauared)
+    sky_per_pix_avg       consistent count units (per pixel)
+    sky_per_pix_med       consistent count units (per pixel)
+    sky_per_pix_std       consistent count units (per pixel)
     aperture_net_cnts     consistent count units
     noise_cnts            consistent count units
     noise_electrons       u.electron
@@ -364,10 +364,10 @@ class PhotometryData(BaseEnhancedTable):
         'fwhm_y' : u.pix,
         'width' : u.pix,
         'aperture' : u.pix,
-        'aperture_area' : u.pix * u.pix,
+        'aperture_area' : u.pix,
         'annulus_inner' : u.pix,
         'annulus_outer' : u.pix,
-        'annulus_area' : u.pix * u.pix,
+        'annulus_area' : u.pix,
         'aperture_sum' : None,
         'annulus_sum' : None,
         'sky_per_pix_avg' : None,
@@ -445,13 +445,13 @@ class PhotometryData(BaseEnhancedTable):
                                     f"{input_data[this_col].unit}).")
             for this_col in counts_per_pixel_sqr_columns:
                 if cnts_unit is None:
-                    persqrunit = u.pixel**-2
+                    perpixel = u.pixel**-1
                 else:
-                    persqrunit = cnts_unit * u.pixel**-2
-                if input_data[this_col].unit != persqrunit:
+                    perpixel = cnts_unit * u.pixel**-1
+                if input_data[this_col].unit != perpixel:
                     raise ValueError(f"input_data['{this_col}'] has inconsistent units "
                                     f"with input_data['{counts_columns[0]}'] (should "
-                                    f"be {persqrunit} but it's "
+                                    f"be {perpixel} but it's "
                                     f"{input_data[this_col].unit}).")
 
             # Compute additional columns (not done yet)
@@ -809,5 +809,7 @@ class SourceListData(BaseEnhancedTable):
     def drop_x_y(self):
         # drop image-based positionsfrom existing SourceListData structure
         self.meta['has_x_y'] = False
-        self['xcenter'] = Column(data=np.full(len(self), np.nan), name='ra', unit=u.deg)
-        self['ycenter'] = Column(data=np.full(len(self), np.nan), name='dec', unit=u.deg)
+        self['xcenter'] = Column(data=np.full(len(self), np.nan), name='ra',
+                                 unit=u.deg)
+        self['ycenter'] = Column(data=np.full(len(self), np.nan), name='dec', 
+                                 unit=u.deg)

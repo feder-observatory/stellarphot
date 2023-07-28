@@ -315,10 +315,11 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     photom['aperture_sum'].unit = ccd_image.unit
     photom['annulus_sum'].unit = ccd_image.unit
     photom['aperture'] = apers.r * u.pixel
-    photom['aperture_area'] = apers.area * u.pixel * u.pixel
     photom['annulus_inner'] = anuls.r_in * u.pixel
     photom['annulus_outer'] = anuls.r_out * u.pixel
-    photom['annulus_area'] = anuls.area  * u.pixel * u.pixel
+    # By convention, area is in units of pixels (not pixels squared) in a digital image
+    photom['aperture_area'] = apers.area * u.pixel
+    photom['annulus_area'] = anuls.area  * u.pixel
 
     if reject_background_outliers:
         print('single_image_photometry: computing clipped sky stats ...')
@@ -329,9 +330,9 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
             print('single_image_photometry: BAD ANNULUS, stats set to np.nan!')
             avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
                 np.nan, np.nan, np.nan
-        photom['sky_per_pix_avg'] = avg_sky_per_pix * u.pixel**-2
-        photom['sky_per_pix_med'] = med_sky_per_pix * u.pixel**-2
-        photom['sky_per_pix_std'] = std_sky_per_pix * u.pixel**-2
+        photom['sky_per_pix_avg'] = avg_sky_per_pix * u.pixel**-1
+        photom['sky_per_pix_med'] = med_sky_per_pix * u.pixel**-1
+        photom['sky_per_pix_std'] = std_sky_per_pix * u.pixel**-1
         print('                          ...DONE computing clipped sky stats')
     else: # Don't reject outliers (but why would you do this?)
         print("single_image_photometry: WARNING: Computing sky per pixel without "
@@ -343,8 +344,8 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
             med_pp.append(np.median(annulus_data))
             std_pp.append(np.std(annulus_data))
         photom['sky_per_pix_avg'] = photom['annulus_sum'] / photom['annulus_area']
-        photom['sky_per_pix_med'] = np.array(med_pp) * ccd_image.unit * u.pixel**-2
-        photom['sky_per_pix_std'] = np.array(std_pp) * ccd_image.unit * u.pixel**-2
+        photom['sky_per_pix_med'] = np.array(med_pp) * ccd_image.unit * u.pixel**-1
+        photom['sky_per_pix_std'] = np.array(std_pp) * ccd_image.unit * u.pixel**-1
 
     # Compute counts using clipped stats on sky per pixel
     photom['aperture_net_cnts'] = (photom['aperture_sum'].value -
