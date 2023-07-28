@@ -419,6 +419,26 @@ def test_sourcelist_recursive():
         sl_test2 = SourceListData(input_data=sl_test, colname_map=None)
 
 
+def test_sourcelist_dropping_skycoords():
+     # Create good sourcelist data instance
+    sl_test = SourceListData(input_data=test_sl_data, colname_map=None)
+
+    # Drop sky coordinates
+    sl_test.drop_ra_dec()
+    assert sl_test.has_ra_dec == False
+    assert sl_test.has_x_y == True
+
+
+def test_sourcelist_dropping_imagecoords():
+     # Create good sourcelist data instance
+    sl_test = SourceListData(input_data=test_sl_data, colname_map=None)
+
+    # Drop sky coordinates
+    sl_test.drop_x_y()
+    assert sl_test.has_ra_dec == True
+    assert sl_test.has_x_y == False
+
+
 def test_sourcelist_slicing():
     # Create good sourcelist data instance
     sl_test = SourceListData(input_data=test_sl_data, colname_map=None)

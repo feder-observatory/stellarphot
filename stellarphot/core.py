@@ -546,8 +546,8 @@ class PhotometryData(BaseEnhancedTable):
 class CatalogData(BaseEnhancedTable):
     """
     A class to hold astronomical catalog data while performing validation
-    to confirm the minumum required columns ('id', 'ra', and 'dec') are present
-    and have the correct units.
+    to confirm the minumum required columns ('id', 'ra', 'dec', 'mag', and
+    'passband') are present and have the correct units.
 
     As a convience function, when the user passes in an astropy table to validate,
     the user can also pass in a col_rename dict which can be used to rename columns
@@ -799,3 +799,15 @@ class SourceListData(BaseEnhancedTable):
     @property
     def has_x_y(self):
         return self.meta['has_x_y']
+
+    def drop_ra_dec(self):
+        # drop sky-based positions from existing SourceListData structure
+        self.meta['has_ra_dec'] = False
+        self['ra'] = Column(data=np.full(len(self), np.nan), name='ra', unit=u.deg)
+        self['dec'] = Column(data=np.full(len(self), np.nan), name='dec', unit=u.deg)
+
+    def drop_x_y(self):
+        # drop image-based positionsfrom existing SourceListData structure
+        self.meta['has_x_y'] = False
+        self['xcenter'] = Column(data=np.full(len(self), np.nan), name='ra', unit=u.deg)
+        self['ycenter'] = Column(data=np.full(len(self), np.nan), name='dec', unit=u.deg)
