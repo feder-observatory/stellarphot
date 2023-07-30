@@ -6,8 +6,7 @@ from astropy.nddata import CCDData, NoOverlapError
 from astropy.table import Column, vstack
 from astropy.time import Time
 from ccdproc import ImageFileCollection
-from photutils.aperture import (CircularAnnulus, CircularAperture,
-                                aperture_photometry)
+from photutils.aperture import CircularAnnulus, CircularAperture, aperture_photometry
 from photutils.centroids import centroid_sources
 from scipy.spatial.distance import cdist
 
@@ -958,8 +957,6 @@ def calculate_noise(camera=None, counts=0.0, sky_per_pix=0.0,
     noise : float
         The noise in the photometric measurement in electrons.
     """
-    print(camera)
-
     if camera is None:
         raise ValueError("camera must be provided")
     elif not isinstance(camera, Camera):
