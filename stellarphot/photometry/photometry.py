@@ -6,8 +6,7 @@ from astropy.nddata import CCDData, NoOverlapError
 from astropy.table import Column, vstack
 from astropy.time import Time
 from ccdproc import ImageFileCollection
-from photutils.aperture import (CircularAnnulus, CircularAperture,
-                                aperture_photometry)
+from photutils.aperture import CircularAnnulus, CircularAperture, aperture_photometry
 from photutils.centroids import centroid_sources
 from scipy.spatial.distance import cdist
 
@@ -401,9 +400,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     photom['aperture_net_cnts'][all_bads] = np.nan
 
     # Compute and save noise
-    noise = calculate_noise(gain=camera.gain.value,
-                            read_noise=camera.read_noise.value,
-                            dark_current_per_sec=camera.dark_current.value,
+    noise = calculate_noise(camera=camera,
                             counts=photom['aperture_net_cnts'].value,
                             sky_per_pix=photom['sky_per_pix_avg'].value,
                             aperture_area=photom['aperture_area'].value,
@@ -880,8 +877,7 @@ def photometry_on_directory(directory_with_images, object_of_interest,
     gain = camera.gain
 
     # Compute and save noise
-    noise = calculate_noise(gain=camera.gain, read_noise=camera.read_noise,
-                            dark_current_per_sec=camera.dark_current,
+    noise = calculate_noise(camera=camera,
                             counts=all_phot['aperture_net_counts'],
                             sky_per_pix=all_phot['sky_per_pix_avg'].value,
                             aperture_area=all_phot['aperture_area'],

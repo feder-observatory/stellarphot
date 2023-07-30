@@ -7,15 +7,19 @@ from astropy.utils.data import get_pkg_data_filename
 from fake_image import FakeCCDImage
 
 from stellarphot.core import Camera, SourceListData
-from stellarphot.photometry import (calculate_noise, find_too_close,
-                                    single_image_photometry, source_detection)
+from stellarphot.photometry import (
+    calculate_noise,
+    find_too_close,
+    single_image_photometry,
+    source_detection,
+)
 
 GAINS = [1.0, 1.5, 2.0]
 
 def test_calc_noise_defaults():
     # If we put in nothing we should get an error about is missing camera
     # instance.
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         assert calculate_noise() == 0
 
 
