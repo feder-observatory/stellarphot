@@ -6,7 +6,8 @@ from astropy.nddata import CCDData, NoOverlapError
 from astropy.table import Column, vstack
 from astropy.time import Time
 from ccdproc import ImageFileCollection
-from photutils.aperture import CircularAnnulus, CircularAperture, aperture_photometry
+from photutils.aperture import (CircularAnnulus, CircularAperture,
+                                aperture_photometry)
 from photutils.centroids import centroid_sources
 from scipy.spatial.distance import cdist
 
@@ -27,6 +28,7 @@ EXPOSURE_KEYWORDS = ["EXPOSURE", "EXPTIME", "TELAPSE", "ELAPTIME", "ONTIME",
 def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
                             aperture_radius, inner_annulus, outer_annulus,
                             shift_tolerance, max_adu, fwhm_estimate,
+                            use_coordinates='pixel',
                             include_dig_noise=True,
                             reject_too_close=True,
                             reject_background_outliers=True,
@@ -87,6 +89,12 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
         This is used to determine the size of the box used to fit the FWHM
         (which is 5 times the FWHM estimate in width).
 
+    use_coordinates : str, optional (Default: 'pixel')
+        If ``'pixel'``, use the x/y positions in the sourcelist for
+        performing aperture photometry.  If ``'sky'``, use the ra/dec
+        positions in the sourcelist and the WCS of the `ccd_image` to
+        compute the x/y positions on the image.
+
     reject_background_outliers : bool, optional (Default: True)
         If ``True``, sigma clip the pixels in the annulus to reject outlying
         pixels (e.g. like stars in the annulus)
@@ -134,17 +142,16 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
 
     Notes
     -----
-    If the input sourcelist contains both x/y and ra/dec positions, the x/y
-    positions will be used for the aperture photometry.  This is because in
-    most cases, ra/dec positions are derived from the x/y positions and
-    the WCS of the `ccd_image`.  This default reduces unnecessary computation
-    and works if the WCS is not very accurate.
+    The default behavior (set by `use_coordinates`="pixel") for determining
+    the placement of apertures is to use the x/y positions in the `sourcelist`.
+    This is because in most cases, ra/dec positions are derived from the x/y
+    positions and the WCS of the `ccd_image`.  This default reduces unnecessary
+    computation and works if the WCS is not very accurate.
 
     When attempting to process multiple images of the same field, it makes sense
     to use the ra/dec positions in the sourcelist and the WCS of the `ccd_image`
-    to compute the x/y positions on each image individually.  We suggest
-    dropping the x/y positions from the sourcelist in these situations before
-    passing it into the function to avoid confusion.
+    to compute the x/y positions on each image individually. In this scenario,
+    the `use_coordinates` parameter should be set to "sky".
     """
 
     # Check that the input parameters are valid
@@ -170,6 +177,9 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
                          "(should be on order of FWHM).")
     if (max_adu<=0):
         raise ValueError(f"max_adu ({max_adu}) must be greater than 0.")
+    if (use_coordinates not in ['pixel', 'sky']):
+        raise ValueError(f"input_coordinates ({use_coordinates}) must be either "
+                         "'pixel' or 'sky'.")
 
     # # Set hot pixels to NaN
     # ccd_image.data[ccd_image.data > max_adu] = np.nan
@@ -183,7 +193,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     src_cnt = len(sourcelist)
 
     # If RA/Dec are available attempt to use them to determine the source positions
-    if sourcelist.has_ra_dec and not sourcelist.has_x_y:
+    if use_coordinates == 'sky' and sourcelist.has_ra_dec:
         try:
             imgpos = ccd_image.wcs.world_to_pixel(SkyCoord(ra, dec, unit=u.deg,
                                                            frame='icrs'))
@@ -191,6 +201,9 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
         except AttributeError:
             # No WCS
             raise ValueError("ccd_image must have a valid WCS to use RA/Dec!")
+    elif use_coordinates == 'sky' and not sourcelist.has_ra_dec:
+        raise ValueError("use_coordinates='sky' but sourcelist does not have"
+                         "RA/Dec coordinates!")
 
     # Reject sources that are within an aperture diameter of each other.
     dropped_sources = []
@@ -242,7 +255,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     # particularly useful is processing multiple images of the same field
     # and just passing the same sourcelist when calling single_image_photometry
     # on each image.
-    if sourcelist.has_ra_dec and not sourcelist.has_x_y:
+    if use_coordinates == 'sky':
         try:
             xcen, ycen = centroid_sources(ccd_image.data, xs, ys,
                                         box_size=2 * aperture_radius + 1)

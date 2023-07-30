@@ -216,6 +216,7 @@ fake_camera = Camera(gain = 1.0*u.electron/u.adu,
 fake_obs = EarthLocation(lat = 0*u.deg,
                          lon = 0*u.deg,
                          height = 0*u.m)
+coords2use='pixel'
 
 def test_aperture_photometry_no_outlier_rejection():
     fake_CCDimage = FakeCCDImage()
@@ -234,6 +235,7 @@ def test_aperture_photometry_no_outlier_rejection():
                                                     outer_annulus,
                                                     shift_tolerance,
                                                     max_adu, fwhm_estimate,
+                                                    use_coordinates=coords2use,
                                                     include_dig_noise=True,
                                                     reject_too_close=False,
                                                     reject_background_outliers=False)
@@ -298,6 +300,7 @@ def test_aperture_photometry_with_outlier_rejection(reject):
                                                     outer_annulus,
                                                     shift_tolerance,
                                                     max_adu, fwhm_estimate,
+                                                    use_coordinates=coords2use,
                                                     include_dig_noise=True,
                                                     reject_too_close=False,
                                                     reject_background_outliers=reject)
