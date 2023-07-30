@@ -149,18 +149,23 @@ class AAVSOExtendedFileFormat:
     def set_column_from_single_value(self, value, column):
         setattr(self, column, Column([value] * len(self.variable_mag), name=column))
 
-    def write(self, file, overwrite=False):
-        p = Path(file)
+    def to_table(self):
+        """
+        Convert the file to an astropy table.
 
+        Returns
+        -------
+        table : `astropy.table.Table`
+            The table representation of the file. Note that there is important information
+            in the table's meta attribute.
+        """
         # Make a table
         table_description = resources.read_text('stellarphot.io', 'aavso_submission_schema.yml')
         table_structure = yaml.safe_load(table_description)
-        for key in table_structure['comments'].keys():
-            print(f"{key}: {hasattr(self, key.lower())}")
+
         table_dict = {}
         length = 0
         for key in table_structure['data'].keys():
-            print(f"{key}: {hasattr(self, key.lower())}")
             if isinstance((item := getattr(self, key.lower())), Column):
                 if len(item) == 0:
                     item = "na"
@@ -171,8 +176,6 @@ class AAVSOExtendedFileFormat:
         print(length)
         for k, v in table_dict.items():
             if len(v) != length:
-                print(f"{k=} {v=} {len(v)=}")
-
                 table_dict[k] = Column([v] * length, name=k)
 
         table = Table(table_dict)
@@ -182,7 +185,22 @@ class AAVSOExtendedFileFormat:
                 value = self.date_format
             else:
                 value = getattr(self, key.lower())
-            table.meta['comments'].append(f"{key} = {value}")
+            table.meta['comments'].append(f"{key}={value}")
 
-        print(table)
         return table
+
+    def write(self, filename, overwrite=False):
+        """
+        Write the file to disk.
+
+        Parameters
+        ----------
+        filename : str, pathlib.Path
+            The file to write to.
+        """
+        table = self.to_table()
+        p = Path(filename)
+        table.write(p,
+                    delimiter=self.delim,
+                    comment="#",
+                    overwrite=overwrite)
