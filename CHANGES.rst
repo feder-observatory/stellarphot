@@ -1,14 +1,16 @@
-1.3.10 (unreleased)
+1.4.0 (unreleased)
 ------------------
 
 New Features
 ^^^^^^^^^^^^
-+ Creation of new data classes for handling aperture, photometry, and catalog data in a more consistent way by enforcing validation and certain column names. [#125]
++ Development of new data classes for handling source list, photometry, and catalog data which include data format validation. [#125]
++ Aperture photometry streamlined into single_image_photometry() and multi_image_photometry() functions that use the new data classes. [#141]
++ multi_image_photometry() now is a wrapper for single_image_photometry() instead of a completely separate function.
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 + Major reorganizaiton of code including moving functions to new modules. [#130, #133]
-
++ Now requires python 3.10 or later.
 
 Bug Fixes
 ^^^^^^^^^
