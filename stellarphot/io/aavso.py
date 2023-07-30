@@ -1,4 +1,4 @@
-# Class to representa file in AAVSO extended format
+# Class to represent a file in AAVSO extended format
 from dataclasses import dataclass, field
 from pathlib import Path
 from importlib import resources
@@ -149,33 +149,7 @@ class AAVSOExtendedFileFormat:
     def set_column_from_single_value(self, value, column):
         setattr(self, column, Column([value] * len(self.variable_mag), name=column))
 
-    def set_data(self, destination, data,
-                 time='time', mag='mag', error='err', airmass='airmass'):
-        """
-        Set data for each thingy
-        """
-        # Standardize column order
-
-        standard_data = {
-            time: data[time],
-            airmass: data[airmass],
-            mag: data[mag],
-            error: data[error],
-        }
-        standard_data = Table(standard_data)
-
-        if destination == "variable":
-            self.variable_data = standard_data
-        elif destination == "check":
-            self.check_data = standard_data
-            del self.check_data[airmass]
-        elif destination == "comparison":
-            if self.ensemble:
-                raise ValueError("Cannot set comparison data for ensemble magnitudeas")
-            self.comparison_data = standard_data
-            del self.comparison_data[airmass]
-
-    def write(self, file):
+    def write(self, file, overwrite=False):
         p = Path(file)
 
         # Make a table
