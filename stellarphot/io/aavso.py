@@ -165,20 +165,32 @@ class AAVSOExtendedFileFormat:
 
         table_dict = {}
         length = 0
+
+        # Begin setting up table structure, with column names as keys
+        # and the column data as values. If the "column" is really
+        # a single item, then make a single entry as the value.
+        # It will be turned into a column eventually.
         for key in table_structure['data'].keys():
+            # woot! my first walrus operator!
             if isinstance((item := getattr(self, key.lower())), Column):
+                # We have a column, but it might not have been set.
                 if len(item) == 0:
                     item = "na"
                 table_dict[key] = item
+                # Kepp track of the longest column
                 length = len(item) if len(item) > length else length
             else:
                 table_dict[key] = item
-        print(length)
+
+        # Fix up anything that is supposed to be a column and isn't yet.
         for k, v in table_dict.items():
             if len(v) != length:
+                # If the length is not correct assume we have a single value
+                # and make a column out of it.
                 table_dict[k] = Column([v] * length, name=k)
 
         table = Table(table_dict)
+        # All of the AAVSO "comment" type entries go in meta.
         table.meta['comments'] = []
         for key in table_structure['comments'].keys():
             if key == "DATE":
