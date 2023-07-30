@@ -1,10 +1,8 @@
-from astropy import units as u
-from astropy.table import QTable, Table, Column
-from astropy.coordinates import EarthLocation, SkyCoord
-from astropy.time import Time
-
-
 import numpy as np
+from astropy import units as u
+from astropy.coordinates import EarthLocation, SkyCoord
+from astropy.table import Column, QTable, Table
+from astropy.time import Time
 
 __all__ = ['Camera', 'BaseEnhancedTable', 'PhotometryData', 'CatalogData',
            'SourceListData']
@@ -105,10 +103,6 @@ class Camera:
 
     def __copy__(self):
         return self.copy()
-
-    def __str__(self):
-        return f"Camera(gain={self.gain}, read_noise={self.read_noise}, " \
-                f"dark_current={self.dark_current}, pixel_scale={self.pixel_scale})"
 
     def __repr__(self):
         return f"Camera(gain={self.gain}, read_noise={self.read_noise}, " \
@@ -434,7 +428,7 @@ class PhotometryData(BaseEnhancedTable):
             # Check for consistency of counts-related columns
             counts_columns = ['aperture_sum', 'annulus_sum', 'aperture_net_cnts',
                               'noise_cnts']
-            counts_per_pixel_sqr_columns = ['sky_per_pix_avg', 'sky_per_pix_med',
+            counts_per_pixel_columns = ['sky_per_pix_avg', 'sky_per_pix_med',
                                             'sky_per_pix_std']
             cnts_unit = self[counts_columns[0]].unit
             for this_col in counts_columns[1:]:
@@ -443,7 +437,7 @@ class PhotometryData(BaseEnhancedTable):
                                     f"with input_data['{counts_columns[0]}'] (should "
                                     f"be {cnts_unit} but it's "
                                     f"{input_data[this_col].unit}).")
-            for this_col in counts_per_pixel_sqr_columns:
+            for this_col in counts_per_pixel_columns:
                 if cnts_unit is None:
                     perpixel = u.pixel**-1
                 else:
@@ -512,7 +506,7 @@ class PhotometryData(BaseEnhancedTable):
         the input observations.  It modifies that table in place.
         """
 
-        if (np.isnan(np.sum(self['ra'])) or np.isnan(np.sum(self['dec']))):
+        if ( np.isnan(self['ra']).any() or np.isnan(self['dec']).any() ):
             print("WARNING: BJD could not be computed in output PhotometryData object "
                   "because some RA or Dec values are missing.")
             return np.full(len(self), np.nan)

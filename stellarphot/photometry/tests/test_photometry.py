@@ -1,22 +1,22 @@
-import pytest
 import numpy as np
-
+import pytest
 from astropy import units as u
 from astropy.coordinates import EarthLocation
 from astropy.io import ascii
 from astropy.utils.data import get_pkg_data_filename
-
-from stellarphot.photometry import (calculate_noise, find_too_close,
-                                    source_detection, single_image_photometry)
-from stellarphot.core import Camera, SourceListData
-
 from fake_image import FakeCCDImage
+
+from stellarphot.core import Camera, SourceListData
+from stellarphot.photometry import (calculate_noise, find_too_close,
+                                    single_image_photometry, source_detection)
 
 GAINS = [1.0, 1.5, 2.0]
 
 def test_calc_noise_defaults():
-    # If we put in nothing we should get zero back
-    assert calculate_noise() == 0
+    # If we put in nothing we should get an error about is missing camera
+    # instance.
+    with pytest.raises(AssertionError):
+        assert calculate_noise() == 0
 
 
 @pytest.mark.parametrize('aperture_area', [5, 20])
@@ -27,7 +27,12 @@ def test_calc_noise_source_only(gain, aperture_area):
     counts = 100
     expected = np.sqrt(gain * counts)
 
-    np.testing.assert_allclose(calculate_noise(gain=gain,
+    # Create camera instance
+    camera = Camera(gain=gain*u.electron/u.adu, read_noise=0*u.electron,
+                    dark_current=0*u.electron/u.second,
+                    pixel_scale=1*u.arcsec/u.pixel)
+
+    np.testing.assert_allclose(calculate_noise(camera,
                                                counts=counts,
                                                aperture_area=aperture_area),
                                expected)
@@ -40,10 +45,16 @@ def test_calc_noise_dark_only(gain, aperture_area):
     # but this is basically Poisson error.
     dark_current = 10
     exposure = 20
+
+    # Create camera instance
+    camera = Camera(gain=gain*u.electron/u.adu,
+                    read_noise=0*u.electron,
+                    dark_current=dark_current*u.electron/u.second,
+                    pixel_scale=1*u.arcsec/u.pixel)
+
     expected = np.sqrt(dark_current * aperture_area * exposure)
 
-    np.testing.assert_allclose(calculate_noise(gain=gain,
-                                               dark_current_per_sec=dark_current,
+    np.testing.assert_allclose(calculate_noise(camera,
                                                aperture_area=aperture_area,
                                                exposure=exposure),
                                expected)
@@ -57,8 +68,13 @@ def test_calc_read_noise_only(gain, aperture_area):
     read_noise = 10
     expected = np.sqrt(aperture_area * read_noise**2)
 
-    np.testing.assert_allclose(calculate_noise(gain=gain,
-                                               read_noise=read_noise,
+    # Create camera instance
+    camera = Camera(gain=gain*u.electron/u.adu,
+                    read_noise=read_noise*u.electron,
+                    dark_current=0*u.electron/u.second,
+                    pixel_scale=1*u.arcsec/u.pixel)
+
+    np.testing.assert_allclose(calculate_noise(camera,
                                                aperture_area=aperture_area),
                                expected)
 
@@ -70,7 +86,13 @@ def test_calc_sky_only(gain, aperture_area):
     sky = 10
     expected = np.sqrt(gain * aperture_area * sky)
 
-    np.testing.assert_allclose(calculate_noise(gain=gain,
+    # Create camera instance
+    camera = Camera(gain=gain*u.electron/u.adu,
+                    read_noise=0*u.electron,
+                    dark_current=0*u.electron/u.second,
+                    pixel_scale=1*u.arcsec/u.pixel)
+
+    np.testing.assert_allclose(calculate_noise(camera,
                                                aperture_area=aperture_area,
                                                sky_per_pix=sky),
                                expected)
@@ -86,7 +108,14 @@ def test_annulus_area_term():
     sky = 10
     expected = np.sqrt(gain * aperture_area *
                        (1 + aperture_area / annulus_area) * sky)
-    np.testing.assert_allclose(calculate_noise(gain=gain,
+
+    # Create camera instance
+    camera = Camera(gain=gain*u.electron/u.adu,
+                    read_noise=0*u.electron,
+                    dark_current=0*u.electron/u.second,
+                    pixel_scale=1*u.arcsec/u.pixel)
+
+    np.testing.assert_allclose(calculate_noise(camera,
                                                aperture_area=aperture_area,
                                                annulus_area=annulus_area,
                                                sky_per_pix=sky),
@@ -109,11 +138,15 @@ def test_calc_noise_messy_case(digit, expected):
     exposure = 18
     read_noise = 12
 
+    # Create camera instance
+    camera = Camera(gain=gain*u.electron/u.adu,
+                    read_noise=read_noise*u.electron,
+                    dark_current=dark_current*u.electron/u.second,
+                    pixel_scale=1*u.arcsec/u.pixel)
+
     np.testing.assert_allclose(
-        calculate_noise(counts=counts,
-                        gain=gain,
-                        dark_current_per_sec=dark_current,
-                        read_noise=read_noise,
+        calculate_noise(camera,
+                        counts=counts,
                         sky_per_pix=sky,
                         exposure=exposure,
                         aperture_area=aperture_area,
