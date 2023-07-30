@@ -1,15 +1,19 @@
+import tempfile
+from pathlib import Path
+
 import numpy as np
 import pytest
 from astropy import units as u
 from astropy.coordinates import EarthLocation
 from astropy.io import ascii
 from astropy.utils.data import get_pkg_data_filename
-from fake_image import FakeCCDImage
+from fake_image import FakeCCDImage, shift_FakeCCDImage
 
 from stellarphot.core import Camera, SourceListData
 from stellarphot.photometry import (
     calculate_noise,
     find_too_close,
+    multi_image_photometry,
     single_image_photometry,
     source_detection,
 )
