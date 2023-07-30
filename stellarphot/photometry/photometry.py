@@ -6,7 +6,8 @@ from astropy.nddata import CCDData, NoOverlapError
 from astropy.table import Column, vstack
 from astropy.time import Time
 from ccdproc import ImageFileCollection
-from photutils.aperture import CircularAnnulus, CircularAperture, aperture_photometry
+from photutils.aperture import (CircularAnnulus, CircularAperture,
+                                aperture_photometry)
 from photutils.centroids import centroid_sources
 from scipy.spatial.distance import cdist
 
@@ -978,7 +979,7 @@ def calculate_noise(camera=None, counts=0.0, sky_per_pix=0.0,
         area_ratio = aperture_area * (1 + aperture_area / annulus_area)
 
     # Convert counts to electrons
-    poisson_source = camera.gain.value * counts
+    poisson_source = gain * counts
 
     try:
         poisson_source = poisson_source.value
