@@ -1,3 +1,5 @@
+import warnings
+
 import bottleneck as bn
 import numpy as np
 from astropy import units as u
@@ -6,8 +8,7 @@ from astropy.nddata import CCDData, NoOverlapError
 from astropy.table import Column, vstack
 from astropy.time import Time
 from ccdproc import ImageFileCollection
-from photutils.aperture import (CircularAnnulus, CircularAperture,
-                                aperture_photometry)
+from photutils.aperture import CircularAnnulus, CircularAperture, aperture_photometry
 from photutils.centroids import centroid_sources
 from scipy.spatial.distance import cdist
 
@@ -24,6 +25,7 @@ __all__ = ['single_image_photometry', 'multi_image_photometry',
 # Allowed FITS header keywords for exposure values
 EXPOSURE_KEYWORDS = ["EXPOSURE", "EXPTIME", "TELAPSE", "ELAPTIME", "ONTIME",
                      "LIVETIME"]
+
 
 def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
                             aperture_radius, inner_annulus, outer_annulus,
@@ -154,6 +156,11 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     the `use_coordinates` parameter should be set to "sky".
     """
 
+    def magNexit(msg):
+        # Issue message and exist function
+        print(msg)
+        return None, None
+
     # Check that the input parameters are valid
     if not isinstance(ccd_image, CCDData):
         raise TypeError("ccd_image must be a CCDData object, but it is "
@@ -199,8 +206,8 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
                                                            frame='icrs'))
             xs, ys = imgpos[0], imgpos[1]
         except AttributeError:
-            # No WCS
-            raise ValueError("ccd_image must have a valid WCS to use RA/Dec!")
+            # No WCS, skip this image
+            return msgNexit(f"{logline} ccd_image must have a valid WCS to use RA/Dec!")
     elif use_coordinates == 'sky' and not sourcelist.has_ra_dec:
         raise ValueError("use_coordinates='sky' but sourcelist does not have"
                          "RA/Dec coordinates!")
@@ -320,7 +327,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
             break
 
     if matched_kw is None:
-        raise ValueError(f"None of the allowed exposure keywords "
+        raise ValueError(f"None of the accepted exposure keywords "
                          f"({format(', '.join(EXPOSURE_KEYWORDS))}) found in the header!")
     else:
         photom['exposure'] = [ccd_image.header[matched_kw]] * len(photom) * u.second
@@ -341,7 +348,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
                             "image header ... setting to NaN!")
         photom['airmass'] = [np.nan] * len(photom)
 
-    # Check for filter keyword in header and set 'filter' if found
+    # Check for filter keyword in header and set 'passband' if found
     try:
         photom['filter'] = [ccd_image.header['FILTER']] * len(photom)
     except KeyError:
@@ -366,7 +373,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
             avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
                     clipped_sky_per_pix_stats(ccd_image, anuls)
         except AttributeError:
-            print(f"{logline} BAD ANNULUS, stats set to np.nan!")
+            print(f"{logline} BAD ANNULUS: 'sky_per_pix' stats set to np.nan!")
             avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
                 np.nan, np.nan, np.nan
         photom['sky_per_pix_avg'] = avg_sky_per_pix / u.pixel
@@ -392,10 +399,15 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
                                     photom['sky_per_pix_avg'].value))
     photom['aperture_net_cnts'].unit = ccd_image.unit
 
-    # Fit the FWHM of the sources
-    print(f"{logline} fitting fwhm of all sources ...")
-    fwhm_x, fwhm_y = compute_fwhm(ccd_image, photom,
-                                  fwhm_estimate=fwhm_estimate, fit=fwhm_by_fit)
+    # Fit the FWHM of the sources (can result in many warrnings due to
+    # failed FWHM fitting, capture those warnings and print a summary)
+    print(f"{logline} fitting fwhm of all sources (may take a few minutes) ...")
+    with warnings.catch_warnings(record=True) as warned:
+        warnings.filterwarnings("ignore", category=UserWarning)
+        fwhm_x, fwhm_y = compute_fwhm(ccd_image, photom,
+                                    fwhm_estimate=fwhm_estimate, fit=fwhm_by_fit)
+        num_warnings = len(warned)
+        print(f"{logline} FWHM fitting failed on {num_warnings} sources.")
     print("                          ...DONE fitting fwhm of all sources")
 
     # Deal with bad FWHM values
@@ -569,24 +581,26 @@ def multi_image_photometry(directory_with_images,
     for this_ccd, this_fname in ifc.ccds(object=object_of_interest, return_fname=True):
         print(f"multi_image_photometry: Processing image {this_fname}")
         if this_ccd.wcs is None:
-            print('                        .... SKIPPING THIS IMAGE, NO WCS')
+            print('                        .... SKIPPING THIS IMAGE (NO WCS)')
             continue
 
         # Call single_image_photometry on each image
-        try:
-            print("  Calling single_image_photometry ...")
-            this_phot, this_missing_sources = \
-                single_image_photometry(this_ccd, sourcelist,
-                                        camera, observatory_location,
-                                        aperture_radius, inner_annulus, outer_annulus,
-                                        shift_tolerance, max_adu, fwhm_estimate,
-                                        use_coordinates='sky',
-                                        include_dig_noise=include_dig_noise,
-                                        reject_too_close=reject_too_close,
-                                        reject_background_outliers=reject_background_outliers,
-                                        passband_map=passband_map,
-                                        fwhm_by_fit=fwhm_by_fit, fname=this_fname,
-                                        logline="    >")
+        print("  Calling single_image_photometry ...")
+        this_phot, this_missing_sources = \
+            single_image_photometry(this_ccd, sourcelist,
+                                    camera, observatory_location,
+                                    aperture_radius, inner_annulus, outer_annulus,
+                                    shift_tolerance, max_adu, fwhm_estimate,
+                                    use_coordinates='sky',
+                                    include_dig_noise=include_dig_noise,
+                                    reject_too_close=reject_too_close,
+                                    reject_background_outliers=reject_background_outliers,
+                                    passband_map=passband_map,
+                                    fwhm_by_fit=fwhm_by_fit, fname=this_fname,
+                                    logline="    >")
+        if (this_phot is None) or (this_missing_sources is None):
+            print("                        .... SKIPPING THIS IMAGE")
+        else:
             print("  Done with single_image_photometry for "
                 f"{this_fname}\n\n")
 
@@ -595,9 +609,6 @@ def multi_image_photometry(directory_with_images,
 
             # And add the final table to the list of tables
             phots.append(this_phot)
-        except (ValueError, TypeError, NoOverlapError) as e:
-            # If there was an error, print it and move on to the next image
-            print(f"    > {type(e).__name__}: {str(e)} ... SKIPPING THIS IMAGE!!!")
 
     ##
     ## Done processing individual images, now combine them into one table
