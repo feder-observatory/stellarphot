@@ -538,6 +538,7 @@ class PhotometryData(BaseEnhancedTable):
         return EarthLocation(lat=self.meta['lat'], lon=self.meta['lon'],
                              height=self.meta['height'])
 
+
 class CatalogData(BaseEnhancedTable):
     """
     A class to hold astronomical catalog data while performing validation

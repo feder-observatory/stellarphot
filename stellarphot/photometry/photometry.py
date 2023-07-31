@@ -7,6 +7,7 @@ from astropy.coordinates import EarthLocation, SkyCoord
 from astropy.nddata import CCDData, NoOverlapError
 from astropy.table import Column, vstack
 from astropy.time import Time
+from astropy.utils.exceptions import AstropyUserWarning
 from ccdproc import ImageFileCollection
 from photutils.aperture import CircularAnnulus, CircularAperture, aperture_photometry
 from photutils.centroids import centroid_sources
@@ -254,8 +255,8 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     dec = dec[in_bounds]
     in_cnt = np.sum(in_bounds)
     out_cnt = np.sum(out_of_bounds)
-    print(f"{logline} {in_cnt} sources kept of {src_cnt} original sources ({out_cnt} "
-          "sources too close to image edge).")
+    print(f"{logline} {out_cnt} sources too close to image edge ... removed them.")
+    print(f"{logline} {in_cnt} of {src_cnt} original sources to have photometry done.")
 
     # If we are using x/y positions previously obtained from the ra/dec positions and
     # WCS, then recentroid the sources to refine the positions. This is
@@ -266,12 +267,6 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
         try:
             xcen, ycen = centroid_sources(ccd_image.data, xs, ys,
                                         box_size=2 * aperture_radius + 1)
-        except NoOverlapError:
-            raise NoOverlapError("Determining new centroid failed!")
-        except Exception as e:
-            raise RuntimeError(
-                f"Call to centroid_sources() returned {type(e).__name__}: {str(e)}")
-        else:
             # Calculate offset between centroid in this image and the positions
             # based on input RA/Dec.
             center_diff = np.sqrt((xs - xcen)**2 + (ys - ycen)**2)
@@ -328,7 +323,8 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
 
     if matched_kw is None:
         return msgNexit(f"{logline} None of the accepted exposure keywords "
-                         f"({format(', '.join(EXPOSURE_KEYWORDS))}) found in the header!")
+                         f"({format(', '.join(EXPOSURE_KEYWORDS))}) found in the "
+                         "header ... SKIPPING THIS IMAGE!")
     else:
         photom['exposure'] = [ccd_image.header[matched_kw]] * len(photom) * u.second
 
@@ -337,7 +333,8 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
                                               * len(photom),
                                     format='isot', scale='utc'), name='date-obs')
     except KeyError:
-        return msgNexit(f"{logline} 'DATE-OBS' not found in CCD image header!")
+        return msgNexit(f"{logline} 'DATE-OBS' not found in CCD image header "
+                        "... SKIPPING THIS IMAGE!")
 
     # Check for airmass keyword in header and set 'airmass' if found,
     # but accept it may not be available
@@ -352,7 +349,8 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     try:
         photom['filter'] = [ccd_image.header['FILTER']] * len(photom)
     except KeyError:
-        return msgNexit(f"{logline} 'FILTER' not found in CCD image header!")
+        return msgNexit(f"{logline} 'FILTER' not found in CCD image header ... "
+                        "SKIPPING THIS IMAGE!")
     photom.rename_column('filter', 'passband')
 
     # Save aperture and annulus information
@@ -368,21 +366,21 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     photom['annulus_area'] = anuls.area  * u.pixel
 
     if reject_background_outliers:
-        print(f"{logline} computing clipped sky stats ...")
+        print(f"{logline} Computing clipped sky stats ... ", end="")
         try:
             avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
                     clipped_sky_per_pix_stats(ccd_image, anuls)
         except AttributeError:
-            print(f"{logline} BAD ANNULUS: 'sky_per_pix' stats set to np.nan!")
+            print("BAD ANNULUS ('sky_per_pix' stats set to np.nan) ... ", end="")
             avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
                 np.nan, np.nan, np.nan
         photom['sky_per_pix_avg'] = avg_sky_per_pix / u.pixel
         photom['sky_per_pix_med'] = med_sky_per_pix / u.pixel
         photom['sky_per_pix_std'] = std_sky_per_pix / u.pixel
-        print("                          ...DONE computing clipped sky stats")
+        print("DONE.")
     else: # Don't reject outliers (but why would you do this?)
-        print(f"{logline} WARNING: Computing sky per pixel without clipping (set "
-              "reject_background_outliers=True to clip).")
+        print(f"{logline} SUGGESTION: You are computing sky per pixel without "
+              "clipping (set reject_background_outliers=True to perform clipping).")
         med_pp = []
         std_pp = []
         for mask in anuls.to_mask():
@@ -401,14 +399,14 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
 
     # Fit the FWHM of the sources (can result in many warrnings due to
     # failed FWHM fitting, capture those warnings and print a summary)
-    print(f"{logline} fitting fwhm of all sources (may take a few minutes) ...")
+    print(f"{logline} Fitting FWHM of all sources (may take a few minutes) ... ", end="")
     with warnings.catch_warnings(record=True) as warned:
-        warnings.filterwarnings("ignore", category=UserWarning)
+        warnings.filterwarnings("always", category=AstropyUserWarning)
         fwhm_x, fwhm_y = compute_fwhm(ccd_image, photom,
                                     fwhm_estimate=fwhm_estimate, fit=fwhm_by_fit)
         num_warnings = len(warned)
-        print(f"{logline} FWHM fitting failed on {num_warnings} sources.")
-    print("                          ...DONE fitting fwhm of all sources")
+        print(f"fitting failed on {num_warnings} of {len(photom)} sources  ... ", end="")
+    print("DONE.")
 
     # Deal with bad FWHM values
     bad_fwhm = (fwhm_x < 1) | (fwhm_y < 1) # Set bad values to NaN now
@@ -422,10 +420,23 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     # This can happen, for example, when the object is faint and centroiding is
     # bad.  It can also happen when the sky background is low.
     bad_cnts = photom['aperture_net_cnts'].value < 0
+    # This next line works because booleans are just 0/1 in numpy
+    if np.sum(bad_cnts) > 0:
+        print(f"{logline} Aperture net counts negative for {np.sum(bad_cnts)} sources.")
+
     all_bads = bad_cnts | bad_fwhm
     photom['aperture_net_cnts'][all_bads] = np.nan
+    print(f"{logline} {np.sum(all_bads)} sources with either bad FWHM fit or bad aperture"
+          "net counts had aperture_net_cnts set to NaN.")
+
+    # Compute instrumental magnitudes
+    photom['mag_inst'] = (
+        -2.5 * np.log10(camera.gain.value * photom['aperture_net_cnts'].value /
+                                photom['exposure'].value)
+    )
 
     # Compute and save noise
+    print(f"{logline} Calculating noise for all sources ... ", end="")
     noise = calculate_noise(camera=camera,
                             counts=photom['aperture_net_cnts'].value,
                             sky_per_pix=photom['sky_per_pix_avg'].value,
@@ -442,12 +453,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     snr = camera.gain.value * photom['aperture_net_cnts'] / noise
     photom['snr'] = snr
     photom['mag_error'] = 1.085736205 / snr
-
-    # Compute instrumental magnitudes
-    photom['mag_inst'] = (
-        -2.5 * np.log10(camera.gain.value * photom['aperture_net_cnts'].value /
-                                photom['exposure'].value)
-    )
+    print("DONE.")
 
     # Create PhotometryData object to return
     photom_data = PhotometryData(observatory=observatory_location, camera=camera,
@@ -577,6 +583,7 @@ def multi_image_photometry(directory_with_images,
 
     # Build image file collection
     ifc = ImageFileCollection(directory_with_images)
+    n_files_processed = 0
 
     for this_ccd, this_fname in ifc.ccds(object=object_of_interest, return_fname=True):
         print(f"multi_image_photometry: Processing image {this_fname}")
@@ -585,6 +592,7 @@ def multi_image_photometry(directory_with_images,
             continue
 
         # Call single_image_photometry on each image
+        n_files_processed += 1
         print("  Calling single_image_photometry ...")
         this_phot, this_missing_sources = \
             single_image_photometry(this_ccd, sourcelist,
@@ -599,7 +607,7 @@ def multi_image_photometry(directory_with_images,
                                     fwhm_by_fit=fwhm_by_fit, fname=this_fname,
                                     logline="    >")
         if (this_phot is None) or (this_missing_sources is None):
-            print("                        .... SKIPPING THIS IMAGE")
+            print("  single_image_photometry failed for this image.")
         else:
             print("  Done with single_image_photometry for "
                 f"{this_fname}\n\n")
@@ -609,6 +617,11 @@ def multi_image_photometry(directory_with_images,
 
             # And add the final table to the list of tables
             phots.append(this_phot)
+
+        print(f"  DONE processing all matching images in {directory_with_images}")
+
+    if n_files_processed == 0:
+        raise RuntimeError("No images were processed!")
 
     ##
     ## Done processing individual images, now combine them into one table
@@ -626,6 +639,8 @@ def multi_image_photometry(directory_with_images,
         else:
             uniques = set([missing_sources])
 
+        print("  Removing {len(uniques)} sources not observed "
+              "in every image ... ", end="")
         # Purge the photometry table of all sources that were eliminated
         # on at least one image
         starid_to_remove = sorted([u for u in uniques if u in all_phot['star_id']])
@@ -642,6 +657,9 @@ def multi_image_photometry(directory_with_images,
             all_phot.remove_rows(sorted(bad_rows))
         # Drop index from PhotometryData to save memory
         all_phot.remove_indices('star_id')
+        print("DONE.")
+
+    print(f"  DONE processing image {this_fname}")
 
     return all_phot
 

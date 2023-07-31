@@ -1,12 +1,10 @@
 
 import astropy.io.fits as fits
-from astropy.wcs import WCS
+import numpy as np
 from astropy.nddata import CCDData
 from astropy.table import Table
 from astropy.utils.data import get_pkg_data_filename
-
-import numpy as np
-
+from astropy.wcs import WCS
 from photutils.datasets import make_gaussian_sources_image, make_noise_image
 
 
@@ -90,6 +88,17 @@ class FakeCCDImage(CCDData):
 
             self.wcs = w
             self.header.update(w.to_header())
+
+    def drop_wcs(self):
+        # Convienence function to remove WCS information from the CCDData object
+        # for testing purposes.
+        self.wcs = None
+        wcs_keywords = ['CTYPE', 'CRPIX', 'CRVAL', 'CDELT','CUNIT',
+                        'CD1_', 'CD2_', 'PC1_', 'PC2_']
+        for keyword in wcs_keywords:
+            matching_keys =  [key for key in self.header.keys() if keyword in key]
+            for key in matching_keys:
+                del self.header[key]
 
 
 def shift_FakeCCDImage(ccd_data, x_shift, y_shift):
