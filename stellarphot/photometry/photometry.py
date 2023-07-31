@@ -156,7 +156,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     the `use_coordinates` parameter should be set to "sky".
     """
 
-    def magNexit(msg):
+    def msgNexit(msg):
         # Issue message and exist function
         print(msg)
         return None, None
@@ -327,7 +327,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
             break
 
     if matched_kw is None:
-        raise ValueError(f"None of the accepted exposure keywords "
+        return msgNexit(f"{logline} None of the accepted exposure keywords "
                          f"({format(', '.join(EXPOSURE_KEYWORDS))}) found in the header!")
     else:
         photom['exposure'] = [ccd_image.header[matched_kw]] * len(photom) * u.second
@@ -337,7 +337,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
                                               * len(photom),
                                     format='isot', scale='utc'), name='date-obs')
     except KeyError:
-        raise ValueError("'DATE-OBS' not found in CCD image header!")
+        return msgNexit(f"{logline} 'DATE-OBS' not found in CCD image header!")
 
     # Check for airmass keyword in header and set 'airmass' if found,
     # but accept it may not be available
@@ -352,7 +352,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     try:
         photom['filter'] = [ccd_image.header['FILTER']] * len(photom)
     except KeyError:
-        raise ValueError("'FILTER' not found in CCD image header!")
+        return msgNexit(f"{logline} 'FILTER' not found in CCD image header!")
     photom.rename_column('filter', 'passband')
 
     # Save aperture and annulus information
