@@ -9,8 +9,7 @@ from astropy.table import Column, vstack
 from astropy.time import Time
 from astropy.utils.exceptions import AstropyUserWarning
 from ccdproc import ImageFileCollection
-from photutils.aperture import (CircularAnnulus, CircularAperture,
-                                aperture_photometry)
+from photutils.aperture import CircularAnnulus, CircularAperture, aperture_photometry
 from photutils.centroids import centroid_sources
 from scipy.spatial.distance import cdist
 
@@ -424,6 +423,8 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     photom['fwhm_x'] = fwhm_x * u.pixel
     photom['fwhm_y'] = fwhm_y * u.pixel
     photom['width'] = ((fwhm_x + fwhm_y) / 2) * u.pixel
+    if np.sum(bad_fwhm) > 0:
+        print(f"{logline} Bad FWHM values (<1 pixel) for {np.sum(bad_fwhm)} sources.")
 
     # Flag sources with bad counts before computing noise.
     # This can happen, for example, when the object is faint and centroiding is
@@ -434,6 +435,8 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
         print(f"{logline} Aperture net counts negative for {np.sum(bad_cnts)} sources.")
 
     all_bads = bad_cnts | bad_fwhm
+    return bad_cnts, bad_fwhm, all_bads
+
     photom['aperture_net_cnts'][all_bads] = np.nan
     print(f"{logline} {np.sum(all_bads)} sources with either bad FWHM fit or bad "
           "aperture net counts had aperture_net_cnts set to NaN.")
