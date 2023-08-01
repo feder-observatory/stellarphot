@@ -1,10 +1,8 @@
-from astropy import units as u
-from astropy.table import QTable, Table, Column
-from astropy.coordinates import EarthLocation, SkyCoord
-from astropy.time import Time
-
-
 import numpy as np
+from astropy import units as u
+from astropy.coordinates import EarthLocation, SkyCoord
+from astropy.table import Column, QTable, Table
+from astropy.time import Time
 
 __all__ = ['Camera', 'BaseEnhancedTable', 'PhotometryData', 'CatalogData',
            'SourceListData']
@@ -105,6 +103,10 @@ class Camera:
 
     def __copy__(self):
         return self.copy()
+
+    def __repr__(self):
+        return f"Camera(gain={self.gain}, read_noise={self.read_noise}, " \
+                f"dark_current={self.dark_current}, pixel_scale={self.pixel_scale})"
 
 
 class BaseEnhancedTable(QTable):
@@ -256,7 +258,9 @@ class PhotometryData(BaseEnhancedTable):
 
     input_data: `astropy.table.QTable`, optional (Default: None)
         A table containing all the instrumental aperture photometry results
-        to be validated.
+        to be validated.  Note: It is allowed for the 'ra' and 'dec' columns
+        to have np.nan values, but if they do, the 'bjd' column will not be
+        computed and will also be left with 'np.nan'.
 
     observatory: `astropy.coordinates.EarthLocation`, optional (Default: None)
         The location of the observatory.
@@ -293,8 +297,10 @@ class PhotometryData(BaseEnhancedTable):
     if you do not, an empty table will be returned.
 
     To be accepted as valid, the  `input_data` must MUST contain the following columns
-    with the following units.  The 'consistent count units' simply means it can be any
-    unit, but it must be the same for all the 'consistent count units' columns.
+    with the following units.  The data in those columns is NOT validated, the values in
+    those columns could be invalid.  Furthermore, the 'consistent count units' below
+    simply means it can be any unit, but it must be the same for all the columns with
+    'consistent count units'.
 
     name                  unit
     -----------------     -------
@@ -307,15 +313,15 @@ class PhotometryData(BaseEnhancedTable):
     fwhm_y                u.pix
     width                 u.pix
     aperture              u.pix
-    aperture_area         u.pix * u.pix
+    aperture_area         u.pix
     annulus_inner         u.pix
     annulus_outer         u.pix
-    annulus_area          u.pix * u.pix
+    annulus_area          u.pix
     aperture_sum          consistent count units
     annulus_sum           consistent count units
-    sky_per_pix_avg       consistent count units
-    sky_per_pix_med       consistent count units
-    sky_per_pix_std       consistent count units
+    sky_per_pix_avg       consistent count units (per pixel)
+    sky_per_pix_med       consistent count units (per pixel)
+    sky_per_pix_std       consistent count units (per pixel)
     aperture_net_cnts     consistent count units
     noise_cnts            consistent count units
     noise_electrons       u.electron
@@ -328,10 +334,10 @@ class PhotometryData(BaseEnhancedTable):
     passband              None
     file                  None
 
-    In addition to these required columns, the following columns are computed based
+    In addition to these required columns, the following columns are created based
     on the input data during creation.
 
-    bjd
+    bjd    (only if ra and dec are all real numbers, otherwise set to np.nan)
     night
 
     If these computed columns already exist in `data` class the class
@@ -352,10 +358,10 @@ class PhotometryData(BaseEnhancedTable):
         'fwhm_y' : u.pix,
         'width' : u.pix,
         'aperture' : u.pix,
-        'aperture_area' : u.pix * u.pix,
+        'aperture_area' : u.pix,
         'annulus_inner' : u.pix,
         'annulus_outer' : u.pix,
-        'annulus_area' : u.pix * u.pix,
+        'annulus_area' : u.pix,
         'aperture_sum' : None,
         'annulus_sum' : None,
         'sky_per_pix_avg' : None,
@@ -403,7 +409,8 @@ class PhotometryData(BaseEnhancedTable):
                                  "astropy.time.Time entries.")
 
             # Convert input data to QTable (while also checking for required columns)
-            super().__init__(input_data=input_data, table_description=self.phot_descript,
+            super().__init__(input_data=input_data,
+                             table_description=self.phot_descript,
                              colname_map=colname_map, **kwargs)
 
             # Add the TableAttributes directly to meta (and adding attribute
@@ -419,15 +426,26 @@ class PhotometryData(BaseEnhancedTable):
             self.meta['pixel_scale'] = camera.pixel_scale
 
             # Check for consistency of counts-related columns
-            counts_columns = ['aperture_sum', 'annulus_sum', 'sky_per_pix_avg',
-                            'sky_per_pix_med', 'sky_per_pix_std', 'aperture_net_cnts',
-                            'noise_cnts']
+            counts_columns = ['aperture_sum', 'annulus_sum', 'aperture_net_cnts',
+                              'noise_cnts']
+            counts_per_pixel_columns = ['sky_per_pix_avg', 'sky_per_pix_med',
+                                            'sky_per_pix_std']
             cnts_unit = self[counts_columns[0]].unit
             for this_col in counts_columns[1:]:
                 if input_data[this_col].unit != cnts_unit:
                     raise ValueError(f"input_data['{this_col}'] has inconsistent units "
                                     f"with input_data['{counts_columns[0]}'] (should "
                                     f"be {cnts_unit} but it's "
+                                    f"{input_data[this_col].unit}).")
+            for this_col in counts_per_pixel_columns:
+                if cnts_unit is None:
+                    perpixel = u.pixel**-1
+                else:
+                    perpixel = cnts_unit * u.pixel**-1
+                if input_data[this_col].unit != perpixel:
+                    raise ValueError(f"input_data['{this_col}'] has inconsistent units "
+                                    f"with input_data['{counts_columns[0]}'] (should "
+                                    f"be {perpixel} but it's "
                                     f"{input_data[this_col].unit}).")
 
             # Compute additional columns (not done yet)
@@ -488,18 +506,24 @@ class PhotometryData(BaseEnhancedTable):
         the input observations.  It modifies that table in place.
         """
 
-        # Convert times at start of each observation to TDB (Barycentric Dynamical Time)
-        times = Time(self['date-obs'])
-        times_tdb = times.tdb
-        times_tdb.format='jd' # Switch to JD format
+        if ( np.isnan(self['ra']).any() or np.isnan(self['dec']).any() ):
+            print("WARNING: BJD could not be computed in output PhotometryData object "
+                  "because some RA or Dec values are missing.")
+            return np.full(len(self), np.nan)
+        else:
+            # Convert times at start of each observation to TDB (Barycentric Dynamical
+            # Time)
+            times = Time(self['date-obs'])
+            times_tdb = times.tdb
+            times_tdb.format='jd' # Switch to JD format
 
-        # Compute light travel time corrections
-        ip_peg = SkyCoord(ra=self['ra'], dec=self['dec'], unit='degree')
-        ltt_bary = times.light_travel_time(ip_peg, location=observatory)
-        time_barycenter = times_tdb + ltt_bary
+            # Compute light travel time corrections
+            ip_peg = SkyCoord(ra=self['ra'], dec=self['dec'], unit='degree')
+            ltt_bary = times.light_travel_time(ip_peg, location=observatory)
+            time_barycenter = times_tdb + ltt_bary
 
-        # Return BJD at midpoint of exposure at each location
-        return Time(time_barycenter + self['exposure'] / 2, scale='tdb')
+            # Return BJD at midpoint of exposure at each location
+            return Time(time_barycenter + self['exposure'] / 2, scale='tdb')
 
     @property
     def camera(self):
@@ -516,8 +540,8 @@ class PhotometryData(BaseEnhancedTable):
 class CatalogData(BaseEnhancedTable):
     """
     A class to hold astronomical catalog data while performing validation
-    to confirm the minumum required columns ('id', 'ra', and 'dec') are present
-    and have the correct units.
+    to confirm the minumum required columns ('id', 'ra', 'dec', 'mag', and
+    'passband') are present and have the correct units.
 
     As a convience function, when the user passes in an astropy table to validate,
     the user can also pass in a col_rename dict which can be used to rename columns
@@ -731,9 +755,14 @@ class SourceListData(BaseEnhancedTable):
             ra_dec_present = True
             x_y_present = True
             nosky_pos = ('ra' not in data.colnames or
-                        'dec' not in data.colnames)
+                        'dec' not in data.colnames or
+                        np.isnan(data['ra'].value).all() or
+                        np.isnan(data['dec'].value).all())
             noimg_pos = ('xcenter' not in data.colnames or
-                        'ycenter' not in data.colnames)
+                        'ycenter' not in data.colnames or
+                        np.isnan(data['xcenter'].value).all() or
+                        np.isnan(data['ycenter'].value).all())
+
             if nosky_pos:
                 ra_dec_present = False
             if noimg_pos:
@@ -764,3 +793,17 @@ class SourceListData(BaseEnhancedTable):
     @property
     def has_x_y(self):
         return self.meta['has_x_y']
+
+    def drop_ra_dec(self):
+        # drop sky-based positions from existing SourceListData structure
+        self.meta['has_ra_dec'] = False
+        self['ra'] = Column(data=np.full(len(self), np.nan), name='ra', unit=u.deg)
+        self['dec'] = Column(data=np.full(len(self), np.nan), name='dec', unit=u.deg)
+
+    def drop_x_y(self):
+        # drop image-based positionsfrom existing SourceListData structure
+        self.meta['has_x_y'] = False
+        self['xcenter'] = Column(data=np.full(len(self), np.nan), name='ra',
+                                 unit=u.deg)
+        self['ycenter'] = Column(data=np.full(len(self), np.nan), name='dec', 
+                                 unit=u.deg)

@@ -151,7 +151,7 @@ photcoltypes = ['int', 'float', 'float', 'float', 'float', 'float', 'float', 'fl
                 'float', 'float', 'float', 'str', 'int', 'float', 'float', 'float',
                 'float', 'str', 'str', 'int', 'float', 'float', 'float', 'float']
 photcolunits = [None, u.pix, u.pix, u.adu, None, u.deg, u.deg, u.adu, u.adu, u.adu,
-                None, None, None, u.pix, u.pix*u.pix, u.pix, u.pix, u.pix*u.pix, u.s,
+                None, None, None, u.pix, u.pix, u.pix, u.pix, u.pix, u.s,
                 None, None, u.adu, None, None, None, None, None, None, None,
                 u.electron, None, u.adu]
 
@@ -164,13 +164,6 @@ testphot_goodTime = testphot_data.copy()
 testphot_goodTime['date-obs'] = Column(data=Time(testphot_goodTime['date-obs'],
                                                  format='isot', scale='utc'),
                                        name='date-obs')
-
-# Fix the units for the counts-related columns
-counts_columns = ['aperture_sum', 'annulus_sum', 'sky_per_pix_avg', 'sky_per_pix_med',
-                          'sky_per_pix_std', 'aperture_net_cnts', 'noise_cnts']
-testphot_goodCounts = testphot_goodTime.copy()
-for this_col in counts_columns:
-    testphot_goodCounts[this_col].unit = u.adu
 
 # Fix all the units for PhotometryData
 phot_descript = {
@@ -202,6 +195,15 @@ phot_descript = {
 testphot_goodUnits = testphot_goodTime.copy()
 for this_col, this_unit in phot_descript.items():
     testphot_goodUnits[this_col].unit = this_unit
+
+# Fix the units for the counts-related columns
+counts_columns = ['aperture_sum', 'annulus_sum', 'aperture_net_cnts', 'noise_cnts']
+counts_per_pixel_sqr_columns = ['sky_per_pix_avg', 'sky_per_pix_med',
+                                            'sky_per_pix_std']
+for this_col in counts_columns:
+    testphot_goodUnits[this_col].unit = u.adu
+for this_col in counts_per_pixel_sqr_columns:
+    testphot_goodUnits[this_col].unit = u.adu * u.pixel**-1
 
 # Remove calculated columns from the test data to produce clean data
 computed_columns = ['bjd', 'night']
@@ -253,17 +255,17 @@ def test_photometry_slicing():
                                passband_map=feder_passbands, input_data=testphot_clean)
 
     # Test slicing works as expected, leaving attributes intact
-    just_cols = phot_data[['ra','dec']]
-    assert just_cols.camera.gain == 1.5 *  u.electron / u.adu
-    assert just_cols.camera.read_noise == 10.0 * u.electron
-    assert just_cols.camera.dark_current == 0.01 * u.electron / u.second
-    assert just_cols.camera.pixel_scale == 0.563 * u.arcsec / u.pix
-    assert just_cols.observatory.lat.value == 46.86678
-    assert just_cols.observatory.lat.unit == u.deg
-    assert just_cols.observatory.lon.value == -96.45328
-    assert just_cols.observatory.lon.unit == u.deg
-    assert round(just_cols.observatory.height.value) == 311
-    assert just_cols.observatory.height.unit == u.m
+    two_cols = phot_data[['ra','dec']]
+    assert two_cols.camera.gain == 1.5 *  u.electron / u.adu
+    assert two_cols.camera.read_noise == 10.0 * u.electron
+    assert two_cols.camera.dark_current == 0.01 * u.electron / u.second
+    assert two_cols.camera.pixel_scale == 0.563 * u.arcsec / u.pix
+    assert two_cols.observatory.lat.value == 46.86678
+    assert two_cols.observatory.lat.unit == u.deg
+    assert two_cols.observatory.lon.value == -96.45328
+    assert two_cols.observatory.lon.unit == u.deg
+    assert round(two_cols.observatory.height.value) == 311
+    assert two_cols.observatory.height.unit == u.m
 
 
 def test_photometry_recursive():
@@ -289,14 +291,6 @@ def test_photometry_inconsistent_count_units():
         phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m,
                                    passband_map=feder_passbands,
                                    input_data=testphot_goodTime)
-
-
-def test_photometry_inconsistent_badunits():
-    with pytest.raises(ValueError):
-        phot_data = PhotometryData(observatory=feder_obs, camera=feder_cg_16m,
-                                   passband_map=feder_passbands,
-                                   input_data=testphot_goodCounts)
-
 
 def test_photometry_inconsistent_computed_col_exists():
     with pytest.raises(ValueError):
@@ -423,6 +417,26 @@ def test_sourcelist_recursive():
     # Attempt recursive call
     with pytest.raises(TypeError):
         sl_test2 = SourceListData(input_data=sl_test, colname_map=None)
+
+
+def test_sourcelist_dropping_skycoords():
+     # Create good sourcelist data instance
+    sl_test = SourceListData(input_data=test_sl_data, colname_map=None)
+
+    # Drop sky coordinates
+    sl_test.drop_ra_dec()
+    assert sl_test.has_ra_dec == False
+    assert sl_test.has_x_y == True
+
+
+def test_sourcelist_dropping_imagecoords():
+     # Create good sourcelist data instance
+    sl_test = SourceListData(input_data=test_sl_data, colname_map=None)
+
+    # Drop sky coordinates
+    sl_test.drop_x_y()
+    assert sl_test.has_ra_dec == True
+    assert sl_test.has_x_y == False
 
 
 def test_sourcelist_slicing():
