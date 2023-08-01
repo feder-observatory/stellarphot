@@ -9,7 +9,8 @@ from astropy.table import Column, vstack
 from astropy.time import Time
 from astropy.utils.exceptions import AstropyUserWarning
 from ccdproc import ImageFileCollection
-from photutils.aperture import CircularAnnulus, CircularAperture, aperture_photometry
+from photutils.aperture import (CircularAnnulus, CircularAperture,
+                                aperture_photometry)
 from photutils.centroids import centroid_sources
 from scipy.spatial.distance import cdist
 
@@ -434,8 +435,8 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
 
     all_bads = bad_cnts | bad_fwhm
     photom['aperture_net_cnts'][all_bads] = np.nan
-    print(f"{logline} {np.sum(all_bads)} sources with either bad FWHM fit or bad aperture"
-          "net counts had aperture_net_cnts set to NaN.")
+    print(f"{logline} {np.sum(all_bads)} sources with either bad FWHM fit or bad "
+          "aperture net counts had aperture_net_cnts set to NaN.")
 
     # Compute instrumental magnitudes
     photom['mag_inst'] = (
