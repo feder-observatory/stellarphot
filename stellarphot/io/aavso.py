@@ -112,7 +112,6 @@ class AAVSOExtendedFileFormat:
     filter: Column = field(default_factory=Column)
     kmag: Column = field(default_factory=Column)
     cmag: Column = field(default_factory=Column)
-    ensemble: bool = False
     group : int  = ""
     trans : str = "NO"
     chart : str = ""
@@ -122,6 +121,21 @@ class AAVSOExtendedFileFormat:
     kname : str = ""
     airmass : Column = field(default_factory=Column)
     mtype : str = "STD"
+
+    def __post_init__(self):
+        self._ensemble = False
+
+    @property
+    def ensemble(self):
+        return self._ensemble
+
+    @ensemble.setter
+    def ensemble(self, value):
+        if value:
+            self.cmag = Column(["na"] * len(self.magnitude), name="cmag")
+            self.cname = Column(["ENSEMBLE"] * len(self.magnitude), name="cname")
+
+        self._ensemble = value
 
     @property
     def type(self):
@@ -153,10 +167,15 @@ class AAVSOExtendedFileFormat:
         else:
             use_data = data
         for source_column, destination_column in column_map.items():
+            if (self.ensemble and
+                (destination_column == AAVSOExtendedFileFormatColumns.COMP_STAR_MAG or
+                 destination_column == AAVSOExtendedFileFormatColumns.COMP_STAR_NAME)):
+                raise ValueError("Cannot set comparison star magnitude or name for ensemble observation")
+
             try:
                 setattr(self, destination_column.value, use_data[source_column])
             except AttributeError:
-                raise AttributeError(f"Column {destination_column} not allowed in AAVSO extended format")
+                raise AttributeError(f"Column {destination_column.value} not allowed in AAVSO extended format")
             except KeyError:
                 raise KeyError(f"Column {source_column} not found in data")
 
