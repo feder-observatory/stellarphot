@@ -1,5 +1,6 @@
 # Class to represent a file in AAVSO extended format
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from importlib import resources
 import yaml
@@ -7,8 +8,20 @@ import yaml
 from astropy.table import Table, Column
 
 __all__ = [
+    "AAVSOExtendedFileFormatColumns",
     "AAVSOExtendedFileFormat"
 ]
+
+
+class AAVSOExtendedFileFormatColumns(Enum):
+    VARIABLE_MAGNITUDE_COLUMN = "magnitude"
+    VARIABLE_MAGNITUDE_ERROR_COLUMN = "magerr"
+    VARIABLE_STAR_ID_COLUMN = "starid"
+    AIRMASS_COLUMN = "airmass"
+    JD_COLUMN = "date"
+    PASSBAND_COLUMN = "filter"
+    CHECK_STAR_MAGNITUDE_COLUMN = "kmag"
+    COMPARISON_STAR_MAGNITUDE_COLUMN = "cmag"
 
 
 @dataclass
@@ -129,7 +142,8 @@ class AAVSOExtendedFileFormat:
             Table containing the data to be written to the file.
         column_map : dict
             Dictionary mapping the column names in the table to the column names
-            in the file.
+            in the file.The values in the dictionary should be column names from
+            `AAVSOExtendedFileFormatColumns`.
         star_id : str, optional
             ID of the star to be written to the file. If not provided, all stars
             in the table will be written to the file.
@@ -140,7 +154,7 @@ class AAVSOExtendedFileFormat:
             use_data = data
         for source_column, destination_column in column_map.items():
             try:
-                setattr(self, destination_column, use_data[source_column])
+                setattr(self, destination_column.value, use_data[source_column])
             except AttributeError:
                 raise AttributeError(f"Column {destination_column} not allowed in AAVSO extended format")
             except KeyError:
