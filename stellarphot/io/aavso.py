@@ -14,14 +14,16 @@ __all__ = [
 
 
 class AAVSOExtendedFileFormatColumns(Enum):
-    VARIABLE_MAGNITUDE_COLUMN = "magnitude"
-    VARIABLE_MAGNITUDE_ERROR_COLUMN = "magerr"
+    VARIABLE_MAG = "magnitude"
+    VARIABLE_MAG_ERROR = "magerr"
     VARIABLE_STAR_ID_COLUMN = "starid"
-    AIRMASS_COLUMN = "airmass"
-    JD_COLUMN = "date"
-    PASSBAND_COLUMN = "filter"
-    CHECK_STAR_MAGNITUDE_COLUMN = "kmag"
-    COMPARISON_STAR_MAGNITUDE_COLUMN = "cmag"
+    AIRMASS = "airmass"
+    JD = "date"
+    PASSBAND = "filter"
+    CHECK_STAR_MAG = "kmag"
+    CHECK_STAR_NAME = "kname"
+    COMP_STAR_MAG = "cmag"
+    COMP_STAR_NAME = "cname"
 
 
 @dataclass
@@ -213,11 +215,11 @@ class AAVSOExtendedFileFormat:
                 # Kepp track of the longest column
                 length = len(item) if len(item) > length else length
             else:
-                table_dict[key] = item
+                table_dict[key] = item if len(item) > 0 else "na"
 
         # Fix up anything that is supposed to be a column and isn't yet.
         for k, v in table_dict.items():
-            if len(v) != length:
+            if not isinstance(v, Column) or len(v) != length:
                 # If the length is not correct assume we have a single value
                 # and make a column out of it.
                 table_dict[k] = Column([v] * length, name=k)
