@@ -73,11 +73,11 @@ def test_making_table():
 
 
 def test_making_table_ensemble():
-    aef, input_data = set_up_aef(ensemble=True)
+    aef, input_data = set_up_aef()
+    aef.ensemble = True
     assert set(aef.to_table()["CMAG"]) == set(["na"])
 
-
-# def test_writing():
-#     aef = AAVSOExtendedFileFormat(DEFAULT_OBSCODE)
-#     aef.write('foo.csv')
-#     assert 0
+    with pytest.raises(ValueError, match="Cannot set comparison star"):
+        aef.set_data_columns(input_data,
+                             {'mag_inst': AAVSOExtendedFileFormatColumns.COMP_STAR_MAG},
+                              star_id=26)
