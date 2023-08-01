@@ -181,7 +181,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
         raise ValueError(f"input_coordinates ({use_coordinates}) must be either "
                          "'pixel' or 'sky'.")
 
-    # # Set hot pixels to NaN
+    # # Set high pixels to NaN
     # ccd_image.data[ccd_image.data > max_adu] = np.nan
 
     # Extract necessary values from sourcelist structure
@@ -259,6 +259,12 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
         try:
             xcen, ycen = centroid_sources(ccd_image.data, xs, ys,
                                         box_size=2 * aperture_radius + 1)
+        except NoOverlapError:
+            raise NoOverlapError("Determining new centroid failed!")
+        except Exception as e:
+            raise RuntimeError(
+                f"Call to centroid_sources() returned {type(e).__name__}: {str(e)}")
+        else:
             # Calculate offset between centroid in this image and the positions
             # based on input RA/Dec.
             center_diff = np.sqrt((xs - xcen)**2 + (ys - ycen)**2)
@@ -272,11 +278,6 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
             xcen[too_much_shift] = xs[too_much_shift]
             ycen[too_much_shift] = ys[too_much_shift]
             xs, ys = xcen, ycen
-        except NoOverlapError:
-            raise NoOverlapError("Determining new centroid failed!")
-        except Exception as e:
-            raise RuntimeError(
-                f"Call to centroid_sources() returned {type(e).__name__}: {str(e)}")
 
     # Compute RA/Dec if not already provided
     if not sourcelist.has_ra_dec:
