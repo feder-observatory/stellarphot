@@ -189,8 +189,35 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
         raise ValueError(f"input_coordinates ({use_coordinates}) must be either "
                          "'pixel' or 'sky'.")
 
-    # # Set high pixels to NaN
-    # ccd_image.data[ccd_image.data > max_adu] = np.nan
+    # Check CCDData headers before proceeding
+
+    # Search for exposure keyword in header and set exposure if found
+    matched_kw = None
+    for kw in EXPOSURE_KEYWORDS:
+        if kw in ccd_image.header:
+            matched_kw = kw
+            break
+
+    if matched_kw is None:
+        return msgNexit(f"{logline} None of the accepted exposure keywords "
+                        f"({format(', '.join(EXPOSURE_KEYWORDS))}) found in the "
+                        "header ... SKIPPING THIS IMAGE!")
+    exposure = ccd_image.header[matched_kw]
+
+    # Search for other keywords that are required
+    try:
+        date_obs = ccd_image.header['DATE-OBS']
+    except KeyError:
+        return msgNexit(f"{logline} 'DATE-OBS' not found in CCD image header "
+                        "... SKIPPING THIS IMAGE!")
+    try:
+        filter = ccd_image.header['FILTER']
+    except KeyError:
+        return msgNexit(f"{logline} 'FILTER' not found in CCD image header ... "
+                        "SKIPPING THIS IMAGE!")
+
+    # Set high pixels to NaN
+    ccd_image.data[ccd_image.data > max_adu] = np.nan
 
     # Extract necessary values from sourcelist structure
     star_ids = sourcelist['star_id'].value
@@ -267,6 +294,10 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
         try:
             xcen, ycen = centroid_sources(ccd_image.data, xs, ys,
                                         box_size=2 * aperture_radius + 1)
+        except NoOverlapError:
+            return msgNexit(f"{logline} Determining new centroids failed ... "
+                            "SKIPPING THIS IMAGE!")
+        else: # Proceed
             # Calculate offset between centroid in this image and the positions
             # based on input RA/Dec.
             center_diff = np.sqrt((xs - xcen)**2 + (ys - ycen)**2)
@@ -314,27 +345,12 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     else:
         photom['file'] = [''] * len(photom)
 
-    # Search for exposure keyword in header and set exposure if found
-    matched_kw = None
-    for kw in EXPOSURE_KEYWORDS:
-        if kw in ccd_image.header:
-            matched_kw = kw
-            break
-
-    if matched_kw is None:
-        return msgNexit(f"{logline} None of the accepted exposure keywords "
-                         f"({format(', '.join(EXPOSURE_KEYWORDS))}) found in the "
-                         "header ... SKIPPING THIS IMAGE!")
-    else:
-        photom['exposure'] = [ccd_image.header[matched_kw]] * len(photom) * u.second
-
-    try:
-        photom['date-obs'] = Column(data=Time([ccd_image.header['DATE-OBS']]
-                                              * len(photom),
-                                    format='isot', scale='utc'), name='date-obs')
-    except KeyError:
-        return msgNexit(f"{logline} 'DATE-OBS' not found in CCD image header "
-                        "... SKIPPING THIS IMAGE!")
+    # Set various columns based on CCDData headers (which we
+    # checked for earlier)
+    photom['exposure'] = [exposure] * len(photom) * u.second
+    photom['date-obs'] = Column(data=Time([date_obs]))
+    photom['filter'] = [filter] * len(photom)
+    photom.rename_column('filter', 'passband')
 
     # Check for airmass keyword in header and set 'airmass' if found,
     # but accept it may not be available
@@ -344,14 +360,6 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
         print(f"{logline} 'AIRMASS' not found in CCD "
                             "image header ... setting to NaN!")
         photom['airmass'] = [np.nan] * len(photom)
-
-    # Check for filter keyword in header and set 'passband' if found
-    try:
-        photom['filter'] = [ccd_image.header['FILTER']] * len(photom)
-    except KeyError:
-        return msgNexit(f"{logline} 'FILTER' not found in CCD image header ... "
-                        "SKIPPING THIS IMAGE!")
-    photom.rename_column('filter', 'passband')
 
     # Save aperture and annulus information
     photom.rename_column('aperture_sum_0', 'aperture_sum')
