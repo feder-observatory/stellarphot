@@ -371,7 +371,7 @@ def test_photometry_on_directory():
     with tempfile.TemporaryDirectory() as temp_dir:
         # Come up with Filenames
         temp_file_names = [Path(temp_dir) /
-                            f"tempfile_{i:02d}.fits" for i in range(1, num_files + 1)]
+                            f"tempfile_{i:02d}.fit" for i in range(1, num_files + 1)]
         # Write the CCDData objects to files
         for i, image in enumerate(fake_images):
             image.write(temp_file_names[i])
