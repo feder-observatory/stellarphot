@@ -368,7 +368,9 @@ def test_photometry_on_directory():
 
     # Write fake images to temporary directory and test
     # multi_image_photometry on them.
-    with tempfile.TemporaryDirectory() as temp_dir:
+    # NOTE: ignore_cleanup_errors=True is needed to avoid an error
+    #       when the temporary directory is deleted on Windows.
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp_dir:
         # Come up with Filenames
         temp_file_names = [Path(temp_dir) /
                             f"tempfile_{i:02d}.fit" for i in range(1, num_files + 1)]
@@ -448,7 +450,9 @@ def test_photometry_on_directory_with_no_ra_dec():
 
     # Write fake images to temporary directory and test
     # multi_image_photometry on them.
-    with tempfile.TemporaryDirectory() as temp_dir:
+    # NOTE: ignore_cleanup_errors=True is needed to avoid an error
+    #       when the temporary directory is deleted on Windows.
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp_dir:
         # Come up with Filenames
         temp_file_names = [Path(temp_dir) /
                             f"tempfile_{i:02d}.fits" for i in range(1, num_files + 1)]
@@ -494,7 +498,9 @@ def test_photometry_on_directory_with_bad_fits():
 
     # Write fake images (without WCS) to temporary directory and test
     # multi_image_photometry on them.
-    with tempfile.TemporaryDirectory() as temp_dir:
+    # NOTE: ignore_cleanup_errors=True is needed to avoid an error
+    #       when the temporary directory is deleted on Windows.
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp_dir:
         # Come up with Filenames
         temp_file_names = [Path(temp_dir) /
                             f"tempfile_{i:02d}.fits" for i in range(1, num_files + 1)]
