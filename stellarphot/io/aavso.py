@@ -214,7 +214,7 @@ class AAVSOExtendedFileFormat:
                 if len(item) == 0:
                     item = "na"
                 table_dict[key] = item
-                # Kepp track of the longest column
+                # Keep track of the longest column
                 length = len(item) if len(item) > length else length
             else:
                 table_dict[key] = item if len(item) > 0 else "na"
