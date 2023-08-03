@@ -191,7 +191,8 @@ data:
       Limit: 20 characters.
   KMAG:
     summary: |
-      Instrumental magnitude of the check star.
+      Instrumental magnitude of the check star, unless doing "ensemble" photometry
+      in which case the calibrated magnitude should be reported.
       If "ensemble" see example below. If not present, use "na".
       Limit: 8 characters.
   AIRMASS:
