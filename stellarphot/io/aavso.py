@@ -40,8 +40,10 @@ class AAVSOExtendedFileFormat:
     ----------
     obscode : str
         The observer's code.
+        
     type : str
         The type of observation. Defaults to 'EXTENDED'.
+        
     software : str
         The software used to generate the file. Defaults to 'stellarphot'.
 
