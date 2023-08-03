@@ -1,8 +1,9 @@
-import numpy as np
 from astropy import units as u
 from astropy.coordinates import EarthLocation, SkyCoord
 from astropy.table import Column, QTable, Table
 from astropy.time import Time
+
+import numpy as np
 
 __all__ = ['Camera', 'BaseEnhancedTable', 'PhotometryData', 'CatalogData',
            'SourceListData']
@@ -536,6 +537,7 @@ class PhotometryData(BaseEnhancedTable):
     def observatory(self):
         return EarthLocation(lat=self.meta['lat'], lon=self.meta['lon'],
                              height=self.meta['height'])
+
 
 class CatalogData(BaseEnhancedTable):
     """

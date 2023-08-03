@@ -1,16 +1,13 @@
 import numpy as np
-
 from astropy import units as u
-from astropy.modeling.models import Const2D, Gaussian2D
 from astropy.modeling.fitting import LevMarLSQFitter
+from astropy.modeling.models import Const2D, Gaussian2D
 from astropy.nddata import CCDData
-from astropy.stats import sigma_clipped_stats
+from astropy.nddata.utils import Cutout2D
+from astropy.stats import gaussian_sigma_to_fwhm, sigma_clipped_stats
 from astropy.table import Table
-
 from photutils.detection import DAOStarFinder
 from photutils.morphology import data_properties
-from astropy.nddata.utils import Cutout2D
-from astropy.stats import gaussian_sigma_to_fwhm
 
 from stellarphot.core import SourceListData
 
@@ -54,7 +51,8 @@ def _fit_2dgaussian(data):
 
     fitter = LevMarLSQFitter()
     y, x = np.indices(data.shape)
-    gfit = fitter(g_init, x, y, data)
+    # Call fitter, enabling filtering of NaN/inf values
+    gfit = fitter(g_init, x, y, data, filter_non_finite=True)
 
     return gfit
 
