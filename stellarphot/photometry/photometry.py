@@ -51,10 +51,11 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     ----------
     ccd_image : `astropy.nddata.CCDData`
         Image on which to perform aperture photometry.  It's headers must contain
-        DATE-OBS, exposure time (which can be any of the following: EXPOSURE,
-        EXPTIME, TELAPSE, ELAPTIME, ONTIME, or LIVETIME), and FILTER.  If AIRMASS is
-        available it will be added to `phot_table`.  This image  must also have
-        a WCS header associated with it if you want to use sky positions as inputs.
+        DATE-OBS, FILTER, and exposure time in units of seconds (identified by one
+        of the following keywords: EXPOSURE, EXPTIME, TELAPSE, ELAPTIME, ONTIME,
+        or LIVETIME). If AIRMASS is available it will be added to `phot_table`.
+        This image  must also have a WCS header associated with it if you want to
+        use sky positions as inputs.
 
     sourcelist : `stellarphot.SourceList`
         Table of extracted sources with positions in terms of pixel coordinates OR
@@ -157,11 +158,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     to compute the x/y positions on each image individually. In this scenario,
     the `use_coordinates` parameter should be set to "sky".
     """
-
-    def msgNexit(msg):
-        # Issue message and exist function
-        print(msg)
-        return None, None
+ 
 
     # Check that the input parameters are valid
     if not isinstance(ccd_image, CCDData):
@@ -200,22 +197,26 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
             break
 
     if matched_kw is None:
-        return msgNexit(f"{logline} None of the accepted exposure keywords "
+        print(f"{logline} None of the accepted exposure keywords "
                         f"({format(', '.join(EXPOSURE_KEYWORDS))}) found in the "
                         "header ... SKIPPING THIS IMAGE!")
+        return None, None
+
     exposure = ccd_image.header[matched_kw]
 
     # Search for other keywords that are required
     try:
         date_obs = ccd_image.header['DATE-OBS']
     except KeyError:
-        return msgNexit(f"{logline} 'DATE-OBS' not found in CCD image header "
+        print(f"{logline} 'DATE-OBS' not found in CCD image header "
                         "... SKIPPING THIS IMAGE!")
+        return None, None
     try:
         filter = ccd_image.header['FILTER']
     except KeyError:
-        return msgNexit(f"{logline} 'FILTER' not found in CCD image header ... "
+        print(f"{logline} 'FILTER' not found in CCD image header ... "
                         "SKIPPING THIS IMAGE!")
+        return None, None
 
     # Set high pixels to NaN
     ccd_image.data[ccd_image.data > max_adu] = np.nan
@@ -236,7 +237,8 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
             xs, ys = imgpos[0], imgpos[1]
         except AttributeError:
             # No WCS, skip this image
-            return msgNexit(f"{logline} ccd_image must have a valid WCS to use RA/Dec!")
+            print(f"{logline} ccd_image must have a valid WCS to use RA/Dec!")
+            return None, None
     elif use_coordinates == 'sky' and not sourcelist.has_ra_dec:
         raise ValueError("use_coordinates='sky' but sourcelist does not have"
                          "RA/Dec coordinates!")
@@ -296,8 +298,9 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
             xcen, ycen = centroid_sources(ccd_image.data, xs, ys,
                                         box_size=2 * aperture_radius + 1)
         except NoOverlapError:
-            return msgNexit(f"{logline} Determining new centroids failed ... "
+            print(f"{logline} Determining new centroids failed ... "
                             "SKIPPING THIS IMAGE!")
+            return None, None
         else: # Proceed
             # Calculate offset between centroid in this image and the positions
             # based on input RA/Dec.

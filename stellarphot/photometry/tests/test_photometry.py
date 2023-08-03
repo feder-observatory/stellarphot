@@ -10,13 +10,9 @@ from astropy.utils.data import get_pkg_data_filename
 from fake_image import FakeCCDImage, shift_FakeCCDImage
 
 from stellarphot.core import Camera, SourceListData
-from stellarphot.photometry import (
-    calculate_noise,
-    find_too_close,
-    multi_image_photometry,
-    single_image_photometry,
-    source_detection,
-)
+from stellarphot.photometry import (calculate_noise, find_too_close,
+                                    multi_image_photometry,
+                                    single_image_photometry, source_detection)
 
 GAINS = [1.0, 1.5, 2.0]
 
@@ -349,7 +345,7 @@ def list_of_fakes(num_files):
         angle = 2*np.pi/(num_files-1) * i
         rad = 50
         dx, dy = rad*np.cos(angle), rad*np.sin(angle)
-        fake_images.append( shift_FakeCCDImage(fake_images[0], dx, dy) )
+        fake_images.append(shift_FakeCCDImage(fake_images[0], dx, dy) )
 
     filters = ['U', 'B', 'V', 'R', 'I']
     for i in range(num_files):
