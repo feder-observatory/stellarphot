@@ -40,10 +40,10 @@ class AAVSOExtendedFileFormat:
     ----------
     obscode : str
         The observer's code.
-        
+
     type : str
         The type of observation. Defaults to 'EXTENDED'.
-        
+
     software : str
         The software used to generate the file. Defaults to 'stellarphot'.
 
@@ -66,7 +66,8 @@ class AAVSOExtendedFileFormat:
         The error in the magnitude of the observation.
 
     filter : `astropy.table.Column`
-        The filter/band used for the observation. Must be one of the AAVSO passbands.
+        The filter/band used for the observation. Must be one of the AAVSO passbands,
+        which are listed at https://www.aavso.org/filters.
 
     kmag : `astropy.table.Column`
         The magnitude of the check star.
