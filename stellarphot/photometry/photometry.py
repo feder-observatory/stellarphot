@@ -670,22 +670,24 @@ def multi_image_photometry(directory_with_images,
     fh.setLevel(logging.INFO)
     multilogger.addHandler(fh)
 
-    multilogger.info("A")
-    multilogger.info("B")
-    multilogger.info("C")
-
     ##
     ## Process all the individual files
     ##
 
     # Build image file collection
     ifc = ImageFileCollection(directory_with_images)
+
+    # Turn off root loggers that are activated by ImageFileCollection
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
+
     n_files_processed = 0
 
-    print(f"Starting photometry of files in {directory_with_images}")
-    multilogger.info(f"Starting photometry of files in {directory_with_images}")
+    msg = f"Starting photometry of files in {directory_with_images} ... "
     if (logfile is not None):
-        print(f"  Logging to {orig_logfile}")
+        msg += f"logging output to {orig_logfile}"
+    print(msg)
+    multilogger.info(msg)
 
     # Suppress the FITSFixedWarning that is raised when reading a FITS file header
     warnings.filterwarnings('ignore', category=FITSFixedWarning)
