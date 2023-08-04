@@ -304,7 +304,6 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     else:
         msg += " ... keeping them."
     logger.info(msg)
-    fh.flush()
 
 
     # Remove all source positions too close to edges of image (where the annulus would
@@ -490,7 +489,6 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     photom['aperture_net_cnts'][all_bads] = np.nan
     logger.info(f"{logline} {np.sum(all_bads)} sources with either bad FWHM fit "
                  "or bad aperture net counts had aperture_net_cnts set to NaN.")
-    fh.flush()
 
     # Compute instrumental magnitudes
     photom['mag_inst'] = (
@@ -518,10 +516,10 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     photom['mag_error'] = 1.085736205 / snr
     msg += "DONE."
     logger.info(msg)
-    fh.flush()
 
     # Close logfile if it was opened
     if logfile is not None:
+        fh.flush()
         fh.close()
 
     # Create PhotometryData object to return
@@ -728,7 +726,9 @@ def multi_image_photometry(directory_with_images,
 
     # Close the logfile if it is open
     if logfile is not None:
+        fh.flush()
         fh.close()
+
 
     if n_files_processed == 0:
         raise RuntimeError("No images were processed!")
