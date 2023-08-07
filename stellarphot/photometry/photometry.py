@@ -539,6 +539,7 @@ def multi_image_photometry(directory_with_images,
                            include_dig_noise=True,
                            reject_too_close=True,
                            reject_background_outliers=True,
+                           reject_unmatched=True,
                            passband_map=None,
                            fwhm_by_fit=True,
                            logfile=None):
@@ -608,6 +609,12 @@ def multi_image_photometry(directory_with_images,
     reject_too_close : bool, optional (Default: True)
         If ``True``, any sources that are closer than twice the aperture radius
         are rejected.  If ``False``, all sources in field are used.
+
+    reject_unmatched : bool, optional (Default: True)
+        If ``True``, any sources that are not detected on all the images are
+        rejected.  If you are interested in a source that can intermittently
+        fall below your detection limits, we suggest setting this to ``False`` 
+        so that all sources detected on each image are reported.
 
     include_dig_noise : bool, optional (Default: True)
         If ``True``, include the digitization noise in the calculation of the
@@ -743,33 +750,34 @@ def multi_image_photometry(directory_with_images,
     # Attributes should survive intact assume all have same camera and observatory.
     all_phot = vstack(phots)
 
-    # Build a set of all the unique star_ids in the sourcelist
-    # that were eliminated on at least one image
-    if len(missing_sources) > 0:
-        if len(missing_sources) > 1:
-            uniques = set(missing_sources)
-        else:
-            uniques = set([missing_sources])
+    # If requested, eliminate source not detected on every image by building
+    # a set of all the unique star_ids that were missing on at least one image.
+    if (reject_unmatched):
+        if len(missing_sources) > 0:
+            if len(missing_sources) > 1:
+                uniques = set(missing_sources)
+            else:
+                uniques = set([missing_sources])
 
-        msg = (f"  Removing {len(uniques)} sources not observed in every image ... ")
-        # Purge the photometry table of all sources that were eliminated
-        # on at least one image
-        starid_to_remove = sorted([u for u in uniques if u in all_phot['star_id']])
-        # add index to PhotometryData to speed up removal
-        all_phot.add_index('star_id')
-        # Remove the starid for objects not observed in every image
-        if starid_to_remove:
-            bad_rows = all_phot.loc_indices[starid_to_remove]
-            try:
-                bad_rows = list(bad_rows)
-            except TypeError:
-                bad_rows = [bad_rows]
+            msg = (f"  Removing {len(uniques)} sources not observed in every image ... ")
+            # Purge the photometry table of all sources that were eliminated
+            # on at least one image
+            starid_to_remove = sorted([u for u in uniques if u in all_phot['star_id']])
+            # add index to PhotometryData to speed up removal
+            all_phot.add_index('star_id')
+            # Remove the starid for objects not observed in every image
+            if starid_to_remove:
+                bad_rows = all_phot.loc_indices[starid_to_remove]
+                try:
+                    bad_rows = list(bad_rows)
+                except TypeError:
+                    bad_rows = [bad_rows]
+                all_phot.remove_indices('star_id')
+                all_phot.remove_rows(sorted(bad_rows))
+            # Drop index from PhotometryData to save memory
             all_phot.remove_indices('star_id')
-            all_phot.remove_rows(sorted(bad_rows))
-        # Drop index from PhotometryData to save memory
-        all_phot.remove_indices('star_id')
-        msg += "DONE."
-        multilogger.info(msg)
+            msg += "DONE."
+            multilogger.info(msg)
 
     multilogger.info(f"  DONE processing all matching images in {directory_with_images}")
     print(f"  DONE processing all matching images in {directory_with_images}")
