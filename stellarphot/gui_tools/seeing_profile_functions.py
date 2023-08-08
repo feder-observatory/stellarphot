@@ -19,6 +19,8 @@ import matplotlib.pyplot as plt
 from stellarphot.io import TessSubmission
 from stellarphot.gui_tools.fits_opener import FitsOpener
 from stellarphot.plotting import seeing_plot
+from stellarphot.settings.views import ui_generator
+from stellarphot.settings.models import ApertureSettings
 
 __all__ = ['set_keybindings', 'find_center', 'radial_profile',
            'RadialProfile', 'box', 'SeeingProfileWidget']
@@ -160,7 +162,7 @@ def find_center(image, center_guess, cutout_size=30, max_iters=10):
     return cen
 
 
-# TODO: Why eactly is this separate from the class RadialProfile?
+# TODO: Why exactly is this separate from the class RadialProfile?
 def radial_profile(data, center, size=30, return_scaled=True):
     """
     Construct a radial profile of a chunk of width ``size`` centered
@@ -465,11 +467,12 @@ class SeeingProfileWidget:
         big_box = ipw.GridspecLayout(1, 2)
         layout = ipw.Layout(width='20ch')
         hb = ipw.HBox()
+        self.aperture_settings = ui_generator(ApertureSettings)
         self.ap_t = ipw.IntText(description='Aperture radius', value=5, layout=layout, style=desc_style)
         self.in_t = ipw.IntText(description='Inner annulus', value=10, layout=layout, style=desc_style)
         self.out_t = ipw.IntText(description='Outer annulus', value=20, layout=layout, style=desc_style)
         self.save_aps = ipw.Button(description="Save settings")
-        hb.children = [self.ap_t, self.save_aps] #, self.in_t, self.out_t]
+        hb.children = [self.aperture_settings] #, self.save_aps] #, self.in_t, self.out_t]
 
         lil_box = ipw.VBox()
         lil_tabs = ipw.Tab()
@@ -705,4 +708,3 @@ class SeeingProfileWidget:
                 plt.grid()
                 plt.show()
         return show_event
-
