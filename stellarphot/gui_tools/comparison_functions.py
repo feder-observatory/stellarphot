@@ -381,20 +381,22 @@ class ComparisonViewer:
     def _save_aperture_to_file(self, button=None, filename=''):
         if not filename:
             filename = self.photom_apertures_file
+
+        # Convert aperture table into a SourceList objects and output
+        targets_table = self.generate_table()
+        # Assign units to columns
+        targets_table['ra'] = targets_table['ra'] * u.deg
+        targets_table['dec'] = targets_table['dec'] * u.deg
+        targets_table['x'] = targets_table['x'] * u.pixel
+        targets_table['y'] = targets_table['y'] * u.pixel
+        # Drop redundant sky position column
+        targets_table.remove_columns(['coord'])
+        # Build sources list
+        targets2sourcelist = {'x' : 'xcenter', 'y' : 'ycenter'}
+        sources = SourceListData(input_data=targets_table, colname_map=targets2sourcelist)
+
         # Export aperture file as CSV (overwrite existing file if it exists)
         try:
-            # Convert aperture table into a SourceList objects and output
-            targets_table = self.generate_table()
-            # Assign units to columns
-            targets_table['ra'] = targets_table['ra'] * u.deg
-            targets_table['dec'] = targets_table['dec'] * u.deg
-            targets_table['x'] = targets_table['x'] * u.pixel
-            targets_table['y'] = targets_table['y'] * u.pixel
-            # Drop redundant sky position column
-            targets_table.remove_columns(['coord'])
-            # Build sources list
-            targets2sourcelist = {'x' : 'xcenter', 'y' : 'ycenter'}
-            sources = SourceListData(input_data=targets_table, colname_map=targets2sourcelist)
             sources.write(filename, overwrite=self.overwrite_outputs)
         except OSError:
             raise OSError(f"Existing file ({filename}) can not be overwritten. Set overwrite_outputs=True to address this.")
