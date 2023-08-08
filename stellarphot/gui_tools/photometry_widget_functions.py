@@ -16,29 +16,45 @@ class PhotometrySettings:
     ----------
 
     aperture_locations : `pathlib.Path`
+        This is the path to the file containing the aperture locations.
 
     aperture_radius : int
+        This is the radius of the aperture.
+
+    inner_annulus : int
+        This is the inner radius of the annulus.
+
+    outer_annulus : int
+        This is the outer radius of the annulus.
 
     box : `ipywidgets.VBox`
+        This is a box containing the widgets.
 
     image_folder : `pathlib.Path`
+        This is the path to the folder containing the images.
 
     ifc : `ccdproc.ImageFileCollection`
         The ImageFileCollection for the selected folder.
 
     object_name : str
+        The name of the object.
     """
     def __init__(self):
-        self._image_dir = FileChooser(title="Choose folder with images", show_only_dirs=True)
-        self._aperture_file_loc = FileChooser(title='Choose aperture location file')
-        self._aperture_settings_loc = FileChooser(title='Choose file with aperture settings')
-        self._object_name = ipw.Dropdown(description='Choose object', style=dict(description_width='initial'))
+        self._image_dir = FileChooser(title="Choose folder with images",
+                                      show_only_dirs=True)
+        self._aperture_file_loc = FileChooser(
+            title='Choose photometry aperture location file')
+        self._aperture_settings_loc = FileChooser(
+            title='Choose file with aperture settings')
+        self._object_name = ipw.Dropdown(description='Choose object',
+                                         style=dict(description_width='initial'))
 
         self._image_dir.register_callback(self._update_ifc)
         self._aperture_settings_loc.register_callback(self._update_aperture_rad)
         self.ifc = None
         self._box = ipw.VBox()
-        self._box.children = [self._image_dir, self._aperture_file_loc, self._aperture_settings_loc, self._object_name]
+        self._box.children = [self._image_dir, self._aperture_file_loc,
+                              self._aperture_settings_loc, self._object_name]
 
     @property
     def box(self):
@@ -69,6 +85,20 @@ class PhotometrySettings:
         return self._aperture_radius
 
     @property
+    def inner_annulus(self):
+        """
+        The inner radius of the annulus.
+        """
+        return self._inner_annulus
+
+    @property
+    def outer_annulus(self):
+        """
+        The outer radius of the annulus
+        """
+        return self._outer_annulus
+
+    @property
     def object_name(self):
         """
         The name of the object.
@@ -90,3 +120,5 @@ class PhotometrySettings:
             stuff = f.read()
 
         self._aperture_radius = int(stuff.split(',')[0])
+        self._inner_annulus = int(stuff.split(',')[1])
+        self._outer_annulus = int(stuff.split(',')[2])
