@@ -16,12 +16,14 @@ try:
 except ImportError:
     from astrowidgets.ginga import ImageWidget
 
+from stellarphot import SourceListData
 from stellarphot.differential_photometry import *
 from stellarphot.photometry import *
 from stellarphot.gui_tools.seeing_profile_functions import set_keybindings
 from stellarphot.gui_tools.fits_opener import FitsOpener
 from stellarphot.io import TessSubmission, TOI, TessTargetFile
-from stellarphot.utils.comparison_utils import set_up, crossmatch_APASS2VSX, mag_scale, in_field
+from stellarphot.utils.comparison_utils import (set_up, crossmatch_APASS2VSX,
+                                                mag_scale, in_field)
 
 
 __all__ = ['make_markers', 'wrap', 'ComparisonViewer']
@@ -176,8 +178,8 @@ class ComparisonViewer:
     object_coordinate : `astropy.coordinates.SkyCoord`, optional
         Coordinates of the target. Defaults to None.
 
-    aperture_output_file : str, optional
-        File to save aperture information to.  Defaults to None.
+    photom_apertures_file : str, optional
+        File to save photometry aperture information to.  Defaults to None.
 
     overwrite_outputs: bool, optional
         Whether to overwrite existing output files. Defaults to True.
@@ -185,8 +187,8 @@ class ComparisonViewer:
     Attributes
     ----------
 
-    aperture_output_file : str
-        File to save aperture information to.
+    photom_apertures_file : str
+        File to save photometry aperture information to.
 
     box : `ipywidgets.Box`
         Box containing the widgets.
@@ -225,7 +227,7 @@ class ComparisonViewer:
                  dim_mag_limit=17,
                  targets_from_file=None,
                  object_coordinate=None,
-                 aperture_output_file=None,
+                 photom_apertures_file=None,
                  overwrite_outputs=True):
 
         self._label_name = 'labels'
@@ -243,7 +245,7 @@ class ComparisonViewer:
 
         self.box, self.iw = self._viewer()
 
-        self.aperture_output_file = aperture_output_file
+        self.photom_apertures_file = photom_apertures_file
         self.overwrite_outputs = overwrite_outputs
 
         if file:
@@ -378,10 +380,22 @@ class ComparisonViewer:
 
     def _save_aperture_to_file(self, button=None, filename=''):
         if not filename:
-            filename = self.aperture_output_file
+            filename = self.photom_apertures_file
         # Export aperture file as CSV (overwrite existing file if it exists)
         try:
-            self.generate_table().write(filename, overwrite=self.overwrite_outputs)
+            # Convert aperture table into a SourceList objects and output
+            targets_table = self.generate_table()
+            # Assign units to columns
+            targets_table['ra'] = targets_table['ra'] * u.deg
+            targets_table['dec'] = targets_table['dec'] * u.deg
+            targets_table['x'] = targets_table['x'] * u.pixel
+            targets_table['y'] = targets_table['y'] * u.pixel
+            # Drop redundant sky position column
+            targets_table.remove_columns(['coord'])
+            # Build sources list
+            targets2sourcelist = {'x' : 'xcenter', 'y' : 'ycenter'}
+            sources = SourceListData(input_data=targets_table, colname_map=targets2sourcelist)
+            sources.write(filename, overwrite=self.overwrite_outputs)
         except OSError:
             raise OSError(f"Existing file ({filename}) can not be overwritten. Set overwrite_outputs=True to address this.")
 
