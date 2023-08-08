@@ -292,7 +292,6 @@ class RadialProfile:
         adjust_max = self.radialprofile.max() - sub_med
         self.scaled_profile = (self.radialprofile - sub_med) / adjust_max
         self.scaled_exact_counts = (self.sub_data - sub_med) / adjust_max
-        self.HWHM = find_hwhm(self.ravg, self.scaled_profile)
 
     @property
     def data(self):
