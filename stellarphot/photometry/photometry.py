@@ -352,7 +352,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     # Set various columns based on CCDData headers (which we
     # checked for earlier)
     photom['exposure'] = [exposure] * len(photom) * u.second
-    photom['date-obs'] = Column(data=Time([date_obs]))
+    photom['date-obs'] = Time(Column(data=[date_obs] ))
     photom['filter'] = [filter] * len(photom)
     photom.rename_column('filter', 'passband')
 
