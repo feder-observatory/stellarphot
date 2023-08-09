@@ -198,7 +198,6 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
 
     # Set up logging
     logger = logging.getLogger("single_image_photometry")
-    logger.disabled = False
     if logger.hasHandlers() is False:
         logger.setLevel(logging.INFO)
         if logfile is not None:
