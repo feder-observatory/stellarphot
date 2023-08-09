@@ -6,6 +6,7 @@ from astropy import units as un
 
 from pydantic import BaseModel, Field
 
+from .autowidgets import CustomBoundedIntTex
 
 class ApertureUnit(Enum):
     PIXEL = un.pix
@@ -13,10 +14,9 @@ class ApertureUnit(Enum):
 
 
 class ApertureSettings(BaseModel):
-    radius : float
-    inner_annulus : float
-    outer_annulus : float
-    unit : ApertureUnit = Field(default=ApertureUnit.PIXEL, enum=[au.value for au in ApertureUnit])
+    radius : conint(ge=1) = Field(autoui=CustomBoundedIntTex)
+    inner_annulus : conint(ge=1) = Field(autoui=CustomBoundedIntTex)
+    outer_annulus : conint(ge=1) = Field(autoui=CustomBoundedIntTex)
 
     class Config:
         use_enum_values = True
