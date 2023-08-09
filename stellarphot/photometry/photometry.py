@@ -1,17 +1,22 @@
 import warnings
+import logging
 
 import bottleneck as bn
 import numpy as np
+from pathlib import Path
+
 from astropy import units as u
 from astropy.coordinates import EarthLocation, SkyCoord
 from astropy.nddata import CCDData, NoOverlapError
 from astropy.table import Column, vstack
 from astropy.time import Time
 from astropy.utils.exceptions import AstropyUserWarning
+from astropy.wcs import FITSFixedWarning
 from ccdproc import ImageFileCollection
 from photutils.aperture import (CircularAnnulus, CircularAperture,
                                 aperture_photometry)
 from photutils.centroids import centroid_sources
+
 from scipy.spatial.distance import cdist
 
 from stellarphot import Camera, PhotometryData, SourceListData
@@ -21,8 +26,7 @@ from .source_detection import compute_fwhm
 __all__ = ['single_image_photometry', 'multi_image_photometry',
            'faster_sigma_clip_stats',
            'find_too_close', 'clipped_sky_per_pix_stats',
-           'add_to_photometry_table', 'photometry_on_directory',
-           'calculate_noise', 'find_bjd']
+           'calculate_noise']
 
 # Allowed FITS header keywords for exposure values
 EXPOSURE_KEYWORDS = ["EXPOSURE", "EXPTIME", "TELAPSE", "ELAPTIME", "ONTIME",
@@ -38,7 +42,9 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
                             reject_background_outliers=True,
                             passband_map=None,
                             fwhm_by_fit=True, fname=None,
-                            logline="single_image_photometry:"):
+                            logline="single_image_photometry:",
+                            logfile=None,
+                            console_log = True):
     """
     Perform aperture photometry on a single image, with an options for estimating
     the local background from sigma clipped stats of the counts in an annulus around
@@ -130,6 +136,15 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     logline : str, optional (Default: "single_image_photometry:")
         String to prepend to all log messages.
 
+    logfile : str, optional (Default: None)
+        Name of the file to which log messages should be written.  If None,
+        then log messages are written to stdout.
+
+    console_log: bool, optional (Default: True)
+        If ``True`` and `logfile` is set, log messages will also be written to
+        stdout.  If ``False``, log messages will not be written to stdout
+        if `logfile` is set.
+
     Returns
     -------
 
@@ -187,8 +202,30 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
         raise ValueError(f"input_coordinates ({use_coordinates}) must be either "
                          "'pixel' or 'sky'.")
 
-    # Check CCDData headers before proceeding
+    # Set up logging
+    logger = logging.getLogger("single_image_photometry")
+    console_format = logging.Formatter('%(message)s')
+    if logger.hasHandlers() is False:
+        logger.setLevel(logging.INFO)
+        if logfile is not None:
+            # by default this appends to existing logfile
+            fh = logging.FileHandler(logfile)
+            log_format = logging.Formatter('%(levelname)s - %(message)s')
+            if console_log:
+                ch = logging.StreamHandler()
+                ch.setFormatter(console_format)
+                ch.setLevel(logging.INFO)
+                logger.addHandler(ch)
+        else: # Log to console
+            fh = logging.StreamHandler()
+            log_format = console_format
+        fh.setFormatter(log_format)
+        fh.setLevel(logging.INFO)
+        logger.addHandler(fh)
 
+    #
+    # Check CCDData headers before proceeding
+    #
     # Search for exposure keyword in header and set exposure if found
     matched_kw = None
     for kw in EXPOSURE_KEYWORDS:
@@ -197,9 +234,9 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
             break
 
     if matched_kw is None:
-        print(f"{logline} None of the accepted exposure keywords "
-                        f"({format(', '.join(EXPOSURE_KEYWORDS))}) found in the "
-                        "header ... SKIPPING THIS IMAGE!")
+        logger.warning(f"{logline} None of the accepted exposure keywords "
+                      f"({format(', '.join(EXPOSURE_KEYWORDS))}) found in the "
+                      "header ... SKIPPING THIS IMAGE!")
         return None, None
 
     exposure = ccd_image.header[matched_kw]
@@ -208,14 +245,14 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     try:
         date_obs = ccd_image.header['DATE-OBS']
     except KeyError:
-        print(f"{logline} 'DATE-OBS' not found in CCD image header "
-                        "... SKIPPING THIS IMAGE!")
+        logger.warning(f"{logline} 'DATE-OBS' not found in CCD image header "
+                       "... SKIPPING THIS IMAGE!")
         return None, None
     try:
         filter = ccd_image.header['FILTER']
     except KeyError:
-        print(f"{logline} 'FILTER' not found in CCD image header ... "
-                        "SKIPPING THIS IMAGE!")
+        logger.warning(f"{logline} 'FILTER' not found in CCD image header ... "
+               "SKIPPING THIS IMAGE!")
         return None, None
 
     # Set high pixels to NaN
@@ -237,7 +274,8 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
             xs, ys = imgpos[0], imgpos[1]
         except AttributeError:
             # No WCS, skip this image
-            print(f"{logline} ccd_image must have a valid WCS to use RA/Dec!")
+            msg = f"{logline} ccd_image must have a valid WCS to use RA/Dec!"
+            logger.warning(msg)
             return None, None
     elif use_coordinates == 'sky' and not sourcelist.has_ra_dec:
         raise ValueError("use_coordinates='sky' but sourcelist does not have"
@@ -254,8 +292,9 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
             f"Call to find_too_close() returned {type(e).__name__}: {str(e)}")
     too_close_cnt = np.sum(too_close)
     non_overlap = ~too_close
-    print(f"{logline} {too_close_cnt} of {src_cnt} sources within 2 aperture radii of "
-          "nearest neighbor", end="")
+    msg = (f"{logline} {too_close_cnt} of {src_cnt} sources within 2 aperture radii of "
+           "nearest neighbor")
+
     if reject_too_close:
         # Track dropped sources due to being too close together
         dropped_sources.extend(star_ids[too_close].tolist())
@@ -265,9 +304,11 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
         ys = ys[non_overlap]
         ra = ra[non_overlap]
         dec = dec[non_overlap]
-        print(" ... removed them.")
+        msg += " ... removed them."
     else:
-        print(" ... keeping them.")
+        msg += " ... keeping them."
+    logger.info(msg)
+
 
     # Remove all source positions too close to edges of image (where the annulus would
     # extend beyond the image boundaries).
@@ -285,8 +326,11 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     dec = dec[in_bounds]
     in_cnt = np.sum(in_bounds)
     out_cnt = np.sum(out_of_bounds)
-    print(f"{logline} {out_cnt} sources too close to image edge ... removed them.")
-    print(f"{logline} {in_cnt} of {src_cnt} original sources to have photometry done.")
+    logger.info(f"{logline} {out_cnt} sources too close to image edge ... removed "
+                "them.")
+    logger.info(f"{logline} {in_cnt} of {src_cnt} original sources to have photometry "
+                "done.")
+
 
     # If we are using x/y positions previously obtained from the ra/dec positions and
     # WCS, then recentroid the sources to refine the positions. This is
@@ -298,7 +342,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
             xcen, ycen = centroid_sources(ccd_image.data, xs, ys,
                                         box_size=2 * aperture_radius + 1)
         except NoOverlapError:
-            print(f"{logline} Determining new centroids failed ... "
+            logger.warning(f"{logline} Determining new centroids failed ... "
                             "SKIPPING THIS IMAGE!")
             return None, None
         else: # Proceed
@@ -361,8 +405,8 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     try:
         photom['airmass'] = [ccd_image.header['AIRMASS']] * len(photom)
     except KeyError:
-        print(f"{logline} 'AIRMASS' not found in CCD "
-                            "image header ... setting to NaN!")
+        logger.warning(f"{logline} 'AIRMASS' not found in CCD "
+                        "image header ... setting to NaN!")
         photom['airmass'] = [np.nan] * len(photom)
 
     # Save aperture and annulus information
@@ -378,21 +422,24 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     photom['annulus_area'] = anuls.area  * u.pixel
 
     if reject_background_outliers:
-        print(f"{logline} Computing clipped sky stats ... ", end="")
+        msg = f"{logline} Computing clipped sky stats ... "
         try:
             avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
                     clipped_sky_per_pix_stats(ccd_image, anuls)
         except AttributeError:
-            print("BAD ANNULUS ('sky_per_pix' stats set to np.nan) ... ", end="")
+            msg += "BAD ANNULUS ('sky_per_pix' stats set to np.nan) ... "
             avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
                 np.nan, np.nan, np.nan
         photom['sky_per_pix_avg'] = avg_sky_per_pix / u.pixel
         photom['sky_per_pix_med'] = med_sky_per_pix / u.pixel
         photom['sky_per_pix_std'] = std_sky_per_pix / u.pixel
-        print("DONE.")
+        msg += "DONE."
+        logger.info(msg)
+
     else: # Don't reject outliers (but why would you do this?)
-        print(f"{logline} SUGGESTION: You are computing sky per pixel without "
-              "clipping (set reject_background_outliers=True to perform clipping).")
+        logger.warning(f"{logline} SUGGESTION: You are computing sky per pixel "
+                        "without clipping (set reject_background_outliers=True "
+                        "to perform clipping).")
         med_pp = []
         std_pp = []
         for mask in anuls.to_mask():
@@ -411,14 +458,15 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
 
     # Fit the FWHM of the sources (can result in many warrnings due to
     # failed FWHM fitting, capture those warnings and print a summary)
-    print(f"{logline} Fitting FWHM of all sources (may take a few minutes) ... ", end="")
+    msg = f"{logline} Fitting FWHM of all sources (may take a few minutes) ... "
     with warnings.catch_warnings(record=True) as warned:
         warnings.filterwarnings("always", category=AstropyUserWarning)
         fwhm_x, fwhm_y = compute_fwhm(ccd_image, photom,
                                     fwhm_estimate=fwhm_estimate, fit=fwhm_by_fit)
         num_warnings = len(warned)
-        print(f"fitting failed on {num_warnings} of {len(photom)} sources  ... ", end="")
-    print("DONE.")
+        msg += f"fitting failed on {num_warnings} of {len(photom)} sources  ... "
+    msg += "DONE."
+    logger.info(msg)
 
     # Deal with bad FWHM values
     bad_fwhm = (fwhm_x < 1) | (fwhm_y < 1) # Set bad values to NaN now
@@ -428,7 +476,8 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     photom['fwhm_y'] = fwhm_y * u.pixel
     photom['width'] = ((fwhm_x + fwhm_y) / 2) * u.pixel
     if np.sum(bad_fwhm) > 0:
-        print(f"{logline} Bad FWHM values (<1 pixel) for {np.sum(bad_fwhm)} sources.")
+        logger.info(f"{logline} Bad FWHM values (<1 pixel) for {np.sum(bad_fwhm)} "
+                     "sources.")
 
     # Flag sources with bad counts before computing noise.
     # This can happen, for example, when the object is faint and centroiding is
@@ -436,13 +485,14 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     bad_cnts = photom['aperture_net_cnts'].value < 0
     # This next line works because booleans are just 0/1 in numpy
     if np.sum(bad_cnts) > 0:
-        print(f"{logline} Aperture net counts negative for {np.sum(bad_cnts)} sources.")
+        logger.info(f"{logline} Aperture net counts negative for {np.sum(bad_cnts)} "
+                     "sources.")
 
     all_bads = bad_cnts | bad_fwhm
 
     photom['aperture_net_cnts'][all_bads] = np.nan
-    print(f"{logline} {np.sum(all_bads)} sources with either bad FWHM fit or bad "
-          "aperture net counts had aperture_net_cnts set to NaN.")
+    logger.info(f"{logline} {np.sum(all_bads)} sources with either bad FWHM fit "
+                 "or bad aperture net counts had aperture_net_cnts set to NaN.")
 
     # Compute instrumental magnitudes
     photom['mag_inst'] = (
@@ -451,7 +501,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     )
 
     # Compute and save noise
-    print(f"{logline} Calculating noise for all sources ... ", end="")
+    msg = f"{logline} Calculating noise for all sources ... "
     noise = calculate_noise(camera=camera,
                             counts=photom['aperture_net_cnts'].value,
                             sky_per_pix=photom['sky_per_pix_avg'].value,
@@ -468,7 +518,15 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     snr = camera.gain.value * photom['aperture_net_cnts'] / noise
     photom['snr'] = snr
     photom['mag_error'] = 1.085736205 / snr
-    print("DONE.")
+    msg += "DONE."
+    logger.info(msg)
+
+    # Close logfile if it was opened
+    if logfile is not None:
+        fh.flush()
+        fh.close()
+    # Remove logger handler
+    logger.handlers.clear()
 
     # Create PhotometryData object to return
     photom_data = PhotometryData(observatory=observatory_location, camera=camera,
@@ -487,8 +545,11 @@ def multi_image_photometry(directory_with_images,
                            include_dig_noise=True,
                            reject_too_close=True,
                            reject_background_outliers=True,
+                           reject_unmatched=True,
                            passband_map=None,
-                           fwhm_by_fit=True):
+                           fwhm_by_fit=True,
+                           logfile=None,
+                           console_log=True):
     """
     Perform aperture photometry on a directory of images.
 
@@ -556,6 +617,12 @@ def multi_image_photometry(directory_with_images,
         If ``True``, any sources that are closer than twice the aperture radius
         are rejected.  If ``False``, all sources in field are used.
 
+    reject_unmatched : bool, optional (Default: True)
+        If ``True``, any sources that are not detected on all the images are
+        rejected.  If you are interested in a source that can intermittently
+        fall below your detection limits, we suggest setting this to ``False`` 
+        so that all sources detected on each image are reported.
+
     include_dig_noise : bool, optional (Default: True)
         If ``True``, include the digitization noise in the calculation of the
         noise for each observation.  If ``False``, only the Poisson noise from
@@ -571,6 +638,16 @@ def multi_image_photometry(directory_with_images,
         If ``True``, the FWHM will be calculated by fitting a Gaussian to
         the star. If ``False``, the FWHM will be calculated by finding the
         second order moments of the light distribution. Default is ``True``.
+
+    logfile : str, optional (Default: None)
+        Name of the file to which log messages should be written.  It will
+        be created in the `directory_with_images` directory.  If None,
+        all messages are logged to stdout.
+
+    console_log: bool, optional (Default: True)
+        If ``True`` and `logfile` is set, log messages will also be written to
+        stdout.  If ``False``, log messages will not be written to stdout
+        if `logfile` is set.
 
     Returns
     -------
@@ -592,23 +669,68 @@ def multi_image_photometry(directory_with_images,
         raise ValueError("multi_image_photometry: sourcelist must have RA/Dec "
                          "coordinates to use this function.")
 
+    # Set up logging (retrieve a logger but purge any existing handlers)
+    multilogger = logging.getLogger("multi_image_photometry")
+    multilogger.setLevel(logging.INFO)
+    console_format = logging.Formatter('%(message)s')
+    for handler in multilogger.handlers[:]:
+        multilogger.removeHandler(handler)
+
+    if logfile is not None:
+        # Keep original name without path
+        orig_logfile = logfile
+        logfile = Path(directory_with_images) / logfile
+        # by default this appends to existing logfile
+        fh = logging.FileHandler(logfile)
+        log_format = logging.Formatter('%(levelname)s - %(message)s')
+        if console_log:
+            ch = logging.StreamHandler()
+            ch.setFormatter(console_format)
+            ch.setLevel(logging.INFO)
+            multilogger.addHandler(ch)
+    else: # Log to console
+        fh = logging.StreamHandler()
+        log_format = console_format
+    fh.setFormatter(log_format)
+    fh.setLevel(logging.INFO)
+    multilogger.addHandler(fh)
+
     ##
     ## Process all the individual files
     ##
 
     # Build image file collection
     ifc = ImageFileCollection(directory_with_images)
+
+    # Disable any root logger handlers that are active before using
+    # logging (must be done here because ImageFileCollection() creates
+    # a logger)
+    if logging.root.hasHandlers():
+        logging.root.handlers.clear()
+
     n_files_processed = 0
 
+    msg = f"Starting photometry of files in {directory_with_images} ... "
+    if (logfile is not None):
+        msg += f"logging output to {orig_logfile}"
+        # If not logging to console, print message here
+        if not console_log:
+            print(msg)
+    multilogger.info(msg)
+
+    # Suppress the FITSFixedWarning that is raised when reading a FITS file header
+    warnings.filterwarnings('ignore', category=FITSFixedWarning)
+
+    # Process all the files
     for this_ccd, this_fname in ifc.ccds(object=object_of_interest, return_fname=True):
-        print(f"multi_image_photometry: Processing image {this_fname}")
+        multilogger.info(f"multi_image_photometry: Processing image {this_fname}")
         if this_ccd.wcs is None:
-            print('                        .... SKIPPING THIS IMAGE (NO WCS)')
+            multilogger.warning('                   .... SKIPPING THIS IMAGE (NO WCS)')
             continue
 
         # Call single_image_photometry on each image
         n_files_processed += 1
-        print("  Calling single_image_photometry ...")
+        multilogger.info("  Calling single_image_photometry ...")
         this_phot, this_missing_sources = \
             single_image_photometry(this_ccd, sourcelist,
                                     camera, observatory_location,
@@ -620,20 +742,18 @@ def multi_image_photometry(directory_with_images,
                                     reject_background_outliers=reject_background_outliers,
                                     passband_map=passband_map,
                                     fwhm_by_fit=fwhm_by_fit, fname=this_fname,
-                                    logline="    >")
+                                    logline="    >",
+                                    logfile = logfile)
         if (this_phot is None) or (this_missing_sources is None):
-            print("  single_image_photometry failed for this image.")
+            multilogger.info("  single_image_photometry failed for this image.")
         else:
-            print("  Done with single_image_photometry for "
-                f"{this_fname}\n\n")
+            multilogger.info(f"  Done with single_image_photometry for {this_fname}\n\n")
 
             # Extend the list of missing stars
             missing_sources.extend(this_missing_sources)
 
             # And add the final table to the list of tables
             phots.append(this_phot)
-
-        print(f"  DONE processing all matching images in {directory_with_images}")
 
     if n_files_processed == 0:
         raise RuntimeError("No images were processed!")
@@ -646,16 +766,15 @@ def multi_image_photometry(directory_with_images,
     # Attributes should survive intact assume all have same camera and observatory.
     all_phot = vstack(phots)
 
-    # Build a set of all the unique star_ids in the sourcelist
-    # that were eliminated on at least one image
-    if len(missing_sources) > 0:
+    # If requested, eliminate source not detected on every image by building
+    # a set of all the unique star_ids that were missing on at least one image.
+    if reject_unmatched and len(missing_sources) > 0:
         if len(missing_sources) > 1:
             uniques = set(missing_sources)
         else:
             uniques = set([missing_sources])
 
-        print("  Removing {len(uniques)} sources not observed "
-              "in every image ... ", end="")
+        msg = (f"  Removing {len(uniques)} sources not observed in every image ... ")
         # Purge the photometry table of all sources that were eliminated
         # on at least one image
         starid_to_remove = sorted([u for u in uniques if u in all_phot['star_id']])
@@ -672,9 +791,19 @@ def multi_image_photometry(directory_with_images,
             all_phot.remove_rows(sorted(bad_rows))
         # Drop index from PhotometryData to save memory
         all_phot.remove_indices('star_id')
-        print("DONE.")
+        msg += "DONE."
+        multilogger.info(msg)
 
-    print(f"  DONE processing image {this_fname}")
+    multilogger.info(f"  DONE processing all matching images in {directory_with_images}")
+    if logfile is not None and not console_log:
+        print(f"  DONE processing all matching images in {directory_with_images}")
+
+    # Close the logfile if it is open
+    if logfile is not None:
+        fh.flush()
+        fh.close()
+    # Remove logger handler
+    multilogger.handlers.clear()
 
     return all_phot
 
@@ -936,364 +1065,3 @@ def calculate_noise(camera=None, counts=0.0, sky_per_pix=0.0,
 
     return np.sqrt(poisson_source + sky + dark + rn_error + digitization)
 
-
-def photometry_on_directory(directory_with_images, object_of_interest,
-                            star_locs, aperture_rad,
-                            inner_annulus, outer_annulus,
-                            max_adu, star_ids,
-                            camera,
-                            bjd_coords=None,
-                            observatory_location=None,
-                            fwhm_by_fit=True):
-    """
-    Perform aperture photometry on a directory of images.
-
-    Parameters
-    ----------
-
-    directory_with_images : str
-        Folder containing the images on which to do photometry. Photometry
-        will only be done on images that contain the ``object_of_interest``.
-
-    object_of_interest : str
-        Name of the object of interest. The only files on which photometry
-        will be done are those whose header contains the keyword ``OBJECT``
-        whose value is ``object_of_interest``.
-
-    star_locs : tuple of numpy array
-        The first entry in the tuple should be the right ascension of the
-        sources, in degrees. The second should be the declination of
-        the sources, in degrees.
-
-    aperture_rad : float
-        Radius of the aperture to use when performing photometry.
-
-    inner_annulus : float
-        Inner radius of annulus to use in for performing local sky
-        subtraction.
-
-    outer_annulus : float
-        Outer radius of annulus to use in for performing local sky
-        subtraction.
-
-    max_adu : float
-        Maximum allowed pixel value before a source is considered
-        saturated.
-
-    star_ids : array-like
-        Unique identifier for each source in ``star_locs``.
-
-    camera : `~stellarphot.Camera`
-        Camera object which has gain, read noise and dark current set.
-
-    bjd_coords : `astropy.coordinates.SkyCoord`
-        Coordinates of the object of interest in the Barycentric Julian Date
-        frame. If not provided, the BJD column will not be added to the
-        photometry table.
-
-    observatory_location : str
-        Name of the observatory where the images were taken. If not provided,
-        the BJD column will not be added to the photometry table.
-
-    fwhm_by_fit : bool, optional
-        If ``True``, the FWHM will be calculated by fitting a Gaussian to
-        the star. If ``False``, the FWHM will be calculated by finding the
-        second order moments of the light distribution. Default is ``True``.
-
-    Returns
-    -------
-
-    phot : `astropy.table.Table`
-        Table containing the photometry results.
-
-    """
-    ifc = ImageFileCollection(directory_with_images)
-    phots = []
-    missing_stars = []
-    for a_ccd, fname in ifc.ccds(object=object_of_interest, return_fname=True):
-        print('on image ', fname)
-        try:
-            # Convert RA/Dec to pixel coordinates for this image
-            pix_coords = a_ccd.wcs.all_world2pix(star_locs[0], star_locs[1], 0)
-        except AttributeError:
-            print('    ....SKIPPING THIS IMAGE, NO WCS')
-            continue
-
-        xs, ys = pix_coords
-
-        # Remove anything that is too close to the edges/out of frame
-        padding = 3 * aperture_rad
-        out_of_bounds = ((xs < padding) | (xs > (a_ccd.shape[1] - padding)) |
-                         (ys < padding) | (ys > (a_ccd.shape[0] - padding)))
-        in_bounds = ~out_of_bounds
-
-        # Find centroids of each region around star that is in_bounds
-        xs_in = xs[in_bounds]
-        ys_in = ys[in_bounds]
-        print('    ...finding centroids')
-        try:
-            xcen, ycen = centroid_sources(a_ccd.data, xs_in, ys_in,
-                                          box_size=2 * aperture_rad + 1)
-        except NoOverlapError:
-            print('    ....SKIPPING THIS IMAGE, CENTROID FAILED')
-            continue
-
-        # Calculate offset between centroid in this image and the positions
-        # based on input RA/Dec. Later we will set the magnitude of those with
-        # large differences to an invalid value (maybe).
-        center_diff = np.sqrt((xs_in - xcen)**2 + (ys_in - ycen)**2)
-
-        # FWHM is typically 5-6 pixels. The center really shouldn't move
-        # by more than that.
-        too_much_shift = center_diff > 6
-
-        xcen[too_much_shift] = xs_in[too_much_shift]
-        ycen[too_much_shift] = ys_in[too_much_shift]
-
-        # Set up apertures and annuli based on the centroids in this image.
-        ap_locs = np.array([xcen, ycen]).T
-        aps = CircularAperture(ap_locs, r=aperture_rad)
-
-        anuls = CircularAnnulus(ap_locs, inner_annulus, outer_annulus)
-
-        # Set any clearly bad values to NaN
-        a_ccd.data[a_ccd.data > max_adu] = np.nan
-        print('    ...doing photometry')
-        # Do the photometry...
-        pho = aperture_photometry(a_ccd.data, (aps, anuls),
-                                  mask=a_ccd.mask, method='center')
-
-        # We may have some stars we did not do photometry for because
-        # those stars were out of bounds.
-        # Add the ones we missed to the list of missing
-        missed = star_ids[out_of_bounds]
-        missing_stars.append(missed)
-
-        # Add all the extra goodies to the table
-        print('    ...adding extra columns')
-        add_to_photometry_table(pho, a_ccd, anuls, aps,
-                                fname=fname, star_ids=star_ids[in_bounds],
-                                camera=camera, bjd_coords=bjd_coords,
-                                observatory_location=observatory_location,
-                                fwhm_by_fit=fwhm_by_fit)
-
-        # And add the final table to the list of tables
-        phots.append(pho)
-
-    # ### Combine all of the individual photometry tables into one
-
-    all_phot = vstack(phots)
-
-    # ### Eliminate any stars that are missing from one or more images
-    #
-    # This makes life a little easier later...
-
-    uniques = set()
-    for miss in missing_stars:
-        uniques.update(set(miss))
-
-    actually_bad = sorted([u for u in uniques if u in all_phot['star_id']])
-    len(uniques), len(actually_bad)
-
-    all_phot.add_index('star_id')
-    if actually_bad:
-        bad_rows = all_phot.loc_indices[actually_bad]
-        try:
-            bad_rows = list(bad_rows)
-        except TypeError:
-            bad_rows = [bad_rows]
-        all_phot.remove_indices('star_id')
-        all_phot.remove_rows(sorted(bad_rows))
-
-    all_phot.remove_indices('star_id')
-
-    gain = camera.gain
-
-    # Compute and save noise
-    noise = calculate_noise(camera=camera,
-                            counts=all_phot['aperture_net_counts'],
-                            sky_per_pix=all_phot['sky_per_pix_avg'].value,
-                            aperture_area=all_phot['aperture_area'],
-                            annulus_area=all_phot['annulus_area'],
-                            exposure=all_phot['exposure'].value,
-                            include_digitization=False)
-    all_phot['noise'] = noise  # Noise in electrons
-    all_phot['noise-aij'] = noise / gain  # Noise in counts
-
-    # Compute and save SNR
-    snr = gain * all_phot['aperture_net_counts'] / noise
-    all_phot['snr'] = snr
-    all_phot['mag_error'] = 1.085736205 / snr
-
-    return all_phot
-
-
-def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
-                            star_ids=None, camera=None,
-                            bjd_coords=None, observatory_location=None,
-                            fwhm_by_fit=True):
-    """
-    Calculate several columns for photometry table which are appended to the
-    input phot.
-
-    Parameters
-    ----------
-
-    phot : `astropy.table.Table`
-        An astropy Table with raw photometry data in it (generated by
-        `photutils.aperture_photometry`).
-
-    ccd : `astropy.nddata.CCDData`
-        Image on which photometry is being done.
-
-    annulus : `photutils.CircularAnnulus`
-        One or more annulus (of any shape) from photutils.
-
-    apertures : `photutils.CircularAperture`
-        One or more apertures (of any shape) from photutils.
-
-    fname : str, optional
-        Name of the image file on which photometry is being performed.
-
-    star_ids : str or int, optional
-        ID for each of the sources.
-
-    gain : float, optional
-        Gain, in electrons/ADU, of the camera that took the image. The gain
-        is used in calculating the instrumental magnitude.
-
-    bjd_coords : `astropy.coordinates.SkyCoord`
-        Coordinates of the object of interest in the Barycentric Julian Date
-        frame. If not provided, the BJD column will not be added to the
-        photometry table.
-
-    observatory_location : str
-        Name of the observatory where the images were taken. If not 'feder',
-        the BJD column will not be added to the photometry table.
-
-    fwhm_by_fit : bool, optional
-        If ``True``, the FWHM will be calculated by fitting a Gaussian to
-        the star. If ``False``, the FWHM will be calculated by finding the
-        second moments of the light distribution. Default is ``True``.
-    """
-    phot.rename_column('aperture_sum_0', 'aperture_sum')
-    phot['aperture_sum'].unit = u.adu
-    phot.rename_column('aperture_sum_1', 'annulus_sum')
-    star_locs = ccd.wcs.all_pix2world(phot['xcenter'], phot['ycenter'], 0)
-    star_coords = SkyCoord(ra=star_locs[0], dec=star_locs[1],
-                           frame='icrs', unit='degree')
-    phot['RA'] = star_coords.ra
-    phot['Dec'] = star_coords.dec
-    print('        ...calculating clipped sky stats')
-    try:
-        avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
-            clipped_sky_per_pix_stats(ccd, annulus)
-    except AttributeError:
-        print('BAD ANNULUS!')
-        avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
-            np.nan, np.nan, np.nan
-    print('        ...DONE calculating clipped sky stats')
-
-    phot['sky_per_pix_avg'] = avg_sky_per_pix
-    phot['sky_per_pix_med'] = med_sky_per_pix
-    phot['sky_per_pix_std'] = std_sky_per_pix
-    # Add width x/y:
-    # Make small table with renamed columns
-    fwhm_x, fwhm_y = compute_fwhm(ccd, phot, fit=fwhm_by_fit)
-
-    # Set bad values to NaN now
-    bad_fwhm = (fwhm_x < 0) | (fwhm_y < 0)
-    fwhm_x[bad_fwhm] = np.nan
-    fwhm_y[bad_fwhm] = np.nan
-
-    phot['fwhm_x'] = fwhm_x
-    phot['fwhm_y'] = fwhm_y
-    phot['width'] = (fwhm_x + fwhm_y) / 2
-
-    phot['aperture'] = apertures.r * u.pixel
-    phot['aperture_area'] = apertures.area  # * u.pixel * u.pixel
-    phot['annulus_inner'] = annulus.r_in * u.pixel
-    phot['annulus_outer'] = annulus.r_out * u.pixel
-    phot['annulus_area'] = annulus.area  # * u.pixel * u.pixel
-    phot['exposure'] = [ccd.header['exposure']] * len(phot) * u.second
-    phot['date-obs'] = [ccd.header['DATE-OBS']] * len(phot)
-    night = Time(ccd.header['DATE-OBS'], scale='utc')
-    night.format = 'mjd'
-    phot['night'] = int(np.floor(night.value - 0.5))
-    phot['aperture_net_counts'] = (phot['aperture_sum'] -
-                                 (phot['aperture_area'] *
-                                  phot['sky_per_pix_avg']))
-
-    # This can happen, for example, when the object is faint
-    # and centroiding is bad.
-    bad_flux = phot['aperture_net_counts'] < 0
-    all_bads = bad_flux | bad_fwhm
-
-    phot['aperture_net_counts'][all_bads] = np.nan
-
-    if observatory_location.lower() == 'feder':
-        phot['BJD'] = find_bjd(phot['date-obs'][0], phot['exposure'][0],
-                                 ra=bjd_coords.ra, dec=bjd_coords.dec)
-
-    if camera is not None:
-        phot['mag_inst'] = \
-            (-2.5 * np.log10(camera.gain * phot['aperture_net_counts'].value /
-                             phot['exposure'].value))
-
-    metadata_to_add = ['AIRMASS', 'FILTER']
-    for meta in metadata_to_add:
-        phot[meta.lower()] = [ccd.header[meta]] * len(phot)
-    if fname:
-        phot['file'] = fname
-    if star_ids is not None:
-        phot['star_id'] = star_ids
-
-
-def find_bjd(dates_col, exposure, ra, dec,
-               latitude=46.86678, longitude=263.54672):
-    """
-    Returns a numpy array of barycentric Julian date times
-
-    Parameters
-    ----------
-
-    dates_col : `astropy.table.Column` or numpy array
-        numpy array or column of observation dates from the photometry table
-
-    exposure : float, optional
-        exposure time in seconds
-
-    ra : float
-        Right ascension in degree units
-
-    dec : float
-        Declination  in degree units
-
-    latitude : float, optional
-        latitude of the observatory in degrees North, default is for Paul P. Feder
-        Observatory
-
-    longitude : float, optional
-        longitude of the observatory in degree East of Greenwich (0 to 360), default
-        is for Paul P. Feder Observatory
-
-
-    Returns
-    -------
-
-    numpy array
-        array of times in barycentric Julian date
-
-    """
-    location = EarthLocation(lat=latitude, lon=longitude)
-
-    times = Time(dates_col, scale='utc', format='isot', location=location)
-    ip_peg = SkyCoord(ra=ra, dec=dec, unit='degree')
-    ltt_bary = times.light_travel_time(ip_peg)
-    times_tdb = times.tdb
-    time_barycenter = times_tdb + ltt_bary
-
-    # Adjust to midpoint of exposure
-    bary_time = time_barycenter + exposure / 2
-
-    return bary_time.jd
