@@ -43,7 +43,8 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
                             passband_map=None,
                             fwhm_by_fit=True, fname=None,
                             logline="single_image_photometry:",
-                            logfile=None):
+                            logfile=None,
+                            console_log = True):
     """
     Perform aperture photometry on a single image, with an options for estimating
     the local background from sigma clipped stats of the counts in an annulus around
@@ -139,6 +140,11 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
         Name of the file to which log messages should be written.  If None,
         then log messages are written to stdout.
 
+    console_log: bool, optional (Default: True)
+        If ``True`` and `logfile` is set, log messages will also be written to
+        stdout.  If ``False``, log messages will not be written to stdout
+        if `logfile` is set.
+
     Returns
     -------
 
@@ -198,15 +204,21 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
 
     # Set up logging
     logger = logging.getLogger("single_image_photometry")
+    console_format = logging.Formatter('%(message)s')
     if logger.hasHandlers() is False:
         logger.setLevel(logging.INFO)
         if logfile is not None:
             # by default this appends to existing logfile
             fh = logging.FileHandler(logfile)
             log_format = logging.Formatter('%(levelname)s - %(message)s')
+            if console_log:
+                ch = logging.StreamHandler()
+                ch.setFormatter(console_format)
+                ch.setLevel(logging.INFO)
+                logger.addHandler(ch)
         else: # Log to console
             fh = logging.StreamHandler()
-            log_format = logging.Formatter('%(message)s')
+            log_format = console_format
         fh.setFormatter(log_format)
         fh.setLevel(logging.INFO)
         logger.addHandler(fh)
@@ -536,7 +548,8 @@ def multi_image_photometry(directory_with_images,
                            reject_unmatched=True,
                            passband_map=None,
                            fwhm_by_fit=True,
-                           logfile=None):
+                           logfile=None,
+                           console_log=True):
     """
     Perform aperture photometry on a directory of images.
 
@@ -631,6 +644,11 @@ def multi_image_photometry(directory_with_images,
         be created in the `directory_with_images` directory.  If None,
         all messages are logged to stdout.
 
+    console_log: bool, optional (Default: True)
+        If ``True`` and `logfile` is set, log messages will also be written to
+        stdout.  If ``False``, log messages will not be written to stdout
+        if `logfile` is set.
+
     Returns
     -------
 
@@ -654,6 +672,7 @@ def multi_image_photometry(directory_with_images,
     # Set up logging (retrieve a logger but purge any existing handlers)
     multilogger = logging.getLogger("multi_image_photometry")
     multilogger.setLevel(logging.INFO)
+    console_format = logging.Formatter('%(message)s')
     for handler in multilogger.handlers[:]:
         multilogger.removeHandler(handler)
 
@@ -664,9 +683,14 @@ def multi_image_photometry(directory_with_images,
         # by default this appends to existing logfile
         fh = logging.FileHandler(logfile)
         log_format = logging.Formatter('%(levelname)s - %(message)s')
+        if console_log:
+            ch = logging.StreamHandler()
+            ch.setFormatter(console_format)
+            ch.setLevel(logging.INFO)
+            multilogger.addHandler(ch)
     else: # Log to console
         fh = logging.StreamHandler()
-        log_format = logging.Formatter('%(message)s')
+        log_format = console_format
     fh.setFormatter(log_format)
     fh.setLevel(logging.INFO)
     multilogger.addHandler(fh)
@@ -689,7 +713,9 @@ def multi_image_photometry(directory_with_images,
     msg = f"Starting photometry of files in {directory_with_images} ... "
     if (logfile is not None):
         msg += f"logging output to {orig_logfile}"
-        print(msg)
+        # If not logging to console, print message here
+        if not console_log:
+            print(msg)
     multilogger.info(msg)
 
     # Suppress the FITSFixedWarning that is raised when reading a FITS file header
@@ -769,7 +795,7 @@ def multi_image_photometry(directory_with_images,
         multilogger.info(msg)
 
     multilogger.info(f"  DONE processing all matching images in {directory_with_images}")
-    if logfile is not None:
+    if logfile is not None and not console_log:
         print(f"  DONE processing all matching images in {directory_with_images}")
 
     # Close the logfile if it is open
