@@ -196,27 +196,21 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
         raise ValueError(f"input_coordinates ({use_coordinates}) must be either "
                          "'pixel' or 'sky'.")
 
-    # Set up logging (retrieve a logger but purge any existing handlers)
-    root_logger = logging.getLogger()
-    for handler in root_logger.root.handlers[:]:
-        root_logger.root.removeHandler(handler)
-
+    # Set up logging
     logger = logging.getLogger("single_image_photometry")
-    logger.setLevel(logging.INFO)
-    for handler in logger.handlers[:]:
-        logger.removeHandler(handler)
-
-    if logfile is not None:
-        # by default this appends to existing logfile
-        fh = logging.FileHandler(logfile)
-        log_format = logging.Formatter('%(levelname)s - %(message)s')
-    else: # Log to console
-        fh = logging.StreamHandler()
-        log_format = logging.Formatter('%(message)s')
-    fh.setFormatter(log_format)
-    fh.setLevel(logging.INFO)
-    logger.addHandler(fh)
-
+    logger.disabled = False
+    if logger.hasHandlers() is False:
+        logger.setLevel(logging.INFO)
+        if logfile is not None:
+            # by default this appends to existing logfile
+            fh = logging.FileHandler(logfile)
+            log_format = logging.Formatter('%(levelname)s - %(message)s')
+        else: # Log to console
+            fh = logging.StreamHandler()
+            log_format = logging.Formatter('%(message)s')
+        fh.setFormatter(log_format)
+        fh.setLevel(logging.INFO)
+        logger.addHandler(fh)
 
     #
     # Check CCDData headers before proceeding
@@ -422,7 +416,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
             avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
                     clipped_sky_per_pix_stats(ccd_image, anuls)
         except AttributeError:
-            msg += "BAD ANNULUS ('sky_per_pix' stats set to np.nan) ... " 
+            msg += "BAD ANNULUS ('sky_per_pix' stats set to np.nan) ... "
             avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
                 np.nan, np.nan, np.nan
         photom['sky_per_pix_avg'] = avg_sky_per_pix / u.pixel
@@ -520,6 +514,8 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     if logfile is not None:
         fh.flush()
         fh.close()
+    # Remove logger handler
+    logger.handlers.clear()
 
     # Create PhotometryData object to return
     photom_data = PhotometryData(observatory=observatory_location, camera=camera,
@@ -683,16 +679,18 @@ def multi_image_photometry(directory_with_images,
     # Build image file collection
     ifc = ImageFileCollection(directory_with_images)
 
-    # Turn off root loggers that are activated by ImageFileCollection
-    for handler in logging.root.handlers[:]:
-        logging.root.removeHandler(handler)
+    # Disable any root logger handlers that are active before using
+    # logging (must be done here because ImageFileCollection() creates
+    # a logger)
+    if logging.root.hasHandlers():
+        logging.root.handlers.clear()
 
     n_files_processed = 0
 
     msg = f"Starting photometry of files in {directory_with_images} ... "
     if (logfile is not None):
         msg += f"logging output to {orig_logfile}"
-    print(msg)
+        print(msg)
     multilogger.info(msg)
 
     # Suppress the FITSFixedWarning that is raised when reading a FITS file header
@@ -732,12 +730,6 @@ def multi_image_photometry(directory_with_images,
             # And add the final table to the list of tables
             phots.append(this_phot)
 
-    # Close the logfile if it is open
-    if logfile is not None:
-        fh.flush()
-        fh.close()
-
-
     if n_files_processed == 0:
         raise RuntimeError("No images were processed!")
 
@@ -751,35 +743,42 @@ def multi_image_photometry(directory_with_images,
 
     # If requested, eliminate source not detected on every image by building
     # a set of all the unique star_ids that were missing on at least one image.
-    if (reject_unmatched):
-        if len(missing_sources) > 0:
-            if len(missing_sources) > 1:
-                uniques = set(missing_sources)
-            else:
-                uniques = set([missing_sources])
+    if reject_unmatched and len(missing_sources) > 0:
+        if len(missing_sources) > 1:
+            uniques = set(missing_sources)
+        else:
+            uniques = set([missing_sources])
 
-            msg = (f"  Removing {len(uniques)} sources not observed in every image ... ")
-            # Purge the photometry table of all sources that were eliminated
-            # on at least one image
-            starid_to_remove = sorted([u for u in uniques if u in all_phot['star_id']])
-            # add index to PhotometryData to speed up removal
-            all_phot.add_index('star_id')
-            # Remove the starid for objects not observed in every image
-            if starid_to_remove:
-                bad_rows = all_phot.loc_indices[starid_to_remove]
-                try:
-                    bad_rows = list(bad_rows)
-                except TypeError:
-                    bad_rows = [bad_rows]
-                all_phot.remove_indices('star_id')
-                all_phot.remove_rows(sorted(bad_rows))
-            # Drop index from PhotometryData to save memory
+        msg = (f"  Removing {len(uniques)} sources not observed in every image ... ")
+        # Purge the photometry table of all sources that were eliminated
+        # on at least one image
+        starid_to_remove = sorted([u for u in uniques if u in all_phot['star_id']])
+        # add index to PhotometryData to speed up removal
+        all_phot.add_index('star_id')
+        # Remove the starid for objects not observed in every image
+        if starid_to_remove:
+            bad_rows = all_phot.loc_indices[starid_to_remove]
+            try:
+                bad_rows = list(bad_rows)
+            except TypeError:
+                bad_rows = [bad_rows]
             all_phot.remove_indices('star_id')
-            msg += "DONE."
-            multilogger.info(msg)
+            all_phot.remove_rows(sorted(bad_rows))
+        # Drop index from PhotometryData to save memory
+        all_phot.remove_indices('star_id')
+        msg += "DONE."
+        multilogger.info(msg)
 
     multilogger.info(f"  DONE processing all matching images in {directory_with_images}")
-    print(f"  DONE processing all matching images in {directory_with_images}")
+    if logfile is not None:
+        print(f"  DONE processing all matching images in {directory_with_images}")
+
+    # Close the logfile if it is open
+    if logfile is not None:
+        fh.flush()
+        fh.close()
+    # Remove logger handler
+    multilogger.handlers.clear()
 
     return all_phot
 
