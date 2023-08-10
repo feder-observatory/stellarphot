@@ -19,8 +19,7 @@ import matplotlib.pyplot as plt
 from stellarphot.io import TessSubmission
 from stellarphot.gui_tools.fits_opener import FitsOpener
 from stellarphot.plotting import seeing_plot
-from stellarphot.settings.views import ui_generator
-from stellarphot.settings.models import ApertureSettings
+from stellarphot.settings import ApertureSettings, ui_generator
 
 __all__ = ['set_keybindings', 'find_center', 'radial_profile',
            'RadialProfile', 'box', 'SeeingProfileWidget']
@@ -472,7 +471,7 @@ class SeeingProfileWidget:
         self.in_t = ipw.IntText(description='Inner annulus', value=10, layout=layout, style=desc_style)
         self.out_t = ipw.IntText(description='Outer annulus', value=20, layout=layout, style=desc_style)
         self.save_aps = ipw.Button(description="Save settings")
-        hb.children = [self.aperture_settings] #, self.save_aps] #, self.in_t, self.out_t]
+        hb.children = [self.aperture_settings, self.save_aps] #, self.save_aps] #, self.in_t, self.out_t]
 
         lil_box = ipw.VBox()
         lil_tabs = ipw.Tab()
@@ -627,6 +626,11 @@ class SeeingProfileWidget:
                 # Set this AFTER the radial profile has been created to avoid an attribute
                 # error.
                 self.ap_t.value = aperture_radius
+                self.aperture_settings.value = dict(
+                    radius=aperture_radius,
+                    inner_annulus=aperture_radius + 5,
+                    outer_annulus=aperture_radius + 15
+                )
             else:
                 # User changed aperture
                 aperture_radius = aperture
@@ -639,8 +643,8 @@ class SeeingProfileWidget:
                 self._seeing_plot_fig = seeing_plot(rad_prof.r_exact, rad_prof.scaled_exact_counts,
                             rad_prof.ravg,
                             rad_prof.scaled_profile, rad_prof.HWHM,
-                            self.object_name, gap=10, annulus_width=15,
-                            radius = aperture_radius,
+                            self.object_name,
+                            aperture_settings=ApertureSettings(**self.aperture_settings.value),
                             figsize=fig_size)
                 plt.show()
 
