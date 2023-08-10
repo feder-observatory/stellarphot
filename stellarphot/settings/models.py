@@ -17,6 +17,21 @@ class ApertureUnit(Enum):
 
 
 class ApertureSettings(BaseModel):
+    """
+    Settings for aperture photometry.
+
+    Parameters
+    ----------
+
+    radius : int
+        Radius of the aperture in pixels.
+
+    inner_annulus : int
+        Inner radius of the annulus in pixels.
+
+    outer_annulus : int
+        Outer radius of the annulus in pixels.
+    """
     radius : conint(ge=1) = Field(autoui=CustomBoundedIntTex)
     inner_annulus : conint(ge=1) = Field(autoui=CustomBoundedIntTex)
     outer_annulus : conint(ge=1) = Field(autoui=CustomBoundedIntTex)
