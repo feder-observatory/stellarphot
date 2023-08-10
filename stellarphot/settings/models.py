@@ -4,7 +4,7 @@ from enum import Enum
 
 from astropy import units as un
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, conint, root_validator
 
 from .autowidgets import CustomBoundedIntTex
 
@@ -19,12 +19,13 @@ class ApertureSettings(BaseModel):
     outer_annulus : conint(ge=1) = Field(autoui=CustomBoundedIntTex)
 
     class Config:
-        use_enum_values = True
+        validate_assignment = True
+        validate_all = True
 
-
-    # @validator('unit')
-    # @classmethod
-    # def check_unit(cls, v):
-    #     if not isinstance(v, un.Unit):
-    #         raise TypeError('unit must be an Astropy unit')
-    #     return v
+    @root_validator(skip_on_failure=True)
+    def check_annuli(cls, values):
+        if values['inner_annulus'] >= values['outer_annulus']:
+            raise ValueError('inner_annulus must be smaller than outer_annulus')
+        if values['radius'] >= values['inner_annulus']:
+            raise ValueError('radius must be smaller than inner_annulus')
+        return values
