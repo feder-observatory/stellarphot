@@ -1,3 +1,14 @@
+1.4.1 (2023-08-14)
+------------------
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
++ Include AAVSO file format description. [#155]
+
+Bug Fixes
+^^^^^^^^^
+
 1.4.0 (2023-08-03)
 ------------------
 
@@ -5,6 +16,7 @@ New Features
 ^^^^^^^^^^^^
 
 + Add class for writing AAVSO files. [#146]
+
 
 1.3.9 (2023-06-16)
 ------------------
