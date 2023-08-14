@@ -501,7 +501,7 @@ class SeeingProfileWidget:
         # Fill this in later with name of object from FITS file
         self.object_name = ''
         self._set_observers()
-        self.aperture_settings.value = dict(**self.aperture_settings.value)
+        self.aperture_settings.description = ""
 
     def load_fits(self, file):
         """
