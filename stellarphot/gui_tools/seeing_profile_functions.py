@@ -501,6 +501,7 @@ class SeeingProfileWidget:
         # Fill this in later with name of object from FITS file
         self.object_name = ''
         self._set_observers()
+        self.aperture_settings.value = dict(**self.aperture_settings.value)
 
     def load_fits(self, file):
         """
@@ -543,9 +544,13 @@ class SeeingProfileWidget:
 
     def _set_observers(self):
         def aperture_obs(change):
-            self._mse(self.iw, aperture=change['new'])
+            self._update_plots()
+            ape = ApertureSettings(**change['new'])
+            self.aperture_settings.description = (
+                f"Inner annulus: {ape.inner_annulus}, outer annulus: {ape.outer_annulus}"
+            )
 
-        self.ap_t.observe(aperture_obs, names='value')
+        self.aperture_settings.observe(aperture_obs, names='_value')
         self.save_aps.on_click(self._save_ap_settings)
         self.fits_file.register_callback(self._update_file)
         self.save_toggle.observe(self._save_toggle_action, names='value')
@@ -580,14 +585,18 @@ class SeeingProfileWidget:
         self.setting_box = setting_box
         return box
 
+    def _update_ap_settings(self, value):
+        self.aperture_settings.value = value
+
     def _make_show_event(self):
 
         def show_event(viewer, event=None, datax=None, datay=None, aperture=None):
             profile_size = 60
-            fig_size = (10, 5)
-
+            default_gap = 5  # pixels
+            default_annulus_width = 15  # pixels
             self.save_toggle.disabled = False
 
+            update_aperture_settings = False
             if event is not None:
                 # User clicked on a star, so generate profile
                 i = self.iw._viewer.get_image()
@@ -626,89 +635,104 @@ class SeeingProfileWidget:
                 # Set this AFTER the radial profile has been created to avoid an attribute
                 # error.
                 self.ap_t.value = aperture_radius
-                self.aperture_settings.value = dict(
-                    radius=aperture_radius,
-                    inner_annulus=aperture_radius + 5,
-                    outer_annulus=aperture_radius + 15
-                )
+
+                # Make an aperture settings object, but don't update it's widget yet.
+                ap_settings = ApertureSettings(radius=aperture_radius,
+                                               gap=default_gap,
+                                               annulus_width=default_annulus_width)
+                update_aperture_settings = True
             else:
                 # User changed aperture
-                aperture_radius = aperture
+                aperture_radius = aperture['radius']
+                ap_settings = ApertureSettings(**aperture)  # Make an ApertureSettings object
+
                 rad_prof = self.rad_prof
 
-            # DISPLAY THE SCALED PROFILE
-            self.out.clear_output(wait=True)
-            with self.out:
-                # sub_med += med
-                self._seeing_plot_fig = seeing_plot(rad_prof.r_exact, rad_prof.scaled_exact_counts,
-                            rad_prof.ravg,
-                            rad_prof.scaled_profile, rad_prof.HWHM,
-                            self.object_name,
-                            aperture_settings=ApertureSettings(**self.aperture_settings.value),
-                            figsize=fig_size)
-                plt.show()
+            if update_aperture_settings:
+                self._update_ap_settings(ap_settings.dict())
 
-            # CALCULATE AND DISPLAY NET COUNTS INSIDE RADIUS
-            self.out2.clear_output(wait=True)
-            with self.out2:
-                sub_blot = rad_prof.sub_data.copy().astype('float32')
-                min_idx = profile_size // 2 - 2 * rad_prof.FWHM
-                max_idx = profile_size // 2 + 2 * rad_prof.FWHM
-                sub_blot[min_idx:max_idx, min_idx:max_idx] = np.nan
-                sub_std = np.nanstd(sub_blot)
-                new_sub_med = np.nanmedian(sub_blot)
-                r_exact, ravg, tbin2 = radial_profile(rad_prof.data - new_sub_med, rad_prof.cen,
-                                                      size=profile_size,
-                                                      return_scaled=False)
-                r_exact_s, ravg_s, tbin2_s = radial_profile(rad_prof.data - new_sub_med, rad_prof.cen,
-                                                      size=profile_size,
-                                                      return_scaled=True)
-                #tbin2 = np.bincount(r.ravel(), (sub_data - sub_med).ravel())
-                counts = np.cumsum(tbin2)
-                plt.figure(figsize=fig_size)
-                plt.plot(rad_prof.radius_values, counts)
-                plt.xlim(0, 40)
-                ylim = plt.ylim()
-                plt.vlines(aperture_radius, *plt.ylim(), colors=['red'])
-                plt.ylim(*ylim)
-                plt.grid()
+            self._update_plots()
 
-                plt.title('Net counts in aperture')
-                e_sky = np.nanmax([np.sqrt(new_sub_med), sub_std])
-
-                plt.xlabel('Aperture radius (pixels)')
-                plt.ylabel('Net counts')
-                plt.show()
-
-            # CALCULATE And DISPLAY SNR AS A FUNCTION OF RADIUS
-            self.out3.clear_output(wait=True)
-            with self.out3:
-                read_noise = 10  # electrons
-                gain = 1.5  # electrons/count
-                # Poisson error is square root of the net number of counts enclosed
-                poisson = np.sqrt(np.cumsum(tbin2))
-
-                # This is obscure, but correctly calculated the number of pixels at
-                # each radius, since the smoothed is tbin2 divided by the number of
-                # pixels.
-                nr = tbin2 / tbin2_s
-
-                # This ignores dark current
-                error = np.sqrt(poisson ** 2 + np.cumsum(nr)
-                                * (e_sky ** 2 + (read_noise / gain)** 2))
-
-                snr = np.cumsum(tbin2) / error
-                plt.figure(figsize=fig_size)
-                plt.plot(rad_prof.radius_values + 1, snr)
-
-                plt.title(f'Signal to noise ratio max {snr.max():.1f} '
-                          f'at radius {snr.argmax() + 1}')
-                plt.xlim(0, 40)
-                ylim = plt.ylim()
-                plt.vlines(aperture_radius, *plt.ylim(), colors=['red'])
-                plt.ylim(*ylim)
-                plt.xlabel('Aperture radius (pixels)')
-                plt.ylabel('SNR')
-                plt.grid()
-                plt.show()
         return show_event
+
+    def _update_plots(self):
+        # DISPLAY THE SCALED PROFILE
+        fig_size = (10, 5)
+        profile_size = 60
+
+        rad_prof = self.rad_prof
+        self.out.clear_output(wait=True)
+        ap_settings = ApertureSettings(**self.aperture_settings.value)
+        with self.out:
+            # sub_med += med
+            self._seeing_plot_fig = seeing_plot(rad_prof.r_exact, rad_prof.scaled_exact_counts,
+                        rad_prof.ravg,
+                        rad_prof.scaled_profile, rad_prof.HWHM,
+                        self.object_name,
+                        aperture_settings=ap_settings,
+                        figsize=fig_size)
+            plt.show()
+
+        # CALCULATE AND DISPLAY NET COUNTS INSIDE RADIUS
+        self.out2.clear_output(wait=True)
+        with self.out2:
+            sub_blot = rad_prof.sub_data.copy().astype('float32')
+            min_idx = profile_size // 2 - 2 * rad_prof.FWHM
+            max_idx = profile_size // 2 + 2 * rad_prof.FWHM
+            sub_blot[min_idx:max_idx, min_idx:max_idx] = np.nan
+            sub_std = np.nanstd(sub_blot)
+            new_sub_med = np.nanmedian(sub_blot)
+            r_exact, ravg, tbin2 = radial_profile(rad_prof.data - new_sub_med, rad_prof.cen,
+                                                    size=profile_size,
+                                                    return_scaled=False)
+            r_exact_s, ravg_s, tbin2_s = radial_profile(rad_prof.data - new_sub_med, rad_prof.cen,
+                                                    size=profile_size,
+                                                    return_scaled=True)
+            #tbin2 = np.bincount(r.ravel(), (sub_data - sub_med).ravel())
+            counts = np.cumsum(tbin2)
+            plt.figure(figsize=fig_size)
+            plt.plot(rad_prof.radius_values, counts)
+            plt.xlim(0, 40)
+            ylim = plt.ylim()
+            plt.vlines(ap_settings.radius, *plt.ylim(), colors=['red'])
+            plt.ylim(*ylim)
+            plt.grid()
+
+            plt.title('Net counts in aperture')
+            e_sky = np.nanmax([np.sqrt(new_sub_med), sub_std])
+
+            plt.xlabel('Aperture radius (pixels)')
+            plt.ylabel('Net counts')
+            plt.show()
+
+        # CALCULATE And DISPLAY SNR AS A FUNCTION OF RADIUS
+        self.out3.clear_output(wait=True)
+        with self.out3:
+            read_noise = 10  # electrons
+            gain = 1.5  # electrons/count
+            # Poisson error is square root of the net number of counts enclosed
+            poisson = np.sqrt(np.cumsum(tbin2))
+
+            # This is obscure, but correctly calculated the number of pixels at
+            # each radius, since the smoothed is tbin2 divided by the number of
+            # pixels.
+            nr = tbin2 / tbin2_s
+
+            # This ignores dark current
+            error = np.sqrt(poisson ** 2 + np.cumsum(nr)
+                            * (e_sky ** 2 + (read_noise / gain)** 2))
+
+            snr = np.cumsum(tbin2) / error
+            plt.figure(figsize=fig_size)
+            plt.plot(rad_prof.radius_values + 1, snr)
+
+            plt.title(f'Signal to noise ratio max {snr.max():.1f} '
+                        f'at radius {snr.argmax() + 1}')
+            plt.xlim(0, 40)
+            ylim = plt.ylim()
+            plt.vlines(ap_settings.radius, *plt.ylim(), colors=['red'])
+            plt.ylim(*ylim)
+            plt.xlabel('Aperture radius (pixels)')
+            plt.ylabel('SNR')
+            plt.grid()
+            plt.show()

@@ -32,18 +32,18 @@ class ApertureSettings(BaseModel):
     outer_annulus : int
         Outer radius of the annulus in pixels.
     """
-    radius : conint(ge=1) = Field(autoui=CustomBoundedIntTex)
-    inner_annulus : conint(ge=1) = Field(autoui=CustomBoundedIntTex)
-    outer_annulus : conint(ge=1) = Field(autoui=CustomBoundedIntTex)
+    radius : conint(ge=1) = Field(autoui=CustomBoundedIntTex, default=1)
+    gap : conint(ge=1) = Field(autoui=CustomBoundedIntTex, default=1)
+    annulus_width : conint(ge=1) = Field(autoui=CustomBoundedIntTex, default=1)
 
     class Config:
         validate_assignment = True
         validate_all = True
 
-    @root_validator(skip_on_failure=True)
-    def check_annuli(cls, values):
-        if values['inner_annulus'] >= values['outer_annulus']:
-            raise ValueError('inner_annulus must be smaller than outer_annulus')
-        if values['radius'] >= values['inner_annulus']:
-            raise ValueError('radius must be smaller than inner_annulus')
-        return values
+    @property
+    def inner_annulus(self):
+        return self.radius + self.gap
+
+    @property
+    def outer_annulus(self):
+        return self.inner_annulus + self.annulus_width
