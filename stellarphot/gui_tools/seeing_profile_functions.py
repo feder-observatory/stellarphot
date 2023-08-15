@@ -1,3 +1,4 @@
+from pathlib import Path
 import warnings
 
 import numpy as np
@@ -465,13 +466,16 @@ class SeeingProfileWidget:
         big_box = ipw.HBox()
         big_box = ipw.GridspecLayout(1, 2)
         layout = ipw.Layout(width='20ch')
-        hb = ipw.HBox()
+        vb = ipw.VBox()
+        self.aperture_settings_file_name = ipw.Text(
+            description="Aperture settings file name",
+            style={'description_width': 'initial'},
+            value="aperture_settings.json"
+        )
         self.aperture_settings = ui_generator(ApertureSettings)
-        self.ap_t = ipw.IntText(description='Aperture radius', value=5, layout=layout, style=desc_style)
-        self.in_t = ipw.IntText(description='Inner annulus', value=10, layout=layout, style=desc_style)
-        self.out_t = ipw.IntText(description='Outer annulus', value=20, layout=layout, style=desc_style)
+        self.aperture_settings.path = Path(self.aperture_settings_file_name.value)
         self.save_aps = ipw.Button(description="Save settings")
-        hb.children = [self.aperture_settings, self.save_aps] #, self.save_aps] #, self.in_t, self.out_t]
+        vb.children = [self.aperture_settings_file_name, self.aperture_settings] #, self.save_aps] #, self.in_t, self.out_t]
 
         lil_box = ipw.VBox()
         lil_tabs = ipw.Tab()
@@ -483,7 +487,7 @@ class SeeingProfileWidget:
         lil_box.children = [lil_tabs, self.tess_box]
 
         imbox = ipw.VBox()
-        imbox.children = [imagewidget, hb]
+        imbox.children = [imagewidget, vb]
         big_box[0, 0] = imbox
         big_box[0, 1] = lil_box
         big_box.layout.width = '100%'
@@ -542,6 +546,12 @@ class SeeingProfileWidget:
     def _save_seeing_plot(self, button):
         self._seeing_plot_fig.savefig(self.seeing_file_name.value)
 
+    def _change_aperture_save_location(self, change):
+        new_name = change['new']
+        new_path = Path(new_name)
+        self.aperture_settings.path = new_path
+        self.aperture_settings.savebuttonbar.unsaved_changes = True
+
     def _set_observers(self):
         def aperture_obs(change):
             self._update_plots()
@@ -552,6 +562,7 @@ class SeeingProfileWidget:
 
         self.aperture_settings.observe(aperture_obs, names='_value')
         self.save_aps.on_click(self._save_ap_settings)
+        self.aperture_settings_file_name.observe(self._change_aperture_save_location, names='value')
         self.fits_file.register_callback(self._update_file)
         self.save_toggle.observe(self._save_toggle_action, names='value')
         self.save_seeing.on_click(self._save_seeing_plot)
@@ -559,7 +570,6 @@ class SeeingProfileWidget:
         self.setting_box.telescope_code.observe(self._set_seeing_profile_name)
 
     def _save_ap_settings(self, button):
-        ap_rad = self.ap_t.value
         with open('aperture_settings.txt', 'w') as f:
             f.write(f'{ap_rad},{ap_rad + 10},{ap_rad + 15}')
 
@@ -631,10 +641,6 @@ class SeeingProfileWidget:
                 # Default is 1.5 times FWHM
                 aperture_radius = np.round(1.5 * 2 * rad_prof.HWHM, 0)
                 self.rad_prof = rad_prof
-
-                # Set this AFTER the radial profile has been created to avoid an attribute
-                # error.
-                self.ap_t.value = aperture_radius
 
                 # Make an aperture settings object, but don't update it's widget yet.
                 ap_settings = ApertureSettings(radius=aperture_radius,
