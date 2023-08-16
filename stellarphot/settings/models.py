@@ -25,11 +25,28 @@ class ApertureSettings(BaseModel):
     radius : int
         Radius of the aperture in pixels.
 
+    gap : int
+        Distance between the radius and the inner annulus in pixels.
+
+    annulus_width : int
+        Width of the annulus in pixels.
+
+    Atributes
+    ---------
+
     inner_annulus : int
-        Inner radius of the annulus in pixels.
+        Radius of the inner annulus in pixels.
 
     outer_annulus : int
-        Outer radius of the annulus in pixels.
+        Radius of the outer annulus in pixels.
+
+    Examples
+    --------
+
+    To create an `ApertureSettings` object, you can pass in the radius, gap,
+    and annulus_width as keyword arguments:
+
+    >>> aperture_settings = ApertureSettings(radius=4, gap=10, annulus_width=15)
     """
     radius : conint(ge=1) = Field(autoui=CustomBoundedIntTex, default=1)
     gap : conint(ge=1) = Field(autoui=CustomBoundedIntTex, default=1)
@@ -41,8 +58,14 @@ class ApertureSettings(BaseModel):
 
     @property
     def inner_annulus(self):
+        """
+        Radius of the inner annulus in pixels.
+        """
         return self.radius + self.gap
 
     @property
     def outer_annulus(self):
+        """
+        Radius of the outer annulus in pixels.
+        """
         return self.inner_annulus + self.annulus_width
