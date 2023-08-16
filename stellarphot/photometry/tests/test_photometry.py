@@ -227,6 +227,10 @@ def test_aperture_photometry_no_outlier_rejection():
     aperture = sources['aperture'][0]
     inner_annulus = 2 * aperture
     outer_annulus = 3 * aperture
+    aperture_settings = ApertureSettings(radius=aperture,
+                                         gap=inner_annulus - aperture,
+                                         width_annulus=outer_annulus - inner_annulus)
+
     found_sources = source_detection(fake_CCDimage,
                                     fwhm=sources['x_stddev'].mean(),
                                     threshold=10)
@@ -234,8 +238,7 @@ def test_aperture_photometry_no_outlier_rejection():
                                                     found_sources,
                                                     fake_camera,
                                                     fake_obs,
-                                                    aperture, inner_annulus,
-                                                    outer_annulus,
+                                                    aperture_settings,
                                                     shift_tolerance,
                                                     max_adu, fwhm_estimate,
                                                     use_coordinates=coords2use,
@@ -278,6 +281,11 @@ def test_aperture_photometry_with_outlier_rejection(reject):
     aperture = sources['aperture'][0]
     inner_annulus = 2 * aperture
     outer_annulus = 3 * aperture
+
+    aperture_settings = ApertureSettings(radius=aperture,
+                                         gap=inner_annulus - aperture,
+                                         width_annulus=outer_annulus - inner_annulus)
+
     image = fake_CCDimage.data
 
     found_sources = source_detection(fake_CCDimage,
@@ -298,8 +306,7 @@ def test_aperture_photometry_with_outlier_rejection(reject):
                                                     found_sources,
                                                     fake_camera,
                                                     fake_obs,
-                                                    aperture, inner_annulus,
-                                                    outer_annulus,
+                                                    aperture_settings,
                                                     shift_tolerance,
                                                     max_adu, fwhm_estimate,
                                                     use_coordinates=coords2use,
