@@ -34,8 +34,10 @@ def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM,
     file_name : optional, string
         if entered, file will save as png with this name
 
-    aperture_settings : optional, `ApertureSettings`
-        The aperture settings used to create the plot.
+    aperture_settings : optional, `stellarphot.settings.ApertureSettings`
+        The aperture settings used to create the plot. If not provided, the
+        aperture radius will be set to 4 * HWHM, the inner annulus will be set
+        to radius + 10, and the outer annulus will be set to radius + 25.
 
     figsize : tuple of int, optional
         Size of figure.
