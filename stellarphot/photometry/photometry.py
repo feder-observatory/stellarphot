@@ -158,7 +158,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     to compute the x/y positions on each image individually. In this scenario,
     the `use_coordinates` parameter should be set to "sky".
     """
- 
+
 
     # Check that the input parameters are valid
     if not isinstance(ccd_image, CCDData):
@@ -481,8 +481,7 @@ def multi_image_photometry(directory_with_images,
                            object_of_interest,
                            sourcelist, camera,
                            observatory_location,
-                           aperture_radius,
-                           inner_annulus, outer_annulus,
+                           aperture_settings,
                            shift_tolerance, max_adu, fwhm_estimate,
                            include_dig_noise=True,
                            reject_too_close=True,
@@ -520,16 +519,8 @@ def multi_image_photometry(directory_with_images,
         Location of the observatory where the images were taken.  Used for calculating
         the BJD.
 
-    aperture_radius : float
-        Radius of the aperture to use when performing photometry.
-
-    inner_annulus : float
-        Inner radius of annulus to use in for performing local sky
-        subtraction.
-
-    outer_annulus : float
-        Outer radius of annulus to use in for performing local sky
-        subtraction.
+    aperture_settings : `stellarphot.settings.ApertureSettings`
+        Radius, inner and outer annulus radii settings.
 
     shift_tolerance : float
         Since source positions need to be computed on each image using
@@ -612,7 +603,9 @@ def multi_image_photometry(directory_with_images,
         this_phot, this_missing_sources = \
             single_image_photometry(this_ccd, sourcelist,
                                     camera, observatory_location,
-                                    aperture_radius, inner_annulus, outer_annulus,
+                                    aperture_settings.radius,
+                                    aperture_settings.inner_annulus,
+                                    aperture_settings.outer_annulus,
                                     shift_tolerance, max_adu, fwhm_estimate,
                                     use_coordinates='sky',
                                     include_dig_noise=include_dig_noise,
