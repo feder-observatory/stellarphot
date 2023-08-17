@@ -250,7 +250,8 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
         return None, None
 
     # Set high pixels to NaN (make sure ccd_image.data is a float array first)
-    ccd_image.data[ccd_image.data.astype(float) > max_adu] = np.nan
+    ccd_image.data = ccd_image.data.astype(float)
+    ccd_image.data[ccd_image.data > max_adu] = np.nan
 
     # Extract necessary values from sourcelist structure
     star_ids = sourcelist['star_id'].value
