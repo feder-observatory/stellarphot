@@ -2,7 +2,7 @@ from astropy import units as un
 from pydantic import ValidationError
 import pytest
 
-from stellarphot.settings.models import ApertureSettings, ApertureUnit
+from stellarphot.settings.models import ApertureSettings
 
 
 DEFAULT_APERTURE_SETTINGS = dict(radius=5,

@@ -2,17 +2,11 @@
 
 from enum import Enum
 
-from astropy import units as un
-
 from pydantic import BaseModel, Field, conint, root_validator
 
 from .autowidgets import CustomBoundedIntTex
 
 __all__ = ['ApertureSettings']
-
-class ApertureUnit(Enum):
-    PIXEL = un.pix
-    ARCSEC = un.arcsec
 
 
 class ApertureSettings(BaseModel):
