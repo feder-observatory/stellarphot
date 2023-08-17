@@ -14,6 +14,7 @@ Other Changes and Additions
 + Major reorganizaiton of code including moving functions to new modules. [#130, #133]
 + Now requires python 3.10 or later. [#147]
 + Use pydantic for aperture settings. [#154]
++ Stomped bug in handling of ``NaN``s in ``single_image_photometry``. [#157]
 
 Bug Fixes
 ^^^^^^^^^
