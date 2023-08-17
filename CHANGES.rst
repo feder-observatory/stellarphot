@@ -5,7 +5,9 @@ New Features
 ^^^^^^^^^^^^
 + Development of new data classes for handling source list, photometry, and catalog data which include data format validation. [#125]
 + Aperture photometry streamlined into ``single_image_photometry``  ``multi_image_photometry`` functions that use the new data classes. [#141]
++ Photometry related notebooks updated to use new data classes. [#151]
 + ``multi_image_photometry`` now is a wrapper for single_image_photometry instead of a completely separate function.
++ Logging has been implemented for photmetry, so all the output can now be logged to a file. [#150]
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
