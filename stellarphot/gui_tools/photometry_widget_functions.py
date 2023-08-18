@@ -4,6 +4,7 @@ from ccdproc import ImageFileCollection
 import ipywidgets as ipw
 from ipyfilechooser import FileChooser
 
+from stellarphot.settings import ApertureSettings
 
 __all__ = ['PhotometrySettings']
 
@@ -116,9 +117,4 @@ class PhotometrySettings:
             self._object_name.options = []
 
     def _update_aperture_rad(self, locator):
-        with open(locator.selected) as f:
-            stuff = f.read()
-
-        self._aperture_radius = int(stuff.split(',')[0])
-        self._inner_annulus = int(stuff.split(',')[1])
-        self._outer_annulus = int(stuff.split(',')[2])
+        self.aperture_settings = ApertureSettings.parse_file(locator.selected)
