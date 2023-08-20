@@ -13,7 +13,7 @@ comments:
       Name and version of software used to create the format. If it is
       private software, put some type of description here.
       For example: "#SOFTWARE=AIP4Win Version 2.2".
-    Limit: 255
+    limit: 255
   DELIM:
     summary: |
       The delimiter used to separate fields in the report. Any ASCII character
@@ -54,21 +54,21 @@ data:
     summary: |
       The star's identifier. It can be the AAVSO Designation, the AAVSO Name, or
       the AAVSO Unique Identifier, but NOT more than one of these.
-    Limit: 30
+    limit: 30
   DATE:
     summary: |
       The date of the observation, in the format specified in the DATE parameter.
-    Limit: 16
+    limit: 16
   MAGNITUDE:
     summary: |
       The magnitude of the observation. Prepend with < if a fainter-than.
       A dot is required (e.g. "9.0" rather than "9"). 
-    Limit: 8
+    limit: 8
   MAGERR:
     summary: |
       Photometric uncertainty associated with the variable star magnitude.
       If not available put "na".
-    Limit: 6
+    limit: 6
   FILTER:
     summary: |
       The filter used for the observation.
@@ -180,29 +180,29 @@ data:
       or the chart label for the comparison star used.
       Use "ENSEMBLE" for ensemble photometry.
       If not present, use "na". 
-    Limit: 20
+    limit: 20
   CMAG:
     summary: |
       Instrumental magnitude of the comparison star.
       If "ensemble" see example below. If not present,
       use "na".
-    Limit: 8
+    limit: 8
   KNAME:
     summary: |
       Check star name or label such as the AUID (much preferred)
       or the chart label for the check star. If not present,
       use "na".
-    Limit: 20
+    limit: 20
   KMAG:
     summary: |
       Instrumental magnitude of the check star.
       If "ensemble" see example below. If not present, use "na".
-    Limit: 8
+    limit: 8
   AIRMASS:
     summary: |
       Airmass of observation Limit 7 characters - entry will be truncated
       if longer than that. If not present, use "na".\
-    Limit: 7
+    limit: 7
   GROUP:
     summary: |
       Grouping identifier (maximum 5 characters). It is used
@@ -215,7 +215,7 @@ data:
       want to group observations, GROUP should be an integer, identical for
       all observations in a group, and unique for a given observer for a
       given star on a given Julian Date. 
-    Limit: 5
+    limit: 5
   CHART:
     summary: |
       Please use the sequence ID you will find written in Bold print
@@ -227,7 +227,7 @@ data:
       Use the comment code K (non-AAVSO chart) and give a proper
       chart name like "APASS DR10". Then add information on the comp
       stars in the notes. 
-    Limit: 20
+    limit: 20
   NOTES:
     summary: |
       Comments or notes about the observation. If no comments, use "na".
