@@ -1,10 +1,12 @@
 import matplotlib.pyplot as plt
 
+from ..settings import ApertureSettings
+
 __all__ = ['seeing_plot']
 
 
 def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM,
-                plot_title='', file_name='', gap=6, annulus_width=13, radius=None,
+                plot_title='', file_name='', aperture_settings=None,
                 figsize=(20, 10)):
     """
     Show a seeing plot for data from an image with radius on the x axis and counts (ADU) on the y axis.
@@ -32,11 +34,10 @@ def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM,
     file_name : optional, string
         if entered, file will save as png with this name
 
-    gap : number
-        the distance between the aperture and the inner annulus
-
-    annulus_width : number
-        the distance between the inner and outer annulus
+    aperture_settings : optional, `stellarphot.settings.ApertureSettings`
+        The aperture settings used to create the plot. If not provided, the
+        aperture radius will be set to 4 * HWHM, the inner annulus will be set
+        to radius + 10, and the outer annulus will be set to radius + 25.
 
     figsize : tuple of int, optional
         Size of figure.
@@ -47,13 +48,19 @@ def seeing_plot(raw_radius, raw_counts, binned_radius, binned_counts, HWHM,
     `matplotlib.pyplot.figure`
         The figure object containing the seeing plot.
     """
-    if radius is None:
-        radius = HWHM * 4
+    if aperture_settings is None:
+        radius = 4 * HWHM
+        aperture_settings = ApertureSettings(radius=radius,
+                                             inner_annulus=radius + 10,
+                                             outer_annulus=radius + 25)
+
+
+    radius = aperture_settings.radius
+    inner_annulus = aperture_settings.inner_annulus
+    outer_annulus = aperture_settings.outer_annulus
 
     fig = plt.figure(figsize=figsize)
     plt.grid(True)
-    inner_annulus = radius + gap
-    outer_annulus = inner_annulus + annulus_width
 
     # plot the raw radius and raw counts
     plt.plot(raw_radius, raw_counts, linestyle='none',

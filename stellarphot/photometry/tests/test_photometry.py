@@ -13,6 +13,7 @@ from stellarphot.core import Camera, SourceListData
 from stellarphot.photometry import (calculate_noise, find_too_close,
                                     multi_image_photometry,
                                     single_image_photometry, source_detection)
+from stellarphot.settings import ApertureSettings
 
 GAINS = [1.0, 1.5, 2.0]
 
@@ -226,6 +227,10 @@ def test_aperture_photometry_no_outlier_rejection():
     aperture = sources['aperture'][0]
     inner_annulus = 2 * aperture
     outer_annulus = 3 * aperture
+    aperture_settings = ApertureSettings(radius=aperture,
+                                         gap=inner_annulus - aperture,
+                                         width_annulus=outer_annulus - inner_annulus)
+
     found_sources = source_detection(fake_CCDimage,
                                     fwhm=sources['x_stddev'].mean(),
                                     threshold=10)
@@ -233,8 +238,7 @@ def test_aperture_photometry_no_outlier_rejection():
                                                     found_sources,
                                                     fake_camera,
                                                     fake_obs,
-                                                    aperture, inner_annulus,
-                                                    outer_annulus,
+                                                    aperture_settings,
                                                     shift_tolerance,
                                                     max_adu, fwhm_estimate,
                                                     use_coordinates=coords2use,
@@ -277,6 +281,11 @@ def test_aperture_photometry_with_outlier_rejection(reject):
     aperture = sources['aperture'][0]
     inner_annulus = 2 * aperture
     outer_annulus = 3 * aperture
+
+    aperture_settings = ApertureSettings(radius=aperture,
+                                         gap=inner_annulus - aperture,
+                                         width_annulus=outer_annulus - inner_annulus)
+
     image = fake_CCDimage.data
 
     found_sources = source_detection(fake_CCDimage,
@@ -297,8 +306,7 @@ def test_aperture_photometry_with_outlier_rejection(reject):
                                                     found_sources,
                                                     fake_camera,
                                                     fake_obs,
-                                                    aperture, inner_annulus,
-                                                    outer_annulus,
+                                                    aperture_settings,
                                                     shift_tolerance,
                                                     max_adu, fwhm_estimate,
                                                     use_coordinates=coords2use,
@@ -379,6 +387,9 @@ def test_photometry_on_directory():
         aperture = sources['aperture'][0]
         inner_annulus = 2 * aperture
         outer_annulus = 3 * aperture
+        aperture_settings = ApertureSettings(radius=aperture,
+                                             gap=inner_annulus - aperture,
+                                             width_annulus=outer_annulus - inner_annulus)
 
         # Generate the sourcelist
         found_sources = source_detection(fake_images[0],
@@ -390,8 +401,7 @@ def test_photometry_on_directory():
                                 found_sources,
                                 fake_camera,
                                 fake_obs,
-                                aperture,
-                                inner_annulus, outer_annulus,
+                                aperture_settings,
                                 shift_tolerance, max_adu, fwhm_estimate,
                                 include_dig_noise=True,
                                 reject_too_close=True,
@@ -461,6 +471,9 @@ def test_photometry_on_directory_with_no_ra_dec():
         aperture = sources['aperture'][0]
         inner_annulus = 2 * aperture
         outer_annulus = 3 * aperture
+        aperture_settings = ApertureSettings(radius=aperture,
+                                             gap=inner_annulus - aperture,
+                                             width_annulus=outer_annulus - inner_annulus)
 
         # Generate the sourcelist
         found_sources = source_detection(fake_images[0],
@@ -476,8 +489,7 @@ def test_photometry_on_directory_with_no_ra_dec():
                                     found_sources,
                                     fake_camera,
                                     fake_obs,
-                                    aperture,
-                                    inner_annulus, outer_annulus,
+                                    aperture_settings,
                                     shift_tolerance, max_adu, fwhm_estimate,
                                     include_dig_noise=True,
                                     reject_too_close=True,
@@ -511,6 +523,10 @@ def test_photometry_on_directory_with_bad_fits():
         inner_annulus = 2 * aperture
         outer_annulus = 3 * aperture
 
+        aperture_settings = ApertureSettings(radius=aperture,
+                                             gap=inner_annulus - aperture,
+                                             width_annulus=outer_annulus - inner_annulus)
+
         # Generate the sourcelist with RA/Dec information from a clean image
         found_sources = source_detection(clean_fake_images[0],
                                         fwhm=clean_fake_images[0].sources['x_stddev'].mean(),
@@ -523,8 +539,7 @@ def test_photometry_on_directory_with_bad_fits():
                                     found_sources,
                                     fake_camera,
                                     fake_obs,
-                                    aperture,
-                                    inner_annulus, outer_annulus,
+                                    aperture_settings,
                                     shift_tolerance, max_adu, fwhm_estimate,
                                     include_dig_noise=True,
                                     reject_too_close=True,

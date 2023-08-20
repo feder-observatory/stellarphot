@@ -34,7 +34,7 @@ EXPOSURE_KEYWORDS = ["EXPOSURE", "EXPTIME", "TELAPSE", "ELAPTIME", "ONTIME",
 
 
 def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
-                            aperture_radius, inner_annulus, outer_annulus,
+                            aperture_settings,
                             shift_tolerance, max_adu, fwhm_estimate,
                             use_coordinates='pixel',
                             include_dig_noise=True,
@@ -75,14 +75,8 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
         Location of the observatory where the images were taken.  Used for calculating
         the BJD.
 
-    aperture_radius : int
-        Radius of aperture(s) in pixels.
-
-    inner_annulus : int
-        Inner radius of the annulus in pixels.
-
-    outer_annulus : int
-        Outer radius of the annulus in pixels.
+    aperture_settings : `stellarphot.settings.ApertureSettings`
+        Radius, inner and outer annulus radii settings.
 
     shift_tolerance : float
         If the x/y position needs to be computed using WCS, then computed
@@ -173,7 +167,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     to compute the x/y positions on each image individually. In this scenario,
     the `use_coordinates` parameter should be set to "sky".
     """
- 
+
 
     # Check that the input parameters are valid
     if not isinstance(ccd_image, CCDData):
@@ -187,12 +181,12 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     if not isinstance(observatory_location, EarthLocation):
         raise TypeError("observatory_location must be a EarthLocation object, but it "
                         f"is '{type(observatory_location)}'.")
-    if inner_annulus >= outer_annulus:
-        raise ValueError(f"outer_annulus ({outer_annulus}) must be greater than "
-                         f"inner_annulus ({inner_annulus}).")
-    if aperture_radius >= inner_annulus:
-        raise ValueError(f"aperture_radius ({aperture_radius}) must be greater than "
-                         f"inner_annulus ({inner_annulus}).")
+    if aperture_settings.inner_annulus >= aperture_settings.outer_annulus:
+        raise ValueError(f"outer_annulus ({aperture_settings.outer_annulus}) must be greater than "
+                         f"inner_annulus ({aperture_settings.inner_annulus}).")
+    if aperture_settings.radius >= aperture_settings.inner_annulus:
+        raise ValueError(f"aperture_radius ({aperture_settings.radius}) must be greater than "
+                         f"inner_annulus ({aperture_settings.inner_annulus}).")
     if (shift_tolerance<=0):
         raise ValueError(f"shift_tolerance ({shift_tolerance}) must be greater than 0 "
                          "(should be on order of FWHM).")
@@ -284,8 +278,8 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     # Reject sources that are within an aperture diameter of each other.
     dropped_sources = []
     try:
-        too_close = find_too_close(sourcelist, aperture_radius,
-                                pixel_scale=camera.pixel_scale.value)
+        too_close = find_too_close(sourcelist, aperture_settings.radius,
+                                   pixel_scale=camera.pixel_scale.value)
     except Exception as e:
         # Any failure here is BAD, so raise an error
         raise RuntimeError(
@@ -312,7 +306,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
 
     # Remove all source positions too close to edges of image (where the annulus would
     # extend beyond the image boundaries).
-    padding = outer_annulus
+    padding = aperture_settings.outer_annulus
     out_of_bounds = ( (xs < padding) | (xs > (ccd_image.shape[1] - padding)) |
                     (ys < padding) | (ys  > (ccd_image.shape[0] - padding)) )
     in_bounds = ~out_of_bounds
@@ -340,7 +334,7 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     if use_coordinates == 'sky':
         try:
             xcen, ycen = centroid_sources(ccd_image.data, xs, ys,
-                                        box_size=2 * aperture_radius + 1)
+                                        box_size=2 * aperture_settings.radius + 1)
         except NoOverlapError:
             logger.warning(f"{logline} Determining new centroids failed ... "
                             "SKIPPING THIS IMAGE!")
@@ -372,8 +366,11 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
 
     # Define apertures and annuli for the aperture photometry
     aper_locs = np.array([xs, ys]).T
-    apers = CircularAperture(aper_locs, r=aperture_radius)
-    anuls = CircularAnnulus(aper_locs, r_in=inner_annulus, r_out=outer_annulus)
+    apers = CircularAperture(aper_locs,
+                             r=aperture_settings.radius)
+    anuls = CircularAnnulus(aper_locs,
+                            r_in=aperture_settings.inner_annulus,
+                            r_out=aperture_settings.outer_annulus)
 
     # Perform the aperture photometry
     photom = aperture_photometry(ccd_image.data, (apers, anuls),
@@ -539,8 +536,7 @@ def multi_image_photometry(directory_with_images,
                            object_of_interest,
                            sourcelist, camera,
                            observatory_location,
-                           aperture_radius,
-                           inner_annulus, outer_annulus,
+                           aperture_settings,
                            shift_tolerance, max_adu, fwhm_estimate,
                            include_dig_noise=True,
                            reject_too_close=True,
@@ -581,16 +577,8 @@ def multi_image_photometry(directory_with_images,
         Location of the observatory where the images were taken.  Used for calculating
         the BJD.
 
-    aperture_radius : float
-        Radius of the aperture to use when performing photometry.
-
-    inner_annulus : float
-        Inner radius of annulus to use in for performing local sky
-        subtraction.
-
-    outer_annulus : float
-        Outer radius of annulus to use in for performing local sky
-        subtraction.
+    aperture_settings : `stellarphot.settings.ApertureSettings`
+        Radius, inner and outer annulus radii settings.
 
     shift_tolerance : float
         Since source positions need to be computed on each image using
@@ -734,7 +722,7 @@ def multi_image_photometry(directory_with_images,
         this_phot, this_missing_sources = \
             single_image_photometry(this_ccd, sourcelist,
                                     camera, observatory_location,
-                                    aperture_radius, inner_annulus, outer_annulus,
+                                    aperture_settings,
                                     shift_tolerance, max_adu, fwhm_estimate,
                                     use_coordinates='sky',
                                     include_dig_noise=include_dig_noise,
