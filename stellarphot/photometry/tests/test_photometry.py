@@ -221,8 +221,11 @@ fake_obs = EarthLocation(lat = 0*u.deg,
 coords2use='pixel'
 
 
-def test_aperture_photometry_no_outlier_rejection():
+# The True case below is a regression test for #157
+@pytest.mark.parametrize('int_data', [True, False])
+def test_aperture_photometry_no_outlier_rejection(int_data):
     fake_CCDimage = FakeCCDImage()
+
     sources = fake_CCDimage.sources
     aperture = sources['aperture'][0]
     inner_annulus = 2 * aperture
@@ -234,6 +237,18 @@ def test_aperture_photometry_no_outlier_rejection():
     found_sources = source_detection(fake_CCDimage,
                                     fwhm=sources['x_stddev'].mean(),
                                     threshold=10)
+
+    # The scale_factor is used to rescale data to integers if needed. It
+    # needs to be set later on when the net counts are "unscaled" in the
+    # asserts that constitute the actual test.
+    scale_factor = 1.0
+    if int_data:
+        scale_factor = 0.75 * max_adu / fake_CCDimage.data.max()
+        # For the moment, ensure the integer data is NOT larger than max_adu
+        # because until #161 is fixed then having NaN in the data will not succeed.
+        data = scale_factor * fake_CCDimage.data
+        fake_CCDimage.data = data.astype(int)
+
     phot, missing_sources = single_image_photometry(fake_CCDimage,
                                                     found_sources,
                                                     fake_camera,
@@ -265,7 +280,9 @@ def test_aperture_photometry_no_outlier_rejection():
 
         # Here we just check whether any difference is consistent with
         # less than the expected one sigma deviation.
-        assert (np.abs(expected_flux - out['aperture_net_cnts'].value) <
+
+        # We need to remove any scaling that has been done of the data values.
+        assert (np.abs(expected_flux - out['aperture_net_cnts'].value / scale_factor) <
                 np.pi * aperture**2 * fake_CCDimage.noise_dev)
 
 
