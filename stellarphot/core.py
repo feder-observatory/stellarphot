@@ -2,6 +2,9 @@ from astropy import units as u
 from astropy.coordinates import EarthLocation, SkyCoord
 from astropy.table import Column, QTable, Table
 from astropy.time import Time
+from astropy.units import Quantity
+
+from pydantic import BaseModel, root_validator
 
 import numpy as np
 
@@ -9,7 +12,45 @@ __all__ = ['Camera', 'BaseEnhancedTable', 'PhotometryData', 'CatalogData',
            'SourceListData']
 
 
-class Camera:
+# Approach to validation of units was inspired by the GammaPy project
+# which did it before we did:
+# https://docs.gammapy.org/dev/_modules/gammapy/analysis/config.html
+
+class QuantityType(Quantity):
+    # Validator for Quantity type
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, v):
+        try:
+            v = Quantity(v)
+        except TypeError:
+            raise ValueError(f"Invalid value for Quantity: {v}")
+
+        return v
+
+
+class PixelScaleType(Quantity):
+    # Validator for pixel scale type
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, v):
+        try:
+            v = Quantity(v)
+        except TypeError:
+            raise ValueError(f"Invalid value for Quantity: {v}")
+        if (len(v.unit.bases) != 2 or
+            v.unit.bases[0].physical_type != "angle" or
+            v.unit.bases[1].name != "pix" ):
+            raise ValueError(f"Invalid unit for pixel scale: {v.unit!r}")
+        return v
+
+class Camera(BaseModel):
     """
     A class to represent a CCD-based camera.
 
@@ -17,15 +58,15 @@ class Camera:
     ----------
 
     gain : `astropy.quantity.Quantity`
-        The gain of the camera in units such that the unit of the product `gain`
-        times the image data matches the unit of the `read_noise`.
+        The gain of the camera in units such the product of `gain`
+        times the image data has units equal to that of the `read_noise`.
 
     read_noise : `astropy.quantity.Quantity`
         The read noise of the camera with units.
 
     dark_current : `astropy.quantity.Quantity`
         The dark current of the camera in units such that, when multiplied by
-        exposure time, the unit matches the unit of the `read_noise`.
+        exposure time, the unit matches the units of the `read_noise`.
 
     pixel_scale : `astropy.quantity.Quantity`
         The pixel scale of the camera in units of arcseconds per pixel.
@@ -34,15 +75,15 @@ class Camera:
     ----------
 
     gain : `astropy.quantity.Quantity`
-        The gain of the camera in units such that the unit of the product
-        `gain` times the image data matches the unit of the `read_noise`.
+        The gain of the camera in units such the product of `gain`
+        times the image data has units equal to that of the `read_noise`.
 
     read_noise : `astropy.quantity.Quantity`
-        The read noise of the camera in units of electrons.
+        The read noise of the camera with units.
 
     dark_current : `astropy.quantity.Quantity`
-        The dark current of the camera in units such that, when multiplied
-        by exposure time, the unit matches the unit of the `read_noise`.
+        The dark current of the camera in units such that, when multiplied by
+        exposure time, the unit matches the units of the `read_noise`.
 
     pixel_scale : `astropy.quantity.Quantity`
         The pixel scale of the camera in units of arcseconds per pixel.
@@ -70,31 +111,50 @@ class Camera:
     <Quantity 0.563 arcsec / pix>
 
     """
-    def __init__(self, gain=1.0 * u.electron / u.adu,
-                 read_noise=1.0 * u.electron,
-                 dark_current=0.01 * u.electron / u.second,
-                 pixel_scale=1.0 * u.arcsec / u.pixel):
-        super().__init__()
+    gain: QuantityType
+    read_noise: QuantityType
+    dark_current: QuantityType
+    pixel_scale: PixelScaleType
 
-        # Check that input has units and if not crap out.
-        if isinstance(gain, u.Quantity):
-            self.gain = gain
-        else:
-            raise TypeError("gain must have units.")
+    class Config:
+        validate_all = True
+        validate_assignment = True
+        extra = "forbid"
+        json_encoders = {
+            Quantity: lambda v: f"{v.value} {v.unit}",
+            QuantityType: lambda v: f"{v.value} {v.unit}",
+            PixelScaleType: lambda v: f"{v.value} {v.unit}"
+        }
 
-        if isinstance(read_noise, u.Quantity):
-            self.read_noise = read_noise
-        else:
-            raise TypeError("read_noise must have units.")
+    # When the switch to pydantic v2 happens, this root_validator will need
+    # to be replaced by a model_validator decorator.
+    @root_validator()
+    def validate_gain(cls, values):
+        # Get read noise units
+        try:
+            rn_unit = Quantity(values['read_noise']).unit
+        except KeyError:
+            raise ValueError("Valid keys for values are: ", values.keys())
 
-        if isinstance(dark_current, u.Quantity):
-            self.dark_current = dark_current
-        else:
-            raise TypeError("dark_current must have units.")
-        if isinstance(pixel_scale, u.Quantity):
-            self.pixel_scale = pixel_scale
-        else:
-            raise TypeError("pixel_scale must have units.")
+        # Check that gain and read noise have compatible units, that is that
+        # gain is read noise per adu.
+        gain = Quantity(values['gain'])
+        if (len(gain.unit.bases) != 2 or gain.unit.bases[0] != rn_unit or
+            gain.unit.bases[1] != u.adu):
+            raise ValueError(f"Gain units {gain.unit} are not compatible with "
+                             f"read noise units {rn_unit}.")
+
+        # Check that dark current and read noise have compatible units, that is
+        # that dark current is read noise per second.
+        dark_current = Quantity(values['dark_current'])
+        if (len(dark_current.unit.bases) != 2 or
+            dark_current.unit.bases[0] != rn_unit or
+            dark_current.unit.bases[1] != u.s):
+            raise ValueError(f"Dark current units {dark_current.unit} are not "
+                             f"compatible with read noise units {rn_unit}.")
+
+        # Dark current validates against read noise
+        return values
 
     def copy(self):
         return Camera(gain=self.gain,

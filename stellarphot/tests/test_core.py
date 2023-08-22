@@ -32,26 +32,42 @@ def test_camera_unitscheck():
     dark_current = 0.01 * u.electron / u.second
     pixel_scale = 0.563 * u.arcsec / u.pix
 
-    with pytest.raises(TypeError):
+    with pytest.raises(ValueError):
         c = Camera(gain=gain.value,
                 read_noise=read_noise,
                 dark_current=dark_current,
                 pixel_scale=pixel_scale)
-    with pytest.raises(TypeError):
+    with pytest.raises(ValueError):
         c = Camera(gain=gain,
                 read_noise=read_noise.value,
                 dark_current=dark_current,
                 pixel_scale=pixel_scale)
-    with pytest.raises(TypeError):
+    with pytest.raises(ValueError):
         c = Camera(gain=gain,
                 read_noise=read_noise,
                 dark_current=dark_current.value,
                 pixel_scale=pixel_scale)
-    with pytest.raises(TypeError):
+    with pytest.raises(ValueError):
         c = Camera(gain=gain,
                 read_noise=read_noise,
                 dark_current=dark_current,
                 pixel_scale=pixel_scale.value)
+
+
+def test_camera_altunitscheck():
+    # Check to see that 'count' is allowed instead of 'electron'
+    gain = 2.0 * u.count / u.adu
+    read_noise = 10 * u.count
+    dark_current = 0.01 * u.count / u.second
+    pixel_scale = 0.563 * u.arcsec / u.pix
+    c = Camera(gain=gain,
+               read_noise=read_noise,
+               dark_current=dark_current,
+               pixel_scale=pixel_scale)
+    assert c.gain == gain
+    assert c.dark_current == dark_current
+    assert c.read_noise == read_noise
+    assert c.pixel_scale == pixel_scale
 
 
 # Create several test descriptions for use in base_enhanced_table tests.
