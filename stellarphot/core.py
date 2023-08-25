@@ -134,7 +134,7 @@ class Camera(BaseModel):
         try:
             rn_unit = Quantity(values['read_noise']).unit
         except KeyError:
-            raise ValueError("Valid keys for values are: ", values.keys())
+            raise ValueError("read_noise must be specified including units.")
 
         # Check that gain and read noise have compatible units, that is that
         # gain is read noise per adu.
