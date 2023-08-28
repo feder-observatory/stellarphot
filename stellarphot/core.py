@@ -28,7 +28,9 @@ class QuantityType(Quantity):
             v = Quantity(v)
         except TypeError:
             raise ValueError(f"Invalid value for Quantity: {v}")
-
+        else:
+            if not v.unit.bases:
+                raise ValueError("Must provided a unit")
         return v
 
 
@@ -128,17 +130,14 @@ class Camera(BaseModel):
 
     # When the switch to pydantic v2 happens, this root_validator will need
     # to be replaced by a model_validator decorator.
-    @root_validator()
+    @root_validator(skip_on_failure=True)
     def validate_gain(cls, values):
         # Get read noise units
-        try:
-            rn_unit = Quantity(values['read_noise']).unit
-        except KeyError:
-            raise ValueError("read_noise must be specified including units.")
+        rn_unit = Quantity(values['read_noise']).unit
 
         # Check that gain and read noise have compatible units, that is that
         # gain is read noise per adu.
-        gain = Quantity(values['gain'])
+        gain = values['gain']
         if (len(gain.unit.bases) != 2 or gain.unit.bases[0] != rn_unit or
             gain.unit.bases[1] != u.adu):
             raise ValueError(f"Gain units {gain.unit} are not compatible with "
@@ -146,7 +145,7 @@ class Camera(BaseModel):
 
         # Check that dark current and read noise have compatible units, that is
         # that dark current is read noise per second.
-        dark_current = Quantity(values['dark_current'])
+        dark_current = values['dark_current']
         if (len(dark_current.unit.bases) != 2 or
             dark_current.unit.bases[0] != rn_unit or
             dark_current.unit.bases[1] != u.s):
@@ -867,5 +866,5 @@ class SourceListData(BaseEnhancedTable):
         self.meta['has_x_y'] = False
         self['xcenter'] = Column(data=np.full(len(self), np.nan), name='ra',
                                  unit=u.deg)
-        self['ycenter'] = Column(data=np.full(len(self), np.nan), name='dec', 
+        self['ycenter'] = Column(data=np.full(len(self), np.nan), name='dec',
                                  unit=u.deg)
