@@ -131,6 +131,7 @@ class Camera(BaseModel):
     # When the switch to pydantic v2 happens, this root_validator will need
     # to be replaced by a model_validator decorator.
     @root_validator(skip_on_failure=True)
+    @classmethod
     def validate_gain(cls, values):
         # Get read noise units
         rn_unit = Quantity(values['read_noise']).unit
