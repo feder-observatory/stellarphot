@@ -25,6 +25,8 @@ def test_compute_fwhm(units):
     fwhm_x, fwhm_y = compute_fwhm(fake_image.image, sources,
                                   x_column='x_mean', y_column='y_mean')
 
+    expected_fwhm = np.array(sources['x_stddev'] * gaussian_sigma_to_fwhm)
+    assert np.allclose(fwhm_x, expected_fwhm, rtol=1e-2)
 
 def test_detect_source_number_location():
     """
