@@ -42,7 +42,7 @@ def test_compute_fwhm_with_NaNs():
     image[y, x] = np.nan
 
     fwhm_x, fwhm_y = compute_fwhm(image, sources,
-                                  x_column='x_mean', y_column='y_mean')
+                                  x_column='x_mean', y_column='y_mean', fit=True)
 
     expected_fwhm = np.array(sources['x_stddev'] * gaussian_sigma_to_fwhm)
     assert np.allclose(fwhm_x, expected_fwhm, rtol=1e-2)
