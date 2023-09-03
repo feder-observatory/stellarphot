@@ -36,10 +36,16 @@ def _fit_2dgaussian(data):
     gfit : `astropy.modeling.Model`
         The best-fit 2D Gaussian model.
     """
-    props = data_properties(data - np.min(data))
+    mask = ~np.isfinite(data)
+
+    # If there are non-finite pixels they need to be masked out
+    # or many of the returned properties will be NaN.
+    props = data_properties(data - np.min(data[~mask]), mask=mask)
 
     init_const = 0.  # subtracted data minimum above
-    init_amplitude = np.ptp(data)
+    # ptp = peak-to-peak, i.e. max - min, need to also exclude non-finite
+    # values here.
+    init_amplitude = np.ptp(data[~mask])
 
     g_init = (Const2D(init_const)
                   + Gaussian2D(amplitude=init_amplitude,
