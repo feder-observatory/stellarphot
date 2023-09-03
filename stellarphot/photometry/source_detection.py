@@ -268,8 +268,8 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
         x, y = compute_fwhm(ccd, sources, fwhm_estimate=fwhm,
                             x_column='xcentroid', y_column='ycentroid',
                             sky_per_pix_avg=sky_per_pix_avg)
-        sources['fwhm_x'] = x 
-        sources['fwhm_y'] = y 
+        sources['fwhm_x'] = x
+        sources['fwhm_y'] = y
         sources['width'] = (x + y) / 2 # Average of x and y FWHM
 
         # Flag bogus fwhm values returned from fitting (no objects
@@ -303,5 +303,3 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
 
     sl_data = SourceListData(input_data=sources, colname_map=colnamemap)
     return sl_data
-
-
