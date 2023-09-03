@@ -28,6 +28,26 @@ def test_compute_fwhm(units):
     expected_fwhm = np.array(sources['x_stddev'] * gaussian_sigma_to_fwhm)
     assert np.allclose(fwhm_x, expected_fwhm, rtol=1e-2)
 
+
+def test_compute_fwhm_with_NaNs():
+    # Regression test for https://github.com/feder-observatory/stellarphot/issues/161
+    # We should be able to find FWHM for a source even with NaNs in the image.
+    fake_image = FakeImage()
+    sources = fake_image.sources
+    x, y = sources['x_mean'].astype(int)[0], sources['y_mean'].astype(int)[0]
+    image = fake_image.image.copy()
+
+    # Add a NaN to the image at the location of the first source. Note the
+    # usual row/column swap when going to x/y coordinates.
+    image[y, x] = np.nan
+
+    fwhm_x, fwhm_y = compute_fwhm(image, sources,
+                                  x_column='x_mean', y_column='y_mean')
+
+    expected_fwhm = np.array(sources['x_stddev'] * gaussian_sigma_to_fwhm)
+    assert np.allclose(fwhm_x, expected_fwhm, rtol=1e-2)
+
+
 def test_detect_source_number_location():
     """
     Make sure we detect the sources in the input table....
