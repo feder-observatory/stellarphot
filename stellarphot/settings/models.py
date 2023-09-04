@@ -1,12 +1,16 @@
 # Objects that contains the user settings for the program.
 
 from enum import Enum
+from pathlib import Path
 
 from pydantic import BaseModel, Field, conint, root_validator
 
 from .autowidgets import CustomBoundedIntTex
 
-__all__ = ['ApertureSettings']
+__all__ = [
+    'ApertureSettings',
+    'PhotometryFileSettings'
+]
 
 
 class ApertureSettings(BaseModel):
@@ -63,3 +67,13 @@ class ApertureSettings(BaseModel):
         Radius of the outer annulus in pixels.
         """
         return self.inner_annulus + self.annulus_width
+
+
+class PhotometryFileSettings(BaseModel):
+    """
+    An evolutionary step on the way to having a monolithic set of photometry settings.
+    """
+    image_folder : Path = Field(show_only_dirs=True, default='',
+                                description="Folder containing the calibrated images")
+    aperture_settings_file : Path = Field(filter_pattern='*.json', default='')
+    aperture_locations_file : Path = Field(filter_pattern=['*.ecsv', '*.csv'], default='')
