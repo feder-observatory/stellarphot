@@ -20,6 +20,7 @@ Other Changes and Additions
 Bug Fixes
 ^^^^^^^^^
 + Fixed dependence on non-release version of astrowidgets for overwrite capability on output images. [#108]
++ Fixed computation of FWHM when fitting to data that includes NaNs. [#164]
 
 1.3.9 (2023-06-16)
 ------------------
