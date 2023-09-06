@@ -1,8 +1,6 @@
 # Objects that contains the user settings for the program.
 
-from enum import Enum
-
-from pydantic import BaseModel, Field, conint, root_validator
+from pydantic import BaseModel, Field, conint
 
 from .autowidgets import CustomBoundedIntTex
 
@@ -25,8 +23,8 @@ class ApertureSettings(BaseModel):
     annulus_width : int
         Width of the annulus in pixels.
 
-    Atributes
-    ---------
+    Attributes
+    ----------
 
     inner_annulus : int
         Radius of the inner annulus in pixels.
