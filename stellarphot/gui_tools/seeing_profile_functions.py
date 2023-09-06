@@ -473,6 +473,7 @@ class SeeingProfileWidget:
             value="aperture_settings.json"
         )
         self.aperture_settings = ui_generator(ApertureSettings)
+        self.aperture_settings.show_savebuttonbar = True
         self.aperture_settings.path = Path(self.aperture_settings_file_name.value)
         self.save_aps = ipw.Button(description="Save settings")
         vb.children = [self.aperture_settings_file_name, self.aperture_settings] #, self.save_aps] #, self.in_t, self.out_t]
