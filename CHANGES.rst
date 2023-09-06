@@ -8,7 +8,7 @@ New Features
 + ``multi_image_photometry`` now is a wrapper for single_image_photometry instead of a completely separate function.
 + Photometry related notebooks updated to use new data classes and new functions. [#151]
 + Logging has been implemented for photometry, so all the output can now be logged to a file. [#150]
-+ Add class to hold the file lcoations needed for the photometry notebook. [#168]
++ Add class to hold the file locations needed for the photometry notebook. [#168]
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
