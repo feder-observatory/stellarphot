@@ -1,3 +1,11 @@
+1.4.5 (2023-09-27)
+------------------
+
+Bug Fixes
+^^^^^^^^^
+
++ Re-update imports in ``transform_pared_back.ipynb``.
+
 1.4.4 (2023-09-27)
 ------------------
 
