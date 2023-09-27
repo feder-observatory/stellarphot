@@ -1,3 +1,6 @@
+from importlib import resources
+import yaml
+
 import pytest
 
 from astropy.utils.data import get_pkg_data_filename
@@ -20,7 +23,7 @@ def test_default_values():
 
 def test_setting_type_raises_error():
     aef = AAVSOExtendedFileFormat(DEFAULT_OBSCODE)
-    with pytest.raises(AttributeError, match="can't set attribute"):
+    with pytest.raises(AttributeError, match="no setter"):
         aef.type = 'STD'
 
 
@@ -81,3 +84,44 @@ def test_making_table_ensemble():
         aef.set_data_columns(input_data,
                              {'mag_inst': AAVSOExtendedFileFormatColumns.COMP_STAR_MAG},
                               star_id=26)
+
+
+def test_table_column_formats(tmp_path):
+    aef, input_data = set_up_aef()
+    aef_table = aef.to_table()
+    aef_table.write(tmp_path / "test.csv")
+    with open(tmp_path / "test.csv") as f:
+        lines = f.readlines()
+
+    # Get the file specification
+    table_description = resources.read_text('stellarphot.io', 'aavso_submission_schema.yml')
+    table_structure = yaml.safe_load(table_description)
+    values = []
+    columns = []
+    errors = {}
+    for line in lines:
+        if line.startswith('#'):
+            print("#")
+            continue
+
+        if str.isalpha(line[0]) and not columns:
+            columns = line.strip().split(",")
+            print(f'{columns=}')
+            continue
+
+        values = line.strip().split(",")
+
+        for column, value in zip(columns, values):
+            table_structure['data'].keys()
+            length_limit = table_structure['data'][column].get('limit', None)
+            if length_limit:
+                try:
+                    assert len(value) <= length_limit
+                except AssertionError as e:
+                    errors[column] = str(e)
+        break
+
+    error_messages = '\n'.join([f'Column {error[0]}: {error[1]}' for error in errors.items()])
+
+    if error_messages:
+        raise AssertionError(f"Errors in table format:\n{error_messages}")
