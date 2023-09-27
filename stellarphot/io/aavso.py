@@ -237,6 +237,18 @@ class AAVSOExtendedFileFormat:
                 value = getattr(self, key.lower())
             table.meta['comments'].append(f"{key}={value}")
 
+        # Specify formats for the columns that have formats
+        for k, v in table_structure['data'].items():
+            length_limit = v.get('limit', None)
+            if length_limit:
+                if v['type'] == 'float':
+                    table[k].info.format = f"{length_limit}f"
+                elif v['type'] == 'str':
+                    if k == 'STARID':
+                        print(table[k])
+                    table[k].info.format = f".{length_limit}s"
+                else:
+                    raise ValueError(f"Unknown type {v['type']}")
         return table
 
     def write(self, filename, overwrite=False):
