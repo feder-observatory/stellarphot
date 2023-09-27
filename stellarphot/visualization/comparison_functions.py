@@ -188,12 +188,12 @@ def mag_scale(cmag, apass, v_angle, RD_angle,
     """
     high_mag = apass['r_mag'] < cmag + dimmer_dmag
     low_mag = apass['r_mag'] > cmag - brighter_dmag
-    if v_angle:
+    if len(v_angle) > 0:
         good_v_angle = v_angle > 1.0 * u.arcsec
     else:
         good_v_angle = True
 
-    if RD_angle:
+    if len(RD_angle) > 0:
         good_RD_angle = RD_angle > 1.0 * u.arcsec
     else:
         good_RD_angle = True
