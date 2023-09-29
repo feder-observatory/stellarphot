@@ -86,8 +86,10 @@ def test_making_table_ensemble():
                               star_id=26)
 
 
-def test_table_column_formats(tmp_path):
+@pytest.mark.parametrize("ensemble", [True, False])
+def test_table_column_formats(tmp_path, ensemble):
     aef, input_data = set_up_aef()
+    aef.ensemble = ensemble
     aef_table = aef.to_table()
     aef_table.write(tmp_path / "test.csv")
     with open(tmp_path / "test.csv") as f:
