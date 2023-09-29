@@ -23,7 +23,7 @@ def test_default_values():
 
 def test_setting_type_raises_error():
     aef = AAVSOExtendedFileFormat(DEFAULT_OBSCODE)
-    with pytest.raises(AttributeError, match="no setter"):
+    with pytest.raises(AttributeError, match="(no setter)|(can't set attribute)"):
         aef.type = 'STD'
 
 
