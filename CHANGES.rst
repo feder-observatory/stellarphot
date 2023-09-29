@@ -1,3 +1,17 @@
+1.4.6 (2023-09-29)
+------------------
+
+Bug Fixes
+^^^^^^^^^
+
++ Fix field length in AAVSO writer. [#172]
++ Fix issue in ``TessTargetFile`` on Windows. [#171]
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
++ Add a number to the name of the photometry transform notebook. [#173]
+
 1.4.5 (2023-09-27)
 ------------------
 
