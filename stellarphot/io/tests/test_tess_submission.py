@@ -2,7 +2,8 @@ import re
 
 import pytest
 
-from stellarphot.io.tess import TessSubmission
+from astropy.coordinates import SkyCoord
+from stellarphot.io.tess import TessSubmission, TessTargetFile
 
 GOOD_HEADER = {
     "date-obs": "2022-06-04T05:44:28.010",
@@ -69,3 +70,18 @@ def test_valid_method():
     # Set invalid TIC number
     tsub.tic_id = 10_000_000_000
     assert not tsub._valid()
+
+
+def test_target_file():
+    # Getting the target information failed on windows, so the
+    # first point of this test is to simply succeed in creating the
+    # object
+
+    tic_742648307 = SkyCoord(ra=104.733225, dec=49.968739, unit='degree')
+    tess_target = TessTargetFile(tic_742648307, magnitude=12, depth=10)
+
+    # Check that the first thing in the list is the tick object
+    check_coords = SkyCoord(ra=tess_target.table['RA'][0],
+                            dec=tess_target.table['Dec'][0],
+                            unit=('hour', 'degree'))
+    assert tic_742648307.separation(check_coords).arcsecond < 1
