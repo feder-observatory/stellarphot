@@ -441,7 +441,9 @@ class TessTargetFile:
     def __post_init__(self):
         self.aperture_server = GAIA_APERTURE_SERVER
         if not self.file:
-            self.file = NamedTemporaryFile()
+            # Be sure not to delete the file -- otherwise, one windows,
+            # the file is deleted immediately as far as I can tell.
+            self.file = NamedTemporaryFile(delete=False)
         self._path = Path(self.file.name)
         self.target_file = self._retrieve_target_file()
         self.target_table = self._build_table()
