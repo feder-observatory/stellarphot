@@ -242,8 +242,25 @@ class AAVSOExtendedFileFormat:
             length_limit = v.get('limit', None)
             if length_limit:
                 if v['type'] == 'float':
-                    table[k].info.format = f"{length_limit}f"
+                    # For float, the width in the format specifier is the _minimum_
+                    # width of the field, not the maximum. Since, most of the time,
+                    # any width issues will arise because some rounding is needed,
+                    # use the width to calculate the place to which to round the
+                    # number, EXCEPT in the case of time. There, use all the digits and
+                    # hope for the best.
+                    if k != 'DATE':
+                        max_precision = length_limit - 3
+                        precision = min(max_precision, 6)
+                    else:
+                        precision = 8
+
+                    # Check whether table column is all "na" -- if that is the case, don't
+                    # set a format.
+                    if not all(table[k] == "na"):
+                        table[k].info.format = f"{length_limit}.{precision}f"
                 elif v['type'] == 'str':
+                    # For a string, the "precision" in the format is the maximum
+                    # size of the field.
                     if k == 'STARID':
                         print(table[k])
                     table[k].info.format = f".{length_limit}s"
