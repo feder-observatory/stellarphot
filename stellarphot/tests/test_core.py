@@ -245,9 +245,9 @@ def test_photometry_data():
     assert phot_data.camera.read_noise == 10.0 * u.electron
     assert phot_data.camera.dark_current == 0.01 * u.electron / u.second
     assert phot_data.camera.pixel_scale == 0.563 * u.arcsec / u.pix
-    assert phot_data.observatory.lat.value == 46.86678
+    np.testing.assert_almost_equal(phot_data.observatory.lat.value, 46.86678)
     assert phot_data.observatory.lat.unit == u.deg
-    assert phot_data.observatory.lon.value == -96.45328
+    np.testing.assert_almost_equal(phot_data.observatory.lon.value, -96.45328)
     assert phot_data.observatory.lon.unit == u.deg
     assert round(phot_data.observatory.height.value) == 311
     assert phot_data.observatory.height.unit == u.m
@@ -276,9 +276,9 @@ def test_photometry_slicing():
     assert two_cols.camera.read_noise == 10.0 * u.electron
     assert two_cols.camera.dark_current == 0.01 * u.electron / u.second
     assert two_cols.camera.pixel_scale == 0.563 * u.arcsec / u.pix
-    assert two_cols.observatory.lat.value == 46.86678
+    np.testing.assert_almost_equal(two_cols.observatory.lat.value, 46.86678)
     assert two_cols.observatory.lat.unit == u.deg
-    assert two_cols.observatory.lon.value == -96.45328
+    np.testing.assert_almost_equal(two_cols.observatory.lon.value, -96.45328)
     assert two_cols.observatory.lon.unit == u.deg
     assert round(two_cols.observatory.height.value) == 311
     assert two_cols.observatory.height.unit == u.m
