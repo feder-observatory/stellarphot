@@ -772,9 +772,16 @@ class ComparisonViewer:
 
         return comp_table
 
-    def show_labels(self):
+    def show_labels(self, marker_table=None):
         """
         Show the labels for the stars.
+
+        Parameters
+        ----------
+
+        marker_table : `astropy.table.Table`, optional
+            Table of stars to use for the aperture file -- this overrides whatever
+            markers are already in the viewer.
 
         Returns
         -------
@@ -783,7 +790,11 @@ class ComparisonViewer:
             Labels for the stars are shown.
         """
         plot_names = []
-        comp_table = self.generate_table()
+
+        if marker_table is None:
+            comp_table = self.generate_table()
+        else:
+            comp_table = marker_table
 
         original_mark = self.iw._marker
         for star in comp_table:
