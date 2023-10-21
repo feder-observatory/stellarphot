@@ -1,3 +1,11 @@
+1.4.7 (2023-10-20)
+------------------
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
++ Add option to display predetermined label names in `ComparisonViewer.show_labels`.
+
 1.4.6 (2023-09-29)
 ------------------
 
