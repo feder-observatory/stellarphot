@@ -5,7 +5,7 @@ import pandas as pd
 from astropy.stats import mad_std
 from astropy.time import Time
 
-from gatspy.periodic import LombScargleFast
+from astropy.timeseries import LombScargle
 
 
 __all__ = ['plot_magnitudes', 'multi_night']
@@ -201,11 +201,13 @@ def multi_night(sources, unique_nights, night,
                     np.isinf(mag_err[source.id - 1]))
         bads = bad_mags | bad_errs
         good_mags = ~bads
-        model = LombScargleFast().fit(source.bjd_tdb[good_mags],
-                                      mags[source.id - 1][good_mags],
-                                      mag_err[source.id - 1][good_mags])
-        periods, power = model.periodogram_auto(nyquist_factor=100,
-                                                oversampling=3)
+        ls = LombScargle(source.bjd_tdb[good_mags],
+                         mags[source.id - 1][good_mags],
+                         mag_err[source.id - 1][good_mags])
+
+        freqs, power = ls.autopower(nyquist_factor=100,
+                                    samples_per_peak=10)
+
         max_pow = power.max()
 
         # print(source, max_pow)
