@@ -1,3 +1,11 @@
+1.4.8 (2023-10-27)
+------------------
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
++ Use `astropy.timeseries.LombScargle` instead of `gatspy` for periodogram.
+
 1.4.7 (2023-10-20)
 ------------------
 
