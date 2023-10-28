@@ -16,7 +16,7 @@ def add_in_quadrature(array):
 def calc_aij_relative_flux(star_data, comp_stars,
                            in_place=True, coord_column=None,
                            star_id_column='star_id',
-                           counts_column_name='aperture_net_counts'):
+                           counts_column_name='aperture_sum'):
     """
     Calculate AstroImageJ-style flux ratios.
 
@@ -28,7 +28,7 @@ def calc_aij_relative_flux(star_data, comp_stars,
 
     comp_stars : '~astropy.table.Table'
         Table of comparison stars in the field. Must contain a column
-        called ``RA`` and a column called ``Dec``.
+        called ``ra`` and a column called ``dec``.
         NOTE that not all
         of the comparison stars will necessarily be used. Stars in
         this table are excluded from the comparison set if, in any
@@ -47,7 +47,7 @@ def calc_aij_relative_flux(star_data, comp_stars,
 
     counts_column_name : str,  optional
         If provided, use this column to find counts.
-        If not provided, the column 'aperture_net_counts' is used.
+        If not provided, the column 'aperture_sum' is used.
 
     star_id_column : str,  optional
         Name of the column that provides a unique identifier for each
@@ -63,26 +63,26 @@ def calc_aij_relative_flux(star_data, comp_stars,
     """
 
     # Match comparison star list to instrumental magnitude information
-    if star_data['RA'].unit is None:
+    if star_data['ra'].unit is None:
         unit = 'degree'
     else:
         # Pulled this from the source code -- None is ok but need
         # to match the number of coordinates.
         unit = [None, None]
 
-    star_data_coords = SkyCoord(ra=star_data['RA'], dec=star_data['Dec'],
+    star_data_coords = SkyCoord(ra=star_data['ra'], dec=star_data['dec'],
                                 unit=unit)
 
     if coord_column is not None:
         comp_coords = comp_stars[coord_column]
     else:
-        if comp_stars['RA'].unit is None:
+        if comp_stars['ra'].unit is None:
             unit = 'degree'
         else:
             # Pulled this from the source code -- None is ok but need
             # to match the number of coordinates.
             unit = [None, None]
-        comp_coords = SkyCoord(ra=comp_stars['RA'], dec=comp_stars['Dec'],
+        comp_coords = SkyCoord(ra=comp_stars['ra'], dec=comp_stars['dec'],
                                unit=unit)
 
     # Check for matches of stars in star data to the stars in comp_stars
@@ -115,7 +115,7 @@ def calc_aij_relative_flux(star_data, comp_stars,
         this_comp = star_data[star_id_column] == comp
         good[this_comp] = False
 
-    error_column_name = 'noise-aij'
+    error_column_name = 'noise_electrons'
     # Calculate comp star counts for each time
 
     # Make a small table with just counts, errors and time for all of the comparison
