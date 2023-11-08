@@ -1,3 +1,11 @@
+1.4.9 (2023-11-08)
+------------------
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
++ Add more file chooser dialogs and other simplifications.
+
 1.4.8 (2023-10-27)
 ------------------
 
