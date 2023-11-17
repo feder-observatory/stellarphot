@@ -1,3 +1,10 @@
+1.4.10 (2023-11-17)
+------------------
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
++ Make it easier to exclude data form transit analysis.
+
 1.4.9 (2023-11-08)
 ------------------
 
