@@ -6,6 +6,7 @@ import astropy.units as u
 
 __all__ = ['add_in_quadrature', 'calc_aij_relative_flux']
 
+
 def add_in_quadrature(array):
     """
     Add an array of numbers in quadrature.
@@ -23,8 +24,8 @@ def calc_aij_relative_flux(star_data, comp_stars,
     Parameters
     ----------
 
-    star_data : '~astropy.table.Table'
-        Table of star data from one or more images.
+    star_data : 'stellarphot.PhotometryDat'
+        Photometry data from one or more images.
 
     comp_stars : '~astropy.table.Table'
         Table of comparison stars in the field. Must contain a column
@@ -56,7 +57,7 @@ def calc_aij_relative_flux(star_data, comp_stars,
     Returns
     -------
 
-    `astropy.table.Table` or None
+    `stellarphot.PhotometryData` or None
         The return type depends on the value of ``in_place``. If it is
         ``False``, then the new columns are returned as a separate table,
         otherwise the columns are simply added to the input table.

@@ -7,6 +7,7 @@ from astropy.table import Table
 from astropy.time import Time
 import astropy.units as u
 
+from stellarphot import PhotometryData
 from stellarphot.differential_photometry.aij_rel_fluxes import calc_aij_relative_flux
 
 
@@ -54,6 +55,7 @@ def _raw_photometry_table():
                       names=['date-obs', 'ra', 'dec', 'aperture_net_cnts',
                              'noise_electrons', 'star_id'])
 
+    photom = PhotometryData(raw_table)
     return expected_flux_ratios, expected_flux_error, raw_table, raw_table[1:4]
 
 
