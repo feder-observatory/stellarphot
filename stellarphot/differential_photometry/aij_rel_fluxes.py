@@ -16,7 +16,7 @@ def add_in_quadrature(array):
 def calc_aij_relative_flux(star_data, comp_stars,
                            in_place=True, coord_column=None,
                            star_id_column='star_id',
-                           counts_column_name='aperture_sum'):
+                           counts_column_name='aperture_net_cnts'):
     """
     Calculate AstroImageJ-style flux ratios.
 
