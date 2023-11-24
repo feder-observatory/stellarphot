@@ -166,6 +166,114 @@ def test_base_enhanced_table_from_existing_table():
     assert len(test_base2["dec"]) == 1
 
 
+def test_base_enhanced_table_clean():
+    # Check that the clean method exists
+    test_base = BaseEnhancedTable(table_description=test_descript, input_data=testdata)
+    # Add a row so that we can clean something
+    test_base_two = test_base.copy()
+    test_base_two.add_row(test_base[0])
+    test_base_two['ra'][1] = - test_base_two['ra'][1]
+    test_cleaned = test_base_two.clean(ra='>0.0')
+    assert len(test_cleaned) == 1
+    assert test_cleaned == test_base
+
+
+def a_table(masked=False):
+    test_table = Table([(1, 2, 3), (1, -1, -1)], names=('a', 'b'),
+                       masked=masked)
+    test_table = BaseEnhancedTable(table_description={'a': None, 'b': None}, input_data=test_table)
+    return test_table
+
+
+def test_bet_clean_criteria_none_removed():
+    """
+    If all rows satisfy the criteria, none should be removed.
+    """
+    inp = a_table()
+    criteria = {'a': '>0'}
+    out = inp.clean(**criteria)
+    assert len(out) == len(inp)
+    assert (out == inp).all()
+
+
+@pytest.mark.parametrize("condition",
+                         ['>0', '=1', '!=-1', '>=1'])
+def test_bet_clean_criteria_some_removed(condition):
+    """
+    Try a few filters which remove the second row and check that it is
+    removed.
+    """
+    inp = a_table()
+    criteria = {'b': condition}
+    out = inp.clean(**criteria)
+    assert len(out) == 1
+    assert (out[0] == inp[0]).all()
+
+
+@pytest.mark.parametrize("criteria,error_msg", [
+                         ({'a': '5'}, "not understood"),
+                         ({'a': '<foo'}, "could not convert string")])
+def test_clean_bad_criteria(criteria, error_msg):
+    """
+    Make sure the appropriate error is raised when bad criteria are used.
+    """
+    inp = a_table(masked=False)
+
+    with pytest.raises(ValueError, match=error_msg):
+        inp.clean(**criteria)
+
+
+@pytest.mark.parametrize("clean_masked",
+                         [False, True])
+def test_clean_masked_handled_correctly(clean_masked):
+    inp = a_table(masked=True)
+    # Mask negative values
+    inp['b'].mask = inp['b'] < 0
+    out = inp.clean(remove_rows_with_mask=clean_masked)
+    if clean_masked:
+        assert len(out) == 1
+        assert (np.array(out[0]) == np.array(inp[0])).all()
+    else:
+        assert len(out) == len(inp)
+        assert (out == inp).all()
+
+
+def test_clean_masked_and_criteria():
+    """
+    Check whether removing masked rows and using a criteria work
+    together.
+    """
+    inp = a_table(masked=True)
+    # Mask the first row.
+    inp['b'].mask = inp['b'] > 0
+
+    inp_copy = inp.copy()
+    # This should remove the third row.
+    criteria = {'a': '<=2'}
+
+    out = inp.clean(remove_rows_with_mask=True, **criteria)
+
+    # Is only one row left?
+    assert len(out) == 1
+
+    # Is the row that is left the same as the second row of the input?
+    assert (np.array(out[0]) == np.array(inp[1])).all()
+
+    # Is the input table unchanged?
+    assert (inp == inp_copy).all()
+
+
+def test_clean_criteria_none_removed():
+    """
+    If all rows satisfy the criteria, none should be removed.
+    """
+    inp = a_table()
+    criteria = {'a': '>0'}
+    out = inp.clean(**criteria)
+    assert len(out) == len(inp)
+    assert (out == inp).all()
+
+
 def test_base_enhanced_table_missing_column():
     # Should raise exception because the RA data is missing from input data
     testdata_nora = testdata.copy()
