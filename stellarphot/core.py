@@ -6,6 +6,9 @@ from astropy.table import Column, QTable, Table
 from astropy.time import Time
 from astropy.units import Quantity
 
+from astroquery.vizier import Vizier
+
+import pandas as pd
 from pydantic import BaseModel, root_validator
 
 import numpy as np
@@ -854,6 +857,218 @@ class CatalogData(BaseEnhancedTable):
     @property
     def catalog_source(self):
         return self.meta["catalog_source"]
+
+    @staticmethod
+    def _tidy_vizier_catalog(data, mag_column_regex, color_column_regex):
+        """
+        Transform a Vizier catalog with magnitudes into tidy structure. Or
+        at least tidier -- this only handles changing magnitude and color
+        columns into tidy format.
+
+        Parameters
+        ----------
+
+        data : `astropy.table.Table`
+            Table of catalog information. There are no restrictions on the columns.
+
+        mag_column_regex : str
+            Regular expression to match magnitude columns.
+
+        color_column_regex : str
+            Regular expression to match color columns.
+
+        Returns
+        -------
+
+        `astropy.table.Table`
+            Table with magnitude and color columns in tidy format. All other
+            columns are preserved as they were in the input data.
+        """
+
+        mag_re = re.compile(mag_column_regex)
+        color_re = re.compile(color_column_regex)
+
+        # Find all the magnitude and color columns
+        mag_match = [mag_re.match(col) for col in data.colnames]
+        color_match = [color_re.match(col) for col in data.colnames]
+
+        # create a single list of all the matches
+        matches = [m_match if m_match else c_match
+                   for m_match, c_match in zip(mag_match, color_match)]
+
+        # The passband should be the first group match.
+        passbands = [match[1] for match in matches if match]
+
+        # The original column names for those that match
+        orig_cols = [match.string for match in matches if match]
+
+        # Each magnitude column should have an error column whose name
+        # is the magnitude column name with 'e_' prepended. While prepending
+        # is what pandas will need to transform the data, many non-magnitude
+        # columns will also start ``e_`` and we don't want to change those,
+        # so we will rename the error columns too.
+        mag_err_cols = [f'e_{col}' for col in orig_cols]
+
+        # Dictionary to update the magnitude column names. The prepended
+        # part could be anything, but the choice below is unlikely to be
+        # used in a column name in a real catalog.
+        mag_col_prepend = 'magstphot'
+        mag_col_map = {orig_col: f'{mag_col_prepend}_{passband}' for orig_col, passband
+                       in zip(orig_cols, passbands)}
+
+        # Dictionary to update the magnitude error column names. The
+        # prepended part could be anything, but the choice below is
+        # unlikely to be used in a column name in a real catalog.
+        mag_err_col_prepend = 'errorstphot'
+        mag_err_col_map = {orig_col: f'{mag_err_col_prepend}_{passband}' for orig_col,
+                           passband in zip(mag_err_cols, passbands)}
+
+        # All columns except those we have renamed should be preserved, so make
+        # a list of them for us in wide_to_long.
+        id_columns = set(data.colnames) - set(orig_cols) - set(mag_err_cols)
+
+        # Make the input data into a Pandas DataFrame
+        df = data.to_pandas()
+
+        # Rename the magnitude and magnitude error columns
+        df.rename(columns=mag_col_map, inplace=True)
+        df.rename(columns=mag_err_col_map, inplace=True)
+
+        # Make the DataFrame tidy
+        df = pd.wide_to_long(df, stubnames=[mag_col_prepend, mag_err_col_prepend],
+                             i=id_columns, j='passband', sep='_', suffix='.*')
+
+        # Make the magnitude and error column names more sensible
+        df.rename(columns={mag_col_prepend: 'mag',
+                           mag_err_col_prepend: 'mag_error'},
+                  inplace=True)
+        # Reset the index, which is otherwise a multi-index of the id columns.
+        df = df.reset_index()
+
+        # Convert back to an astropy table
+        return Table.from_pandas(df)
+
+    @classmethod
+    def from_vizier(cls,
+                    header_or_center,
+                    desired_catalog,
+                    radius=0.5 * u.degree,
+                    clip_by_frame=True,
+                    padding=100,
+                    colname_map=None,
+                    mag_column_regex=r'^([a-zA-Z]+|[a-zA-Z]+-[a-zA-Z]+)_?mag$',
+                    color_column_regex=r'^([a-zA-Z]+-[a-zA-Z]+)$',
+                    prepare_catalog=None):
+        """
+        Return the items from catalog that are within the search radius and
+        (optionally) within the field of view of a frame.
+
+        Parameters
+        ----------
+
+        header_or_center : FITS header or `astropy.coordinates.SkyCoord`
+            Either a FITS header with WCS information or a `SkyCoord` object.
+            The center of the frame or the input coordinate is the center
+            of the cone search.
+
+        desired_catalog : str
+            Vizier name of the catalog to be searched.
+
+        ra_column : str, optional
+            Name of the column in the catalog that contains the RA values.
+            Default is 'RAJ2000'.
+
+        dec_column : str, optional
+            Name of the column in the catalog that contains the Dec values.
+            Default is 'DEJ2000'.
+
+        radius : float, optional
+            Radius, in degrees, around which to search. Default is 0.5.
+
+        clip_by_frame : bool, optional
+            If ``True``, only return items that are within the field of view
+            of the frame. Default is ``True``.
+
+        padding : int, optional
+            Coordinates need to be at least this many pixels in from the edge
+            of the frame to be considered in the field of view. Default value
+            is 100.
+
+        colname_map : dict, optional
+            Dictionary mapping column names in the catalog to column names in
+            a `stellarphot.CatalogData` object. Default is ``None``.
+
+        mag_column_regex : str, optional
+            Regular expression to match magnitude columns. See notes below for
+            more information about the default value.
+
+        color_column_regex : str, optional
+            Regular expression to match color columns. See notes below for
+            more information about the default value.
+
+        prepare_catalog : callable, optional
+            Function to call on the catalog after it is retrieved from Vizier.
+
+        Returns
+        -------
+
+        `astropy.table.Table`
+            Table of catalog information for stars in the field of view.
+
+        """
+
+        if isinstance(header_or_center, SkyCoord):
+            # Center was passed in, just use it.
+            center = header_or_center
+            if clip_by_frame:
+                raise ValueError('To clip entries by frame you must use '
+                                'a WCS as the first argument.')
+        else:
+            # Find the center of the frame
+            shape = (header_or_center['NAXIS2'], header_or_center['NAXIS1'])
+            center = header_or_center.wcs.pixel_to_world(shape[1] / 2,
+                                                         shape[0] / 2)
+
+        # Get catalog via cone search
+        Vizier.ROW_LIMIT = -1  # Set row_limit to have no limit
+        cat = Vizier.query_region(center, radius=radius, catalog=desired_catalog)
+
+        # Vizier always returns list even if there is only one element. Grab that
+        # element.
+        cat = cat[0]
+
+        if prepare_catalog is not None:
+            final_cat = prepare_catalog(cat)
+        else:
+            final_cat = CatalogData._tidy_vizier_catalog(cat, mag_column_regex,
+                                                         color_column_regex)
+
+        # Since we go through pandas, we lose the units, so we need to add them back
+        # in.
+        #
+        # We need to swap the key/values on the input map to get the old column names
+        # as values.
+        invert_map = {v: k for k, v in colname_map.items()}
+        final_cat[invert_map['ra']].unit = u.deg
+        final_cat[invert_map['dec']].unit = u.deg
+
+        # Make the CatalogData object....
+        cat = cls(input_data=final_cat,
+                  colname_map=colname_map,
+                  catalog_name=desired_catalog,
+                  catalog_source='Vizier')
+
+        # ...and now that the column names are standardized, clip by frame if
+        # desired.
+        if clip_by_frame:
+            cat_coords = SkyCoord(ra=cat['ra'], dec=cat['dec'])
+            x, y = header_or_center.wcs.all_world2pix(cat_coords.ra, cat_coords.dec, 0)
+            in_x = (x >= padding) & (x <= header_or_center.wcs.pixel_shape[0] - padding)
+            in_y = (y >= padding) & (y <= header_or_center.wcs.pixel_shape[1] - padding)
+            in_fov = in_x & in_y
+            cat = cat[in_fov]
+
+        return cat
 
 
 class SourceListData(BaseEnhancedTable):
