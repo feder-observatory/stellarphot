@@ -24,7 +24,7 @@ def calc_aij_relative_flux(star_data, comp_stars,
     Parameters
     ----------
 
-    star_data : 'stellarphot.PhotometryDat'
+    star_data : 'stellarphot.PhotometryData'
         Photometry data from one or more images.
 
     comp_stars : '~astropy.table.Table'
@@ -48,7 +48,6 @@ def calc_aij_relative_flux(star_data, comp_stars,
 
     counts_column_name : str,  optional
         If provided, use this column to find counts.
-        If not provided, the column 'aperture_sum' is used.
 
     star_id_column : str,  optional
         Name of the column that provides a unique identifier for each
