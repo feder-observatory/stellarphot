@@ -1,16 +1,20 @@
+from matplotlib import pyplot as plt
+
 import numpy as np
+
+from astropy import units as u
 
 
 __all__ = ['plot_many_factors', 'bin_data', 'scale_and_shift']
 
 
-def plot_many_factors(photometry, low, high, shift, scale):
+def plot_many_factors(photometry, low, high, shift, scale, ax=None):
     """ Plots many factors of photometry against each other.
 
     Parameters
     ----------
 
-    photometry : `astropy.table.Table`
+    photometry : `stellarphot.PhotometryData`
         The photometry table to plot.
 
     low : float
@@ -24,6 +28,9 @@ def plot_many_factors(photometry, low, high, shift, scale):
 
     scale : float
         The amount to scale the data by.
+
+    ax : `matplotlib.axes.Axes`, optional
+        The axes to plot on.
 
     Returns
     -------
@@ -45,7 +52,24 @@ def plot_many_factors(photometry, low, high, shift, scale):
     scale_counts = scale_and_shift(comp_counts, scale, shift, pos=True)
     scale_width = scale_and_shift(width, scale, shift, pos=True)
 
-    grid_y_ticks = np.arange(low, high, 0.02)
+    x_times = (photometry['bjd'] - 2400000 * u.day).jd
+
+    if ax is None:
+        ax = plt.gca()
+
+    print(f'{scale_airmass.min()} {scale_airmass.max()}')
+    ax.plot(x_times, scale_counts, '.', c='brown',
+             label='tot_C_cnts (arbitrarily scaled and shifted)', alpha=0.5, ms=4)
+    ax.plot(x_times, scale_airmass, 'c-',
+             label="AIRMASS (arbitrarily scaled and shifted)", ms=4)
+    ax.plot(x_times, scale_sky_pix, c='gold',
+             label='Sky/Pixel_T1 (arbitrarily scaled and shifted)', ms=4)
+    ax.plot(x_times, scale_width, '-', c='gray',
+             label="Width_T1 (arbitrarily scaled and shifted)", ms=4)
+    ax.plot(x_times, scale_x, '-', c='pink',
+             label="X(FITS)_T1 (arbitrarily scaled and shifted)", ms=4)
+    ax.plot(x_times, scale_y, '-', c='lightblue',
+             label="Y(FITS)_T1 (arbitrarily scaled and shifted)", ms=4)
 
 
 def bin_data(data_set, num=3, error_set=None):
