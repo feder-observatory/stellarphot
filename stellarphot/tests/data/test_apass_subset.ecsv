@@ -1,0 +1,110 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - name: recno
+#   datatype: int32
+#   description: Record number assigned by the VizieR team. Should Not be used for identification.
+#   meta: !!omap
+#   - {ucd: RECORD}
+#   - {width: 8}
+# - name: RAJ2000
+#   unit: deg
+#   datatype: float64
+#   format: '{:10.6f}'
+#   description: Right ascension in decimal degrees (J2000)
+#   meta: !!omap
+#   - {ucd: POS_EQ_RA_MAIN}
+#   - {width: 10}
+#   - {precision: '6'}
+# - name: DEJ2000
+#   unit: deg
+#   datatype: float64
+#   format: '{:10.6f}'
+#   description: Declination in decimal degrees (J2000)
+#   meta: !!omap
+#   - {ucd: POS_EQ_DEC_MAIN}
+#   - {width: 10}
+#   - {precision: '6'}
+# - name: e_RAJ2000
+#   unit: arcsec
+#   datatype: float32
+#   format: '{:6.3f}'
+#   description: '[0/2.4] RA uncertainty'
+#   meta: !!omap
+#   - {ucd: ERROR}
+#   - {width: 6}
+#   - {precision: '3'}
+# - name: e_DEJ2000
+#   unit: arcsec
+#   datatype: float32
+#   format: '{:6.3f}'
+#   description: '[0/2.4] DEC uncertainty'
+#   meta: !!omap
+#   - {ucd: ERROR}
+#   - {width: 6}
+#   - {precision: '3'}
+# - name: B-V
+#   unit: mag
+#   datatype: float32
+#   format: '{:6.3f}'
+#   description: '[-7.5/13]? B-V color index'
+#   meta: !!omap
+#   - {ucd: PHOT_JHN_B-V}
+#   - {width: 6}
+#   - {precision: '3'}
+#   - values: {'null': .nan}
+# - name: e_B-V
+#   unit: mag
+#   datatype: float32
+#   format: '{:6.3f}'
+#   description: '[0/10.1]? B-V uncertainty'
+#   meta: !!omap
+#   - {ucd: ERROR}
+#   - {width: 6}
+#   - {precision: '3'}
+#   - values: {'null': .nan}
+# - name: Vmag
+#   unit: mag
+#   datatype: float32
+#   format: '{:6.3f}'
+#   description: '[5.5/27.4]? Johnson V-band magnitude'
+#   meta: !!omap
+#   - {ucd: PHOT_JHN_V}
+#   - {width: 6}
+#   - {precision: '3'}
+#   - values: {'null': .nan}
+# - name: e_Vmag
+#   unit: mag
+#   datatype: float32
+#   format: '{:6.3f}'
+#   description: '[0/7]? Vmag uncertainty'
+#   meta: !!omap
+#   - {ucd: ERROR}
+#   - {width: 6}
+#   - {precision: '3'}
+#   - values: {'null': .nan}
+# - name: i_mag
+#   unit: mag
+#   datatype: float32
+#   format: '{:6.3f}'
+#   description: '[4.2/29.1]? i''-band AB magnitude, Sloan filter'
+#   meta: !!omap
+#   - {ucd: PHOT_SDSS_I}
+#   - {width: 6}
+#   - {precision: '3'}
+#   - values: {'null': .nan}
+# - name: e_i_mag
+#   unit: mag
+#   datatype: float32
+#   format: '{:6.3f}'
+#   description: '[0/9.6]? i''mag uncertainty'
+#   meta: !!omap
+#   - {ucd: ERROR}
+#   - {width: 6}
+#   - {precision: '3'}
+#   - values: {'null': .nan}
+# meta: {ID: II_336_apass9, description: The APASS catalog, name: II/336/apass9}
+# schema: astropy-2.0
+recno RAJ2000 DEJ2000 e_RAJ2000 e_DEJ2000 B-V e_B-V Vmag e_Vmag i_mag e_i_mag
+16572870 0.345154 -0.907018 0.216 0.185 1.418 0.09 13.399 0.075 12.211 0.061
+16572916 0.419892 -0.842144 0.647 0.664 0.957 0.081 15.166 0.08 14.692 0.027
