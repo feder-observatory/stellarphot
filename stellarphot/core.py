@@ -953,7 +953,7 @@ class CatalogData(BaseEnhancedTable):
                     header_or_center,
                     desired_catalog,
                     radius=0.5 * u.degree,
-                    clip_by_frame=True,
+                    clip_by_frame=False,
                     padding=100,
                     colname_map=None,
                     mag_column_regex=r'^([a-zA-Z]+|[a-zA-Z]+-[a-zA-Z]+)_?mag$',
@@ -973,14 +973,6 @@ class CatalogData(BaseEnhancedTable):
 
         desired_catalog : str
             Vizier name of the catalog to be searched.
-
-        ra_column : str, optional
-            Name of the column in the catalog that contains the RA values.
-            Default is 'RAJ2000'.
-
-        dec_column : str, optional
-            Name of the column in the catalog that contains the Dec values.
-            Default is 'DEJ2000'.
 
         radius : float, optional
             Radius, in degrees, around which to search. Default is 0.5.
@@ -1012,9 +1004,24 @@ class CatalogData(BaseEnhancedTable):
         Returns
         -------
 
-        `astropy.table.Table`
-            Table of catalog information for stars in the field of view.
+        `stellarphot.CatalogData`
+            Table of catalog information.
 
+        Notes
+        -----
+
+        In many Vizier catalogs, the magnitude columns are named with a passband
+        name followed by ``mag``, sometimes with an underscore ``_`` in between.
+        For example, the Johnson V magnitude column is
+        ``Vmag`` or ``V_mag``. The default value for ``mag_column_regex`` will match any
+        column name that starts with a letter or letters, followed by ``mag`` or
+        ``_mag`` with an underscore in between.
+
+        In many Vizier catalogs, the color columns are named with the passbands
+        separated by a hyphen. For example, the Johnson V-I color column is
+        ``V-I``. The default value for ``color_column_regex`` will match any
+        column name that starts with a letter or letters, followed by a hyphen,
+        followed by a letter or letters.
         """
 
         if isinstance(header_or_center, SkyCoord):
