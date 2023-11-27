@@ -378,7 +378,7 @@ class BaseEnhancedTable(QTable):
 
         >>> from astropy.table import Table
         >>> from stellarphot import BaseEnhancedTable  # Any subclasses will work too
-        >>> t = Table([[1, 2, 3], [1, 2, 3]], names=('a', 'b'))
+        >>> t = Table([[1, 2, 3], [1, 2, 3]], names=('a', 'b'), masked=True)
         >>> bet = BaseEnhancedTable(t)
         >>> bet['a'].mask = [True, False, False]
         >>> bet['b'].mask = [False, False, True]
