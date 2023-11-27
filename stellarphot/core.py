@@ -372,6 +372,32 @@ class BaseEnhancedTable(QTable):
 
         same type as object whose method was called
             Table with filtered data
+
+        Examples
+        --------
+
+        >>> from astropy.table import Table
+        >>> from stellarphot import BaseEnhancedTable  # Any subclasses will work too
+        >>> t = Table([[1, 2, 3], [1, 2, 3]], names=('a', 'b'))
+        >>> bet = BaseEnhancedTable(t)
+        >>> bet['a'].mask = [True, False, False]
+        >>> bet['b'].mask = [False, False, True]
+        >>> bet.clean(remove_rows_with_mask=True)
+        <QTable length=1>
+        a   b
+        int64 int64
+        ----- -----
+            2     2
+
+        >>> bet.clean(a='>2')
+        <QTable length=1>
+        a   b
+        int64 int64
+        ----- -----
+            3     3
+
+
+        >>> t.clean()
         """
         comparisons = {
             '<': np.less,
