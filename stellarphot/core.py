@@ -347,7 +347,7 @@ class BaseEnhancedTable(QTable):
             mask = self["passband"] == orig_pb
             self["passband"][mask] = aavso_pb
 
-    def clean(self, remove_rows_with_mask=True, **other_restrictions):
+    def clean(self, remove_rows_with_mask=False, **other_restrictions):
         """
         Return a catalog with only the rows that meet the criteria specified.
 
@@ -383,21 +383,19 @@ class BaseEnhancedTable(QTable):
         >>> bet['a'].mask = [True, False, False]
         >>> bet['b'].mask = [False, False, True]
         >>> bet.clean(remove_rows_with_mask=True)
-        <QTable length=1>
-        a   b
+        <BaseEnhancedTable length=1>
+        a     b
         int64 int64
         ----- -----
             2     2
 
         >>> bet.clean(a='>2')
-        <QTable length=1>
-        a   b
+        <BaseEnhancedTable length=1>
+        a     b
         int64 int64
         ----- -----
-            3     3
+            3    --
 
-
-        >>> t.clean()
         """
         comparisons = {
             '<': np.less,
