@@ -407,6 +407,8 @@ class BaseEnhancedTable(QTable):
         }
 
         recognized_comparison_ops = '|'.join(comparisons.keys())
+        criteria_re = re.compile(r'({})([-+a-zA-Z0-9]+)'.format(recognized_comparison_ops))
+
         keepers = np.ones([len(self)], dtype=bool)
 
         if remove_rows_with_mask and self.has_masked_values:
@@ -414,7 +416,6 @@ class BaseEnhancedTable(QTable):
                 keepers &= ~self[c].mask
 
         for column, restriction in other_restrictions.items():
-            criteria_re = re.compile(r'({})([-+a-zA-Z0-9]+)'.format(recognized_comparison_ops))
             results = criteria_re.match(restriction)
             if not results:
                 raise ValueError("Criteria {}{} not "
