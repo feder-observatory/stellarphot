@@ -181,9 +181,15 @@ def test_base_enhanced_table_clean():
 
 
 def a_table(masked=False):
-    test_table = Table([(1, 2, 3), (1, -1, -1)], names=('a', 'b'),
-                       masked=masked)
-    test_table = BaseEnhancedTable(table_description={'a': None, 'b': None}, input_data=test_table)
+    test_table = Table(
+        [
+            (1, 2, 3),
+            (1, -1, -2)
+        ],
+        names=('a', 'b'),
+        masked=masked)
+    test_table = BaseEnhancedTable(table_description={'a': None, 'b': None},
+                                   input_data=test_table)
     return test_table
 
 
@@ -199,7 +205,7 @@ def test_bet_clean_criteria_none_removed():
 
 
 @pytest.mark.parametrize("condition",
-                         ['>0', '=1', '!=-1', '>=1'])
+                         ['>0', '=1', '!=-1', '>=1', '<-1'])
 def test_bet_clean_criteria_some_removed(condition):
     """
     Try a few filters which remove the second row and check that it is
@@ -745,6 +751,26 @@ def test_tidy_vizier_catalog():
     just_one = result[(result['recno'] == one_star) & (result['passband'] == 'V')]
     assert np.abs(just_one['mag'][0] - one_Vmag) < 1e-6
     assert np.abs(just_one['mag_error'][0] - one_Vmag_error) < 1e-6
+
+
+def test_tidy_vizier_catalog_several_mags():
+    # Test table conversion when there are several magnitude columns.
+    apass_input = Table.read(get_pkg_data_filename('data/test_apass_subset.ecsv'))
+
+    # Make sure the columns we exxpect in the teset data are there before proceeding
+    assert 'Vmag' in apass_input.colnames
+    assert 'i_mag' in apass_input.colnames
+    assert 'B-V' in apass_input.colnames
+
+    # Add a B magnitude column, and an r-i color. The values are nonsense.
+    apass_input['Bmag'] = apass_input['Vmag']
+    apass_input['r-i'] = apass_input['B-V']
+
+    result = CatalogData._tidy_vizier_catalog(apass_input,
+                                              r'^([a-zA-Z]+|[a-zA-Z]+-[a-zA-Z]+)_?mag$',
+                                              r'^([a-zA-Z]+-[a-zA-Z]+)$')
+
+    assert set(result['passband']) == {'V', 'B', 'i', 'r-i', 'B-V'}
 
 
 def test_catalog_from_vizier_search_apass():
