@@ -3,9 +3,11 @@ import numpy as np
 from astropy import units as u
 from astropy.table import Table, Column
 from astropy.time import Time
-from astropy.io import ascii
+from astropy.io import ascii, fits
 from astropy.coordinates import EarthLocation, SkyCoord
+from astropy.nddata import CCDData
 from astropy.utils.data import get_pkg_data_filename
+from astropy.wcs import WCS
 from pydantic import ValidationError
 from stellarphot.core import (
     Camera,
@@ -797,6 +799,32 @@ def test_catalog_from_vizier_search_vsx():
     assert my_cat['id'][0] == 'DQ Psc'
     assert my_cat['passband'][0] == 'Hp'
     assert my_cat['Type'][0] == 'SRB'
+
+
+def test_find_apass():
+    CCD_SHAPE = [2048, 3073]
+    # This is really checking from APASS DR9 on Vizier, or at least that
+    # is where the "expected" data is drawn from.
+    expected_all = Table.read(get_pkg_data_filename('data/all_apass_ey_uma_sorted_ra_first_20.fits'))
+
+    wcs_file = get_pkg_data_filename('data/sample_wcs_ey_uma.fits')
+    wcs = WCS(fits.open(wcs_file)[0].header)
+    wcs.pixel_shape = list(reversed(CCD_SHAPE))
+    ccd = CCDData(data=np.zeros(CCD_SHAPE), wcs=wcs, unit='adu')
+
+    # Turn this into an HDU to get the standard FITS image keywords
+    ccd_im = ccd.to_hdu()
+    all_apass = apass_dr9(ccd_im[0].header, radius=1 * u.deg)
+
+    # Reference data was sorted by RA, first 20 entries kept
+    # There are 6 magnitude or color columns, so 6 * 20 = 120 rows
+    # in the resulting table.
+    all_apass.sort('ra')
+    all_apass = all_apass[:120]
+
+    # It is hard to imagine the RAs matching and other entries not matching,
+    # so just check the RAs.
+    assert set(ra.value for ra in all_apass['ra']) == set(expected_all['RAJ2000'])
 
 
 # Load test apertures
