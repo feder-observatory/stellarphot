@@ -381,23 +381,23 @@ class BaseEnhancedTable(QTable):
 
         >>> from astropy.table import Table
         >>> from stellarphot import BaseEnhancedTable  # Any subclasses will work too
-        >>> t = Table([[1, 2, 3], [1, 2, 3]], names=('a', 'b'), masked=True)
+        >>> t = Table([[1.0, 2.0, 3.0], [1.0, 2.0, 3.0]], names=('a', 'b'), masked=True)
         >>> bet = BaseEnhancedTable(t)
         >>> bet['a'].mask = [True, False, False]
         >>> bet['b'].mask = [False, False, True]
         >>> bet.clean(remove_rows_with_mask=True)
         <BaseEnhancedTable length=1>
-        a     b
-        int64 int64
-        ----- -----
-            2     2
+           a       b
+        float64 float64
+        ------- -------
+          2.0     2.0
 
         >>> bet.clean(a='>2')
         <BaseEnhancedTable length=1>
-        a     b
-        int64 int64
-        ----- -----
-            3    --
+           a       b
+        float64 float64
+        ------- -------
+            3.0    --
 
         """
         comparisons = {

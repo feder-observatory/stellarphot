@@ -834,7 +834,7 @@ def test_catalog_from_vizier_search_vsx():
 
 
 def test_from_vizier_with_coord_and_frame_clip_fails():
-    # Check that calling catalog_search with a coordinate instead
+    # Check that calling from_vizier with a coordinate instead
     # of WCS and with clip_by_frame = True generates an appropriate
     # error.
     data_file = 'data/sample_wcs_ey_uma.fits'
