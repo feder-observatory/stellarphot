@@ -7,9 +7,8 @@ from astropy.coordinates import SkyCoord
 from astropy.nddata import CCDData
 from astropy import units as u
 
-from stellarphot.utils.catalog_search import find_known_variables
 from stellarphot.photometry import *
-from stellarphot import apass_dr9
+from stellarphot import apass_dr9, vsx_vizier
 
 
 __all__ = ["read_file", "set_up", "crossmatch_APASS2VSX", "mag_scale", "in_field"]
@@ -73,7 +72,7 @@ def set_up(sample_image_for_finding_stars, directory_with_images="."):
 
     ccd = CCDData.read(path)
     try:
-        vsx = find_known_variables(ccd)
+        vsx = vsx_vizier(ccd.header, radius=0.5 * u.degree)
     except RuntimeError:
         vsx = []
     else:

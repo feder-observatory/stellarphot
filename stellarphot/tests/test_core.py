@@ -14,6 +14,8 @@ from stellarphot.core import (
     BaseEnhancedTable,
     PhotometryData,
     CatalogData,
+    apass_dr9,
+    vsx_vizier,
     SourceListData,
 )
 
@@ -204,9 +206,13 @@ def test_bet_clean_criteria_none_removed():
     assert (out == inp).all()
 
 
-@pytest.mark.parametrize("condition",
-                         ['>0', '=1', '!=-1', '>=1', '<-1'])
-def test_bet_clean_criteria_some_removed(condition):
+@pytest.mark.parametrize("condition,input_row",
+                            [('>0', 0),
+                             ('=1', 0),
+                             ('>=1', 0),
+                             ('<-1', 2),
+                             ('=-1', 1)])
+def test_bet_clean_criteria_some_removed(condition, input_row):
     """
     Try a few filters which remove the second row and check that it is
     removed.
@@ -215,7 +221,7 @@ def test_bet_clean_criteria_some_removed(condition):
     criteria = {'b': condition}
     out = inp.clean(**criteria)
     assert len(out) == 1
-    assert (out[0] == inp[0]).all()
+    assert (out[0] == inp[input_row]).all()
 
 
 @pytest.mark.parametrize("criteria,error_msg", [
@@ -825,6 +831,40 @@ def test_catalog_from_vizier_search_vsx():
     assert my_cat['id'][0] == 'DQ Psc'
     assert my_cat['passband'][0] == 'Hp'
     assert my_cat['Type'][0] == 'SRB'
+
+
+def test_from_vizier_with_coord_and_frame_clip_fails():
+    # Check that calling catalog_search with a coordinate instead
+    # of WCS and with clip_by_frame = True generates an appropriate
+    # error.
+    data_file = 'data/sample_wcs_ey_uma.fits'
+    data = get_pkg_data_filename(data_file)
+    wcs = WCS(fits.open(data)[0].header)
+    cen_coord = wcs.pixel_to_world(4096 / 2, 4096 / 2)
+    with pytest.raises(ValueError, match='To clip entries by frame'):
+        _ = CatalogData.from_vizier(cen_coord,'B/vsx/vsx', clip_by_frame=True)
+
+
+@pytest.mark.parametrize('clip, data_file',
+                         [(True, 'data/clipped_ey_uma_vsx.fits'),
+                          (False, 'data/unclipped_ey_uma_vsx.fits')])
+def test_vsx_results(clip, data_file):
+    # Check that a catalog search of VSX gives us what we expect.
+    # I suppose this really isn't future-proof, since more variables
+    # could be discovered in the future....
+    data = get_pkg_data_filename(data_file)
+    expected = Table.read(data)
+    wcs_file = get_pkg_data_filename('data/sample_wcs_ey_uma.fits')
+    wcs = WCS(fits.open(wcs_file)[0].header)
+    CCD_SHAPE = [2048, 3073]
+    wcs.pixel_shape = list(reversed(CCD_SHAPE))
+    ccd = CCDData(data=np.zeros(CCD_SHAPE), wcs=wcs, unit='adu')
+
+    # Turn this into an HDU to get the standard FITS image keywords
+    ccd_im = ccd.to_hdu()
+
+    actual = vsx_vizier(ccd_im[0].header, radius=0.5 * u.degree, clip_by_frame=clip)
+    assert set(actual['OID']) == set(expected['OID'])
 
 
 def test_find_apass():

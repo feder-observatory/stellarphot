@@ -19,6 +19,8 @@ __all__ = [
     "BaseEnhancedTable",
     "PhotometryData",
     "CatalogData",
+    "apass_dr9",
+    "vsx_vizier",
     "SourceListData",
 ]
 
@@ -1095,9 +1097,10 @@ class CatalogData(BaseEnhancedTable):
         # desired.
         if clip_by_frame:
             cat_coords = SkyCoord(ra=cat['ra'], dec=cat['dec'])
-            x, y = WCS(header_or_center).all_world2pix(cat_coords.ra, cat_coords.dec, 0)
-            in_x = (x >= padding) & (x <= header_or_center.wcs.pixel_shape[0] - padding)
-            in_y = (y >= padding) & (y <= header_or_center.wcs.pixel_shape[1] - padding)
+            wcs = WCS(header_or_center)
+            x, y = wcs.all_world2pix(cat_coords.ra, cat_coords.dec, 0)
+            in_x = (x >= padding) & (x <= wcs.pixel_shape[0] - padding)
+            in_y = (y >= padding) & (y <= wcs.pixel_shape[1] - padding)
             in_fov = in_x & in_y
             cat = cat[in_fov]
 
@@ -1143,6 +1146,56 @@ def apass_dr9(header_or_center,
                                    clip_by_frame=clip_by_frame,
                                    padding=padding,
                                    colname_map=apass_colnames)
+
+
+def vsx_vizier(header_or_center,
+               radius=1 * u.degree,
+               clip_by_frame=False,
+               padding=100):
+    """
+    Return the items from APASS DR9 that are within the search radius and
+    (optionally) within the field of view of a frame.
+
+    Parameters
+    ----------
+    header_or_center : FITS header or `astropy.coordinates.SkyCoord`
+        Either a FITS header with WCS information or a `SkyCoord` object.
+        The center of the frame or the input coordinate is the center
+        of the cone search.
+
+    radius : `astropy.units.Quantity`, optional
+        Radius around which to search.
+
+    clip_by_frame : bool, optional
+        If ``True``, only return items that are within the field of view
+        of the frame. Default is ``True``.
+
+    padding : int, optional
+        Coordinates need to be at least this many pixels in from the edge
+        of the frame to be considered in the field of view. Default value
+        is 100.
+
+    """
+    vsx_map = dict(
+        Name='id',
+        RAJ2000='ra',
+        DEJ2000='dec',
+    )
+
+    # This one is easier -- it already has the passband in a column name.
+    # We'll use the maximum magnitude as the magnitude column.
+    def prepare_cat(cat):
+        cat.rename_column('max', 'mag')
+        cat.rename_column('n_max', 'passband')
+        return cat
+
+    return CatalogData.from_vizier(header_or_center,
+                                   'B/vsx/vsx',
+                                   radius=radius,
+                                   clip_by_frame=clip_by_frame,
+                                   padding=padding,
+                                   colname_map=vsx_map,
+                                   prepare_catalog=prepare_cat)
 
 
 class SourceListData(BaseEnhancedTable):
