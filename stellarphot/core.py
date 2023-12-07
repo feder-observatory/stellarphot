@@ -891,7 +891,8 @@ class CatalogData(BaseEnhancedTable):
         """
         Transform a Vizier catalog with magnitudes into tidy structure. Or
         at least tidier -- this only handles changing magnitude and color
-        columns into tidy format.
+        columns into tidy format. In that format each row is a single
+        observation of a single object in a single passband.
 
         Parameters
         ----------
@@ -1153,8 +1154,8 @@ def vsx_vizier(header_or_center,
                clip_by_frame=False,
                padding=100):
     """
-    Return the items from APASS DR9 that are within the search radius and
-    (optionally) within the field of view of a frame.
+    Return the items from the copy of VSX on Vizier that are within the search
+    radius and (optionally) within the field of view of a frame.
 
     Parameters
     ----------

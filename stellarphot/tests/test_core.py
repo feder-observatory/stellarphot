@@ -214,8 +214,8 @@ def test_bet_clean_criteria_none_removed():
                              ('=-1', 1)])
 def test_bet_clean_criteria_some_removed(condition, input_row):
     """
-    Try a few filters which remove the second row and check that it is
-    removed.
+    Try a few filters which leave only one row and make sure that row is
+    returned.
     """
     inp = a_table()
     criteria = {'b': condition}
