@@ -1,5 +1,117 @@
 [build-system]
-requires = ["setuptools",
-            "wheel",
-            "setuptools_scm"]
-build-backend = 'setuptools.build_meta'
+    requires = ["hatchling",
+    "hatch-vcs"]
+    build-backend = "hatchling.build"
+
+[project]
+    name = "stellarphot"
+    dynamic = ["version"]
+    description = "A package for performing stellar photometry."
+    readme = "README.md"
+    license = "BSD-3-Clause"
+    requires-python = ">=3.10"
+    authors = [
+        { name = "Matt Craig", email = "mattwcraig@gmail.com" },
+    ]
+    dependencies = [
+        "astropy >=5",
+        "astroquery",
+        "astrowidgets",
+        "bottleneck",
+        "ccdproc",
+        "ginga",
+        "ipyautoui >=0.5.9",
+        "ipyfilechooser",
+        "ipywidgets",
+        "matplotlib",
+        "pandas",
+        "photutils >=1.9",
+        "pydantic<2",
+        "pyyaml",
+    ]
+
+[project.optional-dependencies]
+    docs = [
+        "sphinx",
+        "sphinx-astropy",
+    ]
+    exo_fitting = [
+        "batman-package",
+    ]
+    test = [
+        "pytest",
+        "pytest-astropy",
+    ]
+
+[project.urls]
+        Homepage = "https://github.com/stellarphot/stellarphot"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+    version-file = "stellarphot/_version.py"
+
+[tool.hatch.build.targets.sdist]
+    include = [
+        "/stellarphot",
+    ]
+
+[tool.coverage]
+
+    [tool.coverage.run]
+        source = ["stellarphot"]
+        omit = [
+            "stellarphot/_astropy_init*",
+            "stellarphot/conftest*",
+            "stellarphot/setup_package*",
+            "stellarphot/**/tests/*",
+            "stellarphot/*version*",
+            "stellarphot/**/__init__.py"
+        ]
+
+    [tool.coverage.report]
+        exclude_lines = [
+            # Have to re-enable the standard pragma
+            "pragma: no cover",
+            # Don't complain about packages we have installed
+            "except ImportError",
+            # Don't complain if tests don't hit assertions
+            "raise AssertionError",
+            "raise NotImplementedError",
+            # Don't complain about script hooks
+            "def main(.*):",
+            # Ignore branches that don't pertain to this version of Python
+            "pragma: py{ignore_python_version}",
+        ]
+
+[tool.flake8]
+    # E101 - mix of tabs and spaces
+    # W191 - use of tabs
+    # W291 - trailing whitespace
+    # W292 - no newline at end of file
+    # W293 - trailing whitespace
+    # W391 - blank line at end of file
+    # E111 - 4 spaces per indentation level
+    # E112 - 4 spaces per indentation level
+    # E113 - 4 spaces per indentation level
+    # E901 - SyntaxError or IndentationError
+    # E902 - IOError
+    select = "E101,W191,W291,W292,W293,W391,E111,E112,E113,E901,E902"
+    exclude = "extern,sphinx,*parsetab.py,conftest.py,docs/conf.py,setup.py"
+
+[tool.pycodestyle]
+    max-line-length = 100
+    # E101 - mix of tabs and spaces
+    # W191 - use of tabs
+    # W291 - trailing whitespace
+    # W292 - no newline at end of file
+    # W293 - trailing whitespace
+    # W391 - blank line at end of file
+    # E111 - 4 spaces per indentation level
+    # E112 - 4 spaces per indentation level
+    # E113 - 4 spaces per indentation level
+    # E901 - SyntaxError or IndentationError
+    # E902 - IOError
+    select = "E101,W191,W291,W292,W293,W391,E111,E112,E113,E901,E902"
+    exclude = "extern,sphinx,*parsetab.py,conftest.py,docs/conf.py,setup.py"
