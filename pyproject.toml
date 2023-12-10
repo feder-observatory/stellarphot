@@ -137,3 +137,6 @@ addopts = [
 ]
 log_cli_level = "info"
 xfail_strict = true
+filterwarnings = [
+    "error",
+]
