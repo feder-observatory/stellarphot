@@ -7,7 +7,7 @@ name = "stellarphot"
 dynamic = ["version"]
 description = "A package for performing stellar photometry."
 readme = "README.md"
-license = { file = "LICENSE.rst" }
+license = "BSD-3-Clause"
 requires-python = ">=3.10"
 authors = [
     { name = "Matt Craig", email = "mattwcraig@gmail.com" },
