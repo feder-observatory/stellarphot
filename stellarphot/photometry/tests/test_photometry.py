@@ -16,6 +16,9 @@ from stellarphot.photometry import (calculate_noise, find_too_close,
 from stellarphot.settings import ApertureSettings
 
 GAINS = [1.0, 1.5, 2.0]
+# Make sure the tests are deterministic by using a random seed
+SEED = 5432985
+
 
 def test_calc_noise_defaults():
     # If we put in nothing we should get an error about is missing camera
@@ -224,7 +227,7 @@ coords2use='pixel'
 # The True case below is a regression test for #157
 @pytest.mark.parametrize('int_data', [True, False])
 def test_aperture_photometry_no_outlier_rejection(int_data):
-    fake_CCDimage = FakeCCDImage()
+    fake_CCDimage = FakeCCDImage(seed=SEED)
 
     sources = fake_CCDimage.sources
     aperture = sources['aperture'][0]
@@ -293,7 +296,7 @@ def test_aperture_photometry_with_outlier_rejection(reject):
     the photometry is correct when outliers are rejected and is
     incorrect when outliers are not rejected.
     """
-    fake_CCDimage = FakeCCDImage()
+    fake_CCDimage = FakeCCDImage(seed=SEED)
     sources = fake_CCDimage.sources
     aperture = sources['aperture'][0]
     inner_annulus = 2 * aperture
@@ -305,6 +308,8 @@ def test_aperture_photometry_with_outlier_rejection(reject):
 
     image = fake_CCDimage.data
 
+    print(f'{fake_CCDimage=}')
+    print(f"{sources['x_stddev'].mean()}")
     found_sources = source_detection(fake_CCDimage,
                                     fwhm=sources['x_stddev'].mean(),
                                     threshold=10)
@@ -363,7 +368,7 @@ def test_aperture_photometry_with_outlier_rejection(reject):
 
 def list_of_fakes(num_files):
     # Generate fake CCDData objects for use in photometry_on_directory tests
-    fake_images = [FakeCCDImage()]
+    fake_images = [FakeCCDImage(seed=SEED)]
 
     # Create additional images, each in a different position.
     for i in range(num_files-1):

@@ -1,17 +1,24 @@
+import warnings
+
 import numpy as np
 import pytest
 
 from astropy.table import QTable
 from astropy.stats import gaussian_sigma_to_fwhm
 from astropy import units as u
+from astropy.utils.exceptions import AstropyUserWarning
 
 from stellarphot.photometry import (source_detection, compute_fwhm)
 
 from fake_image import FakeImage
 
+# Make sure the tests are deterministic by using a random seed
+SEED = 5432985
+
+
 @pytest.mark.parametrize('units', [u.pixel, None])
 def test_compute_fwhm(units):
-    fake_image = FakeImage()
+    fake_image = FakeImage(seed=SEED)
     sources = fake_image.sources
     if units is not None:
         # It turns out having a unit on a column is not the same as
@@ -32,17 +39,22 @@ def test_compute_fwhm(units):
 def test_compute_fwhm_with_NaNs():
     # Regression test for https://github.com/feder-observatory/stellarphot/issues/161
     # We should be able to find FWHM for a source even with NaNs in the image.
-    fake_image = FakeImage()
+    fake_image = FakeImage(seed=SEED)
     sources = fake_image.sources
     x, y = sources['x_mean'].astype(int)[0], sources['y_mean'].astype(int)[0]
     image = fake_image.image.copy()
 
     # Add a NaN to the image at the location of the first source. Note the
     # usual row/column swap when going to x/y coordinates.
-    image[y, x] = np.nan
+    print(x, y)
 
-    fwhm_x, fwhm_y = compute_fwhm(image, sources,
-                                  x_column='x_mean', y_column='y_mean', fit=True)
+    # We expect a warning about NaNs in the image, so catch it
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore",
+                                message="Non-Finite input data has been removed",
+                                category=AstropyUserWarning)
+        fwhm_x, fwhm_y = compute_fwhm(image, sources,
+                                      x_column='x_mean', y_column='y_mean', fit=True)
 
     expected_fwhm = np.array(sources['x_stddev'] * gaussian_sigma_to_fwhm)
     assert np.allclose(fwhm_x, expected_fwhm, rtol=1e-2)
@@ -52,7 +64,7 @@ def test_detect_source_number_location():
     """
     Make sure we detect the sources in the input table....
     """
-    fake_image = FakeImage()
+    fake_image = FakeImage(seed=SEED)
     sources = QTable(fake_image.sources, units={'x_mean':u.pixel, 'y_mean':u.pixel,
                                                 'x_stddev':u.pixel, 'y_stddev':u.pixel})
     # print(sources)
@@ -85,7 +97,7 @@ def test_detect_source_with_padding():
     """
     Make sure we detect the sources in the input table....
     """
-    fake_image = FakeImage()
+    fake_image = FakeImage(seed=SEED)
     sources = QTable(fake_image.sources, units={'x_mean':u.pixel, 'y_mean':u.pixel,
                                                 'x_stddev':u.pixel, 'y_stddev':u.pixel})
     # Pass only one value for the sky background for source detection
