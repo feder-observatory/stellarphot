@@ -609,7 +609,7 @@ def multi_image_photometry(directory_with_images,
     reject_unmatched : bool, optional (Default: True)
         If ``True``, any sources that are not detected on all the images are
         rejected.  If you are interested in a source that can intermittently
-        fall below your detection limits, we suggest setting this to ``False`` 
+        fall below your detection limits, we suggest setting this to ``False``
         so that all sources detected on each image are reported.
 
     include_dig_noise : bool, optional (Default: True)
@@ -973,7 +973,7 @@ def calculate_noise(camera=None, counts=0.0, sky_per_pix=0.0,
 
         \\sigma = \\sqrt{G \\cdot N_C + A \\cdot \\left(1 + \\frac{A}{B}\\right)\\cdot \\left[ G\\cdot S + D \\cdot t + R^2 + (0.289 G)^2\\right]}
 
-    where :math:`\sigma` is the noise, :math:`G` is the gain,
+    where :math:`\\sigma` is the noise, :math:`G` is the gain,
     :math:`N_C` is the source counts (which is photon/electron counts divided by gain),
     :math:`A` is the aperture area in pixels,
     :math:`B` is the annulus area in pixels,
@@ -1053,4 +1053,3 @@ def calculate_noise(camera=None, counts=0.0, sky_per_pix=0.0,
         digitization = area_ratio * (gain * 0.289) ** 2
 
     return np.sqrt(poisson_source + sky + dark + rn_error + digitization)
-
