@@ -1,4 +1,5 @@
 import re
+import warnings
 
 import pytest
 
@@ -78,10 +79,27 @@ def test_target_file():
     # object
 
     tic_742648307 = SkyCoord(ra=104.733225, dec=49.968739, unit='degree')
+
     tess_target = TessTargetFile(tic_742648307, magnitude=12, depth=10)
 
     # Check that the first thing in the list is the tick object
-    check_coords = SkyCoord(ra=tess_target.table['RA'][0],
-                            dec=tess_target.table['Dec'][0],
-                            unit=('hour', 'degree'))
+    check_coords = SkyCoord(
+        ra=tess_target.table['RA'][0],
+        dec=tess_target.table['Dec'][0],
+        unit=('hour', 'degree')
+    )
     assert tic_742648307.separation(check_coords).arcsecond < 1
+
+    # On windows the temporary file cannot be deleted because if it is
+    # then the file immediately vanished. That means we get a warning
+    # about having an open file handle. We can ignore that warning
+    # because we don't care about it here.
+
+    # The warning doesn't get generated until the last reference to
+    # the object is deleted, so we need to do that here instead of
+    # letting it happen at the end of the test.
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore",
+                                message="unclosed file",
+                                category=ResourceWarning)
+        del tess_target
