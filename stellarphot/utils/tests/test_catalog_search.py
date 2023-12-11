@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import pytest
 
@@ -7,6 +9,7 @@ from astropy.utils.data import get_pkg_data_filename
 from astropy.io import fits
 from astropy.wcs import WCS
 from astropy.nddata import CCDData
+from astropy.wcs.wcs import FITSFixedWarning
 
 from ..catalog_search import catalog_clean, in_frame, \
                              catalog_search, find_known_variables, \
@@ -136,7 +139,14 @@ def test_catalog_search(clip, data_file):
     data = get_pkg_data_filename(data_file)
     expected = Table.read(data)
     wcs_file = get_pkg_data_filename('data/sample_wcs_ey_uma.fits')
-    wcs = WCS(fits.open(wcs_file)[0].header)
+    with fits.open(wcs_file) as hdulist:
+        with warnings.catch_warnings():
+            # Ignore the warning about the WCS having a different number of
+            # axes than the (non-existent) image.
+            warnings.filterwarnings("ignore",
+                                    message="The WCS transformation has more",
+                                    category=FITSFixedWarning)
+            wcs = WCS(hdulist[0].header)
     wcs.pixel_shape = list(reversed(CCD_SHAPE))
     actual = catalog_search(wcs, CCD_SHAPE, 'B/vsx/vsx',
                             clip_by_frame=clip)
@@ -150,7 +160,14 @@ def test_find_known_variables():
     data = get_pkg_data_filename(data_file)
     expected = Table.read(data)
     wcs_file = get_pkg_data_filename('data/sample_wcs_ey_uma.fits')
-    wcs = WCS(fits.open(wcs_file)[0].header)
+    with fits.open(wcs_file) as hdulist:
+        with warnings.catch_warnings():
+            # Ignore the warning about the WCS having a different number of
+            # axes than the (non-existent) image.
+            warnings.filterwarnings("ignore",
+                                    message="The WCS transformation has more",
+                                    category=FITSFixedWarning)
+            wcs = WCS(hdulist[0].header)
     wcs.pixel_shape = list(reversed(CCD_SHAPE))
     ccd = CCDData(data=np.zeros(CCD_SHAPE), wcs=wcs, unit='adu')
     vsx = find_known_variables(ccd)
@@ -161,7 +178,14 @@ def test_find_known_variables():
 def test_catalog_search_from_wcs_or_coord():
     data_file = 'data/sample_wcs_ey_uma.fits'
     data = get_pkg_data_filename(data_file)
-    wcs = WCS(fits.open(data)[0].header)
+    with fits.open(data) as hdulist:
+        with warnings.catch_warnings():
+            # Ignore the warning about the WCS having a different number of
+            # axes than the (non-existent) image.
+            warnings.filterwarnings("ignore",
+                                    message="The WCS transformation has more",
+                                    category=FITSFixedWarning)
+            wcs = WCS(hdulist[0].header)
     wcs.pixel_shape = (4096, 4096)
     # Try the search using the WCS alone
     vsx_vars = catalog_search(wcs, [4096, 4096], 'B/vsx/vsx',
@@ -182,7 +206,14 @@ def test_catalog_search_with_coord_and_frame_clip_fails():
     # error.
     data_file = 'data/sample_wcs_ey_uma.fits'
     data = get_pkg_data_filename(data_file)
-    wcs = WCS(fits.open(data)[0].header)
+    with fits.open(data) as hdulist:
+        with warnings.catch_warnings():
+            # Ignore the warning about the WCS having a different number of
+            # axes than the (non-existent) image.
+            warnings.filterwarnings("ignore",
+                                    message="The WCS transformation has more",
+                                    category=FITSFixedWarning)
+            wcs = WCS(hdulist[0].header)
     cen_coord = wcs.pixel_to_world(4096 / 2, 4096 / 2)
     with pytest.raises(ValueError) as e:
         _ = catalog_search(cen_coord, [4096, 4096], 'B/vsx/vsx',
@@ -196,7 +227,14 @@ def test_find_apass():
     expected_all = Table.read(get_pkg_data_filename('data/all_apass_ey_uma_sorted_ra_first_20.fits'))
     expected_low_error = Table.read(get_pkg_data_filename('data/low_error_apass_ey_uma_sorted_ra_first_20.fits'))
     wcs_file = get_pkg_data_filename('data/sample_wcs_ey_uma.fits')
-    wcs = WCS(fits.open(wcs_file)[0].header)
+    with fits.open(wcs_file) as hdulist:
+        with warnings.catch_warnings():
+            # Ignore the warning about the WCS having a different number of
+            # axes than the (non-existent) image.
+            warnings.filterwarnings("ignore",
+                                    message="The WCS transformation has more",
+                                    category=FITSFixedWarning)
+            wcs = WCS(hdulist[0].header)
     wcs.pixel_shape = list(reversed(CCD_SHAPE))
     ccd = CCDData(data=np.zeros(CCD_SHAPE), wcs=wcs, unit='adu')
     all_apass, apass_low_error = find_apass_stars(ccd)
