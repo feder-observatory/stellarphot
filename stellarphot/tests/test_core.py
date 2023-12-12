@@ -1,3 +1,5 @@
+import warnings
+
 import pytest
 import numpy as np
 from astropy import units as u
@@ -8,6 +10,8 @@ from astropy.coordinates import EarthLocation, SkyCoord
 from astropy.nddata import CCDData
 from astropy.utils.data import get_pkg_data_filename
 from astropy.wcs import WCS
+from astropy.wcs.wcs import FITSFixedWarning
+
 from pydantic import ValidationError
 from stellarphot.core import (
     Camera,
@@ -839,7 +843,14 @@ def test_from_vizier_with_coord_and_frame_clip_fails():
     # error.
     data_file = 'data/sample_wcs_ey_uma.fits'
     data = get_pkg_data_filename(data_file)
-    wcs = WCS(fits.open(data)[0].header)
+    with fits.open(data) as hdulist:
+        with warnings.catch_warnings():
+            # Ignore the warning about the WCS having a different number of
+            # axes than the (non-existent) image.
+            warnings.filterwarnings("ignore",
+                                    message="The WCS transformation has more",
+                                    category=FITSFixedWarning)
+            wcs = WCS(hdulist[0].header)
     cen_coord = wcs.pixel_to_world(4096 / 2, 4096 / 2)
     with pytest.raises(ValueError, match='To clip entries by frame'):
         _ = CatalogData.from_vizier(cen_coord,'B/vsx/vsx', clip_by_frame=True)
@@ -855,7 +866,14 @@ def test_vsx_results(clip, data_file):
     data = get_pkg_data_filename(data_file)
     expected = Table.read(data)
     wcs_file = get_pkg_data_filename('data/sample_wcs_ey_uma.fits')
-    wcs = WCS(fits.open(wcs_file)[0].header)
+    with fits.open(wcs_file) as hdulist:
+        with warnings.catch_warnings():
+            # Ignore the warning about the WCS having a different number of
+            # axes than the (non-existent) image.
+            warnings.filterwarnings("ignore",
+                                    message="The WCS transformation has more",
+                                    category=FITSFixedWarning)
+            wcs = WCS(hdulist[0].header)
     CCD_SHAPE = [2048, 3073]
     wcs.pixel_shape = list(reversed(CCD_SHAPE))
     ccd = CCDData(data=np.zeros(CCD_SHAPE), wcs=wcs, unit='adu')
@@ -874,7 +892,14 @@ def test_find_apass():
     expected_all = Table.read(get_pkg_data_filename('data/all_apass_ey_uma_sorted_ra_first_20.fits'))
 
     wcs_file = get_pkg_data_filename('data/sample_wcs_ey_uma.fits')
-    wcs = WCS(fits.open(wcs_file)[0].header)
+    with fits.open(wcs_file) as hdulist:
+        with warnings.catch_warnings():
+            # Ignore the warning about the WCS having a different number of
+            # axes than the (non-existent) image.
+            warnings.filterwarnings("ignore",
+                                    message="The WCS transformation has more",
+                                    category=FITSFixedWarning)
+            wcs = WCS(hdulist[0].header)
     wcs.pixel_shape = list(reversed(CCD_SHAPE))
     ccd = CCDData(data=np.zeros(CCD_SHAPE), wcs=wcs, unit='adu')
 
