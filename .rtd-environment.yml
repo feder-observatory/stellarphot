@@ -15,8 +15,9 @@ dependencies:
     - gatspy
     - pyyaml
     - astrowidgets
-    - ipyautoui
     - pydantic<2
     - reducer
     - reproject
     - sphinx-astropy
+    - pip:
+        - ipyautoui
