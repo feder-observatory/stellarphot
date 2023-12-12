@@ -108,9 +108,10 @@ def test_bad_comp_star(bad_thing):
 
     if bad_thing == 'RA':
         # "Jiggle" one of the stars by moving it by a few arcsec in one image.
-        coord_inp = SkyCoord(ra=last_one['ra'], dec=last_one['dec'],
+        coord_inp = SkyCoord(ra=last_one['ra'][0], dec=last_one['dec'][0],
                              unit=u.degree)
         coord_bad_ra = coord_inp.ra + 3 * u.arcsecond
+        print(len(last_one), coord_inp)
         input_table['ra'][-1] = coord_bad_ra.degree
     elif bad_thing == 'NaN':
         input_table['aperture_net_cnts'][-1] = np.nan

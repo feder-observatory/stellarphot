@@ -1,5 +1,6 @@
 import tempfile
 from pathlib import Path
+import warnings
 
 import numpy as np
 import pytest
@@ -7,6 +8,8 @@ from astropy import units as u
 from astropy.coordinates import EarthLocation
 from astropy.io import ascii
 from astropy.utils.data import get_pkg_data_filename
+from astropy.utils.metadata.exceptions import MergeConflictWarning
+
 from fake_image import FakeCCDImage, shift_FakeCCDImage
 
 from stellarphot.core import Camera, SourceListData
@@ -16,6 +19,9 @@ from stellarphot.photometry import (calculate_noise, find_too_close,
 from stellarphot.settings import ApertureSettings
 
 GAINS = [1.0, 1.5, 2.0]
+# Make sure the tests are deterministic by using a random seed
+SEED = 5432985
+
 
 def test_calc_noise_defaults():
     # If we put in nothing we should get an error about is missing camera
@@ -224,7 +230,7 @@ coords2use='pixel'
 # The True case below is a regression test for #157
 @pytest.mark.parametrize('int_data', [True, False])
 def test_aperture_photometry_no_outlier_rejection(int_data):
-    fake_CCDimage = FakeCCDImage()
+    fake_CCDimage = FakeCCDImage(seed=SEED)
 
     sources = fake_CCDimage.sources
     aperture = sources['aperture'][0]
@@ -293,7 +299,7 @@ def test_aperture_photometry_with_outlier_rejection(reject):
     the photometry is correct when outliers are rejected and is
     incorrect when outliers are not rejected.
     """
-    fake_CCDimage = FakeCCDImage()
+    fake_CCDimage = FakeCCDImage(seed=SEED)
     sources = fake_CCDimage.sources
     aperture = sources['aperture'][0]
     inner_annulus = 2 * aperture
@@ -305,6 +311,8 @@ def test_aperture_photometry_with_outlier_rejection(reject):
 
     image = fake_CCDimage.data
 
+    print(f'{fake_CCDimage=}')
+    print(f"{sources['x_stddev'].mean()}")
     found_sources = source_detection(fake_CCDimage,
                                     fwhm=sources['x_stddev'].mean(),
                                     threshold=10)
@@ -363,7 +371,7 @@ def test_aperture_photometry_with_outlier_rejection(reject):
 
 def list_of_fakes(num_files):
     # Generate fake CCDData objects for use in photometry_on_directory tests
-    fake_images = [FakeCCDImage()]
+    fake_images = [FakeCCDImage(seed=SEED)]
 
     # Create additional images, each in a different position.
     for i in range(num_files-1):
@@ -397,6 +405,7 @@ def test_photometry_on_directory():
                             f"tempfile_{i:02d}.fit" for i in range(1, num_files + 1)]
         # Write the CCDData objects to files
         for i, image in enumerate(fake_images):
+            from time import sleep; sleep(1)
             image.write(temp_file_names[i])
 
         object_name = fake_images[0].header['OBJECT']
@@ -413,18 +422,22 @@ def test_photometry_on_directory():
                                         fwhm=fake_images[0].sources['x_stddev'].mean(),
                                         threshold=10)
 
-        phot_data = multi_image_photometry(temp_dir,
-                                object_name,
-                                found_sources,
-                                fake_camera,
-                                fake_obs,
-                                aperture_settings,
-                                shift_tolerance, max_adu, fwhm_estimate,
-                                include_dig_noise=True,
-                                reject_too_close=True,
-                                reject_background_outliers=True,
-                                passband_map=None,
-                                fwhm_by_fit=True)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore",
+                                    message="Cannot merge meta key",
+                                    category=MergeConflictWarning)
+            phot_data = multi_image_photometry(temp_dir,
+                                    object_name,
+                                    found_sources,
+                                    fake_camera,
+                                    fake_obs,
+                                    aperture_settings,
+                                    shift_tolerance, max_adu, fwhm_estimate,
+                                    include_dig_noise=True,
+                                    reject_too_close=True,
+                                    reject_background_outliers=True,
+                                    passband_map=None,
+                                    fwhm_by_fit=True)
 
     # For following assertion to be true, rad must be small enough that
     # no source lies within outer_annulus of the edge of an image.

@@ -18,8 +18,12 @@ class FakeImage:
 
     noise_dev : float, optional
         The standard deviation of the noise in the image.
+
+    seed : int, optional
+        The seed to use for the random number generator. If not specified,
+        the seed will be randomly generated.
     """
-    def __init__(self, noise_dev=1.0):
+    def __init__(self, noise_dev=1.0, seed=None):
         self.image_shape = [400, 500]
         data_file = get_pkg_data_filename('data/test_sources.csv')
         self._sources = Table.read(data_file)
@@ -29,7 +33,8 @@ class FakeImage:
                                                   self.sources)
         self._noise = make_noise_image(self._stars.shape,
                                        mean=self.mean_noise,
-                                       stddev=noise_dev)
+                                       stddev=noise_dev,
+                                       seed=seed)
         # Sky background per pixel should be the mean level of the noise.
         self._sources['sky_per_pix_avg'] = self.mean_noise
 
@@ -51,11 +56,16 @@ class FakeImage:
 class FakeCCDImage(CCDData):
     # Generates a fake CCDData object for testing purposes.
     def __init__(self, *args, **kwargs):
+        # Pull off the seed argument if it exists.
+        seed = kwargs.pop('seed', None)
+
         # If no arguments are passed, use the default FakeImage.
+        # This dodge is necessary because otherwise we can't copy the CCDData
+        # object apparently.
         if (len(args) == 0) and (len(kwargs) == 0):
-            base_data = FakeImage()
+            base_data = FakeImage(seed=seed)
             super().__init__(base_data.image.copy(), unit='adu')
-        
+
             # Append attributes from the base data object.
             self.sources = base_data.sources.copy()
             self.noise_dev = base_data.noise_dev

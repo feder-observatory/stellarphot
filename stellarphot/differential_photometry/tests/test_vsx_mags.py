@@ -30,7 +30,9 @@ def test_multi_vmag():
 
     vmag, error = calc_vmag(var_stars, star_data, comp_stars, band='Rc', star_data_mag_column='mag_inst_R')
     del var_stars['coords']
-    v_data = vstack([var_stars, var_stars])
+
+    # We really don't care about the metadata here, so silently accept one
+    v_data = vstack([var_stars, var_stars], metadata_conflicts='silent')
     v_data['coords'] = SkyCoord(ra=v_data['RAJ2000'],
                                 dec=v_data['DEJ2000'], unit='degree')
     v_table = calc_multi_vmag(v_data, star_data, comp_stars, band='Rc', star_data_mag_column='mag_inst_R')

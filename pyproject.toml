@@ -138,3 +138,14 @@ addopts = [
 ]
 log_cli_level = "info"
 xfail_strict = true
+filterwarnings = [
+    "error",
+    # Apparently bqplot is using deprecated traitlets APIs
+    'ignore:\s+Sentinel is not a public part of the traitlets API:DeprecationWarning',
+    # ginga is using something from asdf that has been deprecated
+    'ignore:AsdfInFits has been deprecated:DeprecationWarning',
+    # ipyautoui generates this warning...
+    'ignore:metadata \{.+\} was set from the constructor:DeprecationWarning',
+    # Generated from batman
+    'ignore:Conversion of an array with ndim > 0 to a scalar:DeprecationWarning',
+]

@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 
 from ..magnitude_transforms import (filter_transform,
@@ -10,6 +12,7 @@ from astropy.modeling import models
 from astropy.table import Table, Column
 from astropy.utils.data import get_pkg_data_filename
 from astropy import units as u
+from astropy.utils.exceptions import AstropyUserWarning
 
 
 def generate_input_mags(n_stars):
@@ -122,10 +125,17 @@ def test_catalog_same_as_input(order):
     color = Column(name='color', data=[1.0] * len(instr_mags))
     catalog = generate_catalog_mags(instr_mags, color, zero)
 
-    _, fit_model = calculate_transform_coefficients(instr_mags,
-                                                    catalog,
-                                                    color,
-                                                    order=order)
+    # We expect these fits to be poorly conditioned because the two
+    # sets of magnitudes are identical.
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore',
+                                message='The fit may be poorly conditioned',
+                                category=AstropyUserWarning)
+        _, fit_model = calculate_transform_coefficients(instr_mags,
+                                                        catalog,
+                                                        color,
+                                                        order=order)
+
     assert len(fit_model.parameters) == order + 1
     assert all(fit_model.parameters == 0)
 
@@ -316,8 +326,19 @@ def test_coordinate_all_mismatches():
     # Mess up the coordinates of half of the stars so that they don't match.
     catalog_table['RAJ2000'] = catalog_table['RAJ2000'] + 0.5 * u.degree
 
-    calib_mags, stars_with_match, transform = \
-        transform_magnitudes(instrumental, catalog_table, catalog_table[:50],
-                             order=2)
+    # Since no stars match we expect a divide by zero in the fitting,
+    # so we'll ignore that.
+    #
+    # We also expect the fit to be poorly conditioned in this case.
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore',
+                                message='invalid value encountered in divide',
+                                category=RuntimeWarning)
+        warnings.filterwarnings('ignore',
+                                message='The fit may be poorly conditioned',
+                                category=AstropyUserWarning)
+        calib_mags, stars_with_match, transform = \
+            transform_magnitudes(instrumental, catalog_table, catalog_table[:50],
+                                 order=2)
 
     assert not any(stars_with_match)
