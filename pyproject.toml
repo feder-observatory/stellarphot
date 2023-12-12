@@ -33,6 +33,7 @@ dependencies = [
 docs = [
     "sphinx",
     "sphinx-astropy",
+    "graphviz",
 ]
 exo_fitting = [
     "batman-package",

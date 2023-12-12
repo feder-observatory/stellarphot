@@ -29,6 +29,7 @@ import os
 import sys
 import datetime
 from importlib import import_module
+from pathlib import Path
 
 try:
     from sphinx_astropy.conf.v1 import *  # noqa
@@ -36,12 +37,16 @@ except ImportError:
     print('ERROR: the documentation requires the sphinx-astropy package to be installed')
     sys.exit(1)
 
-# Get configuration information from setup.cfg
-from configparser import ConfigParser
-conf = ConfigParser()
+if sys.version_info < (3, 11):
+    import tomli as tomllib
+else:
+    import tomllib
 
-conf.read([os.path.join(os.path.dirname(__file__), '..', 'setup.cfg')])
-setup_cfg = dict(conf.items('metadata'))
+# Grab minversion from pyproject.toml
+with (Path(__file__).parents[1] / "pyproject.toml").open("rb") as f:
+    pyproject = tomllib.load(f)
+
+__minimum_python_version__ = pyproject["project"]["requires-python"].replace(">=", "")
 
 # -- General configuration ----------------------------------------------------
 
@@ -67,17 +72,17 @@ rst_epilog += """
 # -- Project information ------------------------------------------------------
 
 # This does not *have* to match the package name, but typically does
-project = setup_cfg['name']
-author = setup_cfg['author']
+project = pyproject['project']['name']
+author = ", ".join(v['name'] for v in pyproject['project']['authors'])
 copyright = '{0}, {1}'.format(
-    datetime.datetime.now().year, setup_cfg['author'])
+    datetime.datetime.now().year, author)
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
 # built documents.
 
-import_module(setup_cfg['name'])
-package = sys.modules[setup_cfg['name']]
+import_module(pyproject['project']['name'])
+package = sys.modules[pyproject['project']['name']]
 
 # The short X.Y version.
 version = package.__version__.split('-', 1)[0]
@@ -150,25 +155,6 @@ latex_documents = [('index', project + '.tex', project + u' Documentation',
 # (source start file, name, description, authors, manual section).
 man_pages = [('index', project.lower(), project + u' Documentation',
               [author], 1)]
-
-
-# -- Options for the edit_on_github extension ---------------------------------
-
-if eval(setup_cfg.get('edit_on_github')):
-    extensions += ['sphinx_astropy.ext.edit_on_github']
-
-    versionmod = import_module(setup_cfg['name'] + '.version')
-    edit_on_github_project = setup_cfg['github_project']
-    if versionmod.release:
-        edit_on_github_branch = "v" + versionmod.version
-    else:
-        edit_on_github_branch = "master"
-
-    edit_on_github_source_root = ""
-    edit_on_github_doc_root = "docs"
-
-# -- Resolving issue number to links in changelog -----------------------------
-github_issues_url = 'https://github.com/{0}/issues/'.format(setup_cfg['github_project'])
 
 # -- Turn on nitpicky mode for sphinx (to warn about references not found) ----
 #
