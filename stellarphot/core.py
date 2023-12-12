@@ -656,15 +656,6 @@ class CatalogData(BaseEnhancedTable):
     dec                   u.deg
     mag                   None
     passband              None
-
-    Attributes
-    ----------
-    catalog_name: str
-        User readable name for the catalog.
-
-    catalog_source: str
-        User readable designation for the source of the catalog (could be a
-        URL or a journal reference).
     """
 
     # Define columns that must be in table and provide information about their type, and

@@ -166,7 +166,7 @@ def find_center(image, center_guess, cutout_size=30, max_iters=10):
 def radial_profile(data, center, size=30, return_scaled=True):
     """
     Construct a radial profile of a chunk of width ``size`` centered
-    at ``center`` from image ``data`.
+    at ``center`` from image ``data``.
 
     Parameters
     ----------
