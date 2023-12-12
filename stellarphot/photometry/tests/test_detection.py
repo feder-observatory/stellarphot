@@ -46,7 +46,7 @@ def test_compute_fwhm_with_NaNs():
 
     # Add a NaN to the image at the location of the first source. Note the
     # usual row/column swap when going to x/y coordinates.
-    print(x, y)
+    image[y, x] = np.nan
 
     # We expect a warning about NaNs in the image, so catch it
     with warnings.catch_warnings():
