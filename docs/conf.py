@@ -29,6 +29,7 @@ import os
 import sys
 import datetime
 from importlib import import_module
+from pathlib import Path
 
 try:
     from sphinx_astropy.conf.v1 import *  # noqa
@@ -36,12 +37,16 @@ except ImportError:
     print('ERROR: the documentation requires the sphinx-astropy package to be installed')
     sys.exit(1)
 
-# Get configuration information from setup.cfg
-from configparser import ConfigParser
-conf = ConfigParser()
+if sys.version_info < (3, 11):
+    import tomli as tomllib
+else:
+    import tomllib
 
-conf.read([os.path.join(os.path.dirname(__file__), '..', 'setup.cfg')])
-setup_cfg = dict(conf.items('metadata'))
+# Grab minversion from pyproject.toml
+with (Path(__file__).parents[1] / "pyproject.toml").open("rb") as f:
+    pyproject = tomllib.load(f)
+
+__minimum_python_version__ = pyproject["project"]["requires-python"].replace(">=", "")
 
 # -- General configuration ----------------------------------------------------
 
@@ -67,17 +72,17 @@ rst_epilog += """
 # -- Project information ------------------------------------------------------
 
 # This does not *have* to match the package name, but typically does
-project = setup_cfg['name']
-author = setup_cfg['author']
+project = pyproject['project']['name']
+author = ", ".join(v['name'] for v in pyproject['project']['authors'])
 copyright = '{0}, {1}'.format(
-    datetime.datetime.now().year, setup_cfg['author'])
+    datetime.datetime.now().year, author)
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
 # built documents.
 
-import_module(setup_cfg['name'])
-package = sys.modules[setup_cfg['name']]
+import_module(pyproject['project']['name'])
+package = sys.modules[pyproject['project']['name']]
 
 # The short X.Y version.
 version = package.__version__.split('-', 1)[0]
