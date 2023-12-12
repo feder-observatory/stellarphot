@@ -11,17 +11,24 @@ conda:
 # Set the version of Python and other tools you might need
 build:
   os: "ubuntu-22.04"
+  apt_packages:
+    - graphviz
   tools:
-    python: "mambaforge-4.10"
+    python: "mambaforge-22.9"
 
 python:
   install:
     - method: pip
       path: .
+      extra_requirements:
+        - docs
+        - all
 
 # Build documentation in the docs/ directory with Sphinx
 sphinx:
+  builder: html
   configuration: docs/conf.py
+  fail_on_warning: true
 
 # We recommend specifying your dependencies to enable reproducible builds:
 # https://docs.readthedocs.io/en/stable/guides/reproducible-builds.html
