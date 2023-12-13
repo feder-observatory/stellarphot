@@ -15,14 +15,17 @@ jobs:
         python-version: ["3.10","3.11"]
         platform: [ubuntu-latest, macos-latest, windows-latest]
         exclude:
-          # This case is handled in the coverage run
+          # This case is handled in the coverage/remote data run
           - python-version: "3.11"
             platform: ubuntu-latest
         include:
           # In the run on python 3.11 on ubuntu include running coverage
+          # and remote data. Do both tests together to get best coverage
+          # estimate.
           - python-version: "3.11"
             platform: ubuntu-latest
             coverage: true
+            toxposargs: --remote-data=any
 
     runs-on: ${{ matrix.platform }}
 
