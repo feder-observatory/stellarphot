@@ -43,7 +43,11 @@ These typically need to be done every time you make a contribution.
     you need to make additional commits, make sure you push them to your
     fork on GitHub. The pull request will be updated automatically.
 
+Some specific examples
+~~~~~~~~~~~~~~~~~~~~~~
+
 .. toctree::
     :maxdepth: 1
 
-    settings.rst
+    settings
+    moving_code
