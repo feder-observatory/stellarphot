@@ -73,6 +73,7 @@ def test_valid_method():
     assert not tsub._valid()
 
 
+@pytest.mark.remote_data
 def test_target_file():
     # Getting the target information failed on windows, so the
     # first point of this test is to simply succeed in creating the
