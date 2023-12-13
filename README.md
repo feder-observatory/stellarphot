@@ -1,12 +1,12 @@
 # A package for transforming stellar photometry
 
-[![Powered by Astropy Badge](http://img.shields.io/badge/powered%20by-AstroPy-orange.svg?style=flat)](http://www.astropy.org) [![GitHub Workflow badge](https://github.com/feder-observatory/stellarphot/workflows/Test/badge.svg?branch=main)](https://github.com/feder-observatory/stellarphot/actions?query=workflow%3ATest)
+[![Powered by Astropy Badge](http://img.shields.io/badge/powered%20by-AstroPy-orange.svg?style=flat)](http://www.astropy.org) [![GitHub Workflow badge](https://github.com/feder-observatory/stellarphot/workflows/Test/badge.svg?branch=main)](https://github.com/feder-observatory/stellarphot/actions?query=workflow%3ATest) [![codecov](https://codecov.io/gh/feder-observatory/stellarphot/graph/badge.svg?token=uVrdNencSQ)](https://codecov.io/gh/feder-observatory/stellarphot)
 
-+ If you already have aperture photometry for a field, 
++ If you already have aperture photometry for a field,
     * calculate relative flux (like [AstroImageJ](https://www.astro.louisville.edu/software/astroimagej/)), and/or
     * calculate calibrated magnitudes by transforming to a catalog (e.g. APASS DR9)
 + If you have calibrated images but haven't done photometry yet, you can do aperture photometry on your images.
-+ If you have not calibrated your images, `stellarphot` can help -- choose the 
++ If you have not calibrated your images, `stellarphot` can help -- choose the
 
 
 ## Installation
@@ -44,5 +44,3 @@ the terms of the BSD 3-Clause license. This package is based upon
 the [Astropy package template](https://github.com/astropy/package-template>)
 which is licensed under the BSD 3-clause licence. See the licenses folder for
 more information.
-
-
