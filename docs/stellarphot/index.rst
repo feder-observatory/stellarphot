@@ -27,6 +27,7 @@ Reference/API
 .. automodapi:: stellarphot.io
 .. automodapi:: stellarphot.photometry.photometry
 .. automodapi:: stellarphot.photometry.source_detection
+.. automodapi:: stellarphot.settings
 .. automodapi:: stellarphot.transit_fitting
 .. automodapi:: stellarphot.transit_fitting.gui
 .. automodapi:: stellarphot.transit_fitting.io

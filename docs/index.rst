@@ -9,7 +9,11 @@ This is a package for doing stellar photometry that relies on astropy.
 
   stellarphot/index.rst
 
-.. note:: The layout of this directory is simply a suggestion.  To follow
-          traditional practice, do *not* edit this page, but instead place
-          all documentation for the package inside ``stellarphot/``.
-          You can follow this practice or choose your own layout.
+
+Developer Documentation
+=======================
+
+.. toctree::
+   :maxdepth: 1
+
+   dev/index.rst
