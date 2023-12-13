@@ -18,11 +18,17 @@ jobs:
           # This case is handled in the coverage run
           - python-version: "3.11"
             platform: ubuntu-latest
+          # This case is handled in the remote data run
+          - python-version: "3.11"
+            platform: macos-latest
         include:
           # In the run on python 3.11 on ubuntu include running coverage
           - python-version: "3.11"
             platform: ubuntu-latest
             coverage: true
+          - python-version: "3.11"
+            platform: macos-latest
+            toxposargs: --remote-data=any
 
     runs-on: ${{ matrix.platform }}
 
