@@ -14,7 +14,10 @@ jobs:
       matrix:
         python-version: ["3.10","3.11"]
         platform: [ubuntu-latest, macos-latest, windows-latest]
-        coverage: ['']
+        exclude:
+          # This case is handled in the coverage run
+          - python-version: "3.11"
+            platform: ubuntu-latest
         include:
           # In the run on python 3.11 on ubuntu include running coverage
           - python-version: "3.11"
@@ -45,13 +48,16 @@ jobs:
       - if: ${{ matrix.coverage }}
         name: Run tests with coverage
         run: |
-          tox -e ${{ matrix.python-version }}-coverage -- ${{ matrix.toxposargs }}
+          tox -e coverage -- ${{ matrix.toxposargs }}
 
       - if: ${{ matrix.coverage }}
         name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v3
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        with:
+          files: ./coverage.xml
+          verbose: true
 
   documentation:
     runs-on: ubuntu-latest
