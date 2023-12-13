@@ -129,6 +129,7 @@ def test_in_frame():
     assert in_out[1]
 
 
+@pytest.mark.remote_data
 @pytest.mark.parametrize('clip, data_file',
                          [(True, 'data/clipped_ey_uma_vsx.fits'),
                           (False, 'data/unclipped_ey_uma_vsx.fits')])
@@ -153,6 +154,7 @@ def test_catalog_search(clip, data_file):
     assert all(actual['OID'] == expected['OID'])
 
 
+@pytest.mark.remote_data
 def test_find_known_variables():
     # Under the hood this calls catalog search on the VSX
     # catalog and clips to the frame.
@@ -175,6 +177,7 @@ def test_find_known_variables():
     assert expected['Name'] == vsx['Name']
 
 
+@pytest.mark.remote_data
 def test_catalog_search_from_wcs_or_coord():
     data_file = 'data/sample_wcs_ey_uma.fits'
     data = get_pkg_data_filename(data_file)
@@ -221,6 +224,7 @@ def test_catalog_search_with_coord_and_frame_clip_fails():
     assert 'To clip entries by frame' in str(e.value)
 
 
+@pytest.mark.remote_data
 def test_find_apass():
     # This is really checking from APASS DR9 on Vizier, or at least that
     # is where the "expected" data is drawn from.
