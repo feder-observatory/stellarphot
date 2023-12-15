@@ -6,7 +6,7 @@ from ipyfilechooser import FileChooser
 
 from stellarphot.settings import ApertureSettings, PhotometryFileSettings, ui_generator
 
-__all__ = ['PhotometrySettings']
+__all__ = ["PhotometrySettings"]
 
 
 class PhotometrySettings:
@@ -31,10 +31,12 @@ class PhotometrySettings:
     object_name : str
         The name of the object.
     """
+
     def __init__(self):
         self._file_loc_widget = ui_generator(PhotometryFileSettings)
-        self._object_name = ipw.Dropdown(description='Choose object',
-                                         style=dict(description_width='initial'))
+        self._object_name = ipw.Dropdown(
+            description="Choose object", style=dict(description_width="initial")
+        )
 
         self._file_loc_widget.observe(self._update_locations)
         self.ifc = None
@@ -81,9 +83,13 @@ class PhotometrySettings:
 
     def _update_object_list(self, change):
         if self.ifc.summary:
-            self._object_name.options = sorted(set(self.ifc.summary['object'][~self.ifc.summary['object'].mask]))
+            self._object_name.options = sorted(
+                set(self.ifc.summary["object"][~self.ifc.summary["object"].mask])
+            )
         else:
             self._object_name.options = []
 
     def _update_aperture_settings(self, change):
-        self.aperture_settings = ApertureSettings.parse_file(self.file_locations.aperture_settings_file)
+        self.aperture_settings = ApertureSettings.parse_file(
+            self.file_locations.aperture_settings_file
+        )

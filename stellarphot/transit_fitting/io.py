@@ -1,7 +1,7 @@
 from astroquery.mast import Catalogs
 
 
-__all__ = ['get_tic_info']
+__all__ = ["get_tic_info"]
 
 
 def get_tic_info(TIC_ID):

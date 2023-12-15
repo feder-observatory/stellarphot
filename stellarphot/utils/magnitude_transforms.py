@@ -13,11 +13,14 @@ from astroquery.vizier import Vizier
 
 
 __all__ = [
-    'f', 'get_cat', 'opts_to_str', 'calc_residual',
-    'filter_transform',
-    'calculate_transform_coefficients',
-    'transform_magnitudes',
-    'transform_to_catalog',
+    "f",
+    "get_cat",
+    "opts_to_str",
+    "calc_residual",
+    "filter_transform",
+    "calculate_transform_coefficients",
+    "transform_magnitudes",
+    "transform_to_catalog",
 ]
 
 
@@ -42,7 +45,7 @@ def f(X, a, b, c, d, z):
     """
     mag_inst, color = X
 
-    return a * mag_inst + b * mag_inst ** 2 + c * color + d * color**2 + z
+    return a * mag_inst + b * mag_inst**2 + c * color + d * color**2 + z
 
 
 def get_cat(image):
@@ -64,15 +67,15 @@ def get_cat(image):
         Table containing the APASS catalog entries within 1 degree of
         first object in Astropy table.
     """
-    our_coords = SkyCoord(image['RA'], image['Dec'], unit='degree')
+    our_coords = SkyCoord(image["RA"], image["Dec"], unit="degree")
     # Get catalog via cone search
     Vizier.ROW_LIMIT = -1  # Set row_limit to have no limit
-    desired_catalog = 'II/336/apass9'
+    desired_catalog = "II/336/apass9"
     a_star = our_coords[0]
     rad = 1 * u.degree
     cat = Vizier.query_region(a_star, radius=rad, catalog=desired_catalog)
     cat = cat[0]
-    cat_coords =  SkyCoord(cat['RAJ2000'], cat['DEJ2000'])
+    cat_coords = SkyCoord(cat["RAJ2000"], cat["DEJ2000"])
     return cat, cat_coords
 
 
@@ -92,11 +95,11 @@ def opts_to_str(opts):
     str
         String representation of the options.
     """
-    opt_names = ['a', 'b', 'c', 'd', 'z']
+    opt_names = ["a", "b", "c", "d", "z"]
     names = []
     for name, value in zip(opt_names, opts):
-        names.append(f'{name}={value:.4f}')
-    return ', '.join(names)
+        names.append(f"{name}={value:.4f}")
+    return ", ".join(names)
 
 
 def calc_residual(new_cal, catalog):
@@ -124,9 +127,7 @@ def calc_residual(new_cal, catalog):
     return resid.std()
 
 
-def filter_transform(mag_data, output_filter,
-                     g=None, r=None, i=None,
-                     transform=None):
+def filter_transform(mag_data, output_filter, g=None, r=None, i=None, transform=None):
     """
     Transform SDSS magnitudes to BVRI using either the transforms from
     Jester et al or Ivezic et al.
@@ -167,47 +168,43 @@ def filter_transform(mag_data, output_filter,
     http://aspbooks.org/custom/publications/paper/364-0165.html
 
     """
-    supported_transforms = ['jester', 'ivezic']
+    supported_transforms = ["jester", "ivezic"]
     if transform not in supported_transforms:
-        raise ValueError('Transform {} is not known. Must be one of '
-                         '{}'.format(transform, supported_transforms))
+        raise ValueError(
+            "Transform {} is not known. Must be one of "
+            "{}".format(transform, supported_transforms)
+        )
     transform_ivezic = {
-        'B': [0.2628, -0.7952, 1.0544, 0.0268],
-        'V': [0.0688, -0.2056, -0.3838, -0.0534],
-        'R': [-0.0107, 0.0050, -0.2689, -0.1540],
-        'I': [-0.0307, 0.1163, -0.3341, -0.3584]
+        "B": [0.2628, -0.7952, 1.0544, 0.0268],
+        "V": [0.0688, -0.2056, -0.3838, -0.0534],
+        "R": [-0.0107, 0.0050, -0.2689, -0.1540],
+        "I": [-0.0307, 0.1163, -0.3341, -0.3584],
     }
-    base_mag_ivezic = {
-        'B': g,
-        'V': g,
-        'R': r,
-        'I': i
-    }
+    base_mag_ivezic = {"B": g, "V": g, "R": r, "I": i}
     # For jester, using the transform for "all stars with Rc-Ic < 1.15"
     # from
     # http://www.sdss3.org/dr8/algorithms/sdssUBVRITransform.php#Jester2005
     jester_transforms = {
-        'B': [1.39, -0.39, 0, 0.21],
-        'V': [0.41, 0.59, 0, -0.01],
-        'R': [0.41, -0.5, 1.09, -0.23],
-        'I': [0.41, -1.5, 2.09, -0.44]
+        "B": [1.39, -0.39, 0, 0.21],
+        "V": [0.41, 0.59, 0, -0.01],
+        "R": [0.41, -0.5, 1.09, -0.23],
+        "I": [0.41, -1.5, 2.09, -0.44],
     }
 
     if output_filter not in base_mag_ivezic.keys():
-        raise ValueError('the desired filter must be a string R B V or I')
+        raise ValueError("the desired filter must be a string R B V or I")
 
-    if transform == 'ivezic':
-        if output_filter == 'R' or output_filter == 'I':
+    if transform == "ivezic":
+        if output_filter == "R" or output_filter == "I":
             # This will throw a KeyError if the column is missing
             c = mag_data[r] - mag_data[i]
 
-        if output_filter == 'B' or output_filter == 'V':
+        if output_filter == "B" or output_filter == "V":
             # This will throw a KeyError if the column is missing
             c = mag_data[g] - mag_data[r]
 
         transform_poly = np.poly1d(transform_ivezic[output_filter])
-        out_mag = transform_poly(c) + \
-            mag_data[base_mag_ivezic[output_filter]]
+        out_mag = transform_poly(c) + mag_data[base_mag_ivezic[output_filter]]
         # poly1d  ignores masks. Add masks back in here if necessary.
         try:
             input_mask = c.mask
@@ -215,25 +212,33 @@ def filter_transform(mag_data, output_filter,
             pass
         else:
             out_mag = np.ma.array(out_mag, mask=input_mask)
-    elif transform == 'jester':
+    elif transform == "jester":
         coeff = jester_transforms[output_filter]
-        out_mag = (coeff[0] * mag_data[g] + coeff[1] * mag_data[r] +
-                   coeff[2] * mag_data[i] + coeff[3])
+        out_mag = (
+            coeff[0] * mag_data[g]
+            + coeff[1] * mag_data[r]
+            + coeff[2] * mag_data[i]
+            + coeff[3]
+        )
 
-    out_mag.name = '{}_mag'.format(output_filter)
-    out_mag.description = ('{}-band magnitude transformed '
-                           'from gri'.format(output_filter))
+    out_mag.name = "{}_mag".format(output_filter)
+    out_mag.description = "{}-band magnitude transformed " "from gri".format(
+        output_filter
+    )
     return out_mag
 
 
-def calculate_transform_coefficients(input_mag, catalog_mag, color,
-                                     input_mag_error=None,
-                                     catalog_mag_error=None,
-                                     faintest_mag=None,
-                                     order=1,
-                                     sigma=2.0,
-                                     gain=None,
-                                     ):
+def calculate_transform_coefficients(
+    input_mag,
+    catalog_mag,
+    color,
+    input_mag_error=None,
+    catalog_mag_error=None,
+    faintest_mag=None,
+    order=1,
+    sigma=2.0,
+    gain=None,
+):
     """
     Calculate linear transform coefficients from input magnitudes to catalog
     magnitudes.
@@ -340,8 +345,7 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
 
     g_init = models.Polynomial1D(order)
     fit = fitting.LinearLSQFitter()
-    or_fit = fitting.FittingWithOutlierRemoval(fit, sigma_clip,
-                                               niter=2, sigma=sigma)
+    or_fit = fitting.FittingWithOutlierRemoval(fit, sigma_clip, niter=2, sigma=sigma)
 
     if faintest_mag is not None:
         bright = catalog_mag < faintest_mag
@@ -351,20 +355,20 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
             # Might not have had a masked array...
             pass
     else:
-        bright = np.ones_like(mag_diff, dtype='bool')
+        bright = np.ones_like(mag_diff, dtype="bool")
 
     bright_index = np.nonzero(bright)
 
     # get fitted model and filtered data
-    or_fitted_model, filtered_data_mask = or_fit(g_init,
-                                                 color[bright],
-                                                 mag_diff[bright])
+    or_fitted_model, filtered_data_mask = or_fit(
+        g_init, color[bright], mag_diff[bright]
+    )
 
     # Restore the filtered_data to the same size as the input
     # magnitudes. Unmasked values were included in the fit,
     # masked were not, either because they were too faint
     # or because they were sigma clipped out.
-    restored_mask = np.zeros_like(mag_diff, dtype='bool')
+    restored_mask = np.zeros_like(mag_diff, dtype="bool")
     restored_mask[bright_index] = filtered_data_mask
     restored_mask[~bright] = True
 
@@ -374,15 +378,18 @@ def calculate_transform_coefficients(input_mag, catalog_mag, color,
     return (restored_filtered, or_fitted_model)
 
 
-def transform_magnitudes(input_mags, catalog,
-                         transform_catalog,
-                         input_mag_colum='mag_inst_r',
-                         catalog_mag_column='r_mag',
-                         catalog_color_column='B-V',
-                         faintest_mag_for_transform=14,
-                         sigma=2,
-                         order=1,
-                         gain=None):
+def transform_magnitudes(
+    input_mags,
+    catalog,
+    transform_catalog,
+    input_mag_colum="mag_inst_r",
+    catalog_mag_column="r_mag",
+    catalog_color_column="B-V",
+    faintest_mag_for_transform=14,
+    sigma=2,
+    order=1,
+    gain=None,
+):
     """
     Calculate catalog magnitudes and transform coefficients
     from instrumental magnitudes.
@@ -445,24 +452,22 @@ def transform_magnitudes(input_mags, catalog,
         of the term ``x**i``.  Warning: This returns a namedtuple if the fit
         fails.
     """
-    catalog_all_coords = SkyCoord(catalog['RAJ2000'],
-                                  catalog['DEJ2000'],
-                                  unit='deg')
+    catalog_all_coords = SkyCoord(catalog["RAJ2000"], catalog["DEJ2000"], unit="deg")
 
-    transform_catalog_coords = SkyCoord(transform_catalog['RAJ2000'],
-                                        transform_catalog['DEJ2000'],
-                                        unit='deg')
-    input_coords = SkyCoord(input_mags['RA'], input_mags['Dec'])
+    transform_catalog_coords = SkyCoord(
+        transform_catalog["RAJ2000"], transform_catalog["DEJ2000"], unit="deg"
+    )
+    input_coords = SkyCoord(input_mags["RA"], input_mags["Dec"])
 
-    transform_catalog_index, d2d, _ = \
-        match_coordinates_sky(input_coords, transform_catalog_coords)
+    transform_catalog_index, d2d, _ = match_coordinates_sky(
+        input_coords, transform_catalog_coords
+    )
 
     # create a boolean of all of the matches that have a discrepancy of less
     # than 5 arcseconds
     good_match_for_transform = d2d < 2 * u.arcsecond
 
-    catalog_index, d2d, _ = match_coordinates_sky(input_coords,
-                                                  catalog_all_coords)
+    catalog_index, d2d, _ = match_coordinates_sky(input_coords, catalog_all_coords)
 
     good_match_all = d2d < 5 * u.arcsecond
 
@@ -472,10 +477,8 @@ def transform_magnitudes(input_mags, catalog,
 
     catalog_match_indexes = transform_catalog_index[good_match_for_transform]
 
-    catalog_match_mags = \
-        transform_catalog[catalog_mag_column][catalog_match_indexes]
-    catalog_match_color = \
-        transform_catalog[catalog_color_column][catalog_match_indexes]
+    catalog_match_mags = transform_catalog[catalog_mag_column][catalog_match_indexes]
+    catalog_match_color = transform_catalog[catalog_color_column][catalog_match_indexes]
 
     good_mags = ~np.isnan(input_match_mags)
 
@@ -484,32 +487,44 @@ def transform_magnitudes(input_mags, catalog,
     catalog_match_color = catalog_match_color[good_mags]
 
     try:
-        matched_data, transforms = \
-            calculate_transform_coefficients(input_match_mags,
-                                             catalog_match_mags,
-                                             catalog_match_color,
-                                             sigma=sigma,
-                                             faintest_mag=faintest_mag_for_transform,
-                                             order=order,
-                                             gain=gain)
+        matched_data, transforms = calculate_transform_coefficients(
+            input_match_mags,
+            catalog_match_mags,
+            catalog_match_color,
+            sigma=sigma,
+            faintest_mag=faintest_mag_for_transform,
+            order=order,
+            gain=gain,
+        )
     except np.linalg.LinAlgError as e:
-        print('Danger! LinAlgError: {}'.format(str(e)))
-        Transform = namedtuple('Transform', ['parameters'])
+        print("Danger! LinAlgError: {}".format(str(e)))
+        Transform = namedtuple("Transform", ["parameters"])
         transforms = Transform(parameters=(np.nan,) * (order + 1))
 
-    our_cat_mags = (input_mags[input_mag_colum][good_match_all] +
-                    transforms(catalog[catalog_color_column][catalog_all_indexes]))
+    our_cat_mags = input_mags[input_mag_colum][good_match_all] + transforms(
+        catalog[catalog_color_column][catalog_all_indexes]
+    )
 
     return our_cat_mags, good_match_all, transforms
 
 
-def transform_to_catalog(observed_mags_grouped, obs_mag_col, obs_filter,
-                         obs_error_column=None,
-                         cat_filter='r_mag', cat_color=('r_mag', 'i_mag'),
-                         a_delta=0.5, a_cen=0, b_delta=1e-6, c_delta=0.5, d_delta=1e-6,
-                         zero_point_range=(18, 22),
-                         in_place=True, fit_diff=True,
-                         verbose=True):
+def transform_to_catalog(
+    observed_mags_grouped,
+    obs_mag_col,
+    obs_filter,
+    obs_error_column=None,
+    cat_filter="r_mag",
+    cat_color=("r_mag", "i_mag"),
+    a_delta=0.5,
+    a_cen=0,
+    b_delta=1e-6,
+    c_delta=0.5,
+    d_delta=1e-6,
+    zero_point_range=(18, 22),
+    in_place=True,
+    fit_diff=True,
+    verbose=True,
+):
     """
     Transform a set of intrumental magnitudes to a standard system using either
     instrumental colors or catalog colors.
@@ -572,19 +587,19 @@ def transform_to_catalog(observed_mags_grouped, obs_mag_col, obs_filter,
         print("are you sure you want to do that? Error weighting is important!")
 
     fit_bounds_lower = [
-        a_cen - a_delta,     # a
-        -b_delta,   # b
-        -c_delta,   # c
-        -d_delta,   # d
-        zero_point_range[0],    # z
+        a_cen - a_delta,  # a
+        -b_delta,  # b
+        -c_delta,  # c
+        -d_delta,  # d
+        zero_point_range[0],  # z
     ]
 
     fit_bounds_upper = [
-        a_cen + a_delta,     # a
+        a_cen + a_delta,  # a
         b_delta,  # b
         c_delta,  # c
         d_delta,  # d
-        zero_point_range[1],    # z
+        zero_point_range[1],  # z
     ]
 
     fit_bounds = (fit_bounds_lower, fit_bounds_upper)
@@ -605,28 +620,33 @@ def transform_to_catalog(observed_mags_grouped, obs_mag_col, obs_filter,
     cat = None
     cat_coords = None
 
-    for file, one_image in zip(observed_mags_grouped.groups.keys, observed_mags_grouped.groups):
-        our_coords = SkyCoord(one_image['RA'], one_image['Dec'], unit='degree')
+    for file, one_image in zip(
+        observed_mags_grouped.groups.keys, observed_mags_grouped.groups
+    ):
+        our_coords = SkyCoord(one_image["RA"], one_image["Dec"], unit="degree")
         if cat is None or cat_coords is None:
             cat, cat_coords = get_cat(one_image)
-            cat['color'] = cat[cat_color[0]] - cat[cat_color[1]]
+            cat["color"] = cat[cat_color[0]] - cat[cat_color[1]]
 
         cat_idx, d2d, _ = our_coords.match_to_catalog_sky(cat_coords)
 
         mag_inst = one_image[obs_mag_col]
         cat_mag = cat[cat_filter][cat_idx]
-        color = cat['color'][cat_idx]
+        color = cat["color"][cat_idx]
 
         # Impose some constraints on what is included in the fit
         good_cat = ~(color.mask | cat_mag.mask) & (d2d.arcsecond < 1)
-        good_dat = ((one_image[obs_mag_col] < -3) &
-                     (one_image[obs_mag_col] > -20) &
-                     ~np.isnan(one_image[obs_mag_col])
-                     )
+        good_dat = (
+            (one_image[obs_mag_col] < -3)
+            & (one_image[obs_mag_col] > -20)
+            & ~np.isnan(one_image[obs_mag_col])
+        )
 
         mag_diff = cat_mag - mag_inst
 
-        good_data = good_dat & (np.abs(mag_diff - np.nanmedian(mag_diff[good_dat & ~mag_diff.mask])) < 1)
+        good_data = good_dat & (
+            np.abs(mag_diff - np.nanmedian(mag_diff[good_dat & ~mag_diff.mask])) < 1
+        )
         try:
             good_data = good_data & ~one_image[obs_mag_col].mask
         except AttributeError:
@@ -651,9 +671,9 @@ def transform_to_catalog(observed_mags_grouped, obs_mag_col, obs_filter,
             offset = 0
 
         # Do the fit
-        popt, pcov = curve_fit(f, X, catm - offset,
-                               p0=init_guess, bounds=fit_bounds,
-                               sigma=errors)
+        popt, pcov = curve_fit(
+            f, X, catm - offset, p0=init_guess, bounds=fit_bounds, sigma=errors
+        )
 
         # Accumulate the parameters
         for param, value in zip(all_params, popt):
@@ -675,9 +695,9 @@ def transform_to_catalog(observed_mags_grouped, obs_mag_col, obs_filter,
         cat_colors.extend(color)
 
         # Keep the user entertained....
-        print(f'{file[0]} has fit {opts_to_str(popt)} with {residual=:.4f}')
+        print(f"{file[0]} has fit {opts_to_str(popt)} with {residual=:.4f}")
 
-    mag_col_name = obs_mag_col + '_cal'
+    mag_col_name = obs_mag_col + "_cal"
     if not in_place:
         result = observed_mags_grouped.copy()
     else:
@@ -685,14 +705,14 @@ def transform_to_catalog(observed_mags_grouped, obs_mag_col, obs_filter,
 
     result[mag_col_name] = cal_mags
     if obs_error_column is not None:
-        result[mag_col_name + '_error'] = (
-            (1 + np.asarray(all_params[0])) * result[obs_error_column]
-        )
-    opt_names = ['a', 'b', 'c', 'd', 'z']
+        result[mag_col_name + "_error"] = (1 + np.asarray(all_params[0])) * result[
+            obs_error_column
+        ]
+    opt_names = ["a", "b", "c", "d", "z"]
 
     for name, values in zip(opt_names, all_params):
         result[name] = values
 
-    result['mag_cat'] = cat_mags
-    result['color_cat'] = cat_colors
+    result["mag_cat"] = cat_mags
+    result["color_cat"] = cat_colors
     return result

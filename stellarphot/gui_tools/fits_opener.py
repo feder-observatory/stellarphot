@@ -7,7 +7,7 @@ from astropy.nddata import CCDData
 from ipyfilechooser import FileChooser
 
 
-__all__ = ['FitsOpener']
+__all__ = ["FitsOpener"]
 
 
 class FitsOpener:
@@ -37,10 +37,11 @@ class FitsOpener:
 
     path : `pathlib.Path`
     """
+
     def __init__(self, title="Choose an image", filter_pattern=None, **kwargs):
         self._fc = FileChooser(title=title, **kwargs)
         if not filter_pattern:
-            self._fc.filter_pattern = ['*.fit*', '*.fit*.[bg]z']
+            self._fc.filter_pattern = ["*.fit*", "*.fit*.[bg]z"]
         else:
             self._fc.filter_pattern = filter_pattern
 
@@ -87,7 +88,7 @@ class FitsOpener:
                 return
 
         try:
-            self.object = self._header['object']
+            self.object = self._header["object"]
         except KeyError:
             pass
 
@@ -105,6 +106,7 @@ class FitsOpener:
         callable : function
             A function that takes one argument.
         """
+
         def wrap_call(change):
             self._set_header()
             callable(change)

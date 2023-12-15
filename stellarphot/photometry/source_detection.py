@@ -11,7 +11,7 @@ from photutils.morphology import data_properties
 
 from stellarphot.core import SourceListData
 
-__all__ = ['source_detection', 'compute_fwhm']
+__all__ = ["source_detection", "compute_fwhm"]
 
 
 def _fit_2dgaussian(data):
@@ -42,18 +42,19 @@ def _fit_2dgaussian(data):
     # or many of the returned properties will be NaN.
     props = data_properties(data - np.min(data[~mask]), mask=mask)
 
-    init_const = 0.  # subtracted data minimum above
+    init_const = 0.0  # subtracted data minimum above
     # ptp = peak-to-peak, i.e. max - min, need to also exclude non-finite
     # values here.
     init_amplitude = np.ptp(data[~mask])
 
-    g_init = (Const2D(init_const)
-                  + Gaussian2D(amplitude=init_amplitude,
-                               x_mean=props.xcentroid,
-                               y_mean=props.ycentroid,
-                               x_stddev=props.semimajor_sigma.value,
-                               y_stddev=props.semiminor_sigma.value,
-                               theta=props.orientation.value))
+    g_init = Const2D(init_const) + Gaussian2D(
+        amplitude=init_amplitude,
+        x_mean=props.xcentroid,
+        y_mean=props.ycentroid,
+        x_stddev=props.semimajor_sigma.value,
+        y_stddev=props.semiminor_sigma.value,
+        theta=props.orientation.value,
+    )
 
     fitter = LevMarLSQFitter()
     y, x = np.indices(data.shape)
@@ -63,10 +64,15 @@ def _fit_2dgaussian(data):
     return gfit
 
 
-def compute_fwhm(ccd, sources, fwhm_estimate=5,
-                 x_column='xcenter', y_column='ycenter',
-                 fit=True,
-                 sky_per_pix_avg=0):
+def compute_fwhm(
+    ccd,
+    sources,
+    fwhm_estimate=5,
+    x_column="xcenter",
+    y_column="ycenter",
+    fit=True,
+    sky_per_pix_avg=0,
+):
     """
     Computes the FWHM in both x and y directions of sources in an image.
 
@@ -148,9 +154,16 @@ def compute_fwhm(ccd, sources, fwhm_estimate=5,
     return np.array(fwhm_x), np.array(fwhm_y)
 
 
-def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
-                     threshold=10.0, find_fwhm=True,
-                     sky_per_pix_avg=0, padding=0):
+def source_detection(
+    ccd,
+    fwhm=8,
+    sigma=3.0,
+    iters=5,
+    threshold=10.0,
+    find_fwhm=True,
+    sky_per_pix_avg=0,
+    padding=0,
+):
     """
     Returns an SourceListData object containing the position of sources
     within the image identified using `photutils.DAOStarFinder` algorithm.
@@ -215,23 +228,29 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
     # if not provided).  Using clipped stats should hopefully get rid of any
     # bright stars that might be in the image, so the mean should be a good
     # estimate of the sky background.
-    print("source_detection: You may see a warning about invalid values in the "
-          "input image.  This is expected if any pixels are saturated and can be "
-          "ignored.")
+    print(
+        "source_detection: You may see a warning about invalid values in the "
+        "input image.  This is expected if any pixels are saturated and can be "
+        "ignored."
+    )
     mean, median, std = sigma_clipped_stats(ccd, sigma=sigma, maxiters=iters)
-    print(f"source_detection: sigma_clipped_stats mean={mean:.4f}, median={median:.4f}, std={std:.4f}")
+    print(
+        f"source_detection: sigma_clipped_stats mean={mean:.4f}, median={median:.4f}, std={std:.4f}"
+    )
     if sky_per_pix_avg is None:
         sky_per_pix_avg = mean
         print(f"source_detection: sky_per_pix_avg set to {sky_per_pix_avg:.4f}")
 
     # Identify sources applying DAOStarFinder to a "sky subtracted"
     # image.
-    print(f"source_detection: threshold set to {threshold}* standard deviation "
-          f"({std:.4f})")
+    print(
+        f"source_detection: threshold set to {threshold}* standard deviation "
+        f"({std:.4f})"
+    )
     print(f"source_detection: Assuming fwhm of {fwhm} for DAOStarFinder")
     # daofind should be run on background subtracted image
     # (fails, or at least returns garbage, if sky_per_pix_avg is too low)
-    daofind = DAOStarFinder(fwhm = fwhm, threshold = threshold * std)
+    daofind = DAOStarFinder(fwhm=fwhm, threshold=threshold * std)
     if isinstance(ccd, CCDData):
         sources = daofind(ccd.data - sky_per_pix_avg)
     else:
@@ -240,11 +259,15 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
     # Identify sources near the edge of the image and remove them
     # from the source list.
     padding_smt = ""
-    if (padding > 0):
+    if padding > 0:
         src_cnt0 = len(sources)
         y_lim, x_lim = ccd.shape
-        keep = ((sources['xcentroid'].value >= padding) & (sources['ycentroid'].value >= padding) &
-                (sources['xcentroid'].value < x_lim-padding) & (sources['ycentroid'].value < y_lim-padding))
+        keep = (
+            (sources["xcentroid"].value >= padding)
+            & (sources["ycentroid"].value >= padding)
+            & (sources["xcentroid"].value < x_lim - padding)
+            & (sources["ycentroid"].value < y_lim - padding)
+        )
         sources = sources[keep]
         padding_smt = f" (after removing {src_cnt0-len(sources)} sources near the edge)"
 
@@ -255,51 +278,54 @@ def source_detection(ccd, fwhm=8, sigma=3.0, iters=5,
     try:
         # Retrieve the RA and Dec of each source as SKyCoord objects, then convert to
         # arrays of floats to add to table
-        skypos = ccd.wcs.pixel_to_world(sources['xcentroid'], sources['ycentroid'])
-        sources['ra'] = skypos.ra.value
-        sources['dec'] = skypos.dec.value
+        skypos = ccd.wcs.pixel_to_world(sources["xcentroid"], sources["ycentroid"])
+        sources["ra"] = skypos.ra.value
+        sources["dec"] = skypos.dec.value
     except AttributeError:
         # No WCS, so add empty columns
-        sources['ra'] = np.nan * np.ones(src_cnt)
-        sources['dec'] = np.nan * np.ones(src_cnt)
+        sources["ra"] = np.nan * np.ones(src_cnt)
+        sources["dec"] = np.nan * np.ones(src_cnt)
 
     # If requested, compute the FWHM of each source
     if find_fwhm:
-        x, y = compute_fwhm(ccd, sources, fwhm_estimate=fwhm,
-                            x_column='xcentroid', y_column='ycentroid',
-                            sky_per_pix_avg=sky_per_pix_avg)
-        sources['fwhm_x'] = x
-        sources['fwhm_y'] = y
-        sources['width'] = (x + y) / 2 # Average of x and y FWHM
+        x, y = compute_fwhm(
+            ccd,
+            sources,
+            fwhm_estimate=fwhm,
+            x_column="xcentroid",
+            y_column="ycentroid",
+            sky_per_pix_avg=sky_per_pix_avg,
+        )
+        sources["fwhm_x"] = x
+        sources["fwhm_y"] = y
+        sources["width"] = (x + y) / 2  # Average of x and y FWHM
 
         # Flag bogus fwhm values returned from fitting (no objects
         # have a fwhm less than 1 pixel)
-        bad_src = (sources['fwhm_x']<1) | (sources['fwhm_y']<1)
-        sources['fwhm_x'][bad_src] = np.nan
-        sources['fwhm_y'][bad_src] = np.nan
-        sources['width'][bad_src] = np.nan
-    else: # add empty columns
-        sources['fwhm_x'] = np.nan * np.ones(src_cnt)
-        sources['fwhm_y'] = np.nan * np.ones(src_cnt)
-        sources['width'] = np.nan * np.ones(src_cnt)
+        bad_src = (sources["fwhm_x"] < 1) | (sources["fwhm_y"] < 1)
+        sources["fwhm_x"][bad_src] = np.nan
+        sources["fwhm_y"][bad_src] = np.nan
+        sources["width"][bad_src] = np.nan
+    else:  # add empty columns
+        sources["fwhm_x"] = np.nan * np.ones(src_cnt)
+        sources["fwhm_y"] = np.nan * np.ones(src_cnt)
+        sources["width"] = np.nan * np.ones(src_cnt)
 
     # Convert sources to SourceListData object by adding
     # units to the columns
     units_dict = {
-        'id' : None,
-        'ra' : u.deg,
-        'dec' : u.deg,
-        'xcentroid' : u.pix,
-        'ycentroid' : u.pix,
-        'fwhm_x' : u.pix,
-        'fwhm_y' : u.pix,
-        'width' : u.pix
+        "id": None,
+        "ra": u.deg,
+        "dec": u.deg,
+        "xcentroid": u.pix,
+        "ycentroid": u.pix,
+        "fwhm_x": u.pix,
+        "fwhm_y": u.pix,
+        "width": u.pix,
     }
     sources = Table(data=sources, units=units_dict)
     # Rename columns to match SourceListData
-    colnamemap = {'id' : 'star_id',
-                  'xcentroid' : 'xcenter',
-                  'ycentroid' : 'ycenter'}
+    colnamemap = {"id": "star_id", "xcentroid": "xcenter", "ycentroid": "ycenter"}
 
     sl_data = SourceListData(input_data=sources, colname_map=colnamemap)
     return sl_data

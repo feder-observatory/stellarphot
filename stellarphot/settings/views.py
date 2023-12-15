@@ -1,6 +1,6 @@
 from ipyautoui import AutoUi
 
-__all__ = ['ui_generator']
+__all__ = ["ui_generator"]
 
 
 def ui_generator(model):

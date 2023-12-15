@@ -4,7 +4,7 @@ from astropy.table import Table
 from astropy.coordinates import SkyCoord
 from astropy import units as u
 
-__all__ = ['calc_multi_vmag', 'calc_vmag']
+__all__ = ["calc_multi_vmag", "calc_vmag"]
 
 
 def calc_multi_vmag(var_stars, star_data, comp_stars, **kwd):
@@ -35,16 +35,17 @@ def calc_multi_vmag(var_stars, star_data, comp_stars, **kwd):
     vmag = []
     stdev = []
     for vsx in var_stars:
-        name.append(vsx['Name'])
+        name.append(vsx["Name"])
         avg_vmag, error = calc_vmag(vsx, star_data, comp_stars, **kwd)
         vmag.append(avg_vmag)
         stdev.append(error)
-    vmag_table = Table([name, vmag, stdev], names=('Name', 'Mag', 'StDev'))
+    vmag_table = Table([name, vmag, stdev], names=("Name", "Mag", "StDev"))
     return vmag_table
 
 
-def calc_vmag(var_stars, star_data, comp_stars, band=None,
-              star_data_mag_column='mag_inst'):
+def calc_vmag(
+    var_stars, star_data, comp_stars, band=None, star_data_mag_column="mag_inst"
+):
     """
     Calculate the average magnitude and standard deviation of a variable star in field.
 
@@ -88,17 +89,17 @@ def calc_vmag(var_stars, star_data, comp_stars, band=None,
 
     # Match variable stars (essentially a list of targets) to instrumental
     # magnitude information.
-    var_coords = var_stars['coords']
-    star_data_coords = SkyCoord(ra=star_data['RA'], dec=star_data['Dec'])
+    var_coords = var_stars["coords"]
+    star_data_coords = SkyCoord(ra=star_data["RA"], dec=star_data["Dec"])
     v_index, v_d2d, _ = var_coords.match_to_catalog_sky(star_data_coords)
 
-    rcomps = comp_stars[comp_stars['band'] == band]
+    rcomps = comp_stars[comp_stars["band"] == band]
 
     # Match comparison star list to instrumental magnitude information
     try:
-        comp_coords = rcomps['coords']
+        comp_coords = rcomps["coords"]
     except KeyError:
-        comp_coords = SkyCoord(ra=rcomps['RAJ2000'], dec=rcomps['DEJ2000'])
+        comp_coords = SkyCoord(ra=rcomps["RAJ2000"], dec=rcomps["DEJ2000"])
     index, d2d, _ = comp_coords.match_to_catalog_sky(star_data_coords)
     good = d2d < 1 * u.arcsec
     good_index = index[good]
@@ -107,7 +108,7 @@ def calc_vmag(var_stars, star_data, comp_stars, band=None,
     comp_star_mag = star_data[good_index][star_data_mag_column]
     a_index, a_d2d, _ = comp_coords.match_to_catalog_sky(comp_coords)
     good_a_index = a_index[good]
-    accepted_comp = rcomps[good_a_index]['mag']
+    accepted_comp = rcomps[good_a_index]["mag"]
     new_mag = vmag_image - comp_star_mag + accepted_comp
     avg = np.nanmean(new_mag)
     stdev = np.nanstd(new_mag)

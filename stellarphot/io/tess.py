@@ -76,6 +76,7 @@ class TessSubmission:
         The UTC date of the first observation, in YYYYMMDD format
 
     """
+
     telescope_code: str
     filter: str
     utc_start: int
@@ -106,21 +107,21 @@ class TessSubmission:
         filter = ""
         fails = {}
         try:
-            dateobs = header['date-obs']
+            dateobs = header["date-obs"]
         except KeyError:
             fails["utc_start"] = "UTC date of first image"
         else:
             dateobs = dateobs.split("T")[0].replace("-", "")
 
         try:
-            filter = header['filter']
+            filter = header["filter"]
         except KeyError:
-            fails["filter"] = ("filter/passband")
+            fails["filter"] = "filter/passband"
 
         try:
-            obj = header['object']
+            obj = header["object"]
         except KeyError:
-            fails['tic_id'] = "TIC ID number"
+            fails["tic_id"] = "TIC ID number"
         else:
             result = TIC_regex.match(obj)
             if result:
@@ -131,7 +132,7 @@ class TessSubmission:
                     planet = int(result.group("planet")[1:])
             else:
                 # No star from the object after all
-                fails['tic_id'] = "TIC ID number"
+                fails["tic_id"] = "TIC ID number"
 
         fail = []
         for k, v in fails.items():
@@ -142,11 +143,13 @@ class TessSubmission:
         if fail:
             raise ValueError(fail)
 
-        return cls(utc_start=dateobs,
-                   filter=filter,
-                   telescope_code=telescope_code,
-                   tic_id=tic_id,
-                   planet_number=planet)
+        return cls(
+            utc_start=dateobs,
+            filter=filter,
+            telescope_code=telescope_code,
+            tic_id=tic_id,
+            planet_number=planet,
+        )
 
     def _valid_tele_code(self):
         return len(self.telescope_code) > 0
@@ -165,9 +168,7 @@ class TessSubmission:
          + TIC ID is not more than 10 digits
         """
         valid = (
-            self._valid_tele_code() and
-            self._valid_planet() and
-            self._valid_tic_num()
+            self._valid_tele_code() and self._valid_planet() and self._valid_tic_num()
         )
         return valid
 
@@ -181,7 +182,7 @@ class TessSubmission:
                 f"TIC{self.tic_id}-{self.planet_number:02d}",
                 self.utc_start,
                 self.telescope_code,
-                self.filter
+                self.filter,
             ]
             return "_".join(pieces)
 
@@ -220,7 +221,9 @@ class TessSubmission:
         """
         if not self._tic_info:
             self._tic_info = get_tic_info(self.tic_id)
-        return SkyCoord(ra=self._tic_info['ra'][0], dec=self._tic_info['dec'][0], unit='degree')
+        return SkyCoord(
+            ra=self._tic_info["ra"][0], dec=self._tic_info["dec"][0], unit="degree"
+        )
 
     def invalid_parts(self):
         """
@@ -283,17 +286,22 @@ class TOI:
 
     tic_id : int
     """
+
     def __init__(self, tic_id, toi_table=DEFAULT_TABLE_LOCATION, allow_download=True):
         path = Path(toi_table)
         if not path.is_file():
             if not allow_download:
                 raise ValueError(f"File {toi_table} not found.")
-            toi_table = download_file(TOI_TABLE_URL, cache=True, show_progress=True, timeout=60)
+            toi_table = download_file(
+                TOI_TABLE_URL, cache=True, show_progress=True, timeout=60
+            )
 
         self._toi_table = Table.read(toi_table, format="ascii.csv")
-        self._toi_table = self._toi_table[self._toi_table['TIC ID'] == tic_id]
+        self._toi_table = self._toi_table[self._toi_table["TIC ID"] == tic_id]
         if len(self._toi_table) != 1:
-            raise RuntimeError(f"Found {len(self._toi_table)} rows in table, expected one.")
+            raise RuntimeError(
+                f"Found {len(self._toi_table)} rows in table, expected one."
+            )
         self._tic_info = get_tic_info(tic_id)
 
     @property
@@ -301,84 +309,87 @@ class TOI:
         """
         The TESS magnitude of the target.
         """
-        return self._toi_table['TESS Mag'][0]
+        return self._toi_table["TESS Mag"][0]
 
     @property
     def tess_mag_error(self):
         """
         The uncertainty in the TESS magnitude.
         """
-        return self._toi_table['TESS Mag err'][0]
+        return self._toi_table["TESS Mag err"][0]
 
     @property
     def depth(self):
         """
         The transit depth of the target in parts per thousand.
         """
-        return self._toi_table['Depth (ppm)'][0] / 1000
+        return self._toi_table["Depth (ppm)"][0] / 1000
 
     @property
     def depth_error(self):
         """
         The uncertainty in the transit depth in parts per thousand.
         """
-        return self._toi_table['Depth (ppm) err'][0] / 1000
+        return self._toi_table["Depth (ppm) err"][0] / 1000
 
     @property
     def epoch(self):
         """
         The epoch of the transit.
         """
-        return Time(self._toi_table['Epoch (BJD)'][0], scale='tdb', format='jd')
+        return Time(self._toi_table["Epoch (BJD)"][0], scale="tdb", format="jd")
 
     @property
     def epoch_error(self):
         """
         The uncertainty in the epoch of the transit.
         """
-        return self._toi_table['Epoch (BJD) err'][0] * u.day
+        return self._toi_table["Epoch (BJD) err"][0] * u.day
 
     @property
     def period(self):
         """
         The period of the transit.
         """
-        return self._toi_table['Period (days)'][0] * u.day
+        return self._toi_table["Period (days)"][0] * u.day
 
     @property
     def period_error(self):
         """
         The uncertainty in the period of the transit.
         """
-        return self._toi_table['Period (days) err'][0] * u.day
+        return self._toi_table["Period (days) err"][0] * u.day
 
     @property
     def duration(self):
         """
         The duration of the transit.
         """
-        return self._toi_table['Duration (hours)'][0] * u.hour
+        return self._toi_table["Duration (hours)"][0] * u.hour
 
     @property
     def duration_error(self):
         """
         The uncertainty in the duration of the transit.
         """
-        return self._toi_table['Duration (hours) err'][0] * u.hour
+        return self._toi_table["Duration (hours) err"][0] * u.hour
 
     @property
     def coord(self):
         """
         The coordinates of the target.
         """
-        return SkyCoord(ra=self._tic_info['ra'][0], dec=self._tic_info['dec'][0], unit='degree')
+        return SkyCoord(
+            ra=self._tic_info["ra"][0], dec=self._tic_info["dec"][0], unit="degree"
+        )
 
     @property
     def tic_id(self):
         """
         The TIC ID of the target.
         """
-        return self._tic_info['ID'][0]
+        return self._tic_info["ID"][0]
+
 
 @dataclass
 class TessTargetFile:
@@ -433,10 +444,11 @@ class TessTargetFile:
         The target table.
 
     """
-    coord : SkyCoord
-    magnitude : float
-    depth : float
-    file : str = ""
+
+    coord: SkyCoord
+    magnitude: float
+    depth: float
+    file: str = ""
 
     def __post_init__(self):
         self.aperture_server = GAIA_APERTURE_SERVER
@@ -450,19 +462,24 @@ class TessTargetFile:
 
     def _retrieve_target_file(self):
         params = dict(
-            ra = self.coord.ra.to_string(unit='hour', decimal=False, sep=":"),
-            dec = self.coord.dec.to_string(unit='degree', decimal=False, sep=":"),
+            ra=self.coord.ra.to_string(unit="hour", decimal=False, sep=":"),
+            dec=self.coord.dec.to_string(unit="degree", decimal=False, sep=":"),
             mag=self.magnitude,
-            depth=self.depth
+            depth=self.depth,
         )
-        result = requests.get(self.aperture_server + "cgi-bin/gaia_to_aij/upload_request.cgi", params=params)
-        links = re.search('href="(.+)"', result.text.replace('\n', ''), )
+        result = requests.get(
+            self.aperture_server + "cgi-bin/gaia_to_aij/upload_request.cgi",
+            params=params,
+        )
+        links = re.search(
+            'href="(.+)"',
+            result.text.replace("\n", ""),
+        )
         download_link = self.aperture_server + links[1]
         target_file_contents = requests.get(download_link)
         # Write GAIA data to local file
         with open(self._path, "w") as f:
             f.write(target_file_contents.text)
-
 
     def _build_table(self):
         from stellarphot.utils.comparison_utils import read_file

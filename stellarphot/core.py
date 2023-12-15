@@ -8,13 +8,19 @@ from pydantic import BaseModel, root_validator
 
 import numpy as np
 
-__all__ = ['Camera', 'BaseEnhancedTable', 'PhotometryData', 'CatalogData',
-           'SourceListData']
+__all__ = [
+    "Camera",
+    "BaseEnhancedTable",
+    "PhotometryData",
+    "CatalogData",
+    "SourceListData",
+]
 
 
 # Approach to validation of units was inspired by the GammaPy project
 # which did it before we did:
 # https://docs.gammapy.org/dev/_modules/gammapy/analysis/config.html
+
 
 class QuantityType(Quantity):
     # Validator for Quantity type
@@ -46,11 +52,14 @@ class PixelScaleType(Quantity):
             v = Quantity(v)
         except TypeError:
             raise ValueError(f"Invalid value for Quantity: {v}")
-        if (len(v.unit.bases) != 2 or
-            v.unit.bases[0].physical_type != "angle" or
-            v.unit.bases[1].name != "pix" ):
+        if (
+            len(v.unit.bases) != 2
+            or v.unit.bases[0].physical_type != "angle"
+            or v.unit.bases[1].name != "pix"
+        ):
             raise ValueError(f"Invalid unit for pixel scale: {v.unit!r}")
         return v
+
 
 class Camera(BaseModel):
     """
@@ -113,6 +122,7 @@ class Camera(BaseModel):
     <Quantity 0.563 arcsec / pix>
 
     """
+
     gain: QuantityType
     read_noise: QuantityType
     dark_current: QuantityType
@@ -125,7 +135,7 @@ class Camera(BaseModel):
         json_encoders = {
             Quantity: lambda v: f"{v.value} {v.unit}",
             QuantityType: lambda v: f"{v.value} {v.unit}",
-            PixelScaleType: lambda v: f"{v.value} {v.unit}"
+            PixelScaleType: lambda v: f"{v.value} {v.unit}",
         }
 
     # When the switch to pydantic v2 happens, this root_validator will need
@@ -134,40 +144,53 @@ class Camera(BaseModel):
     @classmethod
     def validate_gain(cls, values):
         # Get read noise units
-        rn_unit = Quantity(values['read_noise']).unit
+        rn_unit = Quantity(values["read_noise"]).unit
 
         # Check that gain and read noise have compatible units, that is that
         # gain is read noise per adu.
-        gain = values['gain']
-        if (len(gain.unit.bases) != 2 or gain.unit.bases[0] != rn_unit or
-            gain.unit.bases[1] != u.adu):
-            raise ValueError(f"Gain units {gain.unit} are not compatible with "
-                             f"read noise units {rn_unit}.")
+        gain = values["gain"]
+        if (
+            len(gain.unit.bases) != 2
+            or gain.unit.bases[0] != rn_unit
+            or gain.unit.bases[1] != u.adu
+        ):
+            raise ValueError(
+                f"Gain units {gain.unit} are not compatible with "
+                f"read noise units {rn_unit}."
+            )
 
         # Check that dark current and read noise have compatible units, that is
         # that dark current is read noise per second.
-        dark_current = values['dark_current']
-        if (len(dark_current.unit.bases) != 2 or
-            dark_current.unit.bases[0] != rn_unit or
-            dark_current.unit.bases[1] != u.s):
-            raise ValueError(f"Dark current units {dark_current.unit} are not "
-                             f"compatible with read noise units {rn_unit}.")
+        dark_current = values["dark_current"]
+        if (
+            len(dark_current.unit.bases) != 2
+            or dark_current.unit.bases[0] != rn_unit
+            or dark_current.unit.bases[1] != u.s
+        ):
+            raise ValueError(
+                f"Dark current units {dark_current.unit} are not "
+                f"compatible with read noise units {rn_unit}."
+            )
 
         # Dark current validates against read noise
         return values
 
     def copy(self):
-        return Camera(gain=self.gain,
-                      read_noise=self.read_noise,
-                      dark_current=self.dark_current,
-                      pixel_scale=self.pixel_scale)
+        return Camera(
+            gain=self.gain,
+            read_noise=self.read_noise,
+            dark_current=self.dark_current,
+            pixel_scale=self.pixel_scale,
+        )
 
     def __copy__(self):
         return self.copy()
 
     def __repr__(self):
-        return f"Camera(gain={self.gain}, read_noise={self.read_noise}, " \
-                f"dark_current={self.dark_current}, pixel_scale={self.pixel_scale})"
+        return (
+            f"Camera(gain={self.gain}, read_noise={self.read_noise}, "
+            f"dark_current={self.dark_current}, pixel_scale={self.pixel_scale})"
+        )
 
 
 class BaseEnhancedTable(QTable):
@@ -212,8 +235,9 @@ class BaseEnhancedTable(QTable):
     validation of the inputs is performed and the resulting table is returned.
     """
 
-    def __init__(self, *args, input_data=None, table_description=None, colname_map=None,
-                 **kwargs):
+    def __init__(
+        self, *args, input_data=None, table_description=None, colname_map=None, **kwargs
+    ):
         if (table_description is None) and (input_data is None):
             # Assume user is trying to create an empty table and let QTable
             # handle it
@@ -224,16 +248,21 @@ class BaseEnhancedTable(QTable):
             try:
                 self._table_description = {k: v for k, v in table_description.items()}
             except AttributeError:
-                raise TypeError("You must provide a dict as table_description (input "
-                    f"table_description is type {type(self._table_description)}).")
+                raise TypeError(
+                    "You must provide a dict as table_description (input "
+                    f"table_description is type {type(self._table_description)})."
+                )
 
             # Check data before copying to avoid recusive loop and non-QTable
             # data input.
-            if not isinstance(input_data, Table) or isinstance(input_data,
-                                                               BaseEnhancedTable):
-                raise TypeError("You must provide an astropy Table and NOT a "
-                                "BaseEnhancedTable as input_data (currently of "
-                                f"type {type(input_data)}).")
+            if not isinstance(input_data, Table) or isinstance(
+                input_data, BaseEnhancedTable
+            ):
+                raise TypeError(
+                    "You must provide an astropy Table and NOT a "
+                    "BaseEnhancedTable as input_data (currently of "
+                    f"type {type(input_data)})."
+                )
 
             # Copy data before potential modification
             data = input_data.copy()
@@ -244,9 +273,11 @@ class BaseEnhancedTable(QTable):
                 try:
                     self._colname_map = {k: v for k, v in colname_map.items()}
                 except AttributeError:
-                    raise TypeError("You must provide a dict as table_description "
-                                    "(input table_description is type "
-                                    f"{type(self._table_description)}).")
+                    raise TypeError(
+                        "You must provide a dict as table_description "
+                        "(input table_description is type "
+                        f"{type(self._table_description)})."
+                    )
 
                 self._update_colnames(self._colname_map, data)
 
@@ -275,18 +306,22 @@ class BaseEnhancedTable(QTable):
                 # Check type
                 try:
                     if data[this_col].unit != this_unit:
-                        raise ValueError(f"data['{this_col}'] is of wrong unit "
-                                            f"(should be {this_unit} but reported "
-                                            f"as {data[this_col].unit}).")
+                        raise ValueError(
+                            f"data['{this_col}'] is of wrong unit "
+                            f"(should be {this_unit} but reported "
+                            f"as {data[this_col].unit})."
+                        )
                 except KeyError:
-                    raise ValueError(f"data['{this_col}'] is missing from input "
-                                        "data.")
-            else: # Check that columns with no units but are required exist!
+                    raise ValueError(
+                        f"data['{this_col}'] is missing from input " "data."
+                    )
+            else:  # Check that columns with no units but are required exist!
                 try:
                     tempvar = data[this_col]
                 except KeyError:
-                    raise ValueError(f"data['{this_col}'] is missing from input "
-                                     "data.")
+                    raise ValueError(
+                        f"data['{this_col}'] is missing from input " "data."
+                    )
 
     def _update_colnames(self, colname_map, data):
         # Change column names as desired, done before validating the columns,
@@ -295,15 +330,17 @@ class BaseEnhancedTable(QTable):
             try:
                 data.rename_column(orig_name, new_name)
             except KeyError:
-                raise ValueError(f"data['{orig_name}'] is missing from input "
-                                         "data but listed in colname_map!")
+                raise ValueError(
+                    f"data['{orig_name}'] is missing from input "
+                    "data but listed in colname_map!"
+                )
 
     def _update_passbands(self):
         # Converts filter names in filter column to AAVSO standard names
         # Assumes _passband_map is in namespace.
         for orig_pb, aavso_pb in self._passband_map.items():
-            mask = self['passband'] == orig_pb
-            self['passband'][mask] = aavso_pb
+            mask = self["passband"] == orig_pb
+            self["passband"][mask] = aavso_pb
 
 
 class PhotometryData(BaseEnhancedTable):
@@ -410,156 +447,194 @@ class PhotometryData(BaseEnhancedTable):
     # Define columns that must be in table and provide information about their type, and
     # units.
     phot_descript = {
-        'star_id' : None,
-        'ra' : u.deg,
-        'dec' : u.deg,
-        'xcenter' : u.pix,
-        'ycenter' : u.pix,
-        'fwhm_x' : u.pix,
-        'fwhm_y' : u.pix,
-        'width' : u.pix,
-        'aperture' : u.pix,
-        'aperture_area' : u.pix,
-        'annulus_inner' : u.pix,
-        'annulus_outer' : u.pix,
-        'annulus_area' : u.pix,
-        'aperture_sum' : None,
-        'annulus_sum' : None,
-        'sky_per_pix_avg' : None,
-        'sky_per_pix_med' : None,
-        'sky_per_pix_std' : None,
-        'aperture_net_cnts' : None,
-        'noise_cnts' : None,
-        'noise_electrons' : u.electron,
-        'snr' : None,
-        'mag_inst' : None,
-        'mag_error' : None,
-        'exposure' : u.second,
-        'date-obs' : None,
-        'airmass' : None,
-        'passband' : None,
-        'file' : None
+        "star_id": None,
+        "ra": u.deg,
+        "dec": u.deg,
+        "xcenter": u.pix,
+        "ycenter": u.pix,
+        "fwhm_x": u.pix,
+        "fwhm_y": u.pix,
+        "width": u.pix,
+        "aperture": u.pix,
+        "aperture_area": u.pix,
+        "annulus_inner": u.pix,
+        "annulus_outer": u.pix,
+        "annulus_area": u.pix,
+        "aperture_sum": None,
+        "annulus_sum": None,
+        "sky_per_pix_avg": None,
+        "sky_per_pix_med": None,
+        "sky_per_pix_std": None,
+        "aperture_net_cnts": None,
+        "noise_cnts": None,
+        "noise_electrons": u.electron,
+        "snr": None,
+        "mag_inst": None,
+        "mag_error": None,
+        "exposure": u.second,
+        "date-obs": None,
+        "airmass": None,
+        "passband": None,
+        "file": None,
     }
     observatory = None
     camera = None
 
-    def __init__(self, *args, input_data=None, observatory=None, camera=None,
-                 colname_map=None, passband_map=None, retain_user_computed=False,
-                 **kwargs):
+    def __init__(
+        self,
+        *args,
+        input_data=None,
+        observatory=None,
+        camera=None,
+        colname_map=None,
+        passband_map=None,
+        retain_user_computed=False,
+        **kwargs,
+    ):
         if (observatory is None) and (camera is None) and (input_data is None):
             super().__init__(*args, **kwargs)
         else:
             # Perform input validation
             if not isinstance(observatory, EarthLocation):
-                raise TypeError("observatory must be an "
-                                "astropy.coordinates.EarthLocation object instead "
-                                f"of type {type(observatory)}.")
+                raise TypeError(
+                    "observatory must be an "
+                    "astropy.coordinates.EarthLocation object instead "
+                    f"of type {type(observatory)}."
+                )
             if not isinstance(camera, Camera):
-                raise TypeError("camera must be a stellarphot.Camera object instead "
-                                f"of type {type(camera)}.")
+                raise TypeError(
+                    "camera must be a stellarphot.Camera object instead "
+                    f"of type {type(camera)}."
+                )
 
             # Check the time column is correct format and scale
             try:
-                if (input_data['date-obs'][0].scale != 'utc'):
-                    raise ValueError("input_data['date-obs'] astropy.time.Time must "
-                                     "have scale='utc', "
-                                    f"not \'{input_data['date-obs'][0].scale}\'.")
+                if input_data["date-obs"][0].scale != "utc":
+                    raise ValueError(
+                        "input_data['date-obs'] astropy.time.Time must "
+                        "have scale='utc', "
+                        f"not '{input_data['date-obs'][0].scale}'."
+                    )
             except AttributeError:
                 # Happens if first item dosn't have a "scale"
-                raise ValueError("input_data['date-obs'] isn't column of "
-                                 "astropy.time.Time entries.")
+                raise ValueError(
+                    "input_data['date-obs'] isn't column of "
+                    "astropy.time.Time entries."
+                )
 
             # Convert input data to QTable (while also checking for required columns)
-            super().__init__(input_data=input_data,
-                             table_description=self.phot_descript,
-                             colname_map=colname_map, **kwargs)
+            super().__init__(
+                input_data=input_data,
+                table_description=self.phot_descript,
+                colname_map=colname_map,
+                **kwargs,
+            )
 
             # Add the TableAttributes directly to meta (and adding attribute
             # functions below) since using TableAttributes results in a
             # inability to access the values to due a
             # AttributeError: 'TableAttribute' object has no attribute 'name'
-            self.meta['lat'] = observatory.lat
-            self.meta['lon'] = observatory.lon
-            self.meta['height'] = observatory.height
-            self.meta['gain'] = camera.gain
-            self.meta['read_noise'] = camera.read_noise
-            self.meta['dark_current'] = camera.dark_current
-            self.meta['pixel_scale'] = camera.pixel_scale
+            self.meta["lat"] = observatory.lat
+            self.meta["lon"] = observatory.lon
+            self.meta["height"] = observatory.height
+            self.meta["gain"] = camera.gain
+            self.meta["read_noise"] = camera.read_noise
+            self.meta["dark_current"] = camera.dark_current
+            self.meta["pixel_scale"] = camera.pixel_scale
 
             # Check for consistency of counts-related columns
-            counts_columns = ['aperture_sum', 'annulus_sum', 'aperture_net_cnts',
-                              'noise_cnts']
-            counts_per_pixel_columns = ['sky_per_pix_avg', 'sky_per_pix_med',
-                                            'sky_per_pix_std']
+            counts_columns = [
+                "aperture_sum",
+                "annulus_sum",
+                "aperture_net_cnts",
+                "noise_cnts",
+            ]
+            counts_per_pixel_columns = [
+                "sky_per_pix_avg",
+                "sky_per_pix_med",
+                "sky_per_pix_std",
+            ]
             cnts_unit = self[counts_columns[0]].unit
             for this_col in counts_columns[1:]:
                 if input_data[this_col].unit != cnts_unit:
-                    raise ValueError(f"input_data['{this_col}'] has inconsistent units "
-                                    f"with input_data['{counts_columns[0]}'] (should "
-                                    f"be {cnts_unit} but it's "
-                                    f"{input_data[this_col].unit}).")
+                    raise ValueError(
+                        f"input_data['{this_col}'] has inconsistent units "
+                        f"with input_data['{counts_columns[0]}'] (should "
+                        f"be {cnts_unit} but it's "
+                        f"{input_data[this_col].unit})."
+                    )
             for this_col in counts_per_pixel_columns:
                 if cnts_unit is None:
                     perpixel = u.pixel**-1
                 else:
                     perpixel = cnts_unit * u.pixel**-1
                 if input_data[this_col].unit != perpixel:
-                    raise ValueError(f"input_data['{this_col}'] has inconsistent units "
-                                    f"with input_data['{counts_columns[0]}'] (should "
-                                    f"be {perpixel} but it's "
-                                    f"{input_data[this_col].unit}).")
+                    raise ValueError(
+                        f"input_data['{this_col}'] has inconsistent units "
+                        f"with input_data['{counts_columns[0]}'] (should "
+                        f"be {perpixel} but it's "
+                        f"{input_data[this_col].unit})."
+                    )
 
             # Compute additional columns (not done yet)
-            computed_columns = ['bjd', 'night']
+            computed_columns = ["bjd", "night"]
 
             # Check if columns exist already, if they do and retain_user_computed is
             # False,  throw an error.
             for this_col in computed_columns:
                 if this_col in self.colnames:
                     if not retain_user_computed:
-                        raise ValueError(f"Computed column '{this_col}' already exist "
-                                        "in data. If you want to keep them, set "
-                                        "retain_user_computed=True.")
+                        raise ValueError(
+                            f"Computed column '{this_col}' already exist "
+                            "in data. If you want to keep them, set "
+                            "retain_user_computed=True."
+                        )
                 else:
                     # Compute the columns that need to be computed (match requries
                     # python>=3.10)
                     match this_col:
-                        case 'bjd':
-                            self['bjd'] = self.add_bjd_col(observatory)
+                        case "bjd":
+                            self["bjd"] = self.add_bjd_col(observatory)
 
-                        case 'night':
+                        case "night":
                             # Generate integer counter for nights. This should be
                             # approximately the MJD at noon local before the evening of
                             # the observation.
-                            hr_offset = int(observatory.lon.value/15)
+                            hr_offset = int(observatory.lon.value / 15)
                             # Compute offset to 12pm Local Time before evening
-                            LocalTime = Time(self['date-obs']) + hr_offset*u.hr
+                            LocalTime = Time(self["date-obs"]) + hr_offset * u.hr
                             hr = LocalTime.ymdhms.hour
                             # Compute number of hours to shift to arrive at 12 noon
                             # local time
                             shift_hr = hr.copy()
                             shift_hr[hr < 12] = shift_hr[hr < 12] + 12
                             shift_hr[hr >= 12] = shift_hr[hr >= 12] - 12
-                            delta = -shift_hr * u.hr - LocalTime.ymdhms.minute * u.min \
-                                - LocalTime.ymdhms.second*u.s
-                            shift = Column(data = delta, name='shift')
+                            delta = (
+                                -shift_hr * u.hr
+                                - LocalTime.ymdhms.minute * u.min
+                                - LocalTime.ymdhms.second * u.s
+                            )
+                            shift = Column(data=delta, name="shift")
                             # Compute MJD at local noon before the evening of this
                             # observation.
-                            self['night'] = Column(data=
-                                                   np.array((Time(self['date-obs'])
-                                                             + shift).to_value('mjd'),
-                                                            dtype=int),
-                                                   name='night')
+                            self["night"] = Column(
+                                data=np.array(
+                                    (Time(self["date-obs"]) + shift).to_value("mjd"),
+                                    dtype=int,
+                                ),
+                                name="night",
+                            )
 
                         case _:
-                            raise ValueError(f"Trying to compute column ({this_col}). "
-                                            "This should never happen.")
+                            raise ValueError(
+                                f"Trying to compute column ({this_col}). "
+                                "This should never happen."
+                            )
 
             # Apply the filter/passband name update
             if passband_map is not None:
                 self._passband_map = passband_map.copy()
                 self._update_passbands()
-
 
     def add_bjd_col(self, observatory):
         """
@@ -567,36 +642,41 @@ class PhotometryData(BaseEnhancedTable):
         the input observations.  It modifies that table in place.
         """
 
-        if ( np.isnan(self['ra']).any() or np.isnan(self['dec']).any() ):
-            print("WARNING: BJD could not be computed in output PhotometryData object "
-                  "because some RA or Dec values are missing.")
+        if np.isnan(self["ra"]).any() or np.isnan(self["dec"]).any():
+            print(
+                "WARNING: BJD could not be computed in output PhotometryData object "
+                "because some RA or Dec values are missing."
+            )
             return np.full(len(self), np.nan)
         else:
             # Convert times at start of each observation to TDB (Barycentric Dynamical
             # Time)
-            times = Time(self['date-obs'])
+            times = Time(self["date-obs"])
             times_tdb = times.tdb
-            times_tdb.format='jd' # Switch to JD format
+            times_tdb.format = "jd"  # Switch to JD format
 
             # Compute light travel time corrections
-            ip_peg = SkyCoord(ra=self['ra'], dec=self['dec'], unit='degree')
+            ip_peg = SkyCoord(ra=self["ra"], dec=self["dec"], unit="degree")
             ltt_bary = times.light_travel_time(ip_peg, location=observatory)
             time_barycenter = times_tdb + ltt_bary
 
             # Return BJD at midpoint of exposure at each location
-            return Time(time_barycenter + self['exposure'] / 2, scale='tdb')
+            return Time(time_barycenter + self["exposure"] / 2, scale="tdb")
 
     @property
     def camera(self):
-        return Camera(gain=self.meta['gain'],
-                      read_noise=self.meta['read_noise'],
-                      dark_current=self.meta['dark_current'],
-                      pixel_scale=self.meta['pixel_scale'])
+        return Camera(
+            gain=self.meta["gain"],
+            read_noise=self.meta["read_noise"],
+            dark_current=self.meta["dark_current"],
+            pixel_scale=self.meta["pixel_scale"],
+        )
 
     @property
     def observatory(self):
-        return EarthLocation(lat=self.meta['lat'], lon=self.meta['lon'],
-                             height=self.meta['height'])
+        return EarthLocation(
+            lat=self.meta["lat"], lon=self.meta["lon"], height=self.meta["height"]
+        )
 
 
 class CatalogData(BaseEnhancedTable):
@@ -661,34 +741,45 @@ class CatalogData(BaseEnhancedTable):
     # Define columns that must be in table and provide information about their type, and
     # units.
     catalog_descript = {
-        'id' : None,
-        'ra' : u.deg,
-        'dec' : u.deg,
-        'mag' : None,
-        'passband' : None
+        "id": None,
+        "ra": u.deg,
+        "dec": u.deg,
+        "mag": None,
+        "passband": None,
     }
     catalog_name = None
     catalog_source = None
 
-    def __init__(self, *args, input_data=None, catalog_name=None, catalog_source=None,
-                 colname_map=None, passband_map=None, **kwargs):
+    def __init__(
+        self,
+        *args,
+        input_data=None,
+        catalog_name=None,
+        catalog_source=None,
+        colname_map=None,
+        passband_map=None,
+        **kwargs,
+    ):
         if (input_data is None) and (catalog_name is None) and (catalog_source is None):
             super().__init__(*args, **kwargs)
         else:
             self._passband_map = passband_map
 
-            if (input_data is not None):
+            if input_data is not None:
                 # Convert input data to QTable (while also checking for required
                 # columns)
-                super().__init__(table_description=self.catalog_descript,
-                                input_data=input_data,
-                                colname_map=colname_map, **kwargs)
+                super().__init__(
+                    table_description=self.catalog_descript,
+                    input_data=input_data,
+                    colname_map=colname_map,
+                    **kwargs,
+                )
                 # Add the TableAttributes directly to meta (and adding attribute
                 # functions below) since using TableAttributes results in a
                 # inability to access the values to due a
                 # AttributeError: 'TableAttribute' object has no attribute 'name'
-                self.meta['catalog_name'] = str(catalog_name)
-                self.meta['catalog_source'] = str(catalog_source)
+                self.meta["catalog_name"] = str(catalog_name)
+                self.meta["catalog_source"] = str(catalog_source)
 
                 # Apply the filter/passband name update
                 if passband_map is not None:
@@ -700,11 +791,11 @@ class CatalogData(BaseEnhancedTable):
 
     @property
     def catalog_name(self):
-        return self.meta['catalog_name']
+        return self.meta["catalog_name"]
 
     @property
     def catalog_source(self):
-        return self.meta['catalog_source']
+        return self.meta["catalog_source"]
 
 
 class SourceListData(BaseEnhancedTable):
@@ -767,23 +858,26 @@ class SourceListData(BaseEnhancedTable):
     # Define columns that must be in table and provide information about their type, and
     # units.
     sourcelist_descript = {
-        'star_id' : None,
-        'ra' : u.deg,
-        'dec' : u.deg,
-        'xcenter' : u.pix,
-        'ycenter' : u.pix
+        "star_id": None,
+        "ra": u.deg,
+        "dec": u.deg,
+        "xcenter": u.pix,
+        "ycenter": u.pix,
     }
 
     def __init__(self, *args, input_data=None, colname_map=None, **kwargs):
-        if (input_data is None):
+        if input_data is None:
             super().__init__(*args, **kwargs)
         else:
             # Check data before copying to avoid recusive loop and non-QTable
             # data input.
-            if not isinstance(input_data, Table) or isinstance(input_data,
-                                                               BaseEnhancedTable):
-                raise TypeError("input_data must be an astropy Table (and not a "
-                                "BaseEnhancedTable) as data.")
+            if not isinstance(input_data, Table) or isinstance(
+                input_data, BaseEnhancedTable
+            ):
+                raise TypeError(
+                    "input_data must be an astropy Table (and not a "
+                    "BaseEnhancedTable) as data."
+                )
 
             # Process inputs and save as needed
             data = input_data.copy()
@@ -795,8 +889,10 @@ class SourceListData(BaseEnhancedTable):
                 try:
                     self._colname_map = {k: v for k, v in colname_map.items()}
                 except AttributeError:
-                    raise TypeError("You must provide a dict as table_description (it "
-                                    f"is type {type(self._colname_map)}).")
+                    raise TypeError(
+                        "You must provide a dict as table_description (it "
+                        f"is type {type(self._colname_map)})."
+                    )
                 self._update_colnames(self._colname_map, data)
 
                 # No need to repeat this
@@ -807,56 +903,68 @@ class SourceListData(BaseEnhancedTable):
             # Check if RA/Dec or xcenter/ycenter are missing
             ra_dec_present = True
             x_y_present = True
-            nosky_pos = ('ra' not in data.colnames or
-                        'dec' not in data.colnames or
-                        np.isnan(data['ra'].value).all() or
-                        np.isnan(data['dec'].value).all())
-            noimg_pos = ('xcenter' not in data.colnames or
-                        'ycenter' not in data.colnames or
-                        np.isnan(data['xcenter'].value).all() or
-                        np.isnan(data['ycenter'].value).all())
+            nosky_pos = (
+                "ra" not in data.colnames
+                or "dec" not in data.colnames
+                or np.isnan(data["ra"].value).all()
+                or np.isnan(data["dec"].value).all()
+            )
+            noimg_pos = (
+                "xcenter" not in data.colnames
+                or "ycenter" not in data.colnames
+                or np.isnan(data["xcenter"].value).all()
+                or np.isnan(data["ycenter"].value).all()
+            )
 
             if nosky_pos:
                 ra_dec_present = False
             if noimg_pos:
                 x_y_present = False
 
-            if (nosky_pos and noimg_pos):
-                raise ValueError("data must have either sky (ra, dec) or "+
-                                "image (xcenter, ycenter) position.")
+            if nosky_pos and noimg_pos:
+                raise ValueError(
+                    "data must have either sky (ra, dec) or "
+                    + "image (xcenter, ycenter) position."
+                )
 
             # Create empty versions of any missing columns
-            for this_col in ['ra', 'dec', 'xcenter', 'ycenter']:
+            for this_col in ["ra", "dec", "xcenter", "ycenter"]:
                 # Create blank ra/dec columns
-                if (this_col not in data.colnames):
-                    data[this_col] = Column(data=np.full(len(data), np.nan),
-                                                name=this_col,
-                                                unit=self.sourcelist_descript[this_col])
+                if this_col not in data.colnames:
+                    data[this_col] = Column(
+                        data=np.full(len(data), np.nan),
+                        name=this_col,
+                        unit=self.sourcelist_descript[this_col],
+                    )
 
             # Convert input data to QTable (while also checking for required columns)
-            super().__init__(table_description=self.sourcelist_descript,
-                             input_data=data, colname_map=None, **kwargs)
-            self.meta['has_ra_dec'] = ra_dec_present
-            self.meta['has_x_y'] = x_y_present
+            super().__init__(
+                table_description=self.sourcelist_descript,
+                input_data=data,
+                colname_map=None,
+                **kwargs,
+            )
+            self.meta["has_ra_dec"] = ra_dec_present
+            self.meta["has_x_y"] = x_y_present
 
     @property
     def has_ra_dec(self):
-        return self.meta['has_ra_dec']
+        return self.meta["has_ra_dec"]
 
     @property
     def has_x_y(self):
-        return self.meta['has_x_y']
+        return self.meta["has_x_y"]
 
     def drop_ra_dec(self):
         # drop sky-based positions from existing SourceListData structure
-        self.meta['has_ra_dec'] = False
-        self['ra'] = Column(data=np.full(len(self), np.nan), name='ra', unit=u.deg)
-        self['dec'] = Column(data=np.full(len(self), np.nan), name='dec', unit=u.deg)
+        self.meta["has_ra_dec"] = False
+        self["ra"] = Column(data=np.full(len(self), np.nan), name="ra", unit=u.deg)
+        self["dec"] = Column(data=np.full(len(self), np.nan), name="dec", unit=u.deg)
 
     def drop_x_y(self):
         # drop image-based positionsfrom existing SourceListData structure
-        self.meta['has_x_y'] = False
-        self['xcenter'] = Column(data=np.full(len(self), np.nan), name='ra',
-                                 unit=u.deg)
-        self['ycenter'] = Column(data=np.full(len(self), np.nan), name='dec',
-                                 unit=u.deg)
+        self.meta["has_x_y"] = False
+        self["xcenter"] = Column(data=np.full(len(self), np.nan), name="ra", unit=u.deg)
+        self["ycenter"] = Column(
+            data=np.full(len(self), np.nan), name="dec", unit=u.deg
+        )

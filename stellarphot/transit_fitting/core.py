@@ -3,8 +3,7 @@ import warnings
 import numpy as np
 
 from astropy.modeling.models import custom_model
-from astropy.modeling.fitting import (LevMarLSQFitter,
-                                      _validate_model)
+from astropy.modeling.fitting import LevMarLSQFitter, _validate_model
 
 # Functions below changed from private to public in astropy 5
 try:
@@ -23,12 +22,15 @@ from astropy.utils.exceptions import AstropyUserWarning
 try:
     import batman
 except ImportError:
-    ImportError('You must install the batman exoplanet package. Try:\n'
-                'conda install batman-package\n'
-                'or\n'
-                'pip install batman-package')
+    ImportError(
+        "You must install the batman exoplanet package. Try:\n"
+        "conda install batman-package\n"
+        "or\n"
+        "pip install batman-package"
+    )
 
-__all__ = ['VariableArgsFitter', 'TransitModelFit']
+__all__ = ["VariableArgsFitter", "TransitModelFit"]
+
 
 class VariableArgsFitter(LevMarLSQFitter):
     """
@@ -37,18 +39,29 @@ class VariableArgsFitter(LevMarLSQFitter):
     astropy.modeling.fitting.LevMarLSQFitter fitter.
 
     """
+
     def __init__(self):
         super().__init__()
 
     # This is a straight copy-paste from the LevMarLSQFitter __call__.
     # The only modification is to allow any number of arguments.
-    def __call__(self, model, *args, weights=None,
-                 maxiter=100, acc=1e-7,
-                 epsilon=1.4901161193847656e-08, estimate_jacobian=False):
+    def __call__(
+        self,
+        model,
+        *args,
+        weights=None,
+        maxiter=100,
+        acc=1e-7,
+        epsilon=1.4901161193847656e-08,
+        estimate_jacobian=False,
+    ):
         from scipy import optimize
 
         model_copy = _validate_model(model, self.supported_constraints)
-        farg = (model_copy, weights, ) + args
+        farg = (
+            model_copy,
+            weights,
+        ) + args
         if model_copy.fit_deriv is None or estimate_jacobian:
             dfunc = None
         else:
@@ -60,31 +73,45 @@ class VariableArgsFitter(LevMarLSQFitter):
         # convert simply into an array within scipy.optimize.leastsq, when called.
         # So we handle model_bounds here first to the scipy.optimize.leastsq format.
         # can handle the list of initial values we pass in.
-        init_values = np.concatenate((np.asarray(init_values0[0]).flatten(),
-                                      np.asarray(init_values0[1]).flatten(),
-                                      np.asarray(init_values0[2]).flatten()), axis=None)
+        init_values = np.concatenate(
+            (
+                np.asarray(init_values0[0]).flatten(),
+                np.asarray(init_values0[1]).flatten(),
+                np.asarray(init_values0[2]).flatten(),
+            ),
+            axis=None,
+        )
 
         fitparams, cov_x, dinfo, mess, ierr = optimize.leastsq(
-            self.objective_function, init_values, args=farg, Dfun=dfunc,
-            col_deriv=model_copy.col_fit_deriv, maxfev=maxiter, epsfcn=epsilon,
-            xtol=acc, full_output=True)
+            self.objective_function,
+            init_values,
+            args=farg,
+            Dfun=dfunc,
+            col_deriv=model_copy.col_fit_deriv,
+            maxfev=maxiter,
+            epsfcn=epsilon,
+            xtol=acc,
+            full_output=True,
+        )
         fitter_to_model_params(model_copy, fitparams)
         self.fit_info.update(dinfo)
-        self.fit_info['cov_x'] = cov_x
-        self.fit_info['message'] = mess
-        self.fit_info['ierr'] = ierr
+        self.fit_info["cov_x"] = cov_x
+        self.fit_info["message"] = mess
+        self.fit_info["ierr"] = ierr
         if ierr not in [1, 2, 3, 4]:
-            warnings.warn("The fit may be unsuccessful; check "
-                          "fit_info['message'] for more information.",
-                          AstropyUserWarning)
+            warnings.warn(
+                "The fit may be unsuccessful; check "
+                "fit_info['message'] for more information.",
+                AstropyUserWarning,
+            )
 
         # now try to compute the true covariance matrix
         if (len(args[-1]) > len(init_values)) and cov_x is not None:
-            sum_sqrs = np.sum(self.objective_function(fitparams, *farg)**2)
+            sum_sqrs = np.sum(self.objective_function(fitparams, *farg) ** 2)
             dof = len(args[-1]) - len(init_values)
-            self.fit_info['param_cov'] = cov_x * sum_sqrs / dof
+            self.fit_info["param_cov"] = cov_x * sum_sqrs / dof
         else:
-            self.fit_info['param_cov'] = None
+            self.fit_info["param_cov"] = None
 
         return model_copy
 
@@ -113,6 +140,7 @@ class TransitModelFit:
     width : array-like
         Width of the star in pixels at each time. Must be set before fitting.
     """
+
     def __init__(self, batman_params=None):
         self._batman_params = batman.TransitParams()
         self._set_default_batman_params()
@@ -125,7 +153,7 @@ class TransitModelFit:
         self._batman_mod_for_fit = None
         self.weights = None
         self._detrend_parameters = set()
-        self._all_detrend_params = ['airmass', 'width', 'spp']
+        self._all_detrend_params = ["airmass", "width", "spp"]
 
     def _check_consistent_lengths(self, proposed_value):
         """
@@ -137,8 +165,7 @@ class TransitModelFit:
             return True
 
         new_length = len(proposed_value)
-        for independent_var in [self._times, self._airmass,
-                                self._spp, self._width]:
+        for independent_var in [self._times, self._airmass, self._spp, self._width]:
             if independent_var is None:
                 continue
             elif len(independent_var) != new_length:
@@ -159,8 +186,9 @@ class TransitModelFit:
     @times.setter
     def times(self, value):
         if not self._check_consistent_lengths(value):
-            raise ValueError('Length of times not consistent with '
-                             'other independent variables.')
+            raise ValueError(
+                "Length of times not consistent with " "other independent variables."
+            )
         self._times = value
 
         try:
@@ -180,14 +208,15 @@ class TransitModelFit:
     @airmass.setter
     def airmass(self, value):
         if not self._check_consistent_lengths(value):
-            raise ValueError('Length of airmass not consistent with '
-                             'other independent variables.')
+            raise ValueError(
+                "Length of airmass not consistent with " "other independent variables."
+            )
         self._airmass = value
 
         if value is not None:
-            self._detrend_parameters.add('airmass')
+            self._detrend_parameters.add("airmass")
         else:
-            self._detrend_parameters.discard('airmass')
+            self._detrend_parameters.discard("airmass")
 
     @property
     def width(self):
@@ -201,14 +230,15 @@ class TransitModelFit:
     @width.setter
     def width(self, value):
         if not self._check_consistent_lengths(value):
-            raise ValueError('Length of width not consistent with '
-                             'other independent variables.')
+            raise ValueError(
+                "Length of width not consistent with " "other independent variables."
+            )
         self._width = value
 
         if value is not None:
-            self._detrend_parameters.add('width')
+            self._detrend_parameters.add("width")
         else:
-            self._detrend_parameters.discard('width')
+            self._detrend_parameters.discard("width")
 
     @property
     def spp(self):
@@ -221,14 +251,15 @@ class TransitModelFit:
     @spp.setter
     def spp(self, value):
         if not self._check_consistent_lengths(value):
-            raise ValueError('Length of spp not consistent with '
-                             'other independent variables.')
+            raise ValueError(
+                "Length of spp not consistent with " "other independent variables."
+            )
         self._spp = value
 
         if value is not None:
-            self._detrend_parameters.add('spp')
+            self._detrend_parameters.add("spp")
         else:
-            self._detrend_parameters.discard('spp')
+            self._detrend_parameters.discard("spp")
 
     @property
     def data(self):
@@ -241,8 +272,9 @@ class TransitModelFit:
     @data.setter
     def data(self, value):
         if not self._check_consistent_lengths(value):
-            raise ValueError('Length of data not consistent with '
-                             'independent variables.')
+            raise ValueError(
+                "Length of data not consistent with " "independent variables."
+            )
         self._data = value
 
     @property
@@ -273,13 +305,13 @@ class TransitModelFit:
         self._batman_params.a = 12.2
 
         # orbital inclination (in degrees)
-        self._batman_params.inc = 90.
+        self._batman_params.inc = 90.0
 
         # eccentricity
-        self._batman_params.ecc = 0.
+        self._batman_params.ecc = 0.0
 
         # longitude of periastron (in degrees)
-        self._batman_params.w = 90.
+        self._batman_params.w = 90.0
 
         # limb darkening model
         self._batman_params.limb_dark = "quadratic"
@@ -289,11 +321,8 @@ class TransitModelFit:
 
     def _set_up_batman_model_for_fitting(self):
         if self._times is None:
-            raise ValueError('times need to be set before setting up '
-                             'transit model.')
-        self._batman_mod_for_fit = \
-            batman.TransitModel(self._batman_params,
-                                self.times)
+            raise ValueError("times need to be set before setting up " "transit model.")
+        self._batman_mod_for_fit = batman.TransitModel(self._batman_params, self.times)
 
     def _setup_transit_model(self):
         """
@@ -302,12 +331,23 @@ class TransitModelFit:
         model.
         """
 
-        def transit_model_with_trends(time, airmass, width, sky_per_pix,
-                                      t0=0.0, period=1.0, rp=0.1, a=10.0,
-                                      inclination=90.0, eccentricity=0.0,
-                                      limb_u1=0.3, limb_u2=0.3,
-                                      airmass_trend=0.0, width_trend=0.0,
-                                      spp_trend=0.0):
+        def transit_model_with_trends(
+            time,
+            airmass,
+            width,
+            sky_per_pix,
+            t0=0.0,
+            period=1.0,
+            rp=0.1,
+            a=10.0,
+            inclination=90.0,
+            eccentricity=0.0,
+            limb_u1=0.3,
+            limb_u2=0.3,
+            airmass_trend=0.0,
+            width_trend=0.0,
+            spp_trend=0.0,
+        ):
             self._batman_params.t0 = t0
             self._batman_params.per = period
             self._batman_params.rp = rp
@@ -338,11 +378,17 @@ class TransitModelFit:
         # Planet radius cannot be too small or too big
         self._model.rp.bounds = (0.01, 0.5)
 
-    def setup_model(self, t0=0, depth=0, duration=0,
-                    period=1, inclination=90,
-                    airmass_trend=0.0,
-                    width_trend=0.0,
-                    spp_trend=0.0):
+    def setup_model(
+        self,
+        t0=0,
+        depth=0,
+        duration=0,
+        period=1,
+        inclination=90,
+        airmass_trend=0.0,
+        width_trend=0.0,
+        spp_trend=0.0,
+    ):
         """
         Configure a transit model for fitting. The ``duration`` and ``depth``
         are used to estimate underlying fit parameters; they are not
@@ -416,10 +462,9 @@ class TransitModelFit:
         """
         # Maybe do some correctness check of the model before starting.
         if self.times is None:
-            raise ValueError('The times must be set before trying '
-                             'to fit.')
+            raise ValueError("The times must be set before trying " "to fit.")
         if self._model is None:
-            raise ValueError('Run setup_model() before trying to fit.')
+            raise ValueError("Run setup_model() before trying to fit.")
 
         if self._batman_mod_for_fit is None:
             self._set_up_batman_model_for_fitting()
@@ -429,8 +474,7 @@ class TransitModelFit:
         original_values = {}
 
         if self.spp is None:
-            original_values['spp_trend'] = \
-                self.model.spp_trend.fixed
+            original_values["spp_trend"] = self.model.spp_trend.fixed
             self.model.spp_trend = 0
             self.model.spp_trend.fixed = True
             spp = np.zeros_like(self.times)
@@ -438,8 +482,7 @@ class TransitModelFit:
             spp = self.spp
 
         if self.airmass is None:
-            original_values['airmass_trend'] = \
-                self.model.airmass_trend.fixed
+            original_values["airmass_trend"] = self.model.airmass_trend.fixed
             self.model.airmass_trend = 0
             self.model.airmass_trend.fixed = True
             airmass = np.zeros_like(self.times)
@@ -447,8 +490,7 @@ class TransitModelFit:
             airmass = self.airmass
 
         if self.width is None:
-            original_values['width_trend'] = \
-                self.model.width_trend.fixed
+            original_values["width_trend"] = self.model.width_trend.fixed
             self.model.width_trend = 0
             self.model.width_trend.fixed = True
             width = np.zeros_like(self.times)
@@ -457,13 +499,9 @@ class TransitModelFit:
 
         # Do the fitting
 
-        new_model = self._fitter(self.model,
-                                 self.times,
-                                 airmass,
-                                 width,
-                                 spp,
-                                 self.data,
-                                 weights=self.weights)
+        new_model = self._fitter(
+            self.model, self.times, airmass, width, spp, self.data, weights=self.weights
+        )
 
         # Update the model (might not be necessary but can't hurt)
         self._model = new_model
@@ -475,16 +513,18 @@ class TransitModelFit:
             param.fixed = v
 
     def _detrend(self, model, detrend_by):
-        if detrend_by == 'all':
-            detrend_by = [p for p in self._all_detrend_params
-                          if p in self._detrend_parameters]
+        if detrend_by == "all":
+            detrend_by = [
+                p for p in self._all_detrend_params if p in self._detrend_parameters
+            ]
         elif isinstance(detrend_by, str):
             detrend_by = [detrend_by]
 
         detrended = model.copy()
         for trend in detrend_by:
-            detrended = detrended - (getattr(self.model, f'{trend}_trend')
-                                     * getattr(self, trend))
+            detrended = detrended - (
+                getattr(self.model, f"{trend}_trend") * getattr(self, trend)
+            )
 
         return detrended
 
@@ -549,8 +589,9 @@ class TransitModelFit:
             # then restore it.
             original_model = self._batman_mod_for_fit
 
-            self._batman_mod_for_fit = batman.TransitModel(self._batman_params,
-                                                           at_times)
+            self._batman_mod_for_fit = batman.TransitModel(
+                self._batman_params, at_times
+            )
             model = self.model(at_times, airmass, width, spp)
             self._batman_mod_for_fit = original_model
         else:
@@ -568,9 +609,10 @@ class TransitModelFit:
     @property
     def BIC(self):
         residual = self.data - self.model_light_curve()
-        chi_sq = ((residual * self.weights)**2).sum()
+        chi_sq = ((residual * self.weights) ** 2).sum()
         BIC = chi_sq + self.n_fit_parameters * np.log(len(self.data))
         return BIC
+
 
 # example use
 

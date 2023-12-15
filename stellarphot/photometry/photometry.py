@@ -13,8 +13,7 @@ from astropy.time import Time
 from astropy.utils.exceptions import AstropyUserWarning
 from astropy.wcs import FITSFixedWarning
 from ccdproc import ImageFileCollection
-from photutils.aperture import (CircularAnnulus, CircularAperture,
-                                aperture_photometry)
+from photutils.aperture import CircularAnnulus, CircularAperture, aperture_photometry
 from photutils.centroids import centroid_sources
 
 from scipy.spatial.distance import cdist
@@ -23,28 +22,39 @@ from stellarphot import Camera, PhotometryData, SourceListData
 
 from .source_detection import compute_fwhm
 
-__all__ = ['single_image_photometry', 'multi_image_photometry',
-           'faster_sigma_clip_stats',
-           'find_too_close', 'clipped_sky_per_pix_stats',
-           'calculate_noise']
+__all__ = [
+    "single_image_photometry",
+    "multi_image_photometry",
+    "faster_sigma_clip_stats",
+    "find_too_close",
+    "clipped_sky_per_pix_stats",
+    "calculate_noise",
+]
 
 # Allowed FITS header keywords for exposure values
-EXPOSURE_KEYWORDS = ["EXPOSURE", "EXPTIME", "TELAPSE", "ELAPTIME", "ONTIME",
-                     "LIVETIME"]
+EXPOSURE_KEYWORDS = ["EXPOSURE", "EXPTIME", "TELAPSE", "ELAPTIME", "ONTIME", "LIVETIME"]
 
 
-def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
-                            aperture_settings,
-                            shift_tolerance, max_adu, fwhm_estimate,
-                            use_coordinates='pixel',
-                            include_dig_noise=True,
-                            reject_too_close=True,
-                            reject_background_outliers=True,
-                            passband_map=None,
-                            fwhm_by_fit=True, fname=None,
-                            logline="single_image_photometry:",
-                            logfile=None,
-                            console_log = True):
+def single_image_photometry(
+    ccd_image,
+    sourcelist,
+    camera,
+    observatory_location,
+    aperture_settings,
+    shift_tolerance,
+    max_adu,
+    fwhm_estimate,
+    use_coordinates="pixel",
+    include_dig_noise=True,
+    reject_too_close=True,
+    reject_background_outliers=True,
+    passband_map=None,
+    fwhm_by_fit=True,
+    fname=None,
+    logline="single_image_photometry:",
+    logfile=None,
+    console_log=True,
+):
     """
     Perform aperture photometry on a single image, with an options for estimating
     the local background from sigma clipped stats of the counts in an annulus around
@@ -168,49 +178,60 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     the `use_coordinates` parameter should be set to "sky".
     """
 
-
     # Check that the input parameters are valid
     if not isinstance(ccd_image, CCDData):
-        raise TypeError("ccd_image must be a CCDData object, but it is "
-                        f"'{type(ccd_image)}'.")
+        raise TypeError(
+            "ccd_image must be a CCDData object, but it is " f"'{type(ccd_image)}'."
+        )
     if not isinstance(sourcelist, SourceListData):
-        raise TypeError("sourcelist must be a SourceListData object, but it is "
-                        f"'{type(sourcelist)}'.")
+        raise TypeError(
+            "sourcelist must be a SourceListData object, but it is "
+            f"'{type(sourcelist)}'."
+        )
     if not isinstance(camera, Camera):
         raise TypeError(f"camera must be a Camera object, but it is '{type(camera)}'.")
     if not isinstance(observatory_location, EarthLocation):
-        raise TypeError("observatory_location must be a EarthLocation object, but it "
-                        f"is '{type(observatory_location)}'.")
+        raise TypeError(
+            "observatory_location must be a EarthLocation object, but it "
+            f"is '{type(observatory_location)}'."
+        )
     if aperture_settings.inner_annulus >= aperture_settings.outer_annulus:
-        raise ValueError(f"outer_annulus ({aperture_settings.outer_annulus}) must be greater than "
-                         f"inner_annulus ({aperture_settings.inner_annulus}).")
+        raise ValueError(
+            f"outer_annulus ({aperture_settings.outer_annulus}) must be greater than "
+            f"inner_annulus ({aperture_settings.inner_annulus})."
+        )
     if aperture_settings.radius >= aperture_settings.inner_annulus:
-        raise ValueError(f"aperture_radius ({aperture_settings.radius}) must be greater than "
-                         f"inner_annulus ({aperture_settings.inner_annulus}).")
-    if (shift_tolerance<=0):
-        raise ValueError(f"shift_tolerance ({shift_tolerance}) must be greater than 0 "
-                         "(should be on order of FWHM).")
-    if (max_adu<=0):
+        raise ValueError(
+            f"aperture_radius ({aperture_settings.radius}) must be greater than "
+            f"inner_annulus ({aperture_settings.inner_annulus})."
+        )
+    if shift_tolerance <= 0:
+        raise ValueError(
+            f"shift_tolerance ({shift_tolerance}) must be greater than 0 "
+            "(should be on order of FWHM)."
+        )
+    if max_adu <= 0:
         raise ValueError(f"max_adu ({max_adu}) must be greater than 0.")
-    if (use_coordinates not in ['pixel', 'sky']):
-        raise ValueError(f"input_coordinates ({use_coordinates}) must be either "
-                         "'pixel' or 'sky'.")
+    if use_coordinates not in ["pixel", "sky"]:
+        raise ValueError(
+            f"input_coordinates ({use_coordinates}) must be either " "'pixel' or 'sky'."
+        )
 
     # Set up logging
     logger = logging.getLogger("single_image_photometry")
-    console_format = logging.Formatter('%(message)s')
+    console_format = logging.Formatter("%(message)s")
     if logger.hasHandlers() is False:
         logger.setLevel(logging.INFO)
         if logfile is not None:
             # by default this appends to existing logfile
             fh = logging.FileHandler(logfile)
-            log_format = logging.Formatter('%(levelname)s - %(message)s')
+            log_format = logging.Formatter("%(levelname)s - %(message)s")
             if console_log:
                 ch = logging.StreamHandler()
                 ch.setFormatter(console_format)
                 ch.setLevel(logging.INFO)
                 logger.addHandler(ch)
-        else: # Log to console
+        else:  # Log to console
             fh = logging.StreamHandler()
             log_format = console_format
         fh.setFormatter(log_format)
@@ -228,25 +249,31 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
             break
 
     if matched_kw is None:
-        logger.warning(f"{logline} None of the accepted exposure keywords "
-                      f"({format(', '.join(EXPOSURE_KEYWORDS))}) found in the "
-                      "header ... SKIPPING THIS IMAGE!")
+        logger.warning(
+            f"{logline} None of the accepted exposure keywords "
+            f"({format(', '.join(EXPOSURE_KEYWORDS))}) found in the "
+            "header ... SKIPPING THIS IMAGE!"
+        )
         return None, None
 
     exposure = ccd_image.header[matched_kw]
 
     # Search for other keywords that are required
     try:
-        date_obs = ccd_image.header['DATE-OBS']
+        date_obs = ccd_image.header["DATE-OBS"]
     except KeyError:
-        logger.warning(f"{logline} 'DATE-OBS' not found in CCD image header "
-                       "... SKIPPING THIS IMAGE!")
+        logger.warning(
+            f"{logline} 'DATE-OBS' not found in CCD image header "
+            "... SKIPPING THIS IMAGE!"
+        )
         return None, None
     try:
-        filter = ccd_image.header['FILTER']
+        filter = ccd_image.header["FILTER"]
     except KeyError:
-        logger.warning(f"{logline} 'FILTER' not found in CCD image header ... "
-               "SKIPPING THIS IMAGE!")
+        logger.warning(
+            f"{logline} 'FILTER' not found in CCD image header ... "
+            "SKIPPING THIS IMAGE!"
+        )
         return None, None
 
     # Set high pixels to NaN (make sure ccd_image.data is a float array first)
@@ -254,41 +281,47 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     ccd_image.data[ccd_image.data > max_adu] = np.nan
 
     # Extract necessary values from sourcelist structure
-    star_ids = sourcelist['star_id'].value
-    xs = sourcelist['xcenter'].value
-    ys = sourcelist['ycenter'].value
-    ra = sourcelist['ra'].value
-    dec = sourcelist['dec'].value
+    star_ids = sourcelist["star_id"].value
+    xs = sourcelist["xcenter"].value
+    ys = sourcelist["ycenter"].value
+    ra = sourcelist["ra"].value
+    dec = sourcelist["dec"].value
     src_cnt = len(sourcelist)
 
     # If RA/Dec are available attempt to use them to determine the source positions
-    if use_coordinates == 'sky' and sourcelist.has_ra_dec:
+    if use_coordinates == "sky" and sourcelist.has_ra_dec:
         try:
-            imgpos = ccd_image.wcs.world_to_pixel(SkyCoord(ra, dec, unit=u.deg,
-                                                           frame='icrs'))
+            imgpos = ccd_image.wcs.world_to_pixel(
+                SkyCoord(ra, dec, unit=u.deg, frame="icrs")
+            )
             xs, ys = imgpos[0], imgpos[1]
         except AttributeError:
             # No WCS, skip this image
             msg = f"{logline} ccd_image must have a valid WCS to use RA/Dec!"
             logger.warning(msg)
             return None, None
-    elif use_coordinates == 'sky' and not sourcelist.has_ra_dec:
-        raise ValueError("use_coordinates='sky' but sourcelist does not have"
-                         "RA/Dec coordinates!")
+    elif use_coordinates == "sky" and not sourcelist.has_ra_dec:
+        raise ValueError(
+            "use_coordinates='sky' but sourcelist does not have" "RA/Dec coordinates!"
+        )
 
     # Reject sources that are within an aperture diameter of each other.
     dropped_sources = []
     try:
-        too_close = find_too_close(sourcelist, aperture_settings.radius,
-                                   pixel_scale=camera.pixel_scale.value)
+        too_close = find_too_close(
+            sourcelist, aperture_settings.radius, pixel_scale=camera.pixel_scale.value
+        )
     except Exception as e:
         # Any failure here is BAD, so raise an error
         raise RuntimeError(
-            f"Call to find_too_close() returned {type(e).__name__}: {str(e)}")
+            f"Call to find_too_close() returned {type(e).__name__}: {str(e)}"
+        )
     too_close_cnt = np.sum(too_close)
     non_overlap = ~too_close
-    msg = (f"{logline} {too_close_cnt} of {src_cnt} sources within 2 aperture radii of "
-           "nearest neighbor")
+    msg = (
+        f"{logline} {too_close_cnt} of {src_cnt} sources within 2 aperture radii of "
+        "nearest neighbor"
+    )
 
     if reject_too_close:
         # Track dropped sources due to being too close together
@@ -304,12 +337,15 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
         msg += " ... keeping them."
     logger.info(msg)
 
-
     # Remove all source positions too close to edges of image (where the annulus would
     # extend beyond the image boundaries).
     padding = aperture_settings.outer_annulus
-    out_of_bounds = ( (xs < padding) | (xs > (ccd_image.shape[1] - padding)) |
-                    (ys < padding) | (ys  > (ccd_image.shape[0] - padding)) )
+    out_of_bounds = (
+        (xs < padding)
+        | (xs > (ccd_image.shape[1] - padding))
+        | (ys < padding)
+        | (ys > (ccd_image.shape[0] - padding))
+    )
     in_bounds = ~out_of_bounds
     # Track dropped sources due to out of bounds positions
     dropped_sources.extend(star_ids[out_of_bounds].tolist())
@@ -321,29 +357,33 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     dec = dec[in_bounds]
     in_cnt = np.sum(in_bounds)
     out_cnt = np.sum(out_of_bounds)
-    logger.info(f"{logline} {out_cnt} sources too close to image edge ... removed "
-                "them.")
-    logger.info(f"{logline} {in_cnt} of {src_cnt} original sources to have photometry "
-                "done.")
-
+    logger.info(
+        f"{logline} {out_cnt} sources too close to image edge ... removed " "them."
+    )
+    logger.info(
+        f"{logline} {in_cnt} of {src_cnt} original sources to have photometry " "done."
+    )
 
     # If we are using x/y positions previously obtained from the ra/dec positions and
     # WCS, then recentroid the sources to refine the positions. This is
     # particularly useful is processing multiple images of the same field
     # and just passing the same sourcelist when calling single_image_photometry
     # on each image.
-    if use_coordinates == 'sky':
+    if use_coordinates == "sky":
         try:
-            xcen, ycen = centroid_sources(ccd_image.data, xs, ys,
-                                        box_size=2 * aperture_settings.radius + 1)
+            xcen, ycen = centroid_sources(
+                ccd_image.data, xs, ys, box_size=2 * aperture_settings.radius + 1
+            )
         except NoOverlapError:
-            logger.warning(f"{logline} Determining new centroids failed ... "
-                            "SKIPPING THIS IMAGE!")
+            logger.warning(
+                f"{logline} Determining new centroids failed ... "
+                "SKIPPING THIS IMAGE!"
+            )
             return None, None
-        else: # Proceed
+        else:  # Proceed
             # Calculate offset between centroid in this image and the positions
             # based on input RA/Dec.
-            center_diff = np.sqrt((xs - xcen)**2 + (ys - ycen)**2)
+            center_diff = np.sqrt((xs - xcen) ** 2 + (ys - ycen) ** 2)
 
             # The center really shouldn't move more than about the fwhm, could
             # rework this in the future to use that instead.
@@ -367,155 +407,168 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
 
     # Define apertures and annuli for the aperture photometry
     aper_locs = np.array([xs, ys]).T
-    apers = CircularAperture(aper_locs,
-                             r=aperture_settings.radius)
-    anuls = CircularAnnulus(aper_locs,
-                            r_in=aperture_settings.inner_annulus,
-                            r_out=aperture_settings.outer_annulus)
+    apers = CircularAperture(aper_locs, r=aperture_settings.radius)
+    anuls = CircularAnnulus(
+        aper_locs,
+        r_in=aperture_settings.inner_annulus,
+        r_out=aperture_settings.outer_annulus,
+    )
 
     # Perform the aperture photometry
-    photom = aperture_photometry(ccd_image.data, (apers, anuls),
-                                mask=ccd_image.mask, method='center')
+    photom = aperture_photometry(
+        ccd_image.data, (apers, anuls), mask=ccd_image.mask, method="center"
+    )
 
     # Add source ids to the photometry table
-    photom['star_id'] = star_ids
-    photom['ra'] = ra * u.deg
-    photom['dec'] = dec * u.deg
+    photom["star_id"] = star_ids
+    photom["ra"] = ra * u.deg
+    photom["dec"] = dec * u.deg
 
     # Drop ID column from aperture_photometry()
-    del photom['id']
+    del photom["id"]
 
     # Add various CCD image parameters to the photometry table
     if fname is not None:
-        photom['file'] = fname
+        photom["file"] = fname
     else:
-        photom['file'] = [''] * len(photom)
+        photom["file"] = [""] * len(photom)
 
     # Set various columns based on CCDData headers (which we
     # checked for earlier)
-    photom['exposure'] = [exposure] * len(photom) * u.second
-    photom['date-obs'] = Time(Column(data=[date_obs] ))
-    photom['filter'] = [filter] * len(photom)
-    photom.rename_column('filter', 'passband')
+    photom["exposure"] = [exposure] * len(photom) * u.second
+    photom["date-obs"] = Time(Column(data=[date_obs]))
+    photom["filter"] = [filter] * len(photom)
+    photom.rename_column("filter", "passband")
 
     # Check for airmass keyword in header and set 'airmass' if found,
     # but accept it may not be available
     try:
-        photom['airmass'] = [ccd_image.header['AIRMASS']] * len(photom)
+        photom["airmass"] = [ccd_image.header["AIRMASS"]] * len(photom)
     except KeyError:
-        logger.warning(f"{logline} 'AIRMASS' not found in CCD "
-                        "image header ... setting to NaN!")
-        photom['airmass'] = [np.nan] * len(photom)
+        logger.warning(
+            f"{logline} 'AIRMASS' not found in CCD " "image header ... setting to NaN!"
+        )
+        photom["airmass"] = [np.nan] * len(photom)
 
     # Save aperture and annulus information
-    photom.rename_column('aperture_sum_0', 'aperture_sum')
-    photom.rename_column('aperture_sum_1', 'annulus_sum')
-    photom['aperture_sum'].unit = ccd_image.unit
-    photom['annulus_sum'].unit = ccd_image.unit
-    photom['aperture'] = apers.r * u.pixel
-    photom['annulus_inner'] = anuls.r_in * u.pixel
-    photom['annulus_outer'] = anuls.r_out * u.pixel
+    photom.rename_column("aperture_sum_0", "aperture_sum")
+    photom.rename_column("aperture_sum_1", "annulus_sum")
+    photom["aperture_sum"].unit = ccd_image.unit
+    photom["annulus_sum"].unit = ccd_image.unit
+    photom["aperture"] = apers.r * u.pixel
+    photom["annulus_inner"] = anuls.r_in * u.pixel
+    photom["annulus_outer"] = anuls.r_out * u.pixel
     # By convention, area is in units of pixels (not pixels squared) in a digital image
-    photom['aperture_area'] = apers.area * u.pixel
-    photom['annulus_area'] = anuls.area  * u.pixel
+    photom["aperture_area"] = apers.area * u.pixel
+    photom["annulus_area"] = anuls.area * u.pixel
 
     if reject_background_outliers:
         msg = f"{logline} Computing clipped sky stats ... "
         try:
-            avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
-                    clipped_sky_per_pix_stats(ccd_image, anuls)
+            (
+                avg_sky_per_pix,
+                med_sky_per_pix,
+                std_sky_per_pix,
+            ) = clipped_sky_per_pix_stats(ccd_image, anuls)
         except AttributeError:
             msg += "BAD ANNULUS ('sky_per_pix' stats set to np.nan) ... "
-            avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
-                np.nan, np.nan, np.nan
-        photom['sky_per_pix_avg'] = avg_sky_per_pix / u.pixel
-        photom['sky_per_pix_med'] = med_sky_per_pix / u.pixel
-        photom['sky_per_pix_std'] = std_sky_per_pix / u.pixel
+            avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = np.nan, np.nan, np.nan
+        photom["sky_per_pix_avg"] = avg_sky_per_pix / u.pixel
+        photom["sky_per_pix_med"] = med_sky_per_pix / u.pixel
+        photom["sky_per_pix_std"] = std_sky_per_pix / u.pixel
         msg += "DONE."
         logger.info(msg)
 
-    else: # Don't reject outliers (but why would you do this?)
-        logger.warning(f"{logline} SUGGESTION: You are computing sky per pixel "
-                        "without clipping (set reject_background_outliers=True "
-                        "to perform clipping).")
+    else:  # Don't reject outliers (but why would you do this?)
+        logger.warning(
+            f"{logline} SUGGESTION: You are computing sky per pixel "
+            "without clipping (set reject_background_outliers=True "
+            "to perform clipping)."
+        )
         med_pp = []
         std_pp = []
         for mask in anuls.to_mask():
             annulus_data = mask.cutout(ccd_image)
             med_pp.append(np.median(annulus_data))
             std_pp.append(np.std(annulus_data))
-        photom['sky_per_pix_avg'] = photom['annulus_sum'] / photom['annulus_area']
-        photom['sky_per_pix_med'] = np.array(med_pp) * ccd_image.unit / u.pixel
-        photom['sky_per_pix_std'] = np.array(std_pp) * ccd_image.unit / u.pixel
+        photom["sky_per_pix_avg"] = photom["annulus_sum"] / photom["annulus_area"]
+        photom["sky_per_pix_med"] = np.array(med_pp) * ccd_image.unit / u.pixel
+        photom["sky_per_pix_std"] = np.array(std_pp) * ccd_image.unit / u.pixel
 
     # Compute counts using clipped stats on sky per pixel
-    photom['aperture_net_cnts'] = (photom['aperture_sum'].value -
-                                    (photom['aperture_area'].value *
-                                    photom['sky_per_pix_avg'].value))
-    photom['aperture_net_cnts'].unit = ccd_image.unit
+    photom["aperture_net_cnts"] = photom["aperture_sum"].value - (
+        photom["aperture_area"].value * photom["sky_per_pix_avg"].value
+    )
+    photom["aperture_net_cnts"].unit = ccd_image.unit
 
     # Fit the FWHM of the sources (can result in many warrnings due to
     # failed FWHM fitting, capture those warnings and print a summary)
     msg = f"{logline} Fitting FWHM of all sources (may take a few minutes) ... "
     with warnings.catch_warnings(record=True) as warned:
         warnings.filterwarnings("always", category=AstropyUserWarning)
-        fwhm_x, fwhm_y = compute_fwhm(ccd_image, photom,
-                                    fwhm_estimate=fwhm_estimate, fit=fwhm_by_fit)
+        fwhm_x, fwhm_y = compute_fwhm(
+            ccd_image, photom, fwhm_estimate=fwhm_estimate, fit=fwhm_by_fit
+        )
         num_warnings = len(warned)
         msg += f"fitting failed on {num_warnings} of {len(photom)} sources  ... "
     msg += "DONE."
     logger.info(msg)
 
     # Deal with bad FWHM values
-    bad_fwhm = (fwhm_x < 1) | (fwhm_y < 1) # Set bad values to NaN now
+    bad_fwhm = (fwhm_x < 1) | (fwhm_y < 1)  # Set bad values to NaN now
     fwhm_x[bad_fwhm] = np.nan
     fwhm_y[bad_fwhm] = np.nan
-    photom['fwhm_x'] = fwhm_x * u.pixel
-    photom['fwhm_y'] = fwhm_y * u.pixel
-    photom['width'] = ((fwhm_x + fwhm_y) / 2) * u.pixel
+    photom["fwhm_x"] = fwhm_x * u.pixel
+    photom["fwhm_y"] = fwhm_y * u.pixel
+    photom["width"] = ((fwhm_x + fwhm_y) / 2) * u.pixel
     if np.sum(bad_fwhm) > 0:
-        logger.info(f"{logline} Bad FWHM values (<1 pixel) for {np.sum(bad_fwhm)} "
-                     "sources.")
+        logger.info(
+            f"{logline} Bad FWHM values (<1 pixel) for {np.sum(bad_fwhm)} " "sources."
+        )
 
     # Flag sources with bad counts before computing noise.
     # This can happen, for example, when the object is faint and centroiding is
     # bad.  It can also happen when the sky background is low.
-    bad_cnts = photom['aperture_net_cnts'].value < 0
+    bad_cnts = photom["aperture_net_cnts"].value < 0
     # This next line works because booleans are just 0/1 in numpy
     if np.sum(bad_cnts) > 0:
-        logger.info(f"{logline} Aperture net counts negative for {np.sum(bad_cnts)} "
-                     "sources.")
+        logger.info(
+            f"{logline} Aperture net counts negative for {np.sum(bad_cnts)} " "sources."
+        )
 
     all_bads = bad_cnts | bad_fwhm
 
-    photom['aperture_net_cnts'][all_bads] = np.nan
-    logger.info(f"{logline} {np.sum(all_bads)} sources with either bad FWHM fit "
-                 "or bad aperture net counts had aperture_net_cnts set to NaN.")
+    photom["aperture_net_cnts"][all_bads] = np.nan
+    logger.info(
+        f"{logline} {np.sum(all_bads)} sources with either bad FWHM fit "
+        "or bad aperture net counts had aperture_net_cnts set to NaN."
+    )
 
     # Compute instrumental magnitudes
-    photom['mag_inst'] = (
-        -2.5 * np.log10(camera.gain.value * photom['aperture_net_cnts'].value /
-                                photom['exposure'].value)
+    photom["mag_inst"] = -2.5 * np.log10(
+        camera.gain.value * photom["aperture_net_cnts"].value / photom["exposure"].value
     )
 
     # Compute and save noise
     msg = f"{logline} Calculating noise for all sources ... "
-    noise = calculate_noise(camera=camera,
-                            counts=photom['aperture_net_cnts'].value,
-                            sky_per_pix=photom['sky_per_pix_avg'].value,
-                            aperture_area=photom['aperture_area'].value,
-                            annulus_area=photom['annulus_area'].value,
-                            exposure=photom['exposure'].value,
-                            include_digitization=include_dig_noise)
-    photom['noise_electrons'] = noise  # Noise in electrons
-    photom['noise_electrons'].unit = u.electron
-    photom['noise_cnts'] = noise / camera.gain.value  # Noise in counts
-    photom['noise_cnts'].unit = ccd_image.unit
+    noise = calculate_noise(
+        camera=camera,
+        counts=photom["aperture_net_cnts"].value,
+        sky_per_pix=photom["sky_per_pix_avg"].value,
+        aperture_area=photom["aperture_area"].value,
+        annulus_area=photom["annulus_area"].value,
+        exposure=photom["exposure"].value,
+        include_digitization=include_dig_noise,
+    )
+    photom["noise_electrons"] = noise  # Noise in electrons
+    photom["noise_electrons"].unit = u.electron
+    photom["noise_cnts"] = noise / camera.gain.value  # Noise in counts
+    photom["noise_cnts"].unit = ccd_image.unit
 
     # Compute and save SNR
-    snr = camera.gain.value * photom['aperture_net_cnts'] / noise
-    photom['snr'] = snr
-    photom['mag_error'] = 1.085736205 / snr
+    snr = camera.gain.value * photom["aperture_net_cnts"] / noise
+    photom["snr"] = snr
+    photom["mag_error"] = 1.085736205 / snr
     msg += "DONE."
     logger.info(msg)
 
@@ -527,26 +580,35 @@ def single_image_photometry(ccd_image, sourcelist, camera, observatory_location,
     logger.handlers.clear()
 
     # Create PhotometryData object to return
-    photom_data = PhotometryData(observatory=observatory_location, camera=camera,
-                                input_data=photom, passband_map=passband_map)
+    photom_data = PhotometryData(
+        observatory=observatory_location,
+        camera=camera,
+        input_data=photom,
+        passband_map=passband_map,
+    )
 
     return photom_data, dropped_sources
 
 
-def multi_image_photometry(directory_with_images,
-                           object_of_interest,
-                           sourcelist, camera,
-                           observatory_location,
-                           aperture_settings,
-                           shift_tolerance, max_adu, fwhm_estimate,
-                           include_dig_noise=True,
-                           reject_too_close=True,
-                           reject_background_outliers=True,
-                           reject_unmatched=True,
-                           passband_map=None,
-                           fwhm_by_fit=True,
-                           logfile=None,
-                           console_log=True):
+def multi_image_photometry(
+    directory_with_images,
+    object_of_interest,
+    sourcelist,
+    camera,
+    observatory_location,
+    aperture_settings,
+    shift_tolerance,
+    max_adu,
+    fwhm_estimate,
+    include_dig_noise=True,
+    reject_too_close=True,
+    reject_background_outliers=True,
+    reject_unmatched=True,
+    passband_map=None,
+    fwhm_by_fit=True,
+    logfile=None,
+    console_log=True,
+):
     """
     Perform aperture photometry on a directory of images.
 
@@ -655,13 +717,15 @@ def multi_image_photometry(directory_with_images,
 
     # Confirm sourcelist has ra/dec coordinates
     if not sourcelist.has_ra_dec:
-        raise ValueError("multi_image_photometry: sourcelist must have RA/Dec "
-                         "coordinates to use this function.")
+        raise ValueError(
+            "multi_image_photometry: sourcelist must have RA/Dec "
+            "coordinates to use this function."
+        )
 
     # Set up logging (retrieve a logger but purge any existing handlers)
     multilogger = logging.getLogger("multi_image_photometry")
     multilogger.setLevel(logging.INFO)
-    console_format = logging.Formatter('%(message)s')
+    console_format = logging.Formatter("%(message)s")
     for handler in multilogger.handlers[:]:
         multilogger.removeHandler(handler)
 
@@ -671,13 +735,13 @@ def multi_image_photometry(directory_with_images,
         logfile = Path(directory_with_images) / logfile
         # by default this appends to existing logfile
         fh = logging.FileHandler(logfile)
-        log_format = logging.Formatter('%(levelname)s - %(message)s')
+        log_format = logging.Formatter("%(levelname)s - %(message)s")
         if console_log:
             ch = logging.StreamHandler()
             ch.setFormatter(console_format)
             ch.setLevel(logging.INFO)
             multilogger.addHandler(ch)
-    else: # Log to console
+    else:  # Log to console
         fh = logging.StreamHandler()
         log_format = console_format
     fh.setFormatter(log_format)
@@ -700,7 +764,7 @@ def multi_image_photometry(directory_with_images,
     n_files_processed = 0
 
     msg = f"Starting photometry of files in {directory_with_images} ... "
-    if (logfile is not None):
+    if logfile is not None:
         msg += f"logging output to {orig_logfile}"
         # If not logging to console, print message here
         if not console_log:
@@ -708,35 +772,43 @@ def multi_image_photometry(directory_with_images,
     multilogger.info(msg)
 
     # Suppress the FITSFixedWarning that is raised when reading a FITS file header
-    warnings.filterwarnings('ignore', category=FITSFixedWarning)
+    warnings.filterwarnings("ignore", category=FITSFixedWarning)
 
     # Process all the files
     for this_ccd, this_fname in ifc.ccds(object=object_of_interest, return_fname=True):
         multilogger.info(f"multi_image_photometry: Processing image {this_fname}")
         if this_ccd.wcs is None:
-            multilogger.warning('                   .... SKIPPING THIS IMAGE (NO WCS)')
+            multilogger.warning("                   .... SKIPPING THIS IMAGE (NO WCS)")
             continue
 
         # Call single_image_photometry on each image
         n_files_processed += 1
         multilogger.info("  Calling single_image_photometry ...")
-        this_phot, this_missing_sources = \
-            single_image_photometry(this_ccd, sourcelist,
-                                    camera, observatory_location,
-                                    aperture_settings,
-                                    shift_tolerance, max_adu, fwhm_estimate,
-                                    use_coordinates='sky',
-                                    include_dig_noise=include_dig_noise,
-                                    reject_too_close=reject_too_close,
-                                    reject_background_outliers=reject_background_outliers,
-                                    passband_map=passband_map,
-                                    fwhm_by_fit=fwhm_by_fit, fname=this_fname,
-                                    logline="    >",
-                                    logfile = logfile)
+        this_phot, this_missing_sources = single_image_photometry(
+            this_ccd,
+            sourcelist,
+            camera,
+            observatory_location,
+            aperture_settings,
+            shift_tolerance,
+            max_adu,
+            fwhm_estimate,
+            use_coordinates="sky",
+            include_dig_noise=include_dig_noise,
+            reject_too_close=reject_too_close,
+            reject_background_outliers=reject_background_outliers,
+            passband_map=passband_map,
+            fwhm_by_fit=fwhm_by_fit,
+            fname=this_fname,
+            logline="    >",
+            logfile=logfile,
+        )
         if (this_phot is None) or (this_missing_sources is None):
             multilogger.info("  single_image_photometry failed for this image.")
         else:
-            multilogger.info(f"  Done with single_image_photometry for {this_fname}\n\n")
+            multilogger.info(
+                f"  Done with single_image_photometry for {this_fname}\n\n"
+            )
 
             # Extend the list of missing stars
             missing_sources.extend(this_missing_sources)
@@ -763,12 +835,12 @@ def multi_image_photometry(directory_with_images,
         else:
             uniques = set([missing_sources])
 
-        msg = (f"  Removing {len(uniques)} sources not observed in every image ... ")
+        msg = f"  Removing {len(uniques)} sources not observed in every image ... "
         # Purge the photometry table of all sources that were eliminated
         # on at least one image
-        starid_to_remove = sorted([u for u in uniques if u in all_phot['star_id']])
+        starid_to_remove = sorted([u for u in uniques if u in all_phot["star_id"]])
         # add index to PhotometryData to speed up removal
-        all_phot.add_index('star_id')
+        all_phot.add_index("star_id")
         # Remove the starid for objects not observed in every image
         if starid_to_remove:
             bad_rows = all_phot.loc_indices[starid_to_remove]
@@ -776,14 +848,16 @@ def multi_image_photometry(directory_with_images,
                 bad_rows = list(bad_rows)
             except TypeError:
                 bad_rows = [bad_rows]
-            all_phot.remove_indices('star_id')
+            all_phot.remove_indices("star_id")
             all_phot.remove_rows(sorted(bad_rows))
         # Drop index from PhotometryData to save memory
-        all_phot.remove_indices('star_id')
+        all_phot.remove_indices("star_id")
         msg += "DONE."
         multilogger.info(msg)
 
-    multilogger.info(f"  DONE processing all matching images in {directory_with_images}")
+    multilogger.info(
+        f"  DONE processing all matching images in {directory_with_images}"
+    )
     if logfile is not None and not console_log:
         print(f"  DONE processing all matching images in {directory_with_images}")
 
@@ -841,8 +915,11 @@ def faster_sigma_clip_stats(data, sigma=5, iters=5, axis=None):
         if np.nansum(clips) == 0:
             break
         data[clips] = np.nan
-    return (bn.nanmean(data, axis=axis), bn.nanmedian(data, axis=axis),
-            bn.nanstd(data, axis=axis))
+    return (
+        bn.nanmean(data, axis=axis),
+        bn.nanmedian(data, axis=axis),
+        bn.nanstd(data, axis=axis),
+    )
 
 
 def find_too_close(sourcelist, aperture_rad, pixel_scale=None):
@@ -875,29 +952,32 @@ def find_too_close(sourcelist, aperture_rad, pixel_scale=None):
         are closer than two aperture radii, ``False`` otherwise.
     """
     if not isinstance(sourcelist, SourceListData):
-        raise TypeError("sourcelist must be of type SourceListData not "
-                        f"'{type(sourcelist)}'")
+        raise TypeError(
+            "sourcelist must be of type SourceListData not " f"'{type(sourcelist)}'"
+        )
 
     if not isinstance(pixel_scale, float):
         raise TypeError(f"pixel_scale must be a float not '{type(pixel_scale)}'")
 
     if sourcelist.has_x_y:
-        x, y = sourcelist['xcenter'], sourcelist['ycenter']
+        x, y = sourcelist["xcenter"], sourcelist["ycenter"]
         # Find the pixel distance to the nearest neighbor for each source
-        dist_mat = cdist(np.array([x, y]).T, np.array([x, y]).T, metric='euclidean')
+        dist_mat = cdist(np.array([x, y]).T, np.array([x, y]).T, metric="euclidean")
         np.fill_diagonal(dist_mat, np.inf)
         # Return array with True where the distance is less than twice the aperture
         # radius
-        return (dist_mat.min(0) < 2 * aperture_rad)
+        return dist_mat.min(0) < 2 * aperture_rad
     elif sourcelist.has_ra_dec:
-        if (pixel_scale is None):
-            raise ValueError("pixel_scale must be provided if x/y coordinates are "
-                             "not available in the sourcelist.")
-        star_coords = SkyCoord(ra=sourcelist['ra'], dec=sourcelist['dec'],
-                           frame='icrs', unit='degree')
-        idxc, d2d, d3d = star_coords.match_to_catalog_sky(star_coords,
-                                                        nthneighbor=2)
-        return (d2d < (aperture_rad * 2 * pixel_scale * u.arcsec))
+        if pixel_scale is None:
+            raise ValueError(
+                "pixel_scale must be provided if x/y coordinates are "
+                "not available in the sourcelist."
+            )
+        star_coords = SkyCoord(
+            ra=sourcelist["ra"], dec=sourcelist["dec"], frame="icrs", unit="degree"
+        )
+        idxc, d2d, d3d = star_coords.match_to_catalog_sky(star_coords, nthneighbor=2)
+        return d2d < (aperture_rad * 2 * pixel_scale * u.arcsec)
     else:
         raise ValueError("sourcelist must have x/y or ra/dec coordinates")
 
@@ -934,7 +1014,7 @@ def clipped_sky_per_pix_stats(data, annulus, sigma=5, iters=5):
     # Use the 'center' method because then pixels are either in or out. To use
     # 'partial' or 'exact' we would need to do a weighted sigma clip and
     # I'm not sure how to do that.
-    masks = annulus.to_mask(method='center')
+    masks = annulus.to_mask(method="center")
 
     anul_list = []
     for mask in masks:
@@ -945,20 +1025,26 @@ def clipped_sky_per_pix_stats(data, annulus, sigma=5, iters=5):
     anul_array = np.array(anul_list)
     # Turn all zeros into np.nan...
     anul_array[anul_array == 0] = np.nan
-    avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = \
-        faster_sigma_clip_stats(anul_array,
-                                sigma=sigma,
-                                iters=iters,
-                                axis=1
-                               )
+    avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = faster_sigma_clip_stats(
+        anul_array, sigma=sigma, iters=iters, axis=1
+    )
 
-    return (avg_sky_per_pix * data.unit, med_sky_per_pix * data.unit,
-            std_sky_per_pix * data.unit)
+    return (
+        avg_sky_per_pix * data.unit,
+        med_sky_per_pix * data.unit,
+        std_sky_per_pix * data.unit,
+    )
 
 
-def calculate_noise(camera=None, counts=0.0, sky_per_pix=0.0,
-                    aperture_area=0, annulus_area=0,
-                    exposure=0, include_digitization=False):
+def calculate_noise(
+    camera=None,
+    counts=0.0,
+    sky_per_pix=0.0,
+    aperture_area=0,
+    annulus_area=0,
+    exposure=0,
+    include_digitization=False,
+):
     """
     Computes the noise in a photometric measurement.
 
@@ -1045,7 +1131,7 @@ def calculate_noise(camera=None, counts=0.0, sky_per_pix=0.0,
 
     sky = area_ratio * gain * sky_per_pix
     dark = area_ratio * dark_current_per_sec * exposure
-    rn_error = area_ratio * read_noise ** 2
+    rn_error = area_ratio * read_noise**2
 
     digitization = 0.0
 
