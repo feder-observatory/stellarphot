@@ -9,13 +9,13 @@ from stellarphot.io.tess import TessSubmission, TessTargetFile
 GOOD_HEADER = {
     "date-obs": "2022-06-04T05:44:28.010",
     "filter": "ip",
-    "object": "TIC-237205154"
+    "object": "TIC-237205154",
 }
 
 GOOD_HEADER_WITH_PLANET = {
     "date-obs": "2022-06-04T05:44:28.010",
     "filter": "ip",
-    "object": "TIC-237205154.01"
+    "object": "TIC-237205154.01",
 }
 
 BAD_HEADER = {}
@@ -79,15 +79,15 @@ def test_target_file():
     # first point of this test is to simply succeed in creating the
     # object
 
-    tic_742648307 = SkyCoord(ra=104.733225, dec=49.968739, unit='degree')
+    tic_742648307 = SkyCoord(ra=104.733225, dec=49.968739, unit="degree")
 
     tess_target = TessTargetFile(tic_742648307, magnitude=12, depth=10)
 
     # Check that the first thing in the list is the tick object
     check_coords = SkyCoord(
-        ra=tess_target.table['RA'][0],
-        dec=tess_target.table['Dec'][0],
-        unit=('hour', 'degree')
+        ra=tess_target.table["RA"][0],
+        dec=tess_target.table["Dec"][0],
+        unit=("hour", "degree"),
     )
     assert tic_742648307.separation(check_coords).arcsecond < 1
 
@@ -100,7 +100,7 @@ def test_target_file():
     # the object is deleted, so we need to do that here instead of
     # letting it happen at the end of the test.
     with warnings.catch_warnings():
-        warnings.filterwarnings("ignore",
-                                message="unclosed file",
-                                category=ResourceWarning)
+        warnings.filterwarnings(
+            "ignore", message="unclosed file", category=ResourceWarning
+        )
         del tess_target

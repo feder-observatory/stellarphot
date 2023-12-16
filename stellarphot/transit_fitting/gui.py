@@ -10,29 +10,36 @@ from astropy.utils.data import get_pkg_data_filename
 
 from stellarphot.transit_fitting.io import get_tic_info
 
-__all__ = ['MyValid', 'make_checker','validate_exposure_time',
-           'populate_TIC_boxes', 'populate_TOI_boxes', 'exotic_settings_widget',
-           'set_values_from_json_file', 'get_values_from_widget',
-           'generate_json_file_name']
+__all__ = [
+    "MyValid",
+    "make_checker",
+    "validate_exposure_time",
+    "populate_TIC_boxes",
+    "populate_TOI_boxes",
+    "exotic_settings_widget",
+    "set_values_from_json_file",
+    "get_values_from_widget",
+    "generate_json_file_name",
+]
 
 
-template_types = ['known', 'candidate']
+template_types = ["known", "candidate"]
 template_json = {}
 to_fill = {}
 
 for template in template_types:
-    template_name = get_pkg_data_filename('data/tic-template-for-exotic-'
-                                          f'{template}.json')
+    template_name = get_pkg_data_filename(
+        "data/tic-template-for-exotic-" f"{template}.json"
+    )
     with open(template_name) as f:
         template_json[template] = json.load(f)
 
-    template_name = get_pkg_data_filename(f'data/exotic-to-mod-{template}.json')
+    template_name = get_pkg_data_filename(f"data/exotic-to-mod-{template}.json")
     with open(Path(template_name)) as f:
         to_fill[template] = json.load(f)
 
 exotic_arguments = dict(
-    known=['--nasaexoarch', '--pre'],
-    candidate=['--override', '--pre']
+    known=["--nasaexoarch", "--pre"], candidate=["--override", "--pre"]
 )
 
 # Nested keys are flattened by joining them with this character
@@ -58,21 +65,22 @@ class MyValid(ipw.Button):
         Current value of the indicator. Initizlized to False.
 
     """
+
     value = Bool(False, help="Bool value").tag(sync=True)
 
     def __init__(self, **kwd):
         super().__init__(**kwd)
-        self.layout.width = '40px'
+        self.layout.width = "40px"
         self._set_properties(None)
 
-    @observe('value')
+    @observe("value")
     def _set_properties(self, change):
         if self.value:
-            self.style.button_color = 'green'
-            self.icon = 'check'
+            self.style.button_color = "green"
+            self.icon = "check"
         else:
-            self.style.button_color = 'red'
-            self.icon = 'times'
+            self.style.button_color = "red"
+            self.icon = "times"
 
 
 def make_checker(indicator_widget, value_widget):
@@ -99,16 +107,17 @@ def make_checker(indicator_widget, value_widget):
         Function with the correct signature for use as an observer on an
         ipywidget.
     """
+
     def check_name(change):
         # Valid TIC number is 9 digits
-        ticced = re.compile(r'TIC \d{9,10}$')
-        owner = change['owner']
-        is_tic = ticced.match(change['new'])
+        ticced = re.compile(r"TIC \d{9,10}$")
+        owner = change["owner"]
+        is_tic = ticced.match(change["new"])
         if is_tic:
             if indicator_widget is not None:
                 indicator_widget.value = True
             owner.disabled = True
-            tic_info = get_tic_info(change['new'][-9:])
+            tic_info = get_tic_info(change["new"][-9:])
             if not tic_info:
                 indicator_widget.value = False
                 indicator_widget.tooltip = "Not a valid TIC number"
@@ -119,13 +128,13 @@ def make_checker(indicator_widget, value_widget):
             owner.disabled = False
             if indicator_widget is not None:
                 indicator_widget.value = False
-                indicator_widget.tooltip = 'TIC numbers have 9 digits'
+                indicator_widget.tooltip = "TIC numbers have 9 digits"
 
     return check_name
 
 
 def validate_exposure_time(indicator_widget, value_widget):
-    """ Validates the exposure time input.
+    """Validates the exposure time input.
 
     Parameters
     ----------
@@ -143,14 +152,16 @@ def validate_exposure_time(indicator_widget, value_widget):
         indicator_widget to indicate if the value of the exposure time
         is valid.  This can be used as an observer for an ipywidget
     """
+
     def check_exposure(change):
         # Valid Exposure time is greater than zero
-        if change['new'] > 0:
+        if change["new"] > 0:
             if indicator_widget is not None:
                 indicator_widget.value = True
         else:
             if indicator_widget is not None:
                 indicator_widget.value = False
+
     return check_exposure
 
 
@@ -186,15 +197,14 @@ def populate_TIC_boxes(tic_info, value_widget):
         "Host Star Name": "UCAC",
         "Star Metallicity ([FE/H])": "MH",
         "Star Metallicity (+) Uncertainty": "e_MH",
-        "Star Metallicity (-) Uncertainty": "e_MH"
+        "Star Metallicity (-) Uncertainty": "e_MH",
     }
     for k, v in exotic_tic.items():
         exotic_key = join_char.join(["planetary_parameters", k])
         if k == "Host Star Name":
-            value_widget['candidate'][exotic_key].value = \
-                f'UCAC4 {tic_info[v][0]}'
+            value_widget["candidate"][exotic_key].value = f"UCAC4 {tic_info[v][0]}"
         elif not np.isnan(tic_info[v][0]):
-            value_widget['candidate'][exotic_key].value = tic_info[v][0]
+            value_widget["candidate"][exotic_key].value = tic_info[v][0]
 
 
 def populate_TOI_boxes(toi, exotic_widget):
@@ -221,40 +231,41 @@ def populate_TOI_boxes(toi, exotic_widget):
     # Match EXOTIC json keys to columns in the result returned from
     # astroquery
     exotic_toi = {
-            "Planet Name": "tic_id",
-            "Target Star RA": "coord",
-            "Target Star Dec": "coordP",
-            "Orbital Period (days)": "period",
-            "Orbital Period Uncertainty": "period_error",
-            "Published Mid-Transit Time (BJD-UTC)": "epoch",
-            "Mid-Transit Time Uncertainty": "epoch_error",
-            # Could maybe get these from TOI information, but not straightforward
-            #"Ratio of Planet to Stellar Radius (Rp/Rs)": 0.0,
-            #"Ratio of Planet to Stellar Radius (Rp/Rs) Uncertainty": 0.0,
-            #"Ratio of Distance to Stellar Radius (a/Rs)": 0.0,
-            #"Ratio of Distance to Stellar Radius (a/Rs) Uncertainty": 0.0,
+        "Planet Name": "tic_id",
+        "Target Star RA": "coord",
+        "Target Star Dec": "coordP",
+        "Orbital Period (days)": "period",
+        "Orbital Period Uncertainty": "period_error",
+        "Published Mid-Transit Time (BJD-UTC)": "epoch",
+        "Mid-Transit Time Uncertainty": "epoch_error",
+        # Could maybe get these from TOI information, but not straightforward
+        # "Ratio of Planet to Stellar Radius (Rp/Rs)": 0.0,
+        # "Ratio of Planet to Stellar Radius (Rp/Rs) Uncertainty": 0.0,
+        # "Ratio of Distance to Stellar Radius (a/Rs)": 0.0,
+        # "Ratio of Distance to Stellar Radius (a/Rs) Uncertainty": 0.0,
     }
     for k, v in exotic_toi.items():
         exotic_key = join_char.join(["planetary_parameters", k])
         if k == "Planet Name":
-            exotic_widget['candidate'][exotic_key].value = \
-                f'TIC {toi.tic_id}'
+            exotic_widget["candidate"][exotic_key].value = f"TIC {toi.tic_id}"
         elif k == "Target Star RA":
-            exotic_widget['candidate'][exotic_key].value = \
-                toi.coord.ra.to_string(unit='hour', decimal=False, sep=":")
+            exotic_widget["candidate"][exotic_key].value = toi.coord.ra.to_string(
+                unit="hour", decimal=False, sep=":"
+            )
         elif k == "Target Star Dec":
-            exotic_widget['candidate'][exotic_key].value = \
-                toi.coord.dec.to_string(unit='degree', decimal=False, sep=":")
+            exotic_widget["candidate"][exotic_key].value = toi.coord.dec.to_string(
+                unit="degree", decimal=False, sep=":"
+            )
         else:
-            exotic_widget['candidate'][exotic_key].value = getattr(toi, v).value
+            exotic_widget["candidate"][exotic_key].value = getattr(toi, v).value
 
 
 # This sets up the specific widgets whose values get validated.
 # That includes the widget that contains the TIC number for candidates.
 validators = dict(known={}, candidate={})
-validators['candidate']['Planet Name'] = make_checker
+validators["candidate"]["Planet Name"] = make_checker
 for k in validators:
-    validators[k]['Exposure Time (s)'] = validate_exposure_time
+    validators[k]["Exposure Time (s)"] = validate_exposure_time
 
 
 def exotic_settings_widget():
@@ -280,8 +291,8 @@ def exotic_settings_widget():
     widget_list = {}
 
     # Each widget has the same layout for its description and its value/input
-    layout_description = ipw.Layout(width='70%')
-    layout_input = ipw.Layout(width='30%')
+    layout_description = ipw.Layout(width="70%")
+    layout_input = ipw.Layout(width="30%")
 
     # Maintain a separate dict of just the value widgets
     value_widget = {}
@@ -308,8 +319,9 @@ def exotic_settings_widget():
                 # Each horizontal box below is one "cell" and the input grid.
                 # The HTML widget has the label, and input_widget is the text or
                 # float widget.
-                hb = ipw.HBox([ipw.HTML(value=k2, layout=layout_description),
-                               input_widget])
+                hb = ipw.HBox(
+                    [ipw.HTML(value=k2, layout=layout_description), input_widget]
+                )
 
                 # Widgets with validators need some observers added
                 try:
@@ -326,8 +338,9 @@ def exotic_settings_widget():
                     kids.append(indicator)
 
                     # Add an observer to the widget to watch for changes
-                    input_widget.observe(validator(indicator, value_widget),
-                                         names='value')
+                    input_widget.observe(
+                        validator(indicator, value_widget), names="value"
+                    )
 
                     hb.children = kids
 
@@ -337,24 +350,29 @@ def exotic_settings_widget():
 
     hb2 = {}
     for template in template_types:
-        hb2[template] = ipw.HBox([ipw.VBox(widget_list[template][:16],
-                                           layout=ipw.Layout(padding='10px')),
-                                  ipw.VBox(widget_list[template][16:])])
+        hb2[template] = ipw.HBox(
+            [
+                ipw.VBox(widget_list[template][:16], layout=ipw.Layout(padding="10px")),
+                ipw.VBox(widget_list[template][16:]),
+            ]
+        )
 
     select_planet_type = ipw.ToggleButtons(
-        description='Known or candidate exoplanet?',
+        description="Known or candidate exoplanet?",
         options=template_types,
-        style={'description_width': 'initial'}
+        style={"description_width": "initial"},
     )
 
-    lookup_link_text = dict(known='https://exoplanetarchive.ipac.caltech.edu/',
-                            candidate='https://exofop.ipac.caltech.edu/tess/')
+    lookup_link_text = dict(
+        known="https://exoplanetarchive.ipac.caltech.edu/",
+        candidate="https://exofop.ipac.caltech.edu/tess/",
+    )
 
     lookup_link_html = {}
 
     for k, v in lookup_link_text.items():
         lookup_link_html[k] = ipw.HTML(
-            f'<h3>For some information about this '
+            f"<h3>For some information about this "
             f'object: <a href="{v}" target="_blank">{v}</a></h3>'
         )
 
@@ -363,17 +381,19 @@ def exotic_settings_widget():
     whole_thing = ipw.VBox(children=[select_planet_type, input_container])
     whole_thing.planet_type = select_planet_type
     whole_thing.value_widget = value_widget
-    pre_reduced_file = join_char.join(['optional_info', 'Pre-reduced File:'])
+    pre_reduced_file = join_char.join(["optional_info", "Pre-reduced File:"])
     whole_thing.data_file_widget = {
-        'candidate': value_widget['candidate'][pre_reduced_file],
-        'known': value_widget['known'][pre_reduced_file]
+        "candidate": value_widget["candidate"][pre_reduced_file],
+        "known": value_widget["known"][pre_reduced_file],
     }
 
     def observe_select(change):
-        input_container.children = [lookup_link_html[select_planet_type.value],
-                                    hb2[select_planet_type.value]]
+        input_container.children = [
+            lookup_link_html[select_planet_type.value],
+            hb2[select_planet_type.value],
+        ]
 
-    select_planet_type.observe(observe_select, names='value')
+    select_planet_type.observe(observe_select, names="value")
     observe_select(select_planet_type.value)
 
     return whole_thing
@@ -460,11 +480,11 @@ def generate_json_file_name(exotic_widget, key=None):
         key = exotic_widget.planet_type.value
 
     get_values_from_widget(exotic_widget, key=key)
-    user_info = 'user_info'
-    planet = 'planetary_parameters'
-    filter_key = 'Filter Name (aavso.org/filters)'
-    date = template_json[key][user_info]['Observation date']
-    planet_name = template_json[key][planet]['Planet Name']
+    user_info = "user_info"
+    planet = "planetary_parameters"
+    filter_key = "Filter Name (aavso.org/filters)"
+    date = template_json[key][user_info]["Observation date"]
+    planet_name = template_json[key][planet]["Planet Name"]
     filter_name = template_json[key][user_info][filter_key]
-    name = f'{planet_name}-{date}-{filter_name}'
-    return name.replace(' ', '_') + '.json'
+    name = f"{planet_name}-{date}-{filter_name}"
+    return name.replace(" ", "_") + ".json"

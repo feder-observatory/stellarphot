@@ -5,11 +5,11 @@ import numpy as np
 from astropy import units as u
 
 
-__all__ = ['plot_many_factors', 'bin_data', 'scale_and_shift']
+__all__ = ["plot_many_factors", "bin_data", "scale_and_shift"]
 
 
 def plot_many_factors(photometry, low, high, shift, scale, ax=None):
-    """ Plots many factors of photometry against each other.
+    """Plots many factors of photometry against each other.
 
     Parameters
     ----------
@@ -38,12 +38,14 @@ def plot_many_factors(photometry, low, high, shift, scale, ax=None):
     None
         Added features to the plot directly.
     """
-    airmass = photometry['airmass'] / np.mean(photometry['airmass'])
-    x = photometry['xcenter'] / np.mean(photometry['xcenter'])
-    y = photometry['ycenter'] / np.mean(photometry['ycenter'])
-    comp_counts = photometry['comparison counts'] / np.mean(photometry['comparison counts'])
-    sky_per_pix = photometry['sky_per_pix_avg'] / np.mean(photometry['sky_per_pix_avg'])
-    width = photometry['width'] / np.mean(photometry['width'])
+    airmass = photometry["airmass"] / np.mean(photometry["airmass"])
+    x = photometry["xcenter"] / np.mean(photometry["xcenter"])
+    y = photometry["ycenter"] / np.mean(photometry["ycenter"])
+    comp_counts = photometry["comparison counts"] / np.mean(
+        photometry["comparison counts"]
+    )
+    sky_per_pix = photometry["sky_per_pix_avg"] / np.mean(photometry["sky_per_pix_avg"])
+    width = photometry["width"] / np.mean(photometry["width"])
 
     scale_airmass = scale_and_shift(airmass, scale, 0.75 * shift, pos=False)
     scale_x = scale_and_shift(x, scale, shift, pos=True)
@@ -52,28 +54,63 @@ def plot_many_factors(photometry, low, high, shift, scale, ax=None):
     scale_counts = scale_and_shift(comp_counts, scale, shift, pos=True)
     scale_width = scale_and_shift(width, scale, shift, pos=True)
 
-    x_times = (photometry['bjd'] - 2400000 * u.day).jd
+    x_times = (photometry["bjd"] - 2400000 * u.day).jd
 
     if ax is None:
         ax = plt.gca()
 
-    print(f'{scale_airmass.min()} {scale_airmass.max()}')
-    ax.plot(x_times, scale_counts, '.', c='brown',
-             label='tot_C_cnts (arbitrarily scaled and shifted)', alpha=0.5, ms=4)
-    ax.plot(x_times, scale_airmass, 'c-',
-             label="AIRMASS (arbitrarily scaled and shifted)", ms=4)
-    ax.plot(x_times, scale_sky_pix, c='gold',
-             label='Sky/Pixel_T1 (arbitrarily scaled and shifted)', ms=4)
-    ax.plot(x_times, scale_width, '-', c='gray',
-             label="Width_T1 (arbitrarily scaled and shifted)", ms=4)
-    ax.plot(x_times, scale_x, '-', c='pink',
-             label="X(FITS)_T1 (arbitrarily scaled and shifted)", ms=4)
-    ax.plot(x_times, scale_y, '-', c='lightblue',
-             label="Y(FITS)_T1 (arbitrarily scaled and shifted)", ms=4)
+    print(f"{scale_airmass.min()} {scale_airmass.max()}")
+    ax.plot(
+        x_times,
+        scale_counts,
+        ".",
+        c="brown",
+        label="tot_C_cnts (arbitrarily scaled and shifted)",
+        alpha=0.5,
+        ms=4,
+    )
+    ax.plot(
+        x_times,
+        scale_airmass,
+        "c-",
+        label="AIRMASS (arbitrarily scaled and shifted)",
+        ms=4,
+    )
+    ax.plot(
+        x_times,
+        scale_sky_pix,
+        c="gold",
+        label="Sky/Pixel_T1 (arbitrarily scaled and shifted)",
+        ms=4,
+    )
+    ax.plot(
+        x_times,
+        scale_width,
+        "-",
+        c="gray",
+        label="Width_T1 (arbitrarily scaled and shifted)",
+        ms=4,
+    )
+    ax.plot(
+        x_times,
+        scale_x,
+        "-",
+        c="pink",
+        label="X(FITS)_T1 (arbitrarily scaled and shifted)",
+        ms=4,
+    )
+    ax.plot(
+        x_times,
+        scale_y,
+        "-",
+        c="lightblue",
+        label="Y(FITS)_T1 (arbitrarily scaled and shifted)",
+        ms=4,
+    )
 
 
 def bin_data(data_set, num=3, error_set=None):
-    """ Bins data into groups of num.
+    """Bins data into groups of num.
 
     Parameters
     ----------
@@ -99,15 +136,15 @@ def bin_data(data_set, num=3, error_set=None):
     binned_set = []
     error = []
     for i in range(0, len(data_set), num):
-        binned_set.append(data_set[i:i+num].mean())
+        binned_set.append(data_set[i : i + num].mean())
         if error_set is not None:
-            error_bin = error_set[i:i+num]**2
-            error.append(error_bin.sum()/num)
+            error_bin = error_set[i : i + num] ** 2
+            error.append(error_bin.sum() / num)
     return np.array(binned_set), np.array(error)
 
 
 def scale_and_shift(data_set, scale, shift, pos=True):
-    """ Scales and shifts data set passed in.
+    """Scales and shifts data set passed in.
 
     Parameters
     ----------
@@ -131,9 +168,13 @@ def scale_and_shift(data_set, scale, shift, pos=True):
         The scaled and shifted data.
     """
     if not pos:
-        data_set = 1 - scale * (data_set - data_set.min()) / (data_set.max() - data_set.min())
+        data_set = 1 - scale * (data_set - data_set.min()) / (
+            data_set.max() - data_set.min()
+        )
     else:
-        data_set = 1 + scale * (data_set - data_set.min()) / (data_set.max() - data_set.min())
+        data_set = 1 + scale * (data_set - data_set.min()) / (
+            data_set.max() - data_set.min()
+        )
 
     data_set += shift
 

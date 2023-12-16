@@ -22,8 +22,14 @@ from stellarphot.gui_tools.fits_opener import FitsOpener
 from stellarphot.plotting import seeing_plot
 from stellarphot.settings import ApertureSettings, ui_generator
 
-__all__ = ['set_keybindings', 'find_center', 'radial_profile',
-           'RadialProfile', 'box', 'SeeingProfileWidget']
+__all__ = [
+    "set_keybindings",
+    "find_center",
+    "radial_profile",
+    "RadialProfile",
+    "box",
+    "SeeingProfileWidget",
+]
 
 desc_style = {"description_width": "initial"}
 
@@ -61,31 +67,31 @@ def set_keybindings(image_widget, scroll_zoom=False):
     # Displays the event map...
     # bind_map.eventmap
     bind_map.clear_event_map()
-    bind_map.map_event(None, (), 'ms_left', 'pan')
+    bind_map.map_event(None, (), "ms_left", "pan")
     if scroll_zoom:
-        bind_map.map_event(None, (), 'pa_pan', 'zoom')
+        bind_map.map_event(None, (), "pa_pan", "zoom")
 
     # bind_map.map_event(None, (), 'ms_left', 'cursor')
     # contrast with right mouse
-    bind_map.map_event(None, (), 'ms_right', 'contrast')
+    bind_map.map_event(None, (), "ms_right", "contrast")
 
     # shift-right mouse to reset contrast
-    bind_map.map_event(None, ('shift',), 'ms_right', 'contrast_restore')
-    bind_map.map_event(None, ('ctrl',), 'ms_left', 'cursor')
+    bind_map.map_event(None, ("shift",), "ms_right", "contrast_restore")
+    bind_map.map_event(None, ("ctrl",), "ms_left", "cursor")
 
     # Bind +/- to zoom in/out
-    bind_map.map_event(None, (), 'kp_+', 'zoom_in')
-    bind_map.map_event(None, (), 'kp_=', 'zoom_in')
-    bind_map.map_event(None, (), 'kp_-', 'zoom_out')
-    bind_map.map_event(None, (), 'kp__', 'zoom_out')
+    bind_map.map_event(None, (), "kp_+", "zoom_in")
+    bind_map.map_event(None, (), "kp_=", "zoom_in")
+    bind_map.map_event(None, (), "kp_-", "zoom_out")
+    bind_map.map_event(None, (), "kp__", "zoom_out")
 
     # Bind arrow keys to panning
     # There is NOT a typo below. I want the keys to move the image in the
     # direction of the arrow
-    bind_map.map_event(None, (), 'kp_left', 'pan_right')
-    bind_map.map_event(None, (), 'kp_right', 'pan_left')
-    bind_map.map_event(None, (), 'kp_up', 'pan_down')
-    bind_map.map_event(None, (), 'kp_down', 'pan_up')
+    bind_map.map_event(None, (), "kp_left", "pan_right")
+    bind_map.map_event(None, (), "kp_right", "pan_left")
+    bind_map.map_event(None, (), "kp_up", "pan_down")
+    bind_map.map_event(None, (), "kp_down", "pan_up")
 
 
 # TODO: Can this be replaced by a properly masked call to centroid_com?
@@ -125,7 +131,7 @@ def find_center(image, center_guess, cutout_size=30, max_iters=10):
     cnt = 0
 
     # Grab the cutout...
-    sub_data = image[y - pad:y + pad, x - pad:x + pad]  # - med
+    sub_data = image[y - pad : y + pad, x - pad : x + pad]  # - med
 
     # ...do stats on it...
     _, sub_med, _ = sigma_clipped_stats(sub_data)
@@ -140,14 +146,13 @@ def find_center(image, center_guess, cutout_size=30, max_iters=10):
     # ceno is the "original" center guess, set it to something nonsensical here
     ceno = np.array([-100, -100])
 
-    while (cnt <= max_iters and
-           (np.abs(np.array([x_cm, y_cm]) - pad).max() > 3
-            or np.abs(cen - ceno).max() > 0.1)):
-
+    while cnt <= max_iters and (
+        np.abs(np.array([x_cm, y_cm]) - pad).max() > 3 or np.abs(cen - ceno).max() > 0.1
+    ):
         # Update x, y positions for subsetting
         x = int(np.floor(x_cm)) + x - pad
         y = int(np.floor(y_cm)) + y - pad
-        sub_data = image[y - pad:y + pad, x - pad:x + pad]  # - med
+        sub_data = image[y - pad : y + pad, x - pad : x + pad]  # - med
         _, sub_med, _ = sigma_clipped_stats(sub_data)
         # sub_med = 0
         mask = (sub_data - sub_med) < 0
@@ -155,8 +160,10 @@ def find_center(image, center_guess, cutout_size=30, max_iters=10):
         ceno = cen
         cen = np.array([x_cm + x - pad, y_cm + y - pad])
         if not np.all(~np.isnan(cen)):
-            raise RuntimeError('Centroid finding failed, '
-                               'previous was {}, current is {}'.format(ceno, cen))
+            raise RuntimeError(
+                "Centroid finding failed, "
+                "previous was {}, current is {}".format(ceno, cen)
+            )
         cnt += 1
 
     return cen
@@ -200,10 +207,10 @@ def radial_profile(data, center, size=30, return_scaled=True):
     """
     yd, xd = np.indices((size, size))
 
-    sub_image = Cutout2D(data, center, size, mode='strict')
+    sub_image = Cutout2D(data, center, size, mode="strict")
     sub_center = sub_image.center_cutout
 
-    r = np.sqrt((xd - sub_center[0])**2 + (yd - sub_center[1])**2)
+    r = np.sqrt((xd - sub_center[0]) ** 2 + (yd - sub_center[1]) ** 2)
     r_exact = r.copy()
     r = r.astype(int)
 
@@ -267,6 +274,7 @@ class RadialProfile:
     scaled_profile : numpy array
         Radial profile scaled to have a maximum of 1.
     """
+
     def __init__(self, data, x, y):
         self._cen = find_center(data, (x, y), cutout_size=30)
         self._data = data
@@ -283,10 +291,8 @@ class RadialProfile:
 
         """
         self.profile_size = profile_size
-        self.r_exact, self.ravg, self.radialprofile = (
-            radial_profile(self.data,
-                           self.cen,
-                           size=profile_size)
+        self.r_exact, self.ravg, self.radialprofile = radial_profile(
+            self.data, self.cen, size=profile_size
         )
 
         self.sub_data = Cutout2D(self.data, self.cen, size=profile_size).data
@@ -441,20 +447,21 @@ class SeeingProfileWidget:
         Box containing the TESS settings.
 
     """
+
     def __init__(self, imagewidget=None, width=500):
         if not imagewidget:
-            imagewidget = ImageWidget(image_width=width,
-                                      image_height=width,
-                                      use_opencv=True)
+            imagewidget = ImageWidget(
+                image_width=width, image_height=width, use_opencv=True
+            )
 
         self.iw = imagewidget
         # Do some set up of the ImageWidget
         set_keybindings(self.iw, scroll_zoom=False)
         bind_map = self.iw._viewer.get_bindmap()
-        bind_map.map_event(None, ('shift',), 'ms_left', 'cursor')
+        bind_map.map_event(None, ("shift",), "ms_left", "cursor")
         gvc = self.iw._viewer.get_canvas()
         self._mse = self._make_show_event()
-        gvc.add_callback('cursor-down', self._mse)
+        gvc.add_callback("cursor-down", self._mse)
 
         # Outputs to hold the graphs
         self.out = ipw.Output()
@@ -465,18 +472,21 @@ class SeeingProfileWidget:
         self.fits_file = FitsOpener(title="Choose an image")
         big_box = ipw.HBox()
         big_box = ipw.GridspecLayout(1, 2)
-        layout = ipw.Layout(width='20ch')
+        layout = ipw.Layout(width="20ch")
         vb = ipw.VBox()
         self.aperture_settings_file_name = ipw.Text(
             description="Aperture settings file name",
-            style={'description_width': 'initial'},
-            value="aperture_settings.json"
+            style={"description_width": "initial"},
+            value="aperture_settings.json",
         )
         self.aperture_settings = ui_generator(ApertureSettings)
         self.aperture_settings.show_savebuttonbar = True
         self.aperture_settings.path = Path(self.aperture_settings_file_name.value)
         self.save_aps = ipw.Button(description="Save settings")
-        vb.children = [self.aperture_settings_file_name, self.aperture_settings] #, self.save_aps] #, self.in_t, self.out_t]
+        vb.children = [
+            self.aperture_settings_file_name,
+            self.aperture_settings,
+        ]  # , self.save_aps] #, self.in_t, self.out_t]
 
         lil_box = ipw.VBox()
         lil_tabs = ipw.Tab()
@@ -491,20 +501,20 @@ class SeeingProfileWidget:
         imbox.children = [imagewidget, vb]
         big_box[0, 0] = imbox
         big_box[0, 1] = lil_box
-        big_box.layout.width = '100%'
+        big_box.layout.width = "100%"
 
         # Line below puts space between the image and the plots so the plots
         # don't jump around as the image value changes.
-        big_box.layout.justify_content = 'space-between'
+        big_box.layout.justify_content = "space-between"
         self.big_box = big_box
         self.container.children = [self.fits_file.file_chooser, self.big_box]
         self.box = self.container
-        self._aperture_name = 'aperture'
+        self._aperture_name = "aperture"
 
         self._tess_sub = None
 
         # Fill this in later with name of object from FITS file
-        self.object_name = ''
+        self.object_name = ""
         self._set_observers()
         self.aperture_settings.description = ""
 
@@ -528,7 +538,7 @@ class SeeingProfileWidget:
         self._tess_sub = TessSubmission.from_header(
             fits.getheader(file),
             telescope_code=self.setting_box.telescope_code.value,
-            planet=self.setting_box.planet_num.value
+            planet=self.setting_box.planet_num.value,
         )
 
     def _set_seeing_profile_name(self, change):
@@ -536,7 +546,7 @@ class SeeingProfileWidget:
         self.seeing_file_name.value = self._tess_sub.seeing_profile
 
     def _save_toggle_action(self, change):
-        activated = change['new']
+        activated = change["new"]
 
         if activated:
             self.setting_box.layout.visibility = "visible"
@@ -548,7 +558,7 @@ class SeeingProfileWidget:
         self._seeing_plot_fig.savefig(self.seeing_file_name.value)
 
     def _change_aperture_save_location(self, change):
-        new_name = change['new']
+        new_name = change["new"]
         new_path = Path(new_name)
         self.aperture_settings.path = new_path
         self.aperture_settings.savebuttonbar.unsaved_changes = True
@@ -556,36 +566,42 @@ class SeeingProfileWidget:
     def _set_observers(self):
         def aperture_obs(change):
             self._update_plots()
-            ape = ApertureSettings(**change['new'])
-            self.aperture_settings.description = (
-                f"Inner annulus: {ape.inner_annulus}, outer annulus: {ape.outer_annulus}"
-            )
+            ape = ApertureSettings(**change["new"])
+            self.aperture_settings.description = f"Inner annulus: {ape.inner_annulus}, outer annulus: {ape.outer_annulus}"
 
-        self.aperture_settings.observe(aperture_obs, names='_value')
+        self.aperture_settings.observe(aperture_obs, names="_value")
         self.save_aps.on_click(self._save_ap_settings)
-        self.aperture_settings_file_name.observe(self._change_aperture_save_location, names='value')
+        self.aperture_settings_file_name.observe(
+            self._change_aperture_save_location, names="value"
+        )
         self.fits_file.register_callback(self._update_file)
-        self.save_toggle.observe(self._save_toggle_action, names='value')
+        self.save_toggle.observe(self._save_toggle_action, names="value")
         self.save_seeing.on_click(self._save_seeing_plot)
         self.setting_box.planet_num.observe(self._set_seeing_profile_name)
         self.setting_box.telescope_code.observe(self._set_seeing_profile_name)
 
     def _save_ap_settings(self, button):
-        with open('aperture_settings.txt', 'w') as f:
-            f.write(f'{ap_rad},{ap_rad + 10},{ap_rad + 15}')
+        with open("aperture_settings.txt", "w") as f:
+            f.write(f"{ap_rad},{ap_rad + 10},{ap_rad + 15}")
 
     def _make_tess_box(self):
         box = ipw.VBox()
         setting_box = ipw.HBox()
-        self.save_toggle = ipw.ToggleButton(description="TESS seeing profile...",
-                                            disabled=True)
-        scope_name = ipw.Text(description="Telescope code",
-                              value="Paul-P-Feder-0.4m",
-                              style=desc_style)
+        self.save_toggle = ipw.ToggleButton(
+            description="TESS seeing profile...", disabled=True
+        )
+        scope_name = ipw.Text(
+            description="Telescope code", value="Paul-P-Feder-0.4m", style=desc_style
+        )
         planet_num = ipw.IntText(description="Planet", value=1)
         self.save_seeing = ipw.Button(description="Save")
         self.seeing_file_name = ipw.Label(value="Moo")
-        setting_box.children = (scope_name, planet_num, self.seeing_file_name, self.save_seeing)
+        setting_box.children = (
+            scope_name,
+            planet_num,
+            self.seeing_file_name,
+            self.save_seeing,
+        )
         # for kid in setting_box.children:
         #     kid.disabled = True
         box.children = (self.save_toggle, setting_box)
@@ -600,7 +616,6 @@ class SeeingProfileWidget:
         self.aperture_settings.value = value
 
     def _make_show_event(self):
-
         def show_event(viewer, event=None, datax=None, datay=None, aperture=None):
             profile_size = 60
             default_gap = 5  # pixels
@@ -620,7 +635,7 @@ class SeeingProfileWidget:
                 rad_prof = RadialProfile(data, x, y)
 
                 try:
-                    try: # Remove previous marker
+                    try:  # Remove previous marker
                         self.iw.remove_markers(marker_name=self._aperture_name)
                     except AttributeError:
                         self.iw.remove_markers_by_name(marker_name=self._aperture_name)
@@ -629,9 +644,12 @@ class SeeingProfileWidget:
                     pass
 
                 # ADD MARKER WHERE CLICKED
-                self.iw.add_markers(Table(data=[[rad_prof.cen[0]], [rad_prof.cen[1]]],
-                                          names=['x', 'y']),
-                                    marker_name=self._aperture_name)
+                self.iw.add_markers(
+                    Table(
+                        data=[[rad_prof.cen[0]], [rad_prof.cen[1]]], names=["x", "y"]
+                    ),
+                    marker_name=self._aperture_name,
+                )
 
                 # ----> MOVE PROFILE CONSTRUCTION INTO FUNCTION <----
 
@@ -644,14 +662,18 @@ class SeeingProfileWidget:
                 self.rad_prof = rad_prof
 
                 # Make an aperture settings object, but don't update it's widget yet.
-                ap_settings = ApertureSettings(radius=aperture_radius,
-                                               gap=default_gap,
-                                               annulus_width=default_annulus_width)
+                ap_settings = ApertureSettings(
+                    radius=aperture_radius,
+                    gap=default_gap,
+                    annulus_width=default_annulus_width,
+                )
                 update_aperture_settings = True
             else:
                 # User changed aperture
-                aperture_radius = aperture['radius']
-                ap_settings = ApertureSettings(**aperture)  # Make an ApertureSettings object
+                aperture_radius = aperture["radius"]
+                ap_settings = ApertureSettings(
+                    **aperture
+                )  # Make an ApertureSettings object
 
                 rad_prof = self.rad_prof
 
@@ -672,44 +694,54 @@ class SeeingProfileWidget:
         ap_settings = ApertureSettings(**self.aperture_settings.value)
         with self.out:
             # sub_med += med
-            self._seeing_plot_fig = seeing_plot(rad_prof.r_exact, rad_prof.scaled_exact_counts,
-                        rad_prof.ravg,
-                        rad_prof.scaled_profile, rad_prof.HWHM,
-                        self.object_name,
-                        aperture_settings=ap_settings,
-                        figsize=fig_size)
+            self._seeing_plot_fig = seeing_plot(
+                rad_prof.r_exact,
+                rad_prof.scaled_exact_counts,
+                rad_prof.ravg,
+                rad_prof.scaled_profile,
+                rad_prof.HWHM,
+                self.object_name,
+                aperture_settings=ap_settings,
+                figsize=fig_size,
+            )
             plt.show()
 
         # CALCULATE AND DISPLAY NET COUNTS INSIDE RADIUS
         self.out2.clear_output(wait=True)
         with self.out2:
-            sub_blot = rad_prof.sub_data.copy().astype('float32')
+            sub_blot = rad_prof.sub_data.copy().astype("float32")
             min_idx = profile_size // 2 - 2 * rad_prof.FWHM
             max_idx = profile_size // 2 + 2 * rad_prof.FWHM
             sub_blot[min_idx:max_idx, min_idx:max_idx] = np.nan
             sub_std = np.nanstd(sub_blot)
             new_sub_med = np.nanmedian(sub_blot)
-            r_exact, ravg, tbin2 = radial_profile(rad_prof.data - new_sub_med, rad_prof.cen,
-                                                    size=profile_size,
-                                                    return_scaled=False)
-            r_exact_s, ravg_s, tbin2_s = radial_profile(rad_prof.data - new_sub_med, rad_prof.cen,
-                                                    size=profile_size,
-                                                    return_scaled=True)
-            #tbin2 = np.bincount(r.ravel(), (sub_data - sub_med).ravel())
+            r_exact, ravg, tbin2 = radial_profile(
+                rad_prof.data - new_sub_med,
+                rad_prof.cen,
+                size=profile_size,
+                return_scaled=False,
+            )
+            r_exact_s, ravg_s, tbin2_s = radial_profile(
+                rad_prof.data - new_sub_med,
+                rad_prof.cen,
+                size=profile_size,
+                return_scaled=True,
+            )
+            # tbin2 = np.bincount(r.ravel(), (sub_data - sub_med).ravel())
             counts = np.cumsum(tbin2)
             plt.figure(figsize=fig_size)
             plt.plot(rad_prof.radius_values, counts)
             plt.xlim(0, 40)
             ylim = plt.ylim()
-            plt.vlines(ap_settings.radius, *plt.ylim(), colors=['red'])
+            plt.vlines(ap_settings.radius, *plt.ylim(), colors=["red"])
             plt.ylim(*ylim)
             plt.grid()
 
-            plt.title('Net counts in aperture')
+            plt.title("Net counts in aperture")
             e_sky = np.nanmax([np.sqrt(new_sub_med), sub_std])
 
-            plt.xlabel('Aperture radius (pixels)')
-            plt.ylabel('Net counts')
+            plt.xlabel("Aperture radius (pixels)")
+            plt.ylabel("Net counts")
             plt.show()
 
         # CALCULATE And DISPLAY SNR AS A FUNCTION OF RADIUS
@@ -726,20 +758,23 @@ class SeeingProfileWidget:
             nr = tbin2 / tbin2_s
 
             # This ignores dark current
-            error = np.sqrt(poisson ** 2 + np.cumsum(nr)
-                            * (e_sky ** 2 + (read_noise / gain)** 2))
+            error = np.sqrt(
+                poisson**2 + np.cumsum(nr) * (e_sky**2 + (read_noise / gain) ** 2)
+            )
 
             snr = np.cumsum(tbin2) / error
             plt.figure(figsize=fig_size)
             plt.plot(rad_prof.radius_values + 1, snr)
 
-            plt.title(f'Signal to noise ratio max {snr.max():.1f} '
-                        f'at radius {snr.argmax() + 1}')
+            plt.title(
+                f"Signal to noise ratio max {snr.max():.1f} "
+                f"at radius {snr.argmax() + 1}"
+            )
             plt.xlim(0, 40)
             ylim = plt.ylim()
-            plt.vlines(ap_settings.radius, *plt.ylim(), colors=['red'])
+            plt.vlines(ap_settings.radius, *plt.ylim(), colors=["red"])
             plt.ylim(*ylim)
-            plt.xlabel('Aperture radius (pixels)')
-            plt.ylabel('SNR')
+            plt.xlabel("Aperture radius (pixels)")
+            plt.ylabel("SNR")
             plt.grid()
             plt.show()

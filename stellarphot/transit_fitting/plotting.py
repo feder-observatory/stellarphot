@@ -1,10 +1,16 @@
 import matplotlib.pyplot as plt
 
-__all__ = ['plot_predict_ingress_egress']
+__all__ = ["plot_predict_ingress_egress"]
 
 
-def plot_predict_ingress_egress(ingress_time, egress_time, end_line=1,
-                                ingress_x_pos=1, egress_x_pos=1, labels_y_pos=1):
+def plot_predict_ingress_egress(
+    ingress_time,
+    egress_time,
+    end_line=1,
+    ingress_x_pos=1,
+    egress_x_pos=1,
+    labels_y_pos=1,
+):
     """
     Plot vertical lines at the ingress and egress times and label them.
 
@@ -37,13 +43,18 @@ def plot_predict_ingress_egress(ingress_time, egress_time, end_line=1,
     ymin, ymax = plt.ylim()
 
     # create a vertical line at the ingress time and label it
-    plt.vlines(ingress_time, ymin - end_line, ymax,
-               linestyle=(0, (5, 10)), color='red')
-    plt.annotate("Predicted Ingress", (ingress_time - ingress_x_pos,
-                                       ymin - labels_y_pos), color='red')
+    plt.vlines(ingress_time, ymin - end_line, ymax, linestyle=(0, (5, 10)), color="red")
+    plt.annotate(
+        "Predicted Ingress",
+        (ingress_time - ingress_x_pos, ymin - labels_y_pos),
+        color="red",
+    )
 
     # create a vertical line at the egress time and label it
-    plt.vlines(egress_time, ymin - end_line, ymax,
-               linestyle=(0, (5, 10)), color='red')
-    plt.annotate("Predicted Egress", (egress_time - egress_x_pos,
-                                      ymin - labels_y_pos), fontsize=10, color='red')
+    plt.vlines(egress_time, ymin - end_line, ymax, linestyle=(0, (5, 10)), color="red")
+    plt.annotate(
+        "Predicted Egress",
+        (egress_time - egress_x_pos, ymin - labels_y_pos),
+        fontsize=10,
+        color="red",
+    )

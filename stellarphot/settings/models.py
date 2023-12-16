@@ -6,10 +6,7 @@ from pydantic import BaseModel, Field, conint
 
 from .autowidgets import CustomBoundedIntTex
 
-__all__ = [
-    'ApertureSettings',
-    'PhotometryFileSettings'
-]
+__all__ = ["ApertureSettings", "PhotometryFileSettings"]
 
 
 class ApertureSettings(BaseModel):
@@ -45,9 +42,10 @@ class ApertureSettings(BaseModel):
 
     >>> aperture_settings = ApertureSettings(radius=4, gap=10, annulus_width=15)
     """
-    radius : conint(ge=1) = Field(autoui=CustomBoundedIntTex, default=1)
-    gap : conint(ge=1) = Field(autoui=CustomBoundedIntTex, default=1)
-    annulus_width : conint(ge=1) = Field(autoui=CustomBoundedIntTex, default=1)
+
+    radius: conint(ge=1) = Field(autoui=CustomBoundedIntTex, default=1)
+    gap: conint(ge=1) = Field(autoui=CustomBoundedIntTex, default=1)
+    annulus_width: conint(ge=1) = Field(autoui=CustomBoundedIntTex, default=1)
 
     class Config:
         validate_assignment = True
@@ -72,7 +70,13 @@ class PhotometryFileSettings(BaseModel):
     """
     An evolutionary step on the way to having a monolithic set of photometry settings.
     """
-    image_folder : Path = Field(show_only_dirs=True, default='',
-                                description="Folder containing the calibrated images")
-    aperture_settings_file : Path = Field(filter_pattern='*.json', default='')
-    aperture_locations_file : Path = Field(filter_pattern=['*.ecsv', '*.csv'], default='')
+
+    image_folder: Path = Field(
+        show_only_dirs=True,
+        default="",
+        description="Folder containing the calibrated images",
+    )
+    aperture_settings_file: Path = Field(filter_pattern="*.json", default="")
+    aperture_locations_file: Path = Field(
+        filter_pattern=["*.ecsv", "*.csv"], default=""
+    )
