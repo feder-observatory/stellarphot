@@ -779,6 +779,7 @@ def test_tidy_vizier_catalog_several_mags():
     assert set(result["passband"]) == {"V", "B", "i", "r-i", "B-V"}
 
 
+@pytest.mark.remote_data
 def test_catalog_from_vizier_search_apass():
     # Nothing special about this point...
     sc = SkyCoord(ra=0, dec=0, unit="deg")
@@ -808,6 +809,7 @@ def test_catalog_from_vizier_search_apass():
     assert np.abs(just_V["mag"][0] - 15.559) < 1e-6
 
 
+@pytest.mark.remote_data
 def test_catalog_from_vizier_search_vsx():
     # Do a cone search with a small enough radius to return exaclty one star,
     # DQ Psc, which happens to already be in the test data.
@@ -860,6 +862,7 @@ def test_from_vizier_with_coord_and_frame_clip_fails():
         _ = CatalogData.from_vizier(cen_coord, "B/vsx/vsx", clip_by_frame=True)
 
 
+@pytest.mark.remote_data
 @pytest.mark.parametrize(
     "clip, data_file",
     [(True, "data/clipped_ey_uma_vsx.fits"), (False, "data/unclipped_ey_uma_vsx.fits")],
@@ -892,6 +895,7 @@ def test_vsx_results(clip, data_file):
     assert set(actual["OID"]) == set(expected["OID"])
 
 
+@pytest.mark.remote_data
 def test_find_apass():
     CCD_SHAPE = [2048, 3073]
     # This is really checking from APASS DR9 on Vizier, or at least that
