@@ -7,8 +7,8 @@ from astropy.coordinates import SkyCoord
 from astropy.nddata import CCDData
 from astropy import units as u
 
-from stellarphot.utils.catalog_search import find_apass_stars, find_known_variables
 from stellarphot.photometry import *
+from stellarphot import apass_dr9, vsx_vizier
 
 
 __all__ = ["read_file", "set_up", "crossmatch_APASS2VSX", "mag_scale", "in_field"]
@@ -72,7 +72,7 @@ def set_up(sample_image_for_finding_stars, directory_with_images="."):
 
     ccd = CCDData.read(path)
     try:
-        vsx = find_known_variables(ccd)
+        vsx = vsx_vizier(ccd.header, radius=0.5 * u.degree)
     except RuntimeError:
         vsx = []
     else:
@@ -112,9 +112,9 @@ def crossmatch_APASS2VSX(CCD, RD, vsx):
     RD_angle : `astropy.units.Quantity`
         Angular separation between APASS stars and input targets.
     """
-    apass, apass_in_bright = find_apass_stars(CCD)
-    ra = apass["RAJ2000"]
-    dec = apass["DEJ2000"]
+    apass = apass_dr9(CCD)
+    ra = apass["ra"]
+    dec = apass["dec"]
     apass["coords"] = SkyCoord(ra=ra, dec=dec, unit=(u.hour, u.degree))
     apass_coord = apass["coords"]
 
