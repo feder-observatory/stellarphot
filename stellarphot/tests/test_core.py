@@ -995,8 +995,8 @@ def test_sourcelist_dropping_skycoords():
 
     # Drop sky coordinates
     sl_test.drop_ra_dec()
-    assert sl_test.has_ra_dec == False
-    assert sl_test.has_x_y == True
+    assert not sl_test.has_ra_dec
+    assert sl_test.has_x_y
 
 
 def test_sourcelist_dropping_imagecoords():
@@ -1005,8 +1005,8 @@ def test_sourcelist_dropping_imagecoords():
 
     # Drop sky coordinates
     sl_test.drop_x_y()
-    assert sl_test.has_ra_dec == True
-    assert sl_test.has_x_y == False
+    assert sl_test.has_ra_dec
+    assert not sl_test.has_x_y
 
 
 def test_sourcelist_slicing():
@@ -1022,5 +1022,5 @@ def test_sourcelist_slicing():
     assert slicing_test["xcenter"][0] == sl_test["xcenter"][1]
     assert slicing_test["xcenter"][1] == sl_test["xcenter"][2]
     # Checking attributes survive slicing
-    assert slicing_test.has_ra_dec == True
-    assert slicing_test.has_x_y == True
+    assert slicing_test.has_ra_dec
+    assert slicing_test.has_x_y
