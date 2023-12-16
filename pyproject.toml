@@ -98,6 +98,9 @@ include = '\.pyi?$'
 # )
 # '''
 
+[tool.ruff.lint]
+select = ["E"]
+
 [tool.pycodestyle]
 max-line-length = 88
 # E101 - mix of tabs and spaces
