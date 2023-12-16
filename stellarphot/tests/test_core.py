@@ -180,22 +180,17 @@ def test_base_enhanced_table_clean():
     # Add a row so that we can clean something
     test_base_two = test_base.copy()
     test_base_two.add_row(test_base[0])
-    test_base_two['ra'][1] = - test_base_two['ra'][1]
-    test_cleaned = test_base_two.clean(ra='>0.0')
+    test_base_two["ra"][1] = -test_base_two["ra"][1]
+    test_cleaned = test_base_two.clean(ra=">0.0")
     assert len(test_cleaned) == 1
     assert test_cleaned == test_base
 
 
 def a_table(masked=False):
-    test_table = Table(
-        [
-            (1, 2, 3),
-            (1, -1, -2)
-        ],
-        names=('a', 'b'),
-        masked=masked)
-    test_table = BaseEnhancedTable(table_description={'a': None, 'b': None},
-                                   input_data=test_table)
+    test_table = Table([(1, 2, 3), (1, -1, -2)], names=("a", "b"), masked=masked)
+    test_table = BaseEnhancedTable(
+        table_description={"a": None, "b": None}, input_data=test_table
+    )
     return test_table
 
 
@@ -204,33 +199,31 @@ def test_bet_clean_criteria_none_removed():
     If all rows satisfy the criteria, none should be removed.
     """
     inp = a_table()
-    criteria = {'a': '>0'}
+    criteria = {"a": ">0"}
     out = inp.clean(**criteria)
     assert len(out) == len(inp)
     assert (out == inp).all()
 
 
-@pytest.mark.parametrize("condition,input_row",
-                            [('>0', 0),
-                             ('=1', 0),
-                             ('>=1', 0),
-                             ('<-1', 2),
-                             ('=-1', 1)])
+@pytest.mark.parametrize(
+    "condition,input_row", [(">0", 0), ("=1", 0), (">=1", 0), ("<-1", 2), ("=-1", 1)]
+)
 def test_bet_clean_criteria_some_removed(condition, input_row):
     """
     Try a few filters which leave only one row and make sure that row is
     returned.
     """
     inp = a_table()
-    criteria = {'b': condition}
+    criteria = {"b": condition}
     out = inp.clean(**criteria)
     assert len(out) == 1
     assert (out[0] == inp[input_row]).all()
 
 
-@pytest.mark.parametrize("criteria,error_msg", [
-                         ({'a': '5'}, "not understood"),
-                         ({'a': '<foo'}, "could not convert string")])
+@pytest.mark.parametrize(
+    "criteria,error_msg",
+    [({"a": "5"}, "not understood"), ({"a": "<foo"}, "could not convert string")],
+)
 def test_clean_bad_criteria(criteria, error_msg):
     """
     Make sure the appropriate error is raised when bad criteria are used.
@@ -241,12 +234,11 @@ def test_clean_bad_criteria(criteria, error_msg):
         inp.clean(**criteria)
 
 
-@pytest.mark.parametrize("clean_masked",
-                         [False, True])
+@pytest.mark.parametrize("clean_masked", [False, True])
 def test_clean_masked_handled_correctly(clean_masked):
     inp = a_table(masked=True)
     # Mask negative values
-    inp['b'].mask = inp['b'] < 0
+    inp["b"].mask = inp["b"] < 0
     out = inp.clean(remove_rows_with_mask=clean_masked)
     if clean_masked:
         assert len(out) == 1
@@ -263,11 +255,11 @@ def test_clean_masked_and_criteria():
     """
     inp = a_table(masked=True)
     # Mask the first row.
-    inp['b'].mask = inp['b'] > 0
+    inp["b"].mask = inp["b"] > 0
 
     inp_copy = inp.copy()
     # This should remove the third row.
-    criteria = {'a': '<=2'}
+    criteria = {"a": "<=2"}
 
     out = inp.clean(remove_rows_with_mask=True, **criteria)
 
@@ -286,7 +278,7 @@ def test_clean_criteria_none_removed():
     If all rows satisfy the criteria, none should be removed.
     """
     inp = a_table()
-    criteria = {'a': '>0'}
+    criteria = {"a": ">0"}
     out = inp.clean(**criteria)
     assert len(out) == len(inp)
     assert (out == inp).all()
@@ -741,72 +733,79 @@ def test_catalog_recursive():
 def test_tidy_vizier_catalog():
     # Test just the part of the code that converts the table returned by Vizier
     # into a table that can be used by CatalogData.
-    apass_input = Table.read(get_pkg_data_filename('data/test_apass_subset.ecsv'))
+    apass_input = Table.read(get_pkg_data_filename("data/test_apass_subset.ecsv"))
 
-    result = CatalogData._tidy_vizier_catalog(apass_input,
-                                              r'^([a-zA-Z]+|[a-zA-Z]+-[a-zA-Z]+)_?mag$',
-                                              r'^([a-zA-Z]+-[a-zA-Z]+)$')
+    result = CatalogData._tidy_vizier_catalog(
+        apass_input,
+        r"^([a-zA-Z]+|[a-zA-Z]+-[a-zA-Z]+)_?mag$",
+        r"^([a-zA-Z]+-[a-zA-Z]+)$",
+    )
     assert len(result) == 6
 
     # Check some column names
-    assert 'passband' in result.colnames
-    assert 'mag' in result.colnames
-    assert 'mag_error' in result.colnames
+    assert "passband" in result.colnames
+    assert "mag" in result.colnames
+    assert "mag_error" in result.colnames
 
     # Spot check a couple of values
     one_star = 16572870
     one_Vmag = 13.399
     one_Vmag_error = 0.075
 
-    just_one = result[(result['recno'] == one_star) & (result['passband'] == 'V')]
-    assert np.abs(just_one['mag'][0] - one_Vmag) < 1e-6
-    assert np.abs(just_one['mag_error'][0] - one_Vmag_error) < 1e-6
+    just_one = result[(result["recno"] == one_star) & (result["passband"] == "V")]
+    assert np.abs(just_one["mag"][0] - one_Vmag) < 1e-6
+    assert np.abs(just_one["mag_error"][0] - one_Vmag_error) < 1e-6
 
 
 def test_tidy_vizier_catalog_several_mags():
     # Test table conversion when there are several magnitude columns.
-    apass_input = Table.read(get_pkg_data_filename('data/test_apass_subset.ecsv'))
+    apass_input = Table.read(get_pkg_data_filename("data/test_apass_subset.ecsv"))
 
     # Make sure the columns we exxpect in the teset data are there before proceeding
-    assert 'Vmag' in apass_input.colnames
-    assert 'i_mag' in apass_input.colnames
-    assert 'B-V' in apass_input.colnames
+    assert "Vmag" in apass_input.colnames
+    assert "i_mag" in apass_input.colnames
+    assert "B-V" in apass_input.colnames
 
     # Add a B magnitude column, and an r-i color. The values are nonsense.
-    apass_input['Bmag'] = apass_input['Vmag']
-    apass_input['r-i'] = apass_input['B-V']
+    apass_input["Bmag"] = apass_input["Vmag"]
+    apass_input["r-i"] = apass_input["B-V"]
 
-    result = CatalogData._tidy_vizier_catalog(apass_input,
-                                              r'^([a-zA-Z]+|[a-zA-Z]+-[a-zA-Z]+)_?mag$',
-                                              r'^([a-zA-Z]+-[a-zA-Z]+)$')
+    result = CatalogData._tidy_vizier_catalog(
+        apass_input,
+        r"^([a-zA-Z]+|[a-zA-Z]+-[a-zA-Z]+)_?mag$",
+        r"^([a-zA-Z]+-[a-zA-Z]+)$",
+    )
 
-    assert set(result['passband']) == {'V', 'B', 'i', 'r-i', 'B-V'}
+    assert set(result["passband"]) == {"V", "B", "i", "r-i", "B-V"}
 
 
 def test_catalog_from_vizier_search_apass():
     # Nothing special about this point...
-    sc = SkyCoord(ra=0, dec=0, unit='deg')
+    sc = SkyCoord(ra=0, dec=0, unit="deg")
 
     # Small enough radius to get only one star
     radius = 0.03 * u.deg
 
     apass_colnames = {
-        'recno': 'id', # There is no APASS ID, this is the one generated by Vizier
-        'RAJ2000': 'ra',
-        'DEJ2000': 'dec',
+        "recno": "id",  # There is no APASS ID, this is the one generated by Vizier
+        "RAJ2000": "ra",
+        "DEJ2000": "dec",
     }
 
-    apass = CatalogData.from_vizier(sc, 'II/336/apass9',
-                                    radius=radius,
-                                    colname_map=apass_colnames,
-                                    clip_by_frame=False)
+    apass = CatalogData.from_vizier(
+        sc,
+        "II/336/apass9",
+        radius=radius,
+        colname_map=apass_colnames,
+        clip_by_frame=False,
+    )
     assert len(apass) == 6
 
     # Got the values below from Vizier on 2023-11-28
-    assert apass['id'][0] == 17672748
+    assert apass["id"][0] == 17672748
 
-    just_V = apass[apass['passband'] == 'V']
-    assert np.abs(just_V['mag'][0] - 15.559) < 1e-6
+    just_V = apass[apass["passband"] == "V"]
+    assert np.abs(just_V["mag"][0] - 15.559) < 1e-6
 
 
 def test_catalog_from_vizier_search_vsx():
@@ -814,94 +813,106 @@ def test_catalog_from_vizier_search_vsx():
     # DQ Psc, which happens to already be in the test data.
     coordinate = SkyCoord(ra=359.94371 * u.deg, dec=-0.2801 * u.deg)
     vsx_map = dict(
-        Name='id',
-        RAJ2000='ra',
-        DEJ2000='dec',
+        Name="id",
+        RAJ2000="ra",
+        DEJ2000="dec",
     )
 
     # This one is easier -- it already has the passband in a column name.
     # We'll use the maximum magnitude as the magnitude column.
     def prepare_cat(cat):
-        cat.rename_column('max', 'mag')
-        cat.rename_column('n_max', 'passband')
+        cat.rename_column("max", "mag")
+        cat.rename_column("n_max", "passband")
         return cat
-    my_cat = CatalogData.from_vizier(coordinate,
-                                     'B/vsx/vsx',
-                                     radius=0.1*u.arcmin,
-                                     clip_by_frame=False,
-                                     colname_map=vsx_map,
-                                     prepare_catalog=prepare_cat)
 
-    assert my_cat['id'][0] == 'DQ Psc'
-    assert my_cat['passband'][0] == 'Hp'
-    assert my_cat['Type'][0] == 'SRB'
+    my_cat = CatalogData.from_vizier(
+        coordinate,
+        "B/vsx/vsx",
+        radius=0.1 * u.arcmin,
+        clip_by_frame=False,
+        colname_map=vsx_map,
+        prepare_catalog=prepare_cat,
+    )
+
+    assert my_cat["id"][0] == "DQ Psc"
+    assert my_cat["passband"][0] == "Hp"
+    assert my_cat["Type"][0] == "SRB"
 
 
 def test_from_vizier_with_coord_and_frame_clip_fails():
     # Check that calling from_vizier with a coordinate instead
     # of WCS and with clip_by_frame = True generates an appropriate
     # error.
-    data_file = 'data/sample_wcs_ey_uma.fits'
+    data_file = "data/sample_wcs_ey_uma.fits"
     data = get_pkg_data_filename(data_file)
     with fits.open(data) as hdulist:
         with warnings.catch_warnings():
             # Ignore the warning about the WCS having a different number of
             # axes than the (non-existent) image.
-            warnings.filterwarnings("ignore",
-                                    message="The WCS transformation has more",
-                                    category=FITSFixedWarning)
+            warnings.filterwarnings(
+                "ignore",
+                message="The WCS transformation has more",
+                category=FITSFixedWarning,
+            )
             wcs = WCS(hdulist[0].header)
     cen_coord = wcs.pixel_to_world(4096 / 2, 4096 / 2)
-    with pytest.raises(ValueError, match='To clip entries by frame'):
-        _ = CatalogData.from_vizier(cen_coord,'B/vsx/vsx', clip_by_frame=True)
+    with pytest.raises(ValueError, match="To clip entries by frame"):
+        _ = CatalogData.from_vizier(cen_coord, "B/vsx/vsx", clip_by_frame=True)
 
 
-@pytest.mark.parametrize('clip, data_file',
-                         [(True, 'data/clipped_ey_uma_vsx.fits'),
-                          (False, 'data/unclipped_ey_uma_vsx.fits')])
+@pytest.mark.parametrize(
+    "clip, data_file",
+    [(True, "data/clipped_ey_uma_vsx.fits"), (False, "data/unclipped_ey_uma_vsx.fits")],
+)
 def test_vsx_results(clip, data_file):
     # Check that a catalog search of VSX gives us what we expect.
     # I suppose this really isn't future-proof, since more variables
     # could be discovered in the future....
     data = get_pkg_data_filename(data_file)
     expected = Table.read(data)
-    wcs_file = get_pkg_data_filename('data/sample_wcs_ey_uma.fits')
+    wcs_file = get_pkg_data_filename("data/sample_wcs_ey_uma.fits")
     with fits.open(wcs_file) as hdulist:
         with warnings.catch_warnings():
             # Ignore the warning about the WCS having a different number of
             # axes than the (non-existent) image.
-            warnings.filterwarnings("ignore",
-                                    message="The WCS transformation has more",
-                                    category=FITSFixedWarning)
+            warnings.filterwarnings(
+                "ignore",
+                message="The WCS transformation has more",
+                category=FITSFixedWarning,
+            )
             wcs = WCS(hdulist[0].header)
     CCD_SHAPE = [2048, 3073]
     wcs.pixel_shape = list(reversed(CCD_SHAPE))
-    ccd = CCDData(data=np.zeros(CCD_SHAPE), wcs=wcs, unit='adu')
+    ccd = CCDData(data=np.zeros(CCD_SHAPE), wcs=wcs, unit="adu")
 
     # Turn this into an HDU to get the standard FITS image keywords
     ccd_im = ccd.to_hdu()
 
     actual = vsx_vizier(ccd_im[0].header, radius=0.5 * u.degree, clip_by_frame=clip)
-    assert set(actual['OID']) == set(expected['OID'])
+    assert set(actual["OID"]) == set(expected["OID"])
 
 
 def test_find_apass():
     CCD_SHAPE = [2048, 3073]
     # This is really checking from APASS DR9 on Vizier, or at least that
     # is where the "expected" data is drawn from.
-    expected_all = Table.read(get_pkg_data_filename('data/all_apass_ey_uma_sorted_ra_first_20.fits'))
+    expected_all = Table.read(
+        get_pkg_data_filename("data/all_apass_ey_uma_sorted_ra_first_20.fits")
+    )
 
-    wcs_file = get_pkg_data_filename('data/sample_wcs_ey_uma.fits')
+    wcs_file = get_pkg_data_filename("data/sample_wcs_ey_uma.fits")
     with fits.open(wcs_file) as hdulist:
         with warnings.catch_warnings():
             # Ignore the warning about the WCS having a different number of
             # axes than the (non-existent) image.
-            warnings.filterwarnings("ignore",
-                                    message="The WCS transformation has more",
-                                    category=FITSFixedWarning)
+            warnings.filterwarnings(
+                "ignore",
+                message="The WCS transformation has more",
+                category=FITSFixedWarning,
+            )
             wcs = WCS(hdulist[0].header)
     wcs.pixel_shape = list(reversed(CCD_SHAPE))
-    ccd = CCDData(data=np.zeros(CCD_SHAPE), wcs=wcs, unit='adu')
+    ccd = CCDData(data=np.zeros(CCD_SHAPE), wcs=wcs, unit="adu")
 
     # Turn this into an HDU to get the standard FITS image keywords
     ccd_im = ccd.to_hdu()
@@ -910,12 +921,12 @@ def test_find_apass():
     # Reference data was sorted by RA, first 20 entries kept
     # There are 6 magnitude or color columns, so 6 * 20 = 120 rows
     # in the resulting table.
-    all_apass.sort('ra')
+    all_apass.sort("ra")
     all_apass = all_apass[:120]
 
     # It is hard to imagine the RAs matching and other entries not matching,
     # so just check the RAs.
-    assert set(ra.value for ra in all_apass['ra']) == set(expected_all['RAJ2000'])
+    assert set(ra.value for ra in all_apass["ra"]) == set(expected_all["RAJ2000"])
 
 
 # Load test apertures

@@ -401,16 +401,18 @@ class BaseEnhancedTable(QTable):
 
         """
         comparisons = {
-            '<': np.less,
-            '=': np.equal,
-            '>': np.greater,
-            '<=': np.less_equal,
-            '>=': np.greater_equal,
-            '!=': np.not_equal
+            "<": np.less,
+            "=": np.equal,
+            ">": np.greater,
+            "<=": np.less_equal,
+            ">=": np.greater_equal,
+            "!=": np.not_equal,
         }
 
-        recognized_comparison_ops = '|'.join(comparisons.keys())
-        criteria_re = re.compile(r'({})([-+a-zA-Z0-9]+)'.format(recognized_comparison_ops))
+        recognized_comparison_ops = "|".join(comparisons.keys())
+        criteria_re = re.compile(
+            r"({})([-+a-zA-Z0-9]+)".format(recognized_comparison_ops)
+        )
 
         keepers = np.ones([len(self)], dtype=bool)
 
@@ -421,12 +423,12 @@ class BaseEnhancedTable(QTable):
         for column, restriction in other_restrictions.items():
             results = criteria_re.match(restriction)
             if not results:
-                raise ValueError("Criteria {}{} not "
-                                "understood.".format(column, restriction))
+                raise ValueError(
+                    "Criteria {}{} not " "understood.".format(column, restriction)
+                )
             comparison_func = comparisons[results.group(1)]
             comparison_value = results.group(2)
-            new_keepers = comparison_func(self[column],
-                                         float(comparison_value))
+            new_keepers = comparison_func(self[column], float(comparison_value))
             keepers = keepers & new_keepers
 
         return self[keepers]
@@ -922,8 +924,10 @@ class CatalogData(BaseEnhancedTable):
         color_match = [color_re.match(col) for col in data.colnames]
 
         # create a single list of all the matches
-        matches = [m_match if m_match else c_match
-                   for m_match, c_match in zip(mag_match, color_match)]
+        matches = [
+            m_match if m_match else c_match
+            for m_match, c_match in zip(mag_match, color_match)
+        ]
 
         # The passband should be the first group match.
         passbands = [match[1] for match in matches if match]
@@ -936,21 +940,25 @@ class CatalogData(BaseEnhancedTable):
         # is what pandas will need to transform the data, many non-magnitude
         # columns will also start ``e_`` and we don't want to change those,
         # so we will rename the error columns too.
-        mag_err_cols = [f'e_{col}' for col in orig_cols]
+        mag_err_cols = [f"e_{col}" for col in orig_cols]
 
         # Dictionary to update the magnitude column names. The prepended
         # part could be anything, but the choice below is unlikely to be
         # used in a column name in a real catalog.
-        mag_col_prepend = 'magstphot'
-        mag_col_map = {orig_col: f'{mag_col_prepend}_{passband}' for orig_col, passband
-                       in zip(orig_cols, passbands)}
+        mag_col_prepend = "magstphot"
+        mag_col_map = {
+            orig_col: f"{mag_col_prepend}_{passband}"
+            for orig_col, passband in zip(orig_cols, passbands)
+        }
 
         # Dictionary to update the magnitude error column names. The
         # prepended part could be anything, but the choice below is
         # unlikely to be used in a column name in a real catalog.
-        mag_err_col_prepend = 'errorstphot'
-        mag_err_col_map = {orig_col: f'{mag_err_col_prepend}_{passband}' for orig_col,
-                           passband in zip(mag_err_cols, passbands)}
+        mag_err_col_prepend = "errorstphot"
+        mag_err_col_map = {
+            orig_col: f"{mag_err_col_prepend}_{passband}"
+            for orig_col, passband in zip(mag_err_cols, passbands)
+        }
 
         # All columns except those we have renamed should be preserved, so make
         # a list of them for use in wide_to_long.
@@ -964,13 +972,20 @@ class CatalogData(BaseEnhancedTable):
         df.rename(columns=mag_err_col_map, inplace=True)
 
         # Make the DataFrame tidy
-        df = pd.wide_to_long(df, stubnames=[mag_col_prepend, mag_err_col_prepend],
-                             i=id_columns, j='passband', sep='_', suffix='.*')
+        df = pd.wide_to_long(
+            df,
+            stubnames=[mag_col_prepend, mag_err_col_prepend],
+            i=id_columns,
+            j="passband",
+            sep="_",
+            suffix=".*",
+        )
 
         # Make the magnitude and error column names more sensible
-        df.rename(columns={mag_col_prepend: 'mag',
-                           mag_err_col_prepend: 'mag_error'},
-                  inplace=True)
+        df.rename(
+            columns={mag_col_prepend: "mag", mag_err_col_prepend: "mag_error"},
+            inplace=True,
+        )
         # Reset the index, which is otherwise a multi-index of the id columns.
         df = df.reset_index()
 
@@ -978,16 +993,18 @@ class CatalogData(BaseEnhancedTable):
         return Table.from_pandas(df)
 
     @classmethod
-    def from_vizier(cls,
-                    header_or_center,
-                    desired_catalog,
-                    radius=0.5 * u.degree,
-                    clip_by_frame=False,
-                    padding=100,
-                    colname_map=None,
-                    mag_column_regex=r'^([a-zA-Z]+|[a-zA-Z]+-[a-zA-Z]+)_?mag$',
-                    color_column_regex=r'^([a-zA-Z]+-[a-zA-Z]+)$',
-                    prepare_catalog=None):
+    def from_vizier(
+        cls,
+        header_or_center,
+        desired_catalog,
+        radius=0.5 * u.degree,
+        clip_by_frame=False,
+        padding=100,
+        colname_map=None,
+        mag_column_regex=r"^([a-zA-Z]+|[a-zA-Z]+-[a-zA-Z]+)_?mag$",
+        color_column_regex=r"^([a-zA-Z]+-[a-zA-Z]+)$",
+        prepare_catalog=None,
+    ):
         """
         Return the items from catalog that are within the search radius and
         (optionally) within the field of view of a frame.
@@ -1057,13 +1074,14 @@ class CatalogData(BaseEnhancedTable):
             # Center was passed in, just use it.
             center = header_or_center
             if clip_by_frame:
-                raise ValueError('To clip entries by frame you must use '
-                                'a WCS as the first argument.')
+                raise ValueError(
+                    "To clip entries by frame you must use "
+                    "a WCS as the first argument."
+                )
         else:
             # Find the center of the frame
-            shape = (header_or_center['NAXIS2'], header_or_center['NAXIS1'])
-            center = WCS(header_or_center).pixel_to_world(shape[1] / 2,
-                                                         shape[0] / 2)
+            shape = (header_or_center["NAXIS2"], header_or_center["NAXIS1"])
+            center = WCS(header_or_center).pixel_to_world(shape[1] / 2, shape[0] / 2)
 
         # Get catalog via cone search
         Vizier.ROW_LIMIT = -1  # Set row_limit to have no limit
@@ -1076,8 +1094,9 @@ class CatalogData(BaseEnhancedTable):
         if prepare_catalog is not None:
             final_cat = prepare_catalog(cat)
         else:
-            final_cat = CatalogData._tidy_vizier_catalog(cat, mag_column_regex,
-                                                         color_column_regex)
+            final_cat = CatalogData._tidy_vizier_catalog(
+                cat, mag_column_regex, color_column_regex
+            )
 
         # Since we go through pandas, we lose the units, so we need to add them back
         # in.
@@ -1085,19 +1104,21 @@ class CatalogData(BaseEnhancedTable):
         # We need to swap the key/values on the input map to get the old column names
         # as values.
         invert_map = {v: k for k, v in colname_map.items()}
-        final_cat[invert_map['ra']].unit = u.deg
-        final_cat[invert_map['dec']].unit = u.deg
+        final_cat[invert_map["ra"]].unit = u.deg
+        final_cat[invert_map["dec"]].unit = u.deg
 
         # Make the CatalogData object....
-        cat = cls(input_data=final_cat,
-                  colname_map=colname_map,
-                  catalog_name=desired_catalog,
-                  catalog_source='Vizier')
+        cat = cls(
+            input_data=final_cat,
+            colname_map=colname_map,
+            catalog_name=desired_catalog,
+            catalog_source="Vizier",
+        )
 
         # ...and now that the column names are standardized, clip by frame if
         # desired.
         if clip_by_frame:
-            cat_coords = SkyCoord(ra=cat['ra'], dec=cat['dec'])
+            cat_coords = SkyCoord(ra=cat["ra"], dec=cat["dec"])
             wcs = WCS(header_or_center)
             x, y = wcs.all_world2pix(cat_coords.ra, cat_coords.dec, 0)
             in_x = (x >= padding) & (x <= wcs.pixel_shape[0] - padding)
@@ -1108,10 +1129,7 @@ class CatalogData(BaseEnhancedTable):
         return cat
 
 
-def apass_dr9(header_or_center,
-              radius=1 * u.degree,
-              clip_by_frame=False,
-              padding=100):
+def apass_dr9(header_or_center, radius=1 * u.degree, clip_by_frame=False, padding=100):
     """
     Return the items from APASS DR9 that are within the search radius and
     (optionally) within the field of view of a frame.
@@ -1137,22 +1155,21 @@ def apass_dr9(header_or_center,
 
     """
     apass_colnames = {
-        'recno': 'id', # There is no APASS ID, this is the one generated by Vizier
-        'RAJ2000': 'ra',
-        'DEJ2000': 'dec',
+        "recno": "id",  # There is no APASS ID, this is the one generated by Vizier
+        "RAJ2000": "ra",
+        "DEJ2000": "dec",
     }
-    return CatalogData.from_vizier(header_or_center,
-                                   'II/336/apass9',
-                                   radius=radius,
-                                   clip_by_frame=clip_by_frame,
-                                   padding=padding,
-                                   colname_map=apass_colnames)
+    return CatalogData.from_vizier(
+        header_or_center,
+        "II/336/apass9",
+        radius=radius,
+        clip_by_frame=clip_by_frame,
+        padding=padding,
+        colname_map=apass_colnames,
+    )
 
 
-def vsx_vizier(header_or_center,
-               radius=1 * u.degree,
-               clip_by_frame=False,
-               padding=100):
+def vsx_vizier(header_or_center, radius=1 * u.degree, clip_by_frame=False, padding=100):
     """
     Return the items from the copy of VSX on Vizier that are within the search
     radius and (optionally) within the field of view of a frame.
@@ -1178,25 +1195,27 @@ def vsx_vizier(header_or_center,
 
     """
     vsx_map = dict(
-        Name='id',
-        RAJ2000='ra',
-        DEJ2000='dec',
+        Name="id",
+        RAJ2000="ra",
+        DEJ2000="dec",
     )
 
     # This one is easier -- it already has the passband in a column name.
     # We'll use the maximum magnitude as the magnitude column.
     def prepare_cat(cat):
-        cat.rename_column('max', 'mag')
-        cat.rename_column('n_max', 'passband')
+        cat.rename_column("max", "mag")
+        cat.rename_column("n_max", "passband")
         return cat
 
-    return CatalogData.from_vizier(header_or_center,
-                                   'B/vsx/vsx',
-                                   radius=radius,
-                                   clip_by_frame=clip_by_frame,
-                                   padding=padding,
-                                   colname_map=vsx_map,
-                                   prepare_catalog=prepare_cat)
+    return CatalogData.from_vizier(
+        header_or_center,
+        "B/vsx/vsx",
+        radius=radius,
+        clip_by_frame=clip_by_frame,
+        padding=padding,
+        colname_map=vsx_map,
+        prepare_catalog=prepare_cat,
+    )
 
 
 class SourceListData(BaseEnhancedTable):

@@ -113,10 +113,10 @@ def crossmatch_APASS2VSX(CCD, RD, vsx):
         Angular separation between APASS stars and input targets.
     """
     apass = apass_dr9(CCD)
-    ra = apass['ra']
-    dec = apass['dec']
-    apass['coords'] = SkyCoord(ra=ra, dec=dec, unit=(u.hour, u.degree))
-    apass_coord = apass['coords']
+    ra = apass["ra"]
+    dec = apass["dec"]
+    apass["coords"] = SkyCoord(ra=ra, dec=dec, unit=(u.hour, u.degree))
+    apass_coord = apass["coords"]
 
     if vsx:
         v_index, v_angle, v_dist = apass_coord.match_to_catalog_sky(vsx["coords"])
