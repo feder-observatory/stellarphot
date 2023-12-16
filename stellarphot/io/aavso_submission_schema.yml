@@ -62,7 +62,7 @@ data:
   MAGNITUDE:
     summary: |
       The magnitude of the observation. Prepend with < if a fainter-than.
-      A dot is required (e.g. "9.0" rather than "9"). 
+      A dot is required (e.g. "9.0" rather than "9").
     limit: 8
   MAGERR:
     summary: |
@@ -179,7 +179,7 @@ data:
       Comparison star name or label such as the AUID (much preferred)
       or the chart label for the comparison star used.
       Use "ENSEMBLE" for ensemble photometry.
-      If not present, use "na". 
+      If not present, use "na".
     limit: 20
   CMAG:
     summary: |
@@ -214,7 +214,7 @@ data:
       for multiple stars, etc., just set GROUP to "na." For cases where you
       want to group observations, GROUP should be an integer, identical for
       all observations in a group, and unique for a given observer for a
-      given star on a given Julian Date. 
+      given star on a given Julian Date.
     limit: 5
   CHART:
     summary: |
@@ -226,7 +226,7 @@ data:
       do not give a chart ID, even if you plotted the chart using VSP.
       Use the comment code K (non-AAVSO chart) and give a proper
       chart name like "APASS DR10". Then add information on the comp
-      stars in the notes. 
+      stars in the notes.
     limit: 20
   NOTES:
     summary: |
