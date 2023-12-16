@@ -1057,7 +1057,8 @@ def calculate_noise(
 
     .. math::
 
-        \\sigma = \\sqrt{G \\cdot N_C + A \\cdot \\left(1 + \\frac{A}{B}\\right)\\cdot \\left[ G\\cdot S + D \\cdot t + R^2 + (0.289 G)^2\\right]}
+        \\sigma = \\sqrt{G \\cdot N_C + A \\cdot \\left(1 + \\frac{A}{B}\\right)\\cdot
+        \\left[ G\\cdot S + D \\cdot t + R^2 + (0.289 G)^2\\right]}
 
     where :math:`\\sigma` is the noise, :math:`G` is the gain,
     :math:`N_C` is the source counts (which is photon/electron counts divided by gain),

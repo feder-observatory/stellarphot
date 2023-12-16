@@ -338,7 +338,8 @@ class RadialProfile:
 
     def find_hwhm(self):
         """
-        Estimate the half-width half-max from normalized, angle-averaged intensity profile.
+        Estimate the half-width half-max from normalized, angle-averaged
+        intensity profile.
 
         Returns
         -------
@@ -391,7 +392,8 @@ def box(imagewidget):
 
 class SeeingProfileWidget:
     """
-    A class for storing an instance of a widget displaying the seeing profile of stars in an image.
+    A class for storing an instance of a widget displaying the seeing profile
+    of stars in an image.
 
     Parameters
     ----------
@@ -567,7 +569,10 @@ class SeeingProfileWidget:
         def aperture_obs(change):
             self._update_plots()
             ape = ApertureSettings(**change["new"])
-            self.aperture_settings.description = f"Inner annulus: {ape.inner_annulus}, outer annulus: {ape.outer_annulus}"
+            self.aperture_settings.description = (
+                f"Inner annulus: {ape.inner_annulus}, "
+                f"outer annulus: {ape.outer_annulus}"
+            )
 
         self.aperture_settings.observe(aperture_obs, names="_value")
         self.save_aps.on_click(self._save_ap_settings)

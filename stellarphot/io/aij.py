@@ -265,8 +265,8 @@ class ApertureFileAIJ:
     @classmethod
     def read(cls, file):
         """
-        Populate ApertureFileAIJ class by reading AstroImageJ apertures datafile.  Each line is basically a path
-        to an attribute name followed by a value.
+        Populate ApertureFileAIJ class by reading AstroImageJ apertures datafile.
+        Each line is basically a path to an attribute name followed by a value.
 
         Parameters
         ----------
@@ -679,6 +679,7 @@ class Star(object):
     @property
     def bjd_tdb(self):
         """
-        Midpoint of the exposure as barycentric Julian date in Barycentric Dynamical Time.
+        Midpoint of the exposure as barycentric Julian date
+        in Barycentric Dynamical Time.
         """
         return self._table["BJD_TDB"]

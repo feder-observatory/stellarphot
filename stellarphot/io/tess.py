@@ -189,28 +189,32 @@ class TessSubmission:
     @property
     def seeing_profile(self):
         """
-        The name of the seeing profile file, e.g. "TIC123456789-01_20200101_SRO_Ic_seeing-profile.png"
+        The name of the seeing profile file,
+        e.g. "TIC123456789-01_20200101_SRO_Ic_seeing-profile.png"
         """
         return self.base_name + "_seeing-profile.png"
 
     @property
     def field_image(self):
         """
-        The name of the field image file, e.g. "TIC123456789-01_20200101_SRO_Ic_field.png"
+        The name of the field image file,
+        e.g. "TIC123456789-01_20200101_SRO_Ic_field.png"
         """
         return self.base_name + "_field.png"
 
     @property
     def field_image_zoom(self):
         """
-        The name of the zoomed-in field image file, e.g. "TIC123456789-01_20200101_SRO_Ic_field-zoom.png"
+        The name of the zoomed-in field image file,
+        e.g. "TIC123456789-01_20200101_SRO_Ic_field-zoom.png"
         """
         return self.base_name + "_field-zoom.png"
 
     @property
     def apertures(self):
         """
-        The name of the apertures file, e.g. "TIC123456789-01_20200101_SRO_Ic_measurements.apertures"
+        The name of the apertures file,
+        e.g. "TIC123456789-01_20200101_SRO_Ic_measurements.apertures"
         """
         return self.base_name + "_measurements.apertures"
 
@@ -254,7 +258,8 @@ class TOI:
         The TIC ID of the target.
 
     toi_table : str, optional
-        The path to the TOI table. If not provided, the default table will be downloaded.
+        The path to the TOI table. If not provided, the default table will
+        be downloaded.
 
     allow_download : bool, optional
         Whether to allow the default table to be downloaded if it is not found.
