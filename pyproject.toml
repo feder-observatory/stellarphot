@@ -85,23 +85,21 @@ include = [
         "pragma: py{ignore_python_version}",
     ]
 
-[tool.flake8]
-# E101 - mix of tabs and spaces
-# W191 - use of tabs
-# W291 - trailing whitespace
-# W292 - no newline at end of file
-# W293 - trailing whitespace
-# W391 - blank line at end of file
-# E111 - 4 spaces per indentation level
-# E112 - 4 spaces per indentation level
-# E113 - 4 spaces per indentation level
-# E901 - SyntaxError or IndentationError
-# E902 - IOError
-select = "E101,W191,W291,W292,W293,W391,E111,E112,E113,E901,E902"
-exclude = "extern,sphinx,*parsetab.py,conftest.py,docs/conf.py,setup.py"
+[tool.black]
+line-length = 88
+target-version = ['py310', 'py311']
+include = '\.pyi?$'
+# 'extend-exclude' excludes files or directories in addition to the defaults
+# extend-exclude = '''
+# # A regex preceded with ^/ will apply only to files and directories
+# # in the root of the project.
+# (
+#   ^/docs
+# )
+# '''
 
 [tool.pycodestyle]
-max-line-length = 100
+max-line-length = 88
 # E101 - mix of tabs and spaces
 # W191 - use of tabs
 # W291 - trailing whitespace
