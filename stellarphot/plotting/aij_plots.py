@@ -17,7 +17,8 @@ def seeing_plot(
     figsize=(20, 10),
 ):
     """
-    Show a seeing plot for data from an image with radius on the x axis and counts (ADU) on the y axis.
+    Show a seeing plot for data from an image with radius on the x axis and
+    counts (ADU) on the y axis.
 
     Parameters
     ----------

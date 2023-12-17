@@ -235,7 +235,8 @@ def source_detection(
     )
     mean, median, std = sigma_clipped_stats(ccd, sigma=sigma, maxiters=iters)
     print(
-        f"source_detection: sigma_clipped_stats mean={mean:.4f}, median={median:.4f}, std={std:.4f}"
+        f"source_detection: sigma_clipped_stats mean={mean:.4f}, "
+        f"median={median:.4f}, std={std:.4f}"
     )
     if sky_per_pix_avg is None:
         sky_per_pix_avg = mean

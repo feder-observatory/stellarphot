@@ -62,6 +62,12 @@ jobs:
           files: ./coverage.xml
           verbose: true
 
+  linting:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: chartboost/ruff-action@v1
+
   documentation:
     runs-on: ubuntu-latest
     steps:

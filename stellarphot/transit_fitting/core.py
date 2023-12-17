@@ -298,7 +298,8 @@ class TransitModelFit:
         # orbital period
         self._batman_params.per = 5.72
 
-        # planet radius (in units of stellar radii)  --> DETERMINES DEPTH (affects duration)
+        # planet radius (in units of stellar radii)  --> DETERMINES DEPTH
+        # (affects duration)
         self._batman_params.rp = 0.035
 
         # semi-major axis (in units of stellar radii) --> DETERMINES DURATION

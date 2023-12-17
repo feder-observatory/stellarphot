@@ -160,11 +160,14 @@ def filter_transform(mag_data, output_filter, g=None, r=None, i=None, transform=
 
     The transforms implemented in this function are taken from:
 
-    Jester, et al, *The Sloan Digital Sky Survey View of the Palomar-Green Bright Quasar Survey*, AJ 130, p. 873 (2005)
+    Jester, et al, *The Sloan Digital Sky Survey View of the Palomar-Green Bright
+    Quasar Survey*, AJ 130, p. 873 (2005)
     http://iopscience.iop.org/article/10.1086/432466/meta
 
-    Ivezić et al, *A Comparison of SDSS Standard Star Catalog for Stripe 82 with Stetson's Photometric Standards*,
-    The Future Of Photometric, Spectrophotometric And Polarimetric Standardization, ASP Conference Series 364, p. 165 (2007)
+    Ivezić et al, *A Comparison of SDSS Standard Star Catalog for Stripe 82 with
+    Stetson's Photometric Standards*,
+    The Future Of Photometric, Spectrophotometric And Polarimetric Standardization,
+    ASP Conference Series 364, p. 165 (2007)
     http://aspbooks.org/custom/publications/paper/364-0165.html
 
     """
@@ -534,43 +537,49 @@ def transform_to_catalog(
 
     observed_magnitudes_grouped : `astropy.table.Table`
         An astropy table, grouped by whatever you want that sepearates the data into
-        data from just one image. BJD of the center of the observatory is one reasonable choice
+        data from just one image. BJD of the center of the observatory is one reasonable
+        choice
 
     obs_mag_col : str
         Name of the column in `observed_magnitudes_grouped` that contains instrumental
         magnitudes.
 
     obs_filter : str
-        Name of the filter in which observations were done. Should be one of the names at
-        https://www.aavso.org/filters
+        Name of the filter in which observations were done. Should be one of the names
+        at https://www.aavso.org/filters
 
     obs_error_column : str, optional
-        Name of the column in `observed_magnitudes_grouped` that contains the error in the magnitude.
+        Name of the column in `observed_magnitudes_grouped` that contains the error in
+        the magnitude.
 
     cat_filter : str
-        Name of the filter/passband in catalog that should be matched to the instrumental magnitudes.
+        Name of the filter/passband in catalog that should be matched to the
+        instrumental magnitudes.
 
     cat_color : tuple of two strings
-        Names of the two columns in the caatalog that should be used to calculate color. The magnitude
-        difference will be calculated in the ortder the fitlers are given. For example, if the value is
-        ``('r_mag', 'i_mag')`` then the calculated color will be the ``r_mag`` column minus
-        the ``i_mag`` column.
+        Names of the two columns in the caatalog that should be used to calculate color.
+        The magnitude difference will be calculated in the ortder the fitlers are given.
+        For example, if the value is ``('r_mag', 'i_mag')`` then the calculated color
+        will be the ``r_mag`` column minus the ``i_mag`` column.
 
     a_delta, b_delta, c_delta, d_delta : float, optional
-        Range allowed in fitting for each of the parameters ``a``, ``b``, ``c``, and ``d``. Use ``1E-6`` to fix a parameter.
+        Range allowed in fitting for each of the parameters ``a``, ``b``, ``c``,
+        and ``d``. Use ``1E-6`` to fix a parameter.
 
     a_cen : float, optional
         Center of range for the fitting parameter ``a``.
 
     zero_point_range : tuple of float, optional
-        Range to which the value of the zero point is restricted in fitting to observed magnitudes.
+        Range to which the value of the zero point is restricted in fitting to
+        observed magnitudes.
 
     in_place : bool, optional
-        If ``True``, add the calibrated magnitude to the input table, othewise return a copy.
+        If ``True``, add the calibrated magnitude to the input table, othewise return
+        a copy.
 
     fit_diff : bool, optional
-        If ``True``, fit the difference between the instrumental and catalog magnitude instead of the
-        treating the catalog mag as the dependent variable.
+        If ``True``, fit the difference between the instrumental and catalog magnitude
+        instead of the treating the catalog mag as the dependent variable.
 
     verbose: bool optional
         If ``True``, print additional output.
@@ -683,7 +692,8 @@ def transform_to_catalog(
         residual = calc_residual(f(X, *popt) + offset, catm)
         resids.extend([residual] * len(one_image))
 
-        # Calculate calibrated magnitudes and accumulate, settings ones with no catalog match to NaN
+        # Calculate calibrated magnitudes and accumulate, settings ones with
+        # no catalog match to NaN
         X = (mag_inst, color)
         cal_mag = f(X, *popt)
         if fit_diff:

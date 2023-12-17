@@ -274,7 +274,8 @@ class ComparisonViewer:
 
     def _init(self):
         """
-        Handles aspects of initialization that need to be defered until a file is chosen.
+        Handles aspects of initialization that need to be defered until
+        a file is chosen.
         """
         if self.tess_submission is not None:
             self._tess_object_info.layout.visibility = "visible"
@@ -393,7 +394,8 @@ class ComparisonViewer:
             self.variables.write(filename, overwrite=self.overwrite_outputs)
         except OSError:
             raise OSError(
-                f"Existing file ({filename}) can not be overwritten. Set overwrite_outputs=True to address this."
+                f"Existing file ({filename}) can not be overwritten. "
+                "Set overwrite_outputs=True to address this."
             )
 
     def _show_label_button_handler(self, change):
@@ -433,7 +435,8 @@ class ComparisonViewer:
             sources.write(filename, overwrite=self.overwrite_outputs)
         except OSError:
             raise OSError(
-                f"Existing file ({filename}) can not be overwritten. Set overwrite_outputs=True to address this."
+                f"Existing file ({filename}) can not be overwritten."
+                "Set overwrite_outputs=True to address this."
             )
 
     def _make_control_bar(self):
@@ -585,7 +588,8 @@ class ComparisonViewer:
                 self.iw.save(self._field_name.value)
             except OSError:
                 raise OSError(
-                    f"Existing file ({self._field_name.value}) can not be overwritten. Set overwrite_outputs=True to address this."
+                    f"Existing file ({self._field_name.value}) can not be overwritten. "
+                    "Set overwrite_outputs=True to address this."
                 )
 
         if self._zoom_name.value:
@@ -597,7 +601,8 @@ class ComparisonViewer:
                 self.iw.save(self._zoom_name.value)
             except OSError:
                 raise OSError(
-                    f"Existing file ({self._zoom_name.value}) can not be overwritten. Set overwrite_outputs=True to address this."
+                    f"Existing file ({self._zoom_name.value}) can not be overwritten. "
+                    "Set overwrite_outputs=True to address this."
                 )
 
     def generate_table(self):
@@ -779,7 +784,8 @@ class ComparisonViewer:
 
     def tess_field_view(self):
         """
-        Show the whole TESS field of view including circle around target, but hide labels.
+        Show the whole TESS field of view including circle around target,
+        but hide labels.
 
         Returns
         -------

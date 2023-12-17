@@ -12,7 +12,8 @@ __all__ = ["FitsOpener"]
 
 class FitsOpener:
     """
-    A class to open FITS files using a file chooser and display them in an `astrowidgets.ImageWidget`.
+    A class to open FITS files using a file chooser and display them
+    in an `astrowidgets.ImageWidget`.
 
     Parameters
     ----------
