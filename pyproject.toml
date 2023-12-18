@@ -108,6 +108,10 @@ select = [
     "W"
 ]
 
+# Ignore `E402` and `F403` (import violations) in all `__init__.py` files.
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["E402", "F403"]
+
 [tool.pytest.ini_options]
 minversion = 7.0
 testpaths = [
