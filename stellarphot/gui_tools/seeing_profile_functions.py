@@ -1,5 +1,4 @@
 from pathlib import Path
-import warnings
 
 import numpy as np
 from photutils.centroids import centroid_com

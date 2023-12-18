@@ -1,4 +1,3 @@
-from astropy import units as un
 from pydantic import ValidationError
 import pytest
 
