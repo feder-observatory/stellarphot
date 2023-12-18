@@ -325,7 +325,7 @@ class BaseEnhancedTable(QTable):
                     )
             else:  # Check that columns with no units but are required exist!
                 try:
-                    tempvar = data[this_col]
+                    _ = data[this_col]
                 except KeyError:
                     raise ValueError(
                         f"data['{this_col}'] is missing from input " "data."
