@@ -11,6 +11,42 @@ These steps typically only need to be done once.
 2. Clone your fork to your local machine.
 3. Add the main ``stellarphot`` repository as a remote called ``upstream``.
 
+Make a development environment
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+These steps typically only need to be done once. If something goes wrong with
+the dev environment, you may need to delete it and start over.
+
+1.  Create a new conda environment for ``stellarphot``. You can call it
+    whatever you want. For example, you might call it ``stellarphot-dev``.
+    The command to create the environment would be:
+
+    .. code-block:: bash
+
+        # The couple of packages listed below take care of some dependencies
+        # that would otherwise need to be compiled.
+        mamba create -n stellarphot-dev python=3.11 ccdproc batman-package
+
+2.  Activate the environment:
+
+    .. code-block:: bash
+
+        mamba activate stellarphot-dev
+
+3.  Change directory into the folder with your clone of ``stellarphot``.
+    Install ``stellarphot`` in development mode with the dependencies needed
+    for testing:
+
+    .. code-block:: bash
+
+        pip install -e .[test]
+
+4.  Install the pre-commit hooks -- these are checks run before every commit:
+
+    .. code-block:: bash
+
+        pre-commit install
+
 Steps when Contributing
 ~~~~~~~~~~~~~~~~~~~~~~~
 

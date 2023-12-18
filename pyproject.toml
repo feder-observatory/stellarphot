@@ -39,8 +39,11 @@ exo_fitting = [
     "batman-package",
 ]
 test = [
-    "pytest",
+    "black",
+    "pre-commit",
     "pytest-astropy",
+    "ruff",
+    "tox",
 ]
 
 [project.urls]
