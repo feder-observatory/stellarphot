@@ -1,6 +1,5 @@
 from astropy.table import Table, vstack
 from astropy.coordinates import SkyCoord
-from astropy import units as u
 from astropy.utils.data import get_pkg_data_filename
 import numpy as np
 from .. import calc_multi_vmag, calc_vmag
