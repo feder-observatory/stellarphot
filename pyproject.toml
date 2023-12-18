@@ -105,12 +105,26 @@ include = '\.pyi?$'
 select = [
     # E and W are the checks done by pycodestyle
     "E",
-    "W"
+    "W",
+    # pyflakes checks
+    "F",
+    # flake8-unused-arguments
+    "ARG",
 ]
-
-# Ignore `E402` and `F403` (import violations) in all `__init__.py` files.
 [tool.ruff.lint.per-file-ignores]
+# Ignore `E402` and `F403` (import violations) in all `__init__.py` files.
 "__init__.py" = ["E402", "F403"]
+# Ignore F405 (variable may be from star imports) in docs/conf.py
+"docs/conf.py" = ["F405"]
+
+# Ignore pyflakes and ARGS issues in each subpackage until they are fixed
+"stellarphot/differential_photometry/*" = ["F"]
+"stellarphot/gui_tools/*" = ["F", "ARG"]
+"stellarphot/photometry/*" = ["F"]
+"stellarphot/plotting/*" = ["ARG"]
+"stellarphot/tests/*" = ["F"]
+"stellarphot/transit_fitting/*" = ["ARG"]
+"stellarphot/utils/*" = ["F", "ARG"]
 
 [tool.pytest.ini_options]
 minversion = 7.0
