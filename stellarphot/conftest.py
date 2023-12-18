@@ -20,7 +20,7 @@ def pytest_configure(config):
     TESTED_VERSIONS[packagename] = version
 
 
-def pytest_unconfigure(config):
+def pytest_unconfigure():
     from astropy.utils.iers import conf as iers_conf
 
     # Undo IERS auto download setting for testing
