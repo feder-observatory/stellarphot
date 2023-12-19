@@ -71,7 +71,7 @@ def plot_magnitudes(
         yerr=errors,
         fmt="o",
         alpha=alpha,
-        label="night: {}".format(night),
+        label=f"night: {night}",
     )
     plt.xlim(working_times.min(), working_times.max())
     plt.plot(
@@ -111,7 +111,7 @@ def plot_magnitudes(
     calendar_date = Time(night, format="jd", out_subfmt="date")
     calendar_date.format = "iso"
 
-    plt.title("night {}".format(calendar_date))
+    plt.title(f"night {calendar_date}")
     plt.xlabel("time (days)")
     return mean, std
 
@@ -210,7 +210,7 @@ def multi_night(
         y = x
 
         # Add invisible line to make plot.
-        plt.plot(x, y, alpha=0, label="source {}".format(source.id))
+        plt.plot(x, y, alpha=0, label=f"source {source.id}")
         night_means = np.array(night_means)
 
         # Plot bar proportional to Lomb-Scargle power.

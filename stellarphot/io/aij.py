@@ -279,7 +279,7 @@ class ApertureFileAIJ:
 
         aij_aps = cls()
 
-        with open(file, "r") as f:
+        with open(file) as f:
             for line in f:
                 class_path, value = line.strip().split("=")
                 # There is always a leading dot
@@ -528,7 +528,7 @@ def parse_aij_table(table_name):
     return stars
 
 
-class Star(object):
+class Star:
     """
     A class for storing photometry for a single star.
 

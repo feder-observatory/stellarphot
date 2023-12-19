@@ -410,9 +410,7 @@ class BaseEnhancedTable(QTable):
         }
 
         recognized_comparison_ops = "|".join(comparisons.keys())
-        criteria_re = re.compile(
-            r"({})([-+a-zA-Z0-9]+)".format(recognized_comparison_ops)
-        )
+        criteria_re = re.compile(rf"({recognized_comparison_ops})([-+a-zA-Z0-9]+)")
 
         keepers = np.ones([len(self)], dtype=bool)
 
@@ -423,9 +421,7 @@ class BaseEnhancedTable(QTable):
         for column, restriction in other_restrictions.items():
             results = criteria_re.match(restriction)
             if not results:
-                raise ValueError(
-                    "Criteria {}{} not " "understood.".format(column, restriction)
-                )
+                raise ValueError(f"Criteria {column}{restriction} not " "understood.")
             comparison_func = comparisons[results.group(1)]
             comparison_value = results.group(2)
             new_keepers = comparison_func(self[column], float(comparison_value))
