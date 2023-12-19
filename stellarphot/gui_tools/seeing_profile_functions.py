@@ -160,8 +160,7 @@ def find_center(image, center_guess, cutout_size=30, max_iters=10):
         cen = np.array([x_cm + x - pad, y_cm + y - pad])
         if not np.all(~np.isnan(cen)):
             raise RuntimeError(
-                "Centroid finding failed, "
-                "previous was {}, current is {}".format(ceno, cen)
+                "Centroid finding failed, " f"previous was {ceno}, current is {cen}"
             )
         cnt += 1
 

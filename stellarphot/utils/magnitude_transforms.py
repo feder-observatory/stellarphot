@@ -174,8 +174,8 @@ def filter_transform(mag_data, output_filter, g=None, r=None, i=None, transform=
     supported_transforms = ["jester", "ivezic"]
     if transform not in supported_transforms:
         raise ValueError(
-            "Transform {} is not known. Must be one of "
-            "{}".format(transform, supported_transforms)
+            f"Transform {transform} is not known. Must be one of "
+            f"{supported_transforms}"
         )
     transform_ivezic = {
         "B": [0.2628, -0.7952, 1.0544, 0.0268],
@@ -224,10 +224,8 @@ def filter_transform(mag_data, output_filter, g=None, r=None, i=None, transform=
             + coeff[3]
         )
 
-    out_mag.name = "{}_mag".format(output_filter)
-    out_mag.description = "{}-band magnitude transformed " "from gri".format(
-        output_filter
-    )
+    out_mag.name = f"{output_filter}_mag"
+    out_mag.description = f"{output_filter}-band magnitude transformed " "from gri"
     return out_mag
 
 
@@ -500,7 +498,7 @@ def transform_magnitudes(
             gain=gain,
         )
     except np.linalg.LinAlgError as e:
-        print("Danger! LinAlgError: {}".format(str(e)))
+        print(f"Danger! LinAlgError: {str(e)}")
         Transform = namedtuple("Transform", ["parameters"])
         transforms = Transform(parameters=(np.nan,) * (order + 1))
 
