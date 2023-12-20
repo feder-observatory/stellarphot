@@ -128,7 +128,7 @@ select = [
 "stellarphot/plotting/*" = ["ARG"]
 "stellarphot/tests/*" = ["F"]
 "stellarphot/transit_fitting/*" = ["ARG"]
-"stellarphot/utils/*" = ["F", "ARG"]
+
 
 [tool.pytest.ini_options]
 minversion = 7.0
