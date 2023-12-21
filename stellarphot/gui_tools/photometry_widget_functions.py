@@ -80,7 +80,10 @@ class PhotometrySettings:
         self.ifc = ImageFileCollection(self.file_locations.image_folder)
         self._update_object_list(change)
 
-    def _update_object_list(self, change):
+    def _update_object_list(self, change):  # noqa: ARG002
+        """
+        Widget callbacks need to accept a single argument, even if it is not used.
+        """
         if self.ifc.summary:
             self._object_name.options = sorted(
                 set(self.ifc.summary["object"][~self.ifc.summary["object"].mask])
@@ -88,7 +91,10 @@ class PhotometrySettings:
         else:
             self._object_name.options = []
 
-    def _update_aperture_settings(self, change):
+    def _update_aperture_settings(self, change):  # noqa: ARG002
+        """
+        Widget callbacks need to accept a single argument, even if it is not used.
+        """
         self.aperture_settings = ApertureSettings.parse_file(
             self.file_locations.aperture_settings_file
         )
