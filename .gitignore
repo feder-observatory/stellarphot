@@ -19,6 +19,7 @@ MANIFEST
 pip-wheel-metadata
 .pytest_cache
 .tmp
+.ruff_cache
 
 # Sphinx
 docs/api
