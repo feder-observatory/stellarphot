@@ -541,7 +541,10 @@ class SeeingProfileWidget:
             planet=self.setting_box.planet_num.value,
         )
 
-    def _set_seeing_profile_name(self, change):
+    def _set_seeing_profile_name(self, change):  # noqa: ARG002
+        """
+        Widget callbacks need to accept a single argument, even if it is not used.
+        """
         self._construct_tess_sub()
         self.seeing_file_name.value = self._tess_sub.seeing_profile
 
@@ -554,7 +557,10 @@ class SeeingProfileWidget:
         else:
             self.setting_box.layout.visibility = "hidden"
 
-    def _save_seeing_plot(self, button):
+    def _save_seeing_plot(self, button):  # noqa: ARG002
+        """
+        Widget button callbacks need to accept a single argument.
+        """
         self._seeing_plot_fig.savefig(self.seeing_file_name.value)
 
     def _change_aperture_save_location(self, change):
@@ -583,7 +589,10 @@ class SeeingProfileWidget:
         self.setting_box.planet_num.observe(self._set_seeing_profile_name)
         self.setting_box.telescope_code.observe(self._set_seeing_profile_name)
 
-    def _save_ap_settings(self, button):
+    def _save_ap_settings(self, button):  # noqa: ARG002
+        """
+        Widget button callbacks need to accept a single argument.
+        """
         with open("aperture_settings.txt", "w") as f:
             f.write(f"{ap_rad},{ap_rad + 10},{ap_rad + 15}")
 
@@ -619,7 +628,12 @@ class SeeingProfileWidget:
         self.aperture_settings.value = value
 
     def _make_show_event(self):
-        def show_event(viewer, event=None, datax=None, datay=None, aperture=None):
+        def show_event(
+            viewer, event=None, datax=None, datay=None, aperture=None
+        ):  # noqa: ARG001
+            """
+            ginga callbacks require the function signature above.
+            """
             profile_size = 60
             default_gap = 5  # pixels
             default_annulus_width = 15  # pixels

@@ -49,7 +49,7 @@ class FitsOpener:
         self._header = {}
         self._selected_cache = self._fc.selected
         self.object = ""
-        self.register_callback(lambda x: None)
+        self.register_callback(lambda _: None)
 
     @property
     def file_chooser(self):

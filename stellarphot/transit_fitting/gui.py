@@ -74,7 +74,10 @@ class MyValid(ipw.Button):
         self._set_properties(None)
 
     @observe("value")
-    def _set_properties(self, change):
+    def _set_properties(self, change):  # noqa: ARG002
+        """
+        Widget callbacks need to accept a single argument, even if it is not used.
+        """
         if self.value:
             self.style.button_color = "green"
             self.icon = "check"
@@ -387,7 +390,10 @@ def exotic_settings_widget():
         "known": value_widget["known"][pre_reduced_file],
     }
 
-    def observe_select(change):
+    def observe_select(change):  # noqa: ARG001
+        """
+        Widget callbacks need to accept a single argument, even if it is not used.
+        """
         input_container.children = [
             lookup_link_html[select_planet_type.value],
             hb2[select_planet_type.value],

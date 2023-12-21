@@ -117,7 +117,10 @@ def wrap(imagewidget, outputwidget):
 
     """
 
-    def cb(viewer, event, data_x, data_y):
+    def cb(viewer, event, data_x, data_y):  # noqa: ARG001
+        """
+        The signature of this function must have the four arguments above.
+        """
         i = imagewidget._viewer.get_image()
 
         try:
@@ -365,7 +368,10 @@ class ComparisonViewer:
             self._tess_object_info.layout.visibility = "visible"
             self.targets_from_file = self._target_file_info.table
 
-    def _set_file(self, change):
+    def _set_file(self, change):  # noqa: ARG002
+        """
+        Widget callbacks need to accept a change argument, even if not used.
+        """
         self._set_object()
         self._init()
         self._update_tess_save_names()
@@ -386,7 +392,11 @@ class ComparisonViewer:
         self.tess_save_toggle.observe(self._save_toggle_action, "value")
         self.save_files.on_click(self.save_tess_files)
 
-    def _save_variables_to_file(self, button=None, filename=""):
+    def _save_variables_to_file(self, button=None, filename=""):  # noqa: ARG002
+        """
+        Widget button callbacks need to be able to take an argument. It is called
+        button above the the button will be passed as the first positional argument.
+        """
         if not filename:
             filename = "variables.csv"
         # Export variables as CSV (overwrite existing file if it exists)
@@ -411,7 +421,11 @@ class ComparisonViewer:
             value
         ]
 
-    def _save_aperture_to_file(self, button=None, filename=""):
+    def _save_aperture_to_file(self, button=None, filename=""):  # noqa: ARG002
+        """
+        Widget button callbacks need to be able to take an argument. It is called
+        button above the the button will be passed as the first positional argument.
+        """
         if not filename:
             filename = self.photom_apertures_file
 
@@ -563,7 +577,7 @@ class ComparisonViewer:
 
         return box, iw
 
-    def save_tess_files(self, button=None):
+    def save_tess_files(self, button=None):  # noqa: ARG002
         """
         Save the TESS files.
 
