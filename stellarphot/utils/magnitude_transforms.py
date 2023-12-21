@@ -9,12 +9,11 @@ from astropy.table import MaskedColumn
 from astropy.coordinates import SkyCoord, match_coordinates_sky
 from astropy import units as u
 
-from astroquery.vizier import Vizier
+from ..core import apass_dr9
 
 
 __all__ = [
     "f",
-    "get_cat",
     "opts_to_str",
     "calc_residual",
     "filter_transform",
@@ -46,37 +45,6 @@ def f(X, a, b, c, d, z):
     mag_inst, color = X
 
     return a * mag_inst + b * mag_inst**2 + c * color + d * color**2 + z
-
-
-def get_cat(image):
-    """
-    Get the APASS catalog entries within 1 degree of first object in
-    Astropy table 'image'.
-
-    Parameters
-    ----------
-
-    image : `astropy.table.Table`
-        Table containing the image information. Must have columns
-        ``RA`` and ``Dec``.
-
-    Returns
-    -------
-
-    `astropy.table.Table`
-        Table containing the APASS catalog entries within 1 degree of
-        first object in Astropy table.
-    """
-    our_coords = SkyCoord(image["RA"], image["Dec"], unit="degree")
-    # Get catalog via cone search
-    Vizier.ROW_LIMIT = -1  # Set row_limit to have no limit
-    desired_catalog = "II/336/apass9"
-    a_star = our_coords[0]
-    rad = 1 * u.degree
-    cat = Vizier.query_region(a_star, radius=rad, catalog=desired_catalog)
-    cat = cat[0]
-    cat_coords = SkyCoord(cat["RAJ2000"], cat["DEJ2000"])
-    return cat, cat_coords
 
 
 def opts_to_str(opts):
@@ -632,7 +600,10 @@ def transform_to_catalog(
     ):
         our_coords = SkyCoord(one_image["RA"], one_image["Dec"], unit="degree")
         if cat is None or cat_coords is None:
-            cat, cat_coords = get_cat(one_image)
+            cat = apass_dr9(
+                our_coords[0], radius=1 * u.degree, clip_by_frame=False, padding=0
+            )
+            cat_coords = SkyCoord(cat["ra"], cat["dec"])
             cat["color"] = cat[cat_color[0]] - cat[cat_color[1]]
 
         cat_idx, d2d, _ = our_coords.match_to_catalog_sky(cat_coords)
