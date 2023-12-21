@@ -10,7 +10,7 @@ from astropy.wcs import WCS
 from astroquery.vizier import Vizier
 
 import pandas as pd
-from pydantic import BaseModel, root_validator
+from pydantic import BaseModel, root_validator, validator
 
 import numpy as np
 
@@ -90,6 +90,10 @@ class Camera(BaseModel):
     pixel_scale : `astropy.quantity.Quantity`
         The pixel scale of the camera in units of arcseconds per pixel.
 
+    max_data_value : `astropy.quantity.Quantity`, optional (Default: None)
+        The maximum pixel value to allow while performing photometry. Pixel values
+        above this will be set to ``NaN``.
+
     Attributes
     ----------
 
@@ -135,6 +139,7 @@ class Camera(BaseModel):
     read_noise: QuantityType
     dark_current: QuantityType
     pixel_scale: PixelScaleType
+    max_data_value: QuantityType = None
 
     class Config:
         validate_all = True
@@ -183,12 +188,26 @@ class Camera(BaseModel):
         # Dark current validates against read noise
         return values
 
+    @validator("max_adu")
+    @classmethod
+    def validate_max_adu(cls, value):
+        if value is None:
+            return None
+        max_adu = Quantity(value)
+        if max_adu.unit != u.adu:
+            raise ValueError(f"max_adu must be in units of adu, not {max_adu.unit}")
+        if max_adu.value <= 0:
+            raise ValueError("max_adu must be greater than zero")
+
+        return max_adu
+
     def copy(self):
         return Camera(
             gain=self.gain,
             read_noise=self.read_noise,
             dark_current=self.dark_current,
             pixel_scale=self.pixel_scale,
+            max_data_value=self.max_data_value,
         )
 
     def __copy__(self):
@@ -198,6 +217,7 @@ class Camera(BaseModel):
         return (
             f"Camera(gain={self.gain}, read_noise={self.read_noise}, "
             f"dark_current={self.dark_current}, pixel_scale={self.pixel_scale})"
+            f"max_data_value={self.max_data_value})"
         )
 
 

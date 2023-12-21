@@ -235,13 +235,13 @@ def test_find_too_close():
 
 # Constants for the following tests
 shift_tolerance = 6
-max_adu = 60000
 fwhm_estimate = 5
 fake_camera = Camera(
     gain=1.0 * u.electron / u.adu,
     read_noise=0 * u.electron,
     dark_current=0.1 * u.electron / u.second,
     pixel_scale=1 * u.arcsec / u.pixel,
+    max_data_value=60000 * u.adu,
 )
 fake_obs = EarthLocation(lat=0 * u.deg, lon=0 * u.deg, height=0 * u.m)
 coords2use = "pixel"
@@ -271,7 +271,9 @@ def test_aperture_photometry_no_outlier_rejection(int_data):
     # asserts that constitute the actual test.
     scale_factor = 1.0
     if int_data:
-        scale_factor = 0.75 * max_adu / fake_CCDimage.data.max()
+        scale_factor = (
+            0.75 * fake_camera.max_data_value.value / fake_CCDimage.data.max()
+        )
         # For the moment, ensure the integer data is NOT larger than max_adu
         # because until #161 is fixed then having NaN in the data will not succeed.
         data = scale_factor * fake_CCDimage.data
@@ -284,7 +286,6 @@ def test_aperture_photometry_no_outlier_rejection(int_data):
         fake_obs,
         aperture_settings,
         shift_tolerance,
-        max_adu,
         fwhm_estimate,
         use_coordinates=coords2use,
         include_dig_noise=True,
@@ -367,7 +368,6 @@ def test_aperture_photometry_with_outlier_rejection(reject):
         fake_obs,
         aperture_settings,
         shift_tolerance,
-        max_adu,
         fwhm_estimate,
         use_coordinates=coords2use,
         include_dig_noise=True,
@@ -483,7 +483,6 @@ def test_photometry_on_directory():
                 fake_obs,
                 aperture_settings,
                 shift_tolerance,
-                max_adu,
                 fwhm_estimate,
                 include_dig_noise=True,
                 reject_too_close=True,
@@ -583,7 +582,6 @@ def test_photometry_on_directory_with_no_ra_dec():
                 fake_obs,
                 aperture_settings,
                 shift_tolerance,
-                max_adu,
                 fwhm_estimate,
                 include_dig_noise=True,
                 reject_too_close=True,
@@ -642,7 +640,6 @@ def test_photometry_on_directory_with_bad_fits():
                 fake_obs,
                 aperture_settings,
                 shift_tolerance,
-                max_adu,
                 fwhm_estimate,
                 include_dig_noise=True,
                 reject_too_close=True,

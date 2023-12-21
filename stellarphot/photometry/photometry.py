@@ -42,7 +42,6 @@ def single_image_photometry(
     observatory_location,
     aperture_settings,
     shift_tolerance,
-    max_adu,
     fwhm_estimate,
     use_coordinates="pixel",
     include_dig_noise=True,
@@ -95,9 +94,6 @@ def single_image_photometry(
         the computed positions and the refined positions, in pixels.
         The expected shift shift should not be more than the FWHM, so a
         measured FWHM might be a good value to provide here.
-
-    max_adu : float
-        Maximum allowed pixel value before a source is considered saturated.
 
     fwhm_estimate : float
         Initial estimate of the FWHM in pixels for sources in the image.
@@ -210,8 +206,7 @@ def single_image_photometry(
             f"shift_tolerance ({shift_tolerance}) must be greater than 0 "
             "(should be on order of FWHM)."
         )
-    if max_adu <= 0:
-        raise ValueError(f"max_adu ({max_adu}) must be greater than 0.")
+
     if use_coordinates not in ["pixel", "sky"]:
         raise ValueError(
             f"input_coordinates ({use_coordinates}) must be either " "'pixel' or 'sky'."
@@ -278,7 +273,7 @@ def single_image_photometry(
 
     # Set high pixels to NaN (make sure ccd_image.data is a float array first)
     ccd_image.data = ccd_image.data.astype(float)
-    ccd_image.data[ccd_image.data > max_adu] = np.nan
+    ccd_image.data[ccd_image.data > camera.max_data_value.value] = np.nan
 
     # Extract necessary values from sourcelist structure
     star_ids = sourcelist["star_id"].value
@@ -598,7 +593,6 @@ def multi_image_photometry(
     observatory_location,
     aperture_settings,
     shift_tolerance,
-    max_adu,
     fwhm_estimate,
     include_dig_noise=True,
     reject_too_close=True,
@@ -651,9 +645,6 @@ def multi_image_photometry(
         positions and the refined positions, in pixels.  The expected
         shift shift should not be more than the FWHM, so a measured FWHM
         might be a good value to provide here.
-
-    max_adu : float
-        Maximum allowed pixel value before a source is considered saturated.
 
     fwhm_estimate : float
         Initial estimate of the FWHM in pixels for sources in the image.
@@ -791,7 +782,6 @@ def multi_image_photometry(
             observatory_location,
             aperture_settings,
             shift_tolerance,
-            max_adu,
             fwhm_estimate,
             use_coordinates="sky",
             include_dig_noise=include_dig_noise,

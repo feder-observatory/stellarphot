@@ -25,6 +25,7 @@ from stellarphot.core import (
 
 
 def test_camera_attributes():
+    # Check that the attributes are set properly
     gain = 2.0 * u.electron / u.adu
     read_noise = 10 * u.electron
     dark_current = 0.01 * u.electron / u.second
@@ -39,13 +40,27 @@ def test_camera_attributes():
     assert c.dark_current == dark_current
     assert c.read_noise == read_noise
     assert c.pixel_scale == pixel_scale
+    assert c.max_data_value is None
+
+    max_adu = 50000 * u.adu
+
+    c = Camera(
+        gain=gain,
+        read_noise=read_noise,
+        dark_current=dark_current,
+        pixel_scale=pixel_scale,
+        max_data_value=max_adu,
+    )
+    assert c.max_data_value == max_adu
 
 
 def test_camera_unitscheck():
+    # Check that the units are checked properly
     gain = 2.0 * u.electron / u.adu
     read_noise = 10 * u.electron
     dark_current = 0.01 * u.electron / u.second
     pixel_scale = 0.563 * u.arcsec / u.pix
+    max_adu = 50000 * u.adu
 
     with pytest.raises(ValidationError, match="gain"):
         c = Camera(
@@ -75,6 +90,50 @@ def test_camera_unitscheck():
             dark_current=dark_current,
             pixel_scale=pixel_scale.value,
         )
+
+    with pytest.raises(ValidationError, match="max_adu"):
+        Camera(
+            gain=gain,
+            read_noise=read_noise,
+            dark_current=dark_current,
+            pixel_scale=pixel_scale,
+            max_data_value=max_adu.value * u.m,  # try with wrong units
+        )
+
+
+def test_camera_negative_max_adu():
+    # Check that the units are checked properly
+    gain = 2.0 * u.electron / u.adu
+    read_noise = 10 * u.electron
+    dark_current = 0.01 * u.electron / u.second
+    pixel_scale = 0.563 * u.arcsec / u.pix
+    max_adu = -50000 * u.adu
+
+    with pytest.raises(ValidationError, match="max_adu"):
+        Camera(
+            gain=gain,
+            read_noise=read_noise,
+            dark_current=dark_current,
+            pixel_scale=pixel_scale,
+            max_data_value=max_adu,
+        )
+
+
+def test_camera_copy():
+    # Make sure copy actually copies everything
+    gain = 2.0 * u.electron / u.adu
+    read_noise = 10 * u.electron
+    dark_current = 0.01 * u.electron / u.second
+    pixel_scale = 0.563 * u.arcsec / u.pix
+    c = Camera(
+        gain=gain,
+        read_noise=read_noise,
+        dark_current=dark_current,
+        pixel_scale=pixel_scale,
+        max_data_value=65535 * u.adu,
+    )
+    c2 = c.copy()
+    assert c2 == c
 
 
 def test_camera_altunitscheck():
