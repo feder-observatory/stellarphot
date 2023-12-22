@@ -136,6 +136,21 @@ def test_camera_altunitscheck():
     assert c.max_data_value == max_val
 
 
+def test_camera_schema():
+    # Check that we can generate a schema for a Camera and that it
+    # has the right number of attributes
+    c = Camera(
+        data_unit=u.adu,
+        gain=5 * u.electron / u.adu,
+        read_noise=1 * u.electron,
+        dark_current=0.1 * u.electron / u.second,
+        pixel_scale=0.6 * u.arcsec / u.pix,
+        max_data_value=65535 * u.adu,
+    )
+    schema = c.schema()
+    assert len(schema["properties"]) == 6
+
+
 # Create several test descriptions for use in base_enhanced_table tests.
 test_descript = {
     "id": None,
