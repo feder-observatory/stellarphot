@@ -93,6 +93,48 @@ def test_camera_negative_max_adu():
         )
 
 
+def test_camera_incompatible_gain_units():
+    data_unit = u.adu
+    gain = 2.0 * u.count / u.adu
+    read_noise = 10 * u.electron
+    dark_current = 0.01 * u.electron / u.second
+    pixel_scale = 0.563 * u.arcsec / u.pix
+    max_val = 50000 * u.adu
+
+    # Make sure that an incompatible gain raises an error
+    with pytest.raises(ValidationError, match="Gain units.*not compatible"):
+        Camera(
+            data_unit=u.adu,
+            gain=gain,
+            read_noise=read_noise,
+            dark_current=dark_current,
+            pixel_scale=pixel_scale,
+            max_data_value=max_val,
+        )
+
+
+def test_camera_incompatible_max_val_units():
+    data_unit = u.adu
+    gain = 2.0 * u.electron / u.adu
+    read_noise = 10 * u.electron
+    dark_current = 0.01 * u.electron / u.second
+    pixel_scale = 0.563 * u.arcsec / u.pix
+    max_val = 50000 * u.count
+
+    # Make sure that an incompatible gain raises an error
+    with pytest.raises(
+        ValidationError, match="Maximum data value units.*not consistent"
+    ):
+        Camera(
+            data_unit=u.adu,
+            gain=gain,
+            read_noise=read_noise,
+            dark_current=dark_current,
+            pixel_scale=pixel_scale,
+            max_data_value=max_val,
+        )
+
+
 def test_camera_copy():
     # Make sure copy actually copies everything
     gain = 2.0 * u.electron / u.adu
