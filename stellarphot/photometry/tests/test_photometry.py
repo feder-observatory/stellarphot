@@ -22,9 +22,24 @@ from stellarphot.photometry import (
 )
 from stellarphot.settings import ApertureSettings
 
+# Constants for the tests
+
 GAINS = [1.0, 1.5, 2.0]
 # Make sure the tests are deterministic by using a random seed
 SEED = 5432985
+
+SHIFT_TOLERANCE = 6
+FWHM_ESTIMATE = 5
+FAKE_CAMERA = Camera(
+    data_unit=u.adu,
+    gain=1.0 * u.electron / u.adu,
+    read_noise=0 * u.electron,
+    dark_current=0.1 * u.electron / u.second,
+    pixel_scale=1 * u.arcsec / u.pixel,
+    max_data_value=40000 * u.adu,
+)
+FAKE_OBS = EarthLocation(lat=0 * u.deg, lon=0 * u.deg, height=0 * u.m)
+COORDS2USE = "pixel"
 
 
 def test_calc_noise_defaults():
@@ -44,10 +59,12 @@ def test_calc_noise_source_only(gain, aperture_area):
 
     # Create camera instance
     camera = Camera(
+        data_unit=u.adu,
         gain=gain * u.electron / u.adu,
         read_noise=0 * u.electron,
         dark_current=0 * u.electron / u.second,
         pixel_scale=1 * u.arcsec / u.pixel,
+        max_data_value=40000 * u.adu,
     )
 
     np.testing.assert_allclose(
@@ -65,10 +82,12 @@ def test_calc_noise_dark_only(gain, aperture_area):
 
     # Create camera instance
     camera = Camera(
+        data_unit=u.adu,
         gain=gain * u.electron / u.adu,
         read_noise=0 * u.electron,
         dark_current=dark_current * u.electron / u.second,
         pixel_scale=1 * u.arcsec / u.pixel,
+        max_data_value=40000 * u.adu,
     )
 
     expected = np.sqrt(dark_current * aperture_area * exposure)
@@ -89,10 +108,12 @@ def test_calc_read_noise_only(gain, aperture_area):
 
     # Create camera instance
     camera = Camera(
+        data_unit=u.adu,
         gain=gain * u.electron / u.adu,
         read_noise=read_noise * u.electron,
         dark_current=0 * u.electron / u.second,
         pixel_scale=1 * u.arcsec / u.pixel,
+        max_data_value=40000 * u.adu,
     )
 
     np.testing.assert_allclose(
@@ -109,10 +130,12 @@ def test_calc_sky_only(gain, aperture_area):
 
     # Create camera instance
     camera = Camera(
+        data_unit=u.adu,
         gain=gain * u.electron / u.adu,
         read_noise=0 * u.electron,
         dark_current=0 * u.electron / u.second,
         pixel_scale=1 * u.arcsec / u.pixel,
+        max_data_value=40000 * u.adu,
     )
 
     np.testing.assert_allclose(
@@ -132,10 +155,12 @@ def test_annulus_area_term():
 
     # Create camera instance
     camera = Camera(
+        data_unit=u.adu,
         gain=gain * u.electron / u.adu,
         read_noise=0 * u.electron,
         dark_current=0 * u.electron / u.second,
         pixel_scale=1 * u.arcsec / u.pixel,
+        max_data_value=40000 * u.adu,
     )
 
     np.testing.assert_allclose(
@@ -166,10 +191,12 @@ def test_calc_noise_messy_case(digit, expected):
 
     # Create camera instance
     camera = Camera(
+        data_unit=u.adu,
         gain=gain * u.electron / u.adu,
         read_noise=read_noise * u.electron,
         dark_current=dark_current * u.electron / u.second,
         pixel_scale=1 * u.arcsec / u.pixel,
+        max_data_value=40000 * u.adu,
     )
 
     np.testing.assert_allclose(
@@ -233,20 +260,6 @@ def test_find_too_close():
     assert np.sum(rejects) == 5
 
 
-# Constants for the following tests
-shift_tolerance = 6
-fwhm_estimate = 5
-fake_camera = Camera(
-    gain=1.0 * u.electron / u.adu,
-    read_noise=0 * u.electron,
-    dark_current=0.1 * u.electron / u.second,
-    pixel_scale=1 * u.arcsec / u.pixel,
-    max_data_value=60000 * u.adu,
-)
-fake_obs = EarthLocation(lat=0 * u.deg, lon=0 * u.deg, height=0 * u.m)
-coords2use = "pixel"
-
-
 # The True case below is a regression test for #157
 @pytest.mark.parametrize("int_data", [True, False])
 def test_aperture_photometry_no_outlier_rejection(int_data):
@@ -272,7 +285,7 @@ def test_aperture_photometry_no_outlier_rejection(int_data):
     scale_factor = 1.0
     if int_data:
         scale_factor = (
-            0.75 * fake_camera.max_data_value.value / fake_CCDimage.data.max()
+            0.75 * FAKE_CAMERA.max_data_value.value / fake_CCDimage.data.max()
         )
         # For the moment, ensure the integer data is NOT larger than max_adu
         # because until #161 is fixed then having NaN in the data will not succeed.
@@ -282,12 +295,12 @@ def test_aperture_photometry_no_outlier_rejection(int_data):
     phot, missing_sources = single_image_photometry(
         fake_CCDimage,
         found_sources,
-        fake_camera,
-        fake_obs,
+        FAKE_CAMERA,
+        FAKE_OBS,
         aperture_settings,
-        shift_tolerance,
-        fwhm_estimate,
-        use_coordinates=coords2use,
+        SHIFT_TOLERANCE,
+        FWHM_ESTIMATE,
+        use_coordinates=COORDS2USE,
         include_dig_noise=True,
         reject_too_close=False,
         reject_background_outliers=False,
@@ -364,12 +377,12 @@ def test_aperture_photometry_with_outlier_rejection(reject):
     phot, missing_sources = single_image_photometry(
         fake_CCDimage,
         found_sources,
-        fake_camera,
-        fake_obs,
+        FAKE_CAMERA,
+        FAKE_OBS,
         aperture_settings,
-        shift_tolerance,
-        fwhm_estimate,
-        use_coordinates=coords2use,
+        SHIFT_TOLERANCE,
+        FWHM_ESTIMATE,
+        use_coordinates=COORDS2USE,
         include_dig_noise=True,
         reject_too_close=False,
         reject_background_outliers=reject,
@@ -479,11 +492,11 @@ def test_photometry_on_directory():
                 temp_dir,
                 object_name,
                 found_sources,
-                fake_camera,
-                fake_obs,
+                FAKE_CAMERA,
+                FAKE_OBS,
                 aperture_settings,
-                shift_tolerance,
-                fwhm_estimate,
+                SHIFT_TOLERANCE,
+                FWHM_ESTIMATE,
                 include_dig_noise=True,
                 reject_too_close=True,
                 reject_background_outliers=True,
@@ -578,11 +591,11 @@ def test_photometry_on_directory_with_no_ra_dec():
                 temp_dir,
                 object_name,
                 found_sources,
-                fake_camera,
-                fake_obs,
+                FAKE_CAMERA,
+                FAKE_OBS,
                 aperture_settings,
-                shift_tolerance,
-                fwhm_estimate,
+                SHIFT_TOLERANCE,
+                FWHM_ESTIMATE,
                 include_dig_noise=True,
                 reject_too_close=True,
                 reject_background_outliers=True,
@@ -636,11 +649,11 @@ def test_photometry_on_directory_with_bad_fits():
                 temp_dir,
                 object_name,
                 found_sources,
-                fake_camera,
-                fake_obs,
+                FAKE_CAMERA,
+                FAKE_OBS,
                 aperture_settings,
-                shift_tolerance,
-                fwhm_estimate,
+                SHIFT_TOLERANCE,
+                FWHM_ESTIMATE,
                 include_dig_noise=True,
                 reject_too_close=True,
                 reject_background_outliers=True,

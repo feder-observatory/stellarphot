@@ -26,32 +26,27 @@ from stellarphot.core import (
 
 def test_camera_attributes():
     # Check that the attributes are set properly
+    data_unit = u.adu
     gain = 2.0 * u.electron / u.adu
     read_noise = 10 * u.electron
     dark_current = 0.01 * u.electron / u.second
     pixel_scale = 0.563 * u.arcsec / u.pix
+    max_val = 50000 * u.adu
+
     c = Camera(
+        data_unit=data_unit,
         gain=gain,
         read_noise=read_noise,
         dark_current=dark_current,
         pixel_scale=pixel_scale,
+        max_data_value=max_val,
     )
+    assert c.data_unit == data_unit
     assert c.gain == gain
     assert c.dark_current == dark_current
     assert c.read_noise == read_noise
     assert c.pixel_scale == pixel_scale
-    assert c.max_data_value is None
-
-    max_adu = 50000 * u.adu
-
-    c = Camera(
-        gain=gain,
-        read_noise=read_noise,
-        dark_current=dark_current,
-        pixel_scale=pixel_scale,
-        max_data_value=max_adu,
-    )
-    assert c.max_data_value == max_adu
+    assert c.max_data_value == max_val
 
 
 def test_camera_unitscheck():
@@ -62,60 +57,39 @@ def test_camera_unitscheck():
     pixel_scale = 0.563 * u.arcsec / u.pix
     max_adu = 50000 * u.adu
 
-    with pytest.raises(ValidationError, match="gain"):
-        c = Camera(
-            gain=gain.value,
-            read_noise=read_noise,
-            dark_current=dark_current,
-            pixel_scale=pixel_scale,
-        )
-    with pytest.raises(ValidationError, match="read_noise"):
-        c = Camera(
-            gain=gain,
-            read_noise=read_noise.value,
-            dark_current=dark_current,
-            pixel_scale=pixel_scale,
-        )
-    with pytest.raises(ValidationError, match="dark_current"):
-        c = Camera(
-            gain=gain,
-            read_noise=read_noise,
-            dark_current=dark_current.value,
-            pixel_scale=pixel_scale,
-        )
-    with pytest.raises(ValidationError, match="pixel_scale"):
-        c = Camera(
-            gain=gain,
-            read_noise=read_noise,
-            dark_current=dark_current,
-            pixel_scale=pixel_scale.value,
-        )
-
-    with pytest.raises(ValidationError, match="max_adu"):
+    # All 5 of the attributes after data_unit will be checked for units
+    # and noted in the ValidationError message. Rather than checking
+    # separately for all 5, we just check for the presence of the
+    # right number of errors
+    with pytest.raises(ValidationError, match="5 validation errors"):
         Camera(
-            gain=gain,
-            read_noise=read_noise,
-            dark_current=dark_current,
-            pixel_scale=pixel_scale,
-            max_data_value=max_adu.value * u.m,  # try with wrong units
+            data_unit=u.adu,
+            gain=gain.value,
+            read_noise=read_noise.value,
+            dark_current=dark_current.value,
+            pixel_scale=pixel_scale.value,
+            max_data_value=max_adu.value,
         )
 
 
 def test_camera_negative_max_adu():
     # Check that the units are checked properly
+    data_unit = u.adu
     gain = 2.0 * u.electron / u.adu
     read_noise = 10 * u.electron
     dark_current = 0.01 * u.electron / u.second
     pixel_scale = 0.563 * u.arcsec / u.pix
-    max_adu = -50000 * u.adu
+    max_val = -50000 * u.adu
 
-    with pytest.raises(ValidationError, match="max_adu"):
+    # Make sure that a negative max_adu raises an error
+    with pytest.raises(ValidationError, match="must be positive"):
         Camera(
+            data_unit=u.adu,
             gain=gain,
             read_noise=read_noise,
             dark_current=dark_current,
             pixel_scale=pixel_scale,
-            max_data_value=max_adu,
+            max_data_value=max_val,
         )
 
 
@@ -126,6 +100,7 @@ def test_camera_copy():
     dark_current = 0.01 * u.electron / u.second
     pixel_scale = 0.563 * u.arcsec / u.pix
     c = Camera(
+        data_unit=u.adu,
         gain=gain,
         read_noise=read_noise,
         dark_current=dark_current,
@@ -138,20 +113,27 @@ def test_camera_copy():
 
 def test_camera_altunitscheck():
     # Check to see that 'count' is allowed instead of 'electron'
+    data_unit = u.adu
     gain = 2.0 * u.count / u.adu
     read_noise = 10 * u.count
     dark_current = 0.01 * u.count / u.second
     pixel_scale = 0.563 * u.arcsec / u.pix
+    max_val = 50000 * u.adu
+
     c = Camera(
+        data_unit=data_unit,
         gain=gain,
         read_noise=read_noise,
         dark_current=dark_current,
         pixel_scale=pixel_scale,
+        max_data_value=max_val,
     )
+    assert c.data_unit == data_unit
     assert c.gain == gain
     assert c.dark_current == dark_current
     assert c.read_noise == read_noise
     assert c.pixel_scale == pixel_scale
+    assert c.max_data_value == max_val
 
 
 # Create several test descriptions for use in base_enhanced_table tests.
@@ -210,10 +192,12 @@ testdata = Table(data, names=colnames, dtype=coltypes, units=colunits)
 
 # Define some configuration information assuming Feder telescope
 feder_cg_16m = Camera(
+    data_unit=u.adu,
     gain=1.5 * u.electron / u.adu,
     read_noise=10.0 * u.electron,
     dark_current=0.01 * u.electron / u.second,
     pixel_scale=0.563 * u.arcsec / u.pix,
+    max_data_value=50000 * u.adu,
 )
 feder_passbands = {"up": "SU", "gp": "SG", "rp": "SR", "zp": "SZ", "ip": "SI"}
 feder_obs = EarthLocation(lat=46.86678, lon=-96.45328, height=311)
