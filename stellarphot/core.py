@@ -42,7 +42,6 @@ class UnitType(Unit):
 
     @classmethod
     def __modify_schema__(cls, field_schema, field):
-        print(f"{field=}")
         # Set default values for the schema in case the field doesn't provide them
         name = "Unit"
         description = "An astropy unit"
@@ -80,7 +79,6 @@ class QuantityType(Quantity):
 
     @classmethod
     def __modify_schema__(cls, field_schema, field):
-        print(f"{field=}")
         # Set default values for the schema in case the field doesn't provide them
         name = "Quantity"
         description = "An astropy Quantity with units"
