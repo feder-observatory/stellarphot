@@ -139,21 +139,21 @@ class Camera(BaseModel):
     data_unit : `astropy.units.Unit`
         The unit of the data.
 
-    gain : `astropy.quantity.Quantity`
+    gain : `astropy.units.Quantity`
         The gain of the camera in units such the product of `gain`
         times the image data has units equal to that of the `read_noise`.
 
-    read_noise : `astropy.quantity.Quantity`
+    read_noise : `astropy.units.Quantity`
         The read noise of the camera with units.
 
-    dark_current : `astropy.quantity.Quantity`
+    dark_current : `astropy.units.Quantity`
         The dark current of the camera in units such that, when multiplied by
         exposure time, the unit matches the units of the `read_noise`.
 
-    pixel_scale : `astropy.quantity.Quantity`
+    pixel_scale : `astropy.units.Quantity`
         The pixel scale of the camera in units of arcseconds per pixel.
 
-    max_data_value : `astropy.quantity.Quantity`
+    max_data_value : `astropy.units.Quantity`
         The maximum pixel value to allow while performing photometry. Pixel values
         above this will be set to ``NaN``. The unit must be ``data_unit``.
 
@@ -163,21 +163,21 @@ class Camera(BaseModel):
     data_unit : `astropy.units.Unit`
         The unit of the data.
 
-    gain : `astropy.quantity.Quantity`
+    gain : `astropy.units.Quantity`
         The gain of the camera in units such the product of `gain`
         times the image data has units equal to that of the `read_noise`.
 
-    read_noise : `astropy.quantity.Quantity`
+    read_noise : `astropy.units.Quantity`
         The read noise of the camera with units.
 
-    dark_current : `astropy.quantity.Quantity`
+    dark_current : `astropy.units.Quantity`
         The dark current of the camera in units such that, when multiplied by
         exposure time, the unit matches the units of the `read_noise`.
 
-    pixel_scale : `astropy.quantity.Quantity`
+    pixel_scale : `astropy.units.Quantity`
         The pixel scale of the camera in units of arcseconds per pixel.
 
-    max_data_value : `astropy.quantity.Quantity`
+    max_data_value : `astropy.units.Quantity`
         The maximum pixel value to allow while performing photometry. Pixel values
         above this will be set to ``NaN``. The unit must be ``data_unit``.
 
