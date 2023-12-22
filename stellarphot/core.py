@@ -78,6 +78,26 @@ class QuantityType(Quantity):
                 raise ValueError("Must provided a unit")
         return v
 
+    @classmethod
+    def __modify_schema__(cls, field_schema, field):
+        print(f"{field=}")
+        # Set default values for the schema in case the field doesn't provide them
+        name = "Quantity"
+        description = "An astropy Quantity with units"
+
+        name = field.name or name
+        description = field.field_info.description or description
+        examples = field.field_info.extra.get("examples", [])
+
+        field_schema.update(
+            {
+                "title": name,
+                "description": description,
+                "examples": examples,
+                "type": "string",
+            }
+        )
+
 
 class PixelScaleType(Quantity):
     # Validator for pixel scale type
@@ -98,6 +118,17 @@ class PixelScaleType(Quantity):
         ):
             raise ValueError(f"Invalid unit for pixel scale: {v.unit!r}")
         return v
+
+    @classmethod
+    def __modify_schema__(cls, field_schema):
+        field_schema.update(
+            {
+                "title": "PixelScale",
+                "description": "An astropy Quantity with units of angle per pixel",
+                "examples": ["0.563 arcsec / pix"],
+                "type": "string",
+            }
+        )
 
 
 class Camera(BaseModel):
