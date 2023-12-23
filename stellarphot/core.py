@@ -222,7 +222,7 @@ class Camera(BaseModel):
         examples=["10.0 electron"],
     )
     dark_current: QuantityType = Field(
-        description="unit consisten with read noise, per unit time",
+        description="unit consistent with read noise, per unit time",
         examples=["0.01 electron / second"],
     )
     pixel_scale: PixelScaleType = Field(

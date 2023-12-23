@@ -25,7 +25,7 @@ from stellarphot.settings import ApertureSettings
 # Constants for the tests
 
 GAINS = [1.0, 1.5, 2.0]
-# Make sure the tests are deterministic by using a random seed
+# Make sure the tests are deterministic by using a seed
 SEED = 5432985
 
 SHIFT_TOLERANCE = 6
