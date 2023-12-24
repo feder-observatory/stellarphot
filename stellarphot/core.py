@@ -4,13 +4,13 @@ from astropy import units as u
 from astropy.coordinates import EarthLocation, SkyCoord
 from astropy.table import Column, QTable, Table
 from astropy.time import Time
-from astropy.units import Quantity
+from astropy.units import Quantity, Unit
 from astropy.wcs import WCS
 
 from astroquery.vizier import Vizier
 
 import pandas as pd
-from pydantic import BaseModel, root_validator
+from pydantic import BaseModel, root_validator, Field, validator
 
 import numpy as np
 
@@ -30,6 +30,36 @@ __all__ = [
 # https://docs.gammapy.org/dev/_modules/gammapy/analysis/config.html
 
 
+class UnitType(Unit):
+    # Validator for Unit type
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, v):
+        return Unit(v)
+
+    @classmethod
+    def __modify_schema__(cls, field_schema, field):
+        # Set default values for the schema in case the field doesn't provide them
+        name = "Unit"
+        description = "An astropy unit"
+
+        name = field.name or name
+        description = field.field_info.description or description
+        examples = field.field_info.extra.get("examples", [])
+
+        field_schema.update(
+            {
+                "title": name,
+                "description": description,
+                "examples": examples,
+                "type": "string",
+            }
+        )
+
+
 class QuantityType(Quantity):
     # Validator for Quantity type
     @classmethod
@@ -46,6 +76,25 @@ class QuantityType(Quantity):
             if not v.unit.bases:
                 raise ValueError("Must provided a unit")
         return v
+
+    @classmethod
+    def __modify_schema__(cls, field_schema, field):
+        # Set default values for the schema in case the field doesn't provide them
+        name = "Quantity"
+        description = "An astropy Quantity with units"
+
+        name = field.name or name
+        description = field.field_info.description or description
+        examples = field.field_info.extra.get("examples", [])
+
+        field_schema.update(
+            {
+                "title": name,
+                "description": description,
+                "examples": examples,
+                "type": "string",
+            }
+        )
 
 
 class PixelScaleType(Quantity):
@@ -68,6 +117,17 @@ class PixelScaleType(Quantity):
             raise ValueError(f"Invalid unit for pixel scale: {v.unit!r}")
         return v
 
+    @classmethod
+    def __modify_schema__(cls, field_schema):
+        field_schema.update(
+            {
+                "title": "PixelScale",
+                "description": "An astropy Quantity with units of angle per pixel",
+                "examples": ["0.563 arcsec / pix"],
+                "type": "string",
+            }
+        )
+
 
 class Camera(BaseModel):
     """
@@ -76,36 +136,50 @@ class Camera(BaseModel):
     Parameters
     ----------
 
-    gain : `astropy.quantity.Quantity`
+    data_unit : `astropy.units.Unit`
+        The unit of the data.
+
+    gain : `astropy.units.Quantity`
         The gain of the camera in units such the product of `gain`
         times the image data has units equal to that of the `read_noise`.
 
-    read_noise : `astropy.quantity.Quantity`
+    read_noise : `astropy.units.Quantity`
         The read noise of the camera with units.
 
-    dark_current : `astropy.quantity.Quantity`
+    dark_current : `astropy.units.Quantity`
         The dark current of the camera in units such that, when multiplied by
         exposure time, the unit matches the units of the `read_noise`.
 
-    pixel_scale : `astropy.quantity.Quantity`
+    pixel_scale : `astropy.units.Quantity`
         The pixel scale of the camera in units of arcseconds per pixel.
+
+    max_data_value : `astropy.units.Quantity`
+        The maximum pixel value to allow while performing photometry. Pixel values
+        above this will be set to ``NaN``. The unit must be ``data_unit``.
 
     Attributes
     ----------
 
-    gain : `astropy.quantity.Quantity`
+    data_unit : `astropy.units.Unit`
+        The unit of the data.
+
+    gain : `astropy.units.Quantity`
         The gain of the camera in units such the product of `gain`
         times the image data has units equal to that of the `read_noise`.
 
-    read_noise : `astropy.quantity.Quantity`
+    read_noise : `astropy.units.Quantity`
         The read noise of the camera with units.
 
-    dark_current : `astropy.quantity.Quantity`
+    dark_current : `astropy.units.Quantity`
         The dark current of the camera in units such that, when multiplied by
         exposure time, the unit matches the units of the `read_noise`.
 
-    pixel_scale : `astropy.quantity.Quantity`
+    pixel_scale : `astropy.units.Quantity`
         The pixel scale of the camera in units of arcseconds per pixel.
+
+    max_data_value : `astropy.units.Quantity`
+        The maximum pixel value to allow while performing photometry. Pixel values
+        above this will be set to ``NaN``. The unit must be ``data_unit``.
 
     Notes
     -----
@@ -116,10 +190,14 @@ class Camera(BaseModel):
     --------
     >>> from astropy import units as u
     >>> from stellarphot import Camera
-    >>> camera = Camera(gain=1.0 * u.electron / u.adu,
+    >>> camera = Camera(data_unit="adu",
+    ...                 gain=1.0 * u.electron / u.adu,
     ...                 read_noise=1.0 * u.electron,
     ...                 dark_current=0.01 * u.electron / u.second,
-    ...                 pixel_scale=0.563 * u.arcsec / u.pixel)
+    ...                 pixel_scale=0.563 * u.arcsec / u.pixel,
+    ...                 max_data_value=50000 * u.adu)
+    >>> camera.data_unit
+    Unit("adu")
     >>> camera.gain
     <Quantity 1. electron / adu>
     >>> camera.read_noise
@@ -128,13 +206,32 @@ class Camera(BaseModel):
     <Quantity 0.01 electron / s>
     >>> camera.pixel_scale
     <Quantity 0.563 arcsec / pix>
-
+    >>> camera.max_data_value
+    <Quantity 50000. adu>
     """
 
-    gain: QuantityType
-    read_noise: QuantityType
-    dark_current: QuantityType
-    pixel_scale: PixelScaleType
+    data_unit: UnitType = Field(
+        description="units of the data", examples=["adu", "counts", "DN", "electrons"]
+    )
+    gain: QuantityType = Field(
+        description="unit should be consistent with data and read noise",
+        examples=["1.0 electron / adu"],
+    )
+    read_noise: QuantityType = Field(
+        description="unit should be consistent with dark current",
+        examples=["10.0 electron"],
+    )
+    dark_current: QuantityType = Field(
+        description="unit consistent with read noise, per unit time",
+        examples=["0.01 electron / second"],
+    )
+    pixel_scale: PixelScaleType = Field(
+        description="units of angle per pixel", examples=["0.6 arcsec / pix"]
+    )
+    max_data_value: QuantityType = Field(
+        description="maximum data value while performing photometry",
+        examples=["50000 adu"],
+    )
 
     class Config:
         validate_all = True
@@ -143,6 +240,7 @@ class Camera(BaseModel):
         json_encoders = {
             Quantity: lambda v: f"{v.value} {v.unit}",
             QuantityType: lambda v: f"{v.value} {v.unit}",
+            UnitType: lambda v: f"{v}",
             PixelScaleType: lambda v: f"{v.value} {v.unit}",
         }
 
@@ -155,12 +253,12 @@ class Camera(BaseModel):
         rn_unit = Quantity(values["read_noise"]).unit
 
         # Check that gain and read noise have compatible units, that is that
-        # gain is read noise per adu.
+        # gain is read noise per data unit.
         gain = values["gain"]
         if (
             len(gain.unit.bases) != 2
             or gain.unit.bases[0] != rn_unit
-            or gain.unit.bases[1] != u.adu
+            or gain.unit.bases[1] != values["data_unit"]
         ):
             raise ValueError(
                 f"Gain units {gain.unit} are not compatible with "
@@ -180,25 +278,20 @@ class Camera(BaseModel):
                 f"compatible with read noise units {rn_unit}."
             )
 
-        # Dark current validates against read noise
+        # Check that maximum data value is consistent with data units
+        if values["max_data_value"].unit != values["data_unit"]:
+            raise ValueError(
+                f"Maximum data value units {values['max_data_value'].unit} "
+                f"are not consistent with data units {values['data_unit']}."
+            )
         return values
 
-    def copy(self):
-        return Camera(
-            gain=self.gain,
-            read_noise=self.read_noise,
-            dark_current=self.dark_current,
-            pixel_scale=self.pixel_scale,
-        )
-
-    def __copy__(self):
-        return self.copy()
-
-    def __repr__(self):
-        return (
-            f"Camera(gain={self.gain}, read_noise={self.read_noise}, "
-            f"dark_current={self.dark_current}, pixel_scale={self.pixel_scale})"
-        )
+    @validator("max_data_value")
+    @classmethod
+    def validate_max_data_value(cls, v):
+        if v.value <= 0:
+            raise ValueError("max_data_value must be positive")
+        return v
 
 
 class BaseEnhancedTable(QTable):
@@ -624,10 +717,12 @@ class PhotometryData(BaseEnhancedTable):
             self.meta["lat"] = observatory.lat
             self.meta["lon"] = observatory.lon
             self.meta["height"] = observatory.height
+            self.meta["data_unit"] = camera.data_unit
             self.meta["gain"] = camera.gain
             self.meta["read_noise"] = camera.read_noise
             self.meta["dark_current"] = camera.dark_current
             self.meta["pixel_scale"] = camera.pixel_scale
+            self.meta["max_data_value"] = camera.max_data_value
 
             # Check for consistency of counts-related columns
             counts_columns = [
@@ -753,10 +848,12 @@ class PhotometryData(BaseEnhancedTable):
     @property
     def camera(self):
         return Camera(
+            data_unit=self.meta["data_unit"],
             gain=self.meta["gain"],
             read_noise=self.meta["read_noise"],
             dark_current=self.meta["dark_current"],
             pixel_scale=self.meta["pixel_scale"],
+            max_data_value=self.meta["max_data_value"],
         )
 
     @property
