@@ -127,29 +127,31 @@ class Exoplanet(BaseModel):
         Identifier of the exoplanet as a string, required.
 
     coordinate : SkyCoordType
-        Coordinates of the exoplanet as an astropy SkyCoord object, required. 
-    
+        Coordinates of the exoplanet as an astropy SkyCoord object, required.
+
     depth : float
         Depth of the exoplanet object as a float, not required.
 
     duration : QuantityType
-        Duration of the exoplanet transit as a Quantity with units of time, not required. 
+        Duration of the exoplanet transit as a Quantity with units of time,
+        not required.
 
     Examples
     --------
 
-    To create an `Exoplanet` object, you can pass in the epoch, period, Identifier, coordinate, depth,
-    and duration as keyword arguments:
+    To create an `Exoplanet` object, you can pass in the epoch,
+    period, Identifier, coordinate, depth, and duration as keyword arguments:
 
-    >>> planet  = Exoplanet(
-        epoch=Time(0, format="jd"),
-        period=0 * u.min,
-        identifier="",
-        coordinate=SkyCoord(ra="00:00:00.00", dec="+00:00:00.0", frame="icrs", unit=("hour", "degree")),
-        depth=0,
-        duration=0 * u.min,)
+    >>> planet  = Exoplanet(epoch=Time(0, format="jd"), period=0 * u.min,
+    ...                     identifier="TIC_2312323",
+    ...                     coordinate=SkyCoord(ra="00:00:00.00",
+    ...                                         dec="+00:00:00.0",
+    ...                                         frame="icrs",
+    ...                                         unit=("hour", "degree")),
+    ...                     depth=0,
+    ...                     duration=0 * u.min)
     """
-    
+
     epoch: TimeType | None = None
     period: QuantityType | None = None
     identifier: str
@@ -169,16 +171,24 @@ class Exoplanet(BaseModel):
 
     @classmethod
     def validate_period(cls, values):
+        """
+        Checks that the period has physical units of time and
+        raises an error if that is not true.
+        """
         if u.get_physical_type(values["period"]) != "time":
             raise ValueError(
-                f"Period does not have time units,currently has "
-                f"{values['period'].unit} units."
+                f"Period does not have time units,"
+                f"currently has {values['period'].unit} units."
             )
 
     @classmethod
     def validate_duration(cls, values):
+        """
+        Checks that the duration has physical units of time and
+        raises an error if that is not true.
+        """
         if u.get_physical_type(values["duration"]) != "time":
             raise ValueError(
-                f"Period does not have time units,currently has "
-                f"{values['duration'].unit} units."
+                f"Duration does not have time units,"
+                f"currently has {values['duration'].unit} units."
             )
