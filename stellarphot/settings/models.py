@@ -172,8 +172,7 @@ class Exoplanet(BaseModel):
     @classmethod
     def validate_period(cls, values):
         """
-        Checks that the period has physical units of time and
-        raises an error if that is not true.
+        Checks that the period has physical units of time and raises an error if that is not true. 
         """
         if u.get_physical_type(values["period"]) != "time":
             raise ValueError(
@@ -184,8 +183,7 @@ class Exoplanet(BaseModel):
     @classmethod
     def validate_duration(cls, values):
         """
-        Checks that the duration has physical units of time and
-        raises an error if that is not true.
+        Checks that the duration has physical units of time and raises an error if that is not true. 
         """
         if u.get_physical_type(values["duration"]) != "time":
             raise ValueError(
