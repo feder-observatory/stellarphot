@@ -84,7 +84,7 @@ def test_camera_negative_max_adu():
     # Make sure that a negative max_adu raises an error
     with pytest.raises(ValidationError, match="must be positive"):
         Camera(
-            data_unit=u.adu,
+            data_unit=data_unit,
             gain=gain,
             read_noise=read_noise,
             dark_current=dark_current,
@@ -104,7 +104,7 @@ def test_camera_incompatible_gain_units():
     # Make sure that an incompatible gain raises an error
     with pytest.raises(ValidationError, match="Gain units.*not compatible"):
         Camera(
-            data_unit=u.adu,
+            data_unit=data_unit,
             gain=gain,
             read_noise=read_noise,
             dark_current=dark_current,
@@ -126,7 +126,7 @@ def test_camera_incompatible_max_val_units():
         ValidationError, match="Maximum data value units.*not consistent"
     ):
         Camera(
-            data_unit=u.adu,
+            data_unit=data_unit,
             gain=gain,
             read_noise=read_noise,
             dark_current=dark_current,
@@ -411,9 +411,7 @@ def test_base_enhanced_table_missing_column():
     testdata_nora = testdata.copy()
     testdata_nora.remove_column("ra")
     with pytest.raises(ValueError):
-        test_base = BaseEnhancedTable(
-            table_description=test_descript, input_data=testdata_nora
-        )
+        _ = BaseEnhancedTable(table_description=test_descript, input_data=testdata_nora)
 
 
 def test_base_enhanced_table_missing_badunits():
@@ -422,9 +420,7 @@ def test_base_enhanced_table_missing_badunits():
     bad_ra_descript[1, 2] = u.hr
 
     with pytest.raises(ValueError):
-        test_base = BaseEnhancedTable(
-            table_description=bad_ra_descript, input_data=testdata
-        )
+        _ = BaseEnhancedTable(table_description=bad_ra_descript, input_data=testdata)
 
 
 def test_base_enhanced_table_recursive():
@@ -435,9 +431,7 @@ def test_base_enhanced_table_recursive():
 
     # Attempt recursive call
     with pytest.raises(TypeError):
-        test_base3 = BaseEnhancedTable(
-            table_description=test_descript, input_data=test_base2
-        )
+        _ = BaseEnhancedTable(table_description=test_descript, input_data=test_base2)
 
 
 def test_base_enhanced_table_no_desription():
@@ -756,7 +750,7 @@ def test_photometry_recursive():
 
 def test_photometry_badtime():
     with pytest.raises(ValueError):
-        phot_data = PhotometryData(
+        _ = PhotometryData(
             observatory=feder_obs,
             camera=feder_cg_16m,
             passband_map=feder_passbands,
@@ -766,7 +760,7 @@ def test_photometry_badtime():
 
 def test_photometry_inconsistent_count_units():
     with pytest.raises(ValueError):
-        phot_data = PhotometryData(
+        _ = PhotometryData(
             observatory=feder_obs,
             camera=feder_cg_16m,
             passband_map=feder_passbands,
@@ -806,7 +800,7 @@ test_cat = ascii.read(
 def test_catalog_missing_col():
     # Fails with ValueError due to not having 'ra' column
     with pytest.raises(ValueError):
-        catalog_dat = CatalogData(
+        _ = CatalogData(
             input_data=test_cat, catalog_name="VSX", catalog_source="Vizier"
         )
 
@@ -875,7 +869,7 @@ def test_catalog_recursive():
 
     # Attempt recursive call
     with pytest.raises(TypeError):
-        catalog_dat2 = CatalogData(
+        _ = CatalogData(
             input_data=catalog_dat,
             catalog_name="VSX",
             catalog_source="Vizier",
@@ -914,7 +908,7 @@ def test_tidy_vizier_catalog_several_mags():
     # Test table conversion when there are several magnitude columns.
     apass_input = Table.read(get_pkg_data_filename("data/test_apass_subset.ecsv"))
 
-    # Make sure the columns we exxpect in the teset data are there before proceeding
+    # Make sure the columns we expect in the test data exists before proceeding
     assert "Vmag" in apass_input.colnames
     assert "i_mag" in apass_input.colnames
     assert "B-V" in apass_input.colnames
@@ -1124,12 +1118,12 @@ def test_sourcelist_missing_cols():
     del test_sl_data4["xcenter"]
     del test_sl_data4["ycenter"]
     with pytest.raises(ValueError):
-        sl_test = SourceListData(input_data=test_sl_data4, colname_map=None)
+        _ = SourceListData(input_data=test_sl_data4, colname_map=None)
 
     test_sl_data5 = test_sl_data.copy()
     del test_sl_data5["star_id"]
     with pytest.raises(ValueError):
-        sl_test = SourceListData(input_data=test_sl_data5, colname_map=None)
+        _ = SourceListData(input_data=test_sl_data5, colname_map=None)
 
 
 def test_sourcelist_recursive():
@@ -1139,7 +1133,7 @@ def test_sourcelist_recursive():
 
     # Attempt recursive call
     with pytest.raises(TypeError):
-        sl_test2 = SourceListData(input_data=sl_test, colname_map=None)
+        _ = SourceListData(input_data=sl_test, colname_map=None)
 
 
 def test_sourcelist_dropping_skycoords():
