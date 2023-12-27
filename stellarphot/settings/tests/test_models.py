@@ -15,7 +15,8 @@ def test_create_aperture_settings_correctly():
     assert ap_set.radius == DEFAULT_APERTURE_SETTINGS["radius"]
     assert (
         ap_set.inner_annulus
-        == DEFAULT_APERTURE_SETTINGS["radius"] + DEFAULT_APERTURE_SETTINGS["gap"]
+        == DEFAULT_APERTURE_SETTINGS["radius"] +
+        DEFAULT_APERTURE_SETTINGS["gap"]
     )
     assert (
         ap_set.outer_annulus
@@ -39,7 +40,8 @@ DEFAULT_EXOPLANET_SETTINGS = dict(
     period=0 * u.min,
     identifier="",
     coordinate=SkyCoord(
-        ra="00:00:00.00", dec="+00:00:00.0", frame="icrs", unit=("hour", "degree")
+        ra="00:00:00.00", dec="+00:00:00.0", frame="icrs",
+        unit=("hour", "degree")
     ),
     depth=0,
     duration=0 * u.min,
@@ -61,7 +63,8 @@ def test_create_exoplanet_correctly():
         "epoch": Time(0, format="jd"),
         "period": 120,
         "identifier": "bad-planet",
-        "coordinate": SkyCoord(ra="00:00:00.00", dec="+00:00:00.0", frame="icrs", unit=("hour", "degree")),
+        "coordinate": SkyCoord(ra="00:00:00.00", dec="+00:00:00.0",
+                               frame="icrs", unit=("hour", "degree")),
         "depth": 0,
         "duration": 42 * u.C,
     }
