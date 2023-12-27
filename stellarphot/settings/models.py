@@ -133,8 +133,7 @@ class Exoplanet(BaseModel):
         Depth of the exoplanet.
 
     duration : `astropy.units.Quantity`, optional
-        Duration of the exoplanet transit as a Quantity with units of time,
-        not required.
+        Duration of the exoplanet transit.
 
     Examples
     --------
@@ -142,7 +141,7 @@ class Exoplanet(BaseModel):
     To create an `Exoplanet` object, you can pass in the epoch,
      period, identifier, coordinate, depth, and duration as keyword arguments:
 
-    >>> planet  = Exoplanet(epoch=Time( 2455909.29280, format="jd"),
+    >>> planet  = Exoplanet(epoch=Time(2455909.29280, format="jd"),
     ...                     period=1.21749 * u.day,
     ...                     identifier="KELT-1b",
     ...                     coordinate=SkyCoord(ra="00:01:26.9169",
