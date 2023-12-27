@@ -58,18 +58,18 @@ def test_create_exoplanet_correctly():
     assert u.get_physical_type(planet.duration) == "time"
 
 
-@pytest.mark.parametrize("bad_one", [
-    {
-        "epoch": Time(0, format="jd"),
-        "period": 120,
-        "identifier": "bad-planet",
-        "coordinate": SkyCoord(ra="00:00:00.00", dec="+00:00:00.0",
-                               frame="icrs", unit=("hour", "degree")),
-        "depth": 0,
-        "duration": 42 * u.C,
-    }
-])
-def test_create_invalid_exoplanet(bad_one):
+def test_create_invalid_exoplanet():
+    epoch = 1.0 * u.cm
+    period = 2.3
+    identifier = 'Bad planet'
+    coordinate = 'Not a real place'
+    depth = 23123
+    duration = 23213
     # Check that individual values that are bad raise an error
-    with pytest.raises(ValidationError, match=".*"):
-        Exoplanet(**bad_one)
+    with pytest.raises(ValidationError, match='4 validation errors'):
+        Exoplanet(epoch=epoch,
+                  period=period,
+                  identifier=identifier,
+                  coordinate=coordinate,
+                  depth=depth,
+                  duration=duration)

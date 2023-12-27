@@ -48,7 +48,9 @@ class ApertureSettings(BaseModel):
     To create an `ApertureSettings` object, you can pass in the radius, gap,
     and annulus_width as keyword arguments:
 
-    >>> aperture_settings = ApertureSettings(radius=4, gap=10, annulus_width=15)
+    >>> aperture_settings = ApertureSettings(radius=4,
+    ...                                      gap=10,
+    ...                                      annulus_width=15)
     """
 
     radius: conint(ge=1) = Field(autoui=CustomBoundedIntTex, default=1)
