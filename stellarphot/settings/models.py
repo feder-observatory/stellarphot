@@ -117,22 +117,22 @@ class Exoplanet(BaseModel):
     Parameters
     ----------
 
-    epoch : TimeType
-        Epoch of the exoplanet as an astropy Time object, not required.
+    epoch : `astropy.time.Time`, optional
+        Epoch of the exoplanet.
 
-    period : QuantityType
-        Period of the exoplanet as a Quantity with units of time, not required.
+    period : `astropy.units.Quantity`, optional
+        Period of the exoplanet.
 
-    Identifier : Str
-        Identifier of the exoplanet as a string, required.
+    Identifier : str
+        Identifier of the exoplanet.
 
-    coordinate : SkyCoordType
-        Coordinates of the exoplanet as an astropy SkyCoord object, required.
+    coordinate : `astropy.coordinates.SkyCoord`
+        Coordinates of the exoplanet.
 
     depth : float
-        Depth of the exoplanet object as a float, not required.
+        Depth of the exoplanet.
 
-    duration : QuantityType
+    duration : `astropy.units.Quantity`, optional
         Duration of the exoplanet transit as a Quantity with units of time,
         not required.
 
@@ -140,16 +140,17 @@ class Exoplanet(BaseModel):
     --------
 
     To create an `Exoplanet` object, you can pass in the epoch,
-    period, Identifier, coordinate, depth, and duration as keyword arguments:
+     period, identifier, coordinate, depth, and duration as keyword arguments:
 
-    >>> planet  = Exoplanet(epoch=Time(0, format="jd"), period=0 * u.min,
-    ...                     identifier="TIC_2312323",
-    ...                     coordinate=SkyCoord(ra="00:00:00.00",
-    ...                                         dec="+00:00:00.0",
+    >>> planet  = Exoplanet(epoch=Time( 2455909.29280, format="jd"),
+    ...                     period=1.21749 * u.day,
+    ...                     identifier="KELT-1b",
+    ...                     coordinate=SkyCoord(ra="00:01:26.9169",
+    ...                                         dec="+39:23:01.7821",
     ...                                         frame="icrs",
     ...                                         unit=("hour", "degree")),
-    ...                     depth=0,
-    ...                     duration=0 * u.min)
+    ...                     depth=0.006,
+    ...                     duration=120 * u.min)
     """
 
     epoch: TimeType | None = None

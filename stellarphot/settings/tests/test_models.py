@@ -2,8 +2,7 @@ from astropy.time import Time
 from pydantic import ValidationError
 import pytest
 
-from stellarphot.settings.models import ApertureSettings
-from stellarphot.settings.models import Exoplanet
+from stellarphot.settings.models import ApertureSettings,Exoplanet
 
 from astropy.coordinates import SkyCoord
 import astropy.units as u
