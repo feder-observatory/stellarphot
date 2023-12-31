@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import numpy as np
-from photutils.centroids import centroid_com
+from photutils.centroids import centroid_com, centroid_quadratic, centroid_2dg
 import ipywidgets as ipw
 
 from astropy.io import fits
@@ -94,7 +94,7 @@ def set_keybindings(image_widget, scroll_zoom=False):
 
 
 # TODO: Can this be replaced by a properly masked call to centroid_com?
-def find_center(image, center_guess, cutout_size=30, max_iters=10):
+def find_center(image, center_guess, cutout_size=30, max_iters=10, match_limit=3):
     """
     Find the centroid of a star from an initial guess of its position. Originally
     written to find star from a mouse click.
@@ -116,6 +116,10 @@ def find_center(image, center_guess, cutout_size=30, max_iters=10):
     max_iters : int, optional
         Maximum number of iterations to go through in finding the center.
 
+    match_limit : int, optional
+        Maximum number of pixels to allow the COM centroid and Gaussian center to
+        differ.
+
     Returns
     -------
 
@@ -130,41 +134,61 @@ def find_center(image, center_guess, cutout_size=30, max_iters=10):
     cnt = 0
 
     # Grab the cutout...
-    sub_data = image[y - pad : y + pad, x - pad : x + pad]  # - med
-
+    sub_data = Cutout2D(image, center_guess, (cutout_size, cutout_size), mode="trim")
     # ...do stats on it...
-    _, sub_med, _ = sigma_clipped_stats(sub_data)
-    # sub_med = 0
-
+    _, sub_med, _ = sigma_clipped_stats(sub_data.data)
     # ...and centroid.
-    x_cm, y_cm = centroid_com(sub_data - sub_med)
+    mask = (sub_data.data - sub_med) < 0
+    x_cm, y_cm = centroid_com(sub_data.data - sub_med, mask=mask)
 
     # Translate centroid back to original image (maybe use Cutout2D instead)
-    cen = np.array([x_cm + x - pad, y_cm + y - pad])
-
+    cen = np.array(sub_data.to_original_position((x_cm, y_cm)))
+    print(f"{cen=} {x_cm=} {y_cm=}")
     # ceno is the "original" center guess, set it to something nonsensical here
     ceno = np.array([-100, -100])
 
     while cnt <= max_iters and (
         np.abs(np.array([x_cm, y_cm]) - pad).max() > 3 or np.abs(cen - ceno).max() > 0.1
     ):
-        # Update x, y positions for subsetting
-        x = int(np.floor(x_cm)) + x - pad
-        y = int(np.floor(y_cm)) + y - pad
-        sub_data = image[y - pad : y + pad, x - pad : x + pad]  # - med
-        _, sub_med, _ = sigma_clipped_stats(sub_data)
-        # sub_med = 0
-        mask = (sub_data - sub_med) < 0
-        x_cm, y_cm = centroid_com(sub_data - sub_med, mask=mask)
+        try:
+            sub_data = Cutout2D(image, cen, (cutout_size, cutout_size), mode="trim")
+        except NoOverlapError:
+            raise RuntimeError(
+                f"Centroid finding failed, previous was {ceno}, current is {cen}"
+            )
+        _, sub_med, _ = sigma_clipped_stats(sub_data.data)
+
+        mask = (sub_data.data - sub_med) < 0
+        x_cm, y_cm = centroid_com(sub_data.data - sub_med, mask=mask)
         ceno = cen
-        cen = np.array([x_cm + x - pad, y_cm + y - pad])
+        cen = np.array(sub_data.to_original_position((x_cm, y_cm)))
         if not np.all(~np.isnan(cen)):
             raise RuntimeError(
-                "Centroid finding failed, " f"previous was {ceno}, current is {cen}"
+                f"Centroid finding failed, previous was {ceno}, current is {cen}"
             )
         cnt += 1
 
-    return cen
+    # Is we hit the max number of iterations, raise an error
+    if max_iters > 1 and cnt > max_iters:
+        raise RuntimeError(f"Centroid finding did not converge")
+
+    # Get the final centroid position by fitting a gaussian
+    # We may not have converged on a star, so capture any warning about a
+    # bad fit.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        ceng = centroid_2dg(sub_data.data - sub_med)
+    ceng = np.array(sub_data.to_original_position(ceng))
+
+    # Confirm that we actually found a star by comparing the two centroiding
+    # methods
+    if np.linalg.norm(cen - ceng) > match_limit:
+        raise RuntimeError(
+            "Centroid did not converge on a star. "
+            f"Got {cen} from centroid_com and {ceng} from centroid_2dg."
+        )
+
+    return ceng
 
 
 # TODO: Why exactly is this separate from the class RadialProfile?

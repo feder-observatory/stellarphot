@@ -4,6 +4,7 @@ import pytest
 
 from photutils.datasets import make_gaussian_sources_image, make_noise_image
 from astropy.table import Table
+from astropy.utils.exceptions import AstropyUserWarning
 from astrowidgets import ImageWidget
 
 from stellarphot.gui_tools import seeing_profile_functions as spf
@@ -77,7 +78,7 @@ def test_find_center_noise_good_guess():
         SHAPE, distribution="gaussian", mean=0, stddev=5, seed=RANDOM_SEED
     )
     # Trying again with several iterations should work
-    cen3 = spf.find_center(image + noise, [31, 41], max_iters=10)
+    cen3 = spf.find_center(image + noise, [31, 41], max_iters=20)
     # Tolerance chosen based on some trial and error
     np.testing.assert_allclose(cen3, [30, 40], atol=0.02)
 
@@ -85,8 +86,9 @@ def test_find_center_noise_good_guess():
 def test_find_center_no_noise_star_at_edge():
     # Trying to put the star at the edge of the initial guess
     image = make_gaussian_sources_image(SHAPE, STARS)
-    cen = spf.find_center(image, [45, 65], max_iters=10)
-    np.testing.assert_allclose(cen, [30, 40])
+    cen = spf.find_center(image, [45, 65], max_iters=20)
+
+    np.testing.assert_allclose(cen, [30, 40], atol=0.02)
 
 
 def test_find_center_no_star():
@@ -96,8 +98,9 @@ def test_find_center_no_star():
     noise = make_noise_image(
         SHAPE, distribution="gaussian", mean=1000, stddev=5, seed=RANDOM_SEED
     )
-    cen = spf.find_center(image + noise, [50, 200], max_iters=10)
-    assert (np.abs(cen[0] - 50) > 1) and (np.abs(cen[1] - 200) > 1)
+
+    with pytest.raises(RuntimeError, match="Centroid did not converge on a star"):
+        cen = spf.find_center(image + noise, [50, 200], max_iters=10)
 
 
 def test_radial_profile():
