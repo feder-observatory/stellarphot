@@ -1,13 +1,17 @@
 from pathlib import Path
+import warnings
 
 import numpy as np
 from photutils.centroids import centroid_com, centroid_quadratic, centroid_2dg
+from photutils.profiles import RadialProfile, CurveOfGrowth
 import ipywidgets as ipw
 
 from astropy.io import fits
 from astropy.stats import sigma_clipped_stats
 from astropy.table import Table
 from astropy.nddata import Cutout2D
+from astropy.nddata.utils import NoOverlapError
+from astropy.utils import lazyproperty
 
 try:
     from astrowidgets import ImageWidget
@@ -18,14 +22,14 @@ import matplotlib.pyplot as plt
 
 from stellarphot.io import TessSubmission
 from stellarphot.gui_tools.fits_opener import FitsOpener
+from stellarphot.photometry import calculate_noise
 from stellarphot.plotting import seeing_plot
 from stellarphot.settings import ApertureSettings, ui_generator
 
 __all__ = [
     "set_keybindings",
     "find_center",
-    "radial_profile",
-    "RadialProfile",
+    "CenterAndProfile",
     "box",
     "SeeingProfileWidget",
 ]
@@ -191,206 +195,158 @@ def find_center(image, center_guess, cutout_size=30, max_iters=10, match_limit=3
     return ceng
 
 
-# TODO: Why exactly is this separate from the class RadialProfile?
-def radial_profile(data, center, size=30, return_scaled=True):
+class CenterAndProfile:
     """
-    Construct a radial profile of a chunk of width ``size`` centered
-    at ``center`` from image ``data``.
+    Class to dentermine center of and hold radial profile information for a star.
 
     Parameters
     ----------
-
     data : `astropy.nddata.CCDData` or numpy array
         Image data
 
-    center : list-like
+    center_approx : list-like
         x, y position of the center in pixel coordinates, i.e. horizontal
         coordinate then vertical.
 
-    size : int, optional
-        Width of the rectangular cutout to use in constructing the profile.
+    cutout_size : int, optional
+        Width of the rectangular image cutout to use in looking for a star.
 
-    return_scaled : bool, optional
-        If ``True``, return an average radius and profile, otherwise
-        it is cumulative. Not at all clear what a "cumulative" radius
-        means, tbh.
-
-    Returns
-    -------
-
-    r_exact : numpy array
-        Exact radius of center of each pixels from profile center.
-
-    ravg : numpy array
-        Average radius in pixels used in constructing profile.
-
-    radialprofile : numpy array
-        Radial profile.
-    """
-    yd, xd = np.indices((size, size))
-
-    sub_image = Cutout2D(data, center, size, mode="strict")
-    sub_center = sub_image.center_cutout
-
-    r = np.sqrt((xd - sub_center[0]) ** 2 + (yd - sub_center[1]) ** 2)
-    r_exact = r.copy()
-    r = r.astype(int)
-
-    sub_data = sub_image.data
-
-    tbin = np.bincount(r.ravel(), sub_data.ravel())
-    rbin = np.bincount(r.ravel(), r_exact.ravel())
-    nr = np.bincount(r.ravel())
-    if return_scaled:
-        radialprofile = tbin / nr
-        ravg = rbin / nr
-    else:
-        radialprofile = tbin
-        ravg = rbin
-
-    return r_exact, ravg, radialprofile
-
-
-class RadialProfile:
-    """
-    Class to hold radial profile information for a star.
-
-    Parameters
-    ----------
-
-    data : numpy array
-        Image data.
-
-    x : int
-        x position of the star.
-
-    y : int
-        y position of the star.
-
-    Attributes
-    ----------
-
-    cen : tuple
-
-    data : numpy array
-
-    FWHM : float
-
-    HWHM : float
-        Half-width half-max of the radial profile.
-
-    profile_size : int
-        Size of the cutout used to construct the radial profile.
-
-    r_exact : numpy array
-        Exact radius of center of each pixels from profile center.
-
-    radius_values : numpy array
-
-    ravg : numpy array
-        Average radius in pixels used in constructing profile.
-
-    scaled_exact_counts : numpy array
-        Exact counts in each pixel, scaled to have a maximum of 1.
-
-    scaled_profile : numpy array
-        Radial profile scaled to have a maximum of 1.
+    profile_radius : int, optional
+        Maximum radius to use in constructing the profile.
     """
 
-    def __init__(self, data, x, y):
-        self._cen = find_center(data, (x, y), cutout_size=30)
+    def __init__(self, data, center_approx, cutout_size=30, profile_radius=None):
+        self._cen = find_center(data, center_approx, cutout_size=cutout_size)
         self._data = data
+        self._cutout = Cutout2D(data, self._cen, (cutout_size, cutout_size))
+        if profile_radius is None:
+            profile_radius = cutout_size // 2
 
-    def profile(self, profile_size):
-        """
-        Construct the radial profile of the star.
+        radii = np.linspace(0, profile_radius, profile_radius + 1)
+        # Get a rough profile without background subtraction
+        self._radial_profile = RadialProfile(self._data, self._cen, radii)
 
-        Parameters
-        ----------
+        self._sky_area = None
 
-        profile_size : int
-            Size of the cutout to use in constructing the profile.
-
-        """
-        self.profile_size = profile_size
-        self.r_exact, self.ravg, self.radialprofile = radial_profile(
-            self.data, self.cen, size=profile_size
+        # Do proper background subtraction for the final radial profile
+        self._radial_profile = RadialProfile(
+            data - self.sky_pixel_value, self._cen, radii
         )
 
-        self.sub_data = Cutout2D(self.data, self.cen, size=profile_size).data
-        sub_med = np.median(self.sub_data)
-        adjust_max = self.radialprofile.max() - sub_med
-        self.scaled_profile = (self.radialprofile - sub_med) / adjust_max
-        self.scaled_exact_counts = (self.sub_data - sub_med) / adjust_max
-
     @property
-    def data(self):
-        """
-        Image data.
-        """
-        return self._data
-
-    @property
-    def cen(self):
+    def center(self):
         """
         x, y position of the center of the star.
         """
         return self._cen
 
     @property
-    def HWHM(self):
-        """
-        Half-width half-max of the radial profile.
-        """
-        return self.find_hwhm()
-
-    @property
     def FWHM(self):
         """
         Full-width half-max of the radial profile.
         """
-        return int(np.round(2 * self.HWHM))
+        return self.radial_profile.gaussian_fwhm
 
     @property
-    def radius_values(self):
+    def HWHM(self):
         """
-        Radius values for the radial profile.
+        Half-width half-max of the radial profile.
         """
-        return np.arange(len(self.radialprofile))
+        return self.FWHM / 2
 
-    def find_hwhm(self):
+    @property
+    def cutout(self):
         """
-        Estimate the half-width half-max from normalized, angle-averaged
-        intensity profile.
-
-        Returns
-        -------
-
-        r_half : float
-            Radius at which the intensity is 50% the maximum
+        Cutout image around the star.
         """
+        return self._cutout
 
-        r = self.ravg
-        intensity = self.scaled_profile
-        # Make the bold assumption that intensity decreases monotonically
-        # so that we just need to find the first place where intensity is
-        # less than 0.5 to estimate the HWHM.
-        less_than_half = intensity < 0.5
-        half_index = np.arange(len(less_than_half))[less_than_half][0]
-        before_half = half_index - 1
+    @property
+    def radial_profile(self):
+        """
+        Radial profile of the star.
+        """
+        return self._radial_profile
 
-        # Do linear interpolation to find the radius at which the intensity
-        # is 0.5.
-        r_more = r[before_half]
-        r_less = r[half_index]
-        I_more = intensity[before_half]
-        I_less = intensity[half_index]
+    @lazyproperty
+    def normalized_profile(self):
+        """
+        Radial profile scaled to have a maximum of 1.
+        """
+        # This seems to be what photutils does under the hood
+        return self.radial_profile.profile / self.radial_profile.profile.max()
 
-        I_half = 0.5
+    @lazyproperty
+    def pixel_values_in_profile(self):
+        """
+        Pixel values in the radial profile.
+        """
+        radii = []
+        pixel_values = []
+        for rad, ap in zip(self.radial_profile.radius, self.radial_profile.apertures):
+            ap_mask = ap.to_mask(method="center")
+            ap_data = ap_mask.multiply(self._data)
+            good_data = ap_data != 0
+            pixel_values.extend(ap_data[good_data].flatten())
+            radii.extend([rad] * good_data.sum())
+        radii = np.array(radii)
+        pixel_values = np.array(pixel_values)
+        return radii, pixel_values
 
-        r_half = r_less - (I_less - I_half) / (I_less - I_more) * (r_less - r_more)
+    @lazyproperty
+    def curve_of_growth(self):
+        """
+        Curve of growth for the star.
+        """
+        self._cog = CurveOfGrowth(
+            self._data - self.sky_pixel_value,
+            self.center,
+            self.radial_profile.radii + 1,
+        )
+        return self._cog
 
-        return r_half
+    @lazyproperty
+    def sky_pixel_value(self):
+        """
+        Pixel values for the sky, i.e. outside the star.
+        """
+        grid_x, grid_y = np.mgrid[: self.cutout.shape[0], : self.cutout.shape[1]]
+        x_s, y_s = self.cutout.to_cutout_position(self.center)
+        dist_from_star = np.sqrt((grid_x - x_s) ** 2 + (grid_y - y_s) ** 2)
+        mask = dist_from_star > self.FWHM * 3
+        self._sky_area = mask.sum()
+        _, median, _ = sigma_clipped_stats(self.cutout.data[mask])
+        return median
+
+    @lazyproperty
+    def sky_area(self):
+        """
+        Area of the sky annulus.
+        """
+        if self._sky_area is None:
+            # sky area is set as a side effect of this....
+            _ = self.sky_pixel_value
+
+        return self._sky_area
+
+    def noise(self, camera, exposure):
+        """
+        Noise in the star.
+        """
+        return calculate_noise(
+            camera,
+            counts=self.curve_of_growth.profile,
+            sky_per_pix=self.sky_pixel_value,
+            aperture_area=self.curve_of_growth.area,
+            annulus_area=0,
+            exposure=exposure,
+        )
+
+    def snr(self, camera, exposure):
+        """
+        Signal to noise ratio of the star.
+        """
+        return camera.gain * self.curve_of_growth.profile / self.noise(camera, exposure)
 
 
 def box(imagewidget):
@@ -472,13 +428,15 @@ class SeeingProfileWidget:
 
     """
 
-    def __init__(self, imagewidget=None, width=500):
+    def __init__(self, imagewidget=None, width=500, camera=None):
         if not imagewidget:
             imagewidget = ImageWidget(
                 image_width=width, image_height=width, use_opencv=True
             )
 
         self.iw = imagewidget
+
+        self.camera = camera
         # Do some set up of the ImageWidget
         set_keybindings(self.iw, scroll_zoom=False)
         bind_map = self.iw._viewer.get_bindmap()
@@ -488,33 +446,38 @@ class SeeingProfileWidget:
         gvc.add_callback("cursor-down", self._mse)
 
         # Outputs to hold the graphs
-        self.out = ipw.Output()
-        self.out2 = ipw.Output()
-        self.out3 = ipw.Output()
+        self.seeing_profile_plot = ipw.Output()
+        self.curve_growth_plot = ipw.Output()
+        self.snr_plot = ipw.Output()
         # Build the larger widget
         self.container = ipw.VBox()
         self.fits_file = FitsOpener(title="Choose an image")
         big_box = ipw.HBox()
         big_box = ipw.GridspecLayout(1, 2)
-        layout = ipw.Layout(width="20ch")
+        layout = ipw.Layout(width="60ch")
         vb = ipw.VBox()
         self.aperture_settings_file_name = ipw.Text(
             description="Aperture settings file name",
             style={"description_width": "initial"},
             value="aperture_settings.json",
+            layout=layout,
         )
         self.aperture_settings = ui_generator(ApertureSettings)
         self.aperture_settings.show_savebuttonbar = True
         self.aperture_settings.path = Path(self.aperture_settings_file_name.value)
-        self.save_aps = ipw.Button(description="Save settings")
+
         vb.children = [
             self.aperture_settings_file_name,
             self.aperture_settings,
-        ]  # , self.save_aps] #, self.in_t, self.out_t]
+        ]
 
         lil_box = ipw.VBox()
         lil_tabs = ipw.Tab()
-        lil_tabs.children = [self.out3, self.out, self.out2]
+        lil_tabs.children = [
+            self.snr_plot,
+            self.seeing_profile_plot,
+            self.curve_growth_plot,
+        ]
         lil_tabs.set_title(0, "SNR")
         lil_tabs.set_title(1, "Seeing profile")
         lil_tabs.set_title(2, "Integrated counts")
@@ -537,8 +500,9 @@ class SeeingProfileWidget:
 
         self._tess_sub = None
 
-        # Fill this in later with name of object from FITS file
+        # Fill these in later with name of object from FITS file
         self.object_name = ""
+        self.exposure = 0
         self._set_observers()
         self.aperture_settings.description = ""
 
@@ -553,6 +517,8 @@ class SeeingProfileWidget:
             Filename to open.
         """
         self.fits_file.load_in_image_widget(self.iw)
+        self.object_name = self.fits_file.object
+        self.exposure = self.fits_file.header["EXPOSURE"]
 
     def _update_file(self, change):
         self.load_fits(change.selected)
@@ -603,7 +569,6 @@ class SeeingProfileWidget:
             )
 
         self.aperture_settings.observe(aperture_obs, names="_value")
-        self.save_aps.on_click(self._save_ap_settings)
         self.aperture_settings_file_name.observe(
             self._change_aperture_save_location, names="value"
         )
@@ -612,13 +577,6 @@ class SeeingProfileWidget:
         self.save_seeing.on_click(self._save_seeing_plot)
         self.setting_box.planet_num.observe(self._set_seeing_profile_name)
         self.setting_box.telescope_code.observe(self._set_seeing_profile_name)
-
-    def _save_ap_settings(self, button):  # noqa: ARG002
-        """
-        Widget button callbacks need to accept a single argument.
-        """
-        with open("aperture_settings.txt", "w") as f:
-            f.write(f"{ap_rad},{ap_rad + 10},{ap_rad + 15}")
 
     def _make_tess_box(self):
         box = ipw.VBox()
@@ -673,7 +631,7 @@ class SeeingProfileWidget:
                 x = int(np.floor(event.data_x))
                 y = int(np.floor(event.data_y))
 
-                rad_prof = RadialProfile(data, x, y)
+                rad_prof = CenterAndProfile(data, (x, y), profile_radius=profile_size)
 
                 try:
                     try:  # Remove previous marker
@@ -687,19 +645,14 @@ class SeeingProfileWidget:
                 # ADD MARKER WHERE CLICKED
                 self.iw.add_markers(
                     Table(
-                        data=[[rad_prof.cen[0]], [rad_prof.cen[1]]], names=["x", "y"]
+                        data=[[rad_prof.center[0]], [rad_prof.center[1]]],
+                        names=["x", "y"],
                     ),
                     marker_name=self._aperture_name,
                 )
 
-                # ----> MOVE PROFILE CONSTRUCTION INTO FUNCTION <----
-
-                # CONSTRUCT RADIAL PROFILE OF PATCH AROUND STAR
-                # NOTE: THIS IS NOT BACKGROUND SUBTRACTED
-                rad_prof.profile(profile_size)
-
                 # Default is 1.5 times FWHM
-                aperture_radius = np.round(1.5 * 2 * rad_prof.HWHM, 0)
+                aperture_radius = np.round(1.5 * rad_prof.FWHM, 0)
                 self.rad_prof = rad_prof
 
                 # Make an aperture settings object, but don't update it's widget yet.
@@ -716,8 +669,6 @@ class SeeingProfileWidget:
                     **aperture
                 )  # Make an ApertureSettings object
 
-                rad_prof = self.rad_prof
-
             if update_aperture_settings:
                 self._update_ap_settings(ap_settings.dict())
 
@@ -731,15 +682,19 @@ class SeeingProfileWidget:
         profile_size = 60
 
         rad_prof = self.rad_prof
-        self.out.clear_output(wait=True)
+        self.seeing_profile_plot.clear_output(wait=True)
         ap_settings = ApertureSettings(**self.aperture_settings.value)
-        with self.out:
+        with self.seeing_profile_plot:
             # sub_med += med
+            r_exact, individual_counts = rad_prof.pixel_values_in_profile
+            scaled_exact_counts = (
+                individual_counts / rad_prof.radial_profile.profile.max()
+            )
             self._seeing_plot_fig = seeing_plot(
-                rad_prof.r_exact,
-                rad_prof.scaled_exact_counts,
-                rad_prof.ravg,
-                rad_prof.scaled_profile,
+                r_exact,
+                scaled_exact_counts,
+                rad_prof.radial_profile.radius,
+                rad_prof.normalized_profile,
                 rad_prof.HWHM,
                 self.object_name,
                 aperture_settings=ap_settings,
@@ -748,30 +703,12 @@ class SeeingProfileWidget:
             plt.show()
 
         # CALCULATE AND DISPLAY NET COUNTS INSIDE RADIUS
-        self.out2.clear_output(wait=True)
-        with self.out2:
-            sub_blot = rad_prof.sub_data.copy().astype("float32")
-            min_idx = profile_size // 2 - 2 * rad_prof.FWHM
-            max_idx = profile_size // 2 + 2 * rad_prof.FWHM
-            sub_blot[min_idx:max_idx, min_idx:max_idx] = np.nan
-            sub_std = np.nanstd(sub_blot)
-            new_sub_med = np.nanmedian(sub_blot)
-            r_exact, ravg, tbin2 = radial_profile(
-                rad_prof.data - new_sub_med,
-                rad_prof.cen,
-                size=profile_size,
-                return_scaled=False,
-            )
-            r_exact_s, ravg_s, tbin2_s = radial_profile(
-                rad_prof.data - new_sub_med,
-                rad_prof.cen,
-                size=profile_size,
-                return_scaled=True,
-            )
-            # tbin2 = np.bincount(r.ravel(), (sub_data - sub_med).ravel())
-            counts = np.cumsum(tbin2)
+        self.curve_growth_plot.clear_output(wait=True)
+        with self.curve_growth_plot:
+            cog = rad_prof.curve_of_growth
+
             plt.figure(figsize=fig_size)
-            plt.plot(rad_prof.radius_values, counts)
+            plt.plot(cog.radius, cog.profile)
             plt.xlim(0, 40)
             ylim = plt.ylim()
             plt.vlines(ap_settings.radius, *plt.ylim(), colors=["red"])
@@ -779,33 +716,17 @@ class SeeingProfileWidget:
             plt.grid()
 
             plt.title("Net counts in aperture")
-            e_sky = np.nanmax([np.sqrt(new_sub_med), sub_std])
 
             plt.xlabel("Aperture radius (pixels)")
             plt.ylabel("Net counts")
             plt.show()
 
         # CALCULATE And DISPLAY SNR AS A FUNCTION OF RADIUS
-        self.out3.clear_output(wait=True)
-        with self.out3:
-            read_noise = 10  # electrons
-            gain = 1.5  # electrons/count
-            # Poisson error is square root of the net number of counts enclosed
-            poisson = np.sqrt(np.cumsum(tbin2))
-
-            # This is obscure, but correctly calculated the number of pixels at
-            # each radius, since the smoothed is tbin2 divided by the number of
-            # pixels.
-            nr = tbin2 / tbin2_s
-
-            # This ignores dark current
-            error = np.sqrt(
-                poisson**2 + np.cumsum(nr) * (e_sky**2 + (read_noise / gain) ** 2)
-            )
-
-            snr = np.cumsum(tbin2) / error
+        self.snr_plot.clear_output(wait=True)
+        with self.snr_plot:
             plt.figure(figsize=fig_size)
-            plt.plot(rad_prof.radius_values + 1, snr)
+            snr = rad_prof.snr(self.camera, self.exposure)
+            plt.plot(rad_prof.curve_of_growth.radius, snr)
 
             plt.title(
                 f"Signal to noise ratio max {snr.max():.1f} "
