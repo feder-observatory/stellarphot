@@ -1,6 +1,11 @@
 name: Test
 
-on: [push, pull_request]
+on:
+  workflow_dispatch:  # Allows manual triggering
+  pull_request:
+  push:
+    branches:
+      - main
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
