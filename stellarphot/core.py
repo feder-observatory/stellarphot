@@ -4,7 +4,7 @@ from astropy import units as u
 from astropy.coordinates import EarthLocation, SkyCoord
 from astropy.table import Column, QTable, Table
 from astropy.time import Time
-from astropy.units import Quantity, Unit
+from astropy.units import Quantity, Unit, IrreducibleUnit
 from astropy.wcs import WCS
 
 from astroquery.vizier import Vizier
@@ -240,7 +240,8 @@ class Camera(BaseModel):
         json_encoders = {
             Quantity: lambda v: f"{v.value} {v.unit}",
             QuantityType: lambda v: f"{v.value} {v.unit}",
-            UnitType: lambda v: f"{v}",
+            Unit: lambda v: f"{v}",
+            IrreducibleUnit: lambda v: f"{v}",
             PixelScaleType: lambda v: f"{v.value} {v.unit}",
         }
 

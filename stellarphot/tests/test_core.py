@@ -193,6 +193,28 @@ def test_camera_schema():
     assert len(schema["properties"]) == 6
 
 
+def test_camera_json_round_trip():
+    # Check that a camera can be converted to json and back
+    data_unit = u.adu
+    gain = 2.0 * u.electron / u.adu
+    read_noise = 10 * u.electron
+    dark_current = 0.01 * u.electron / u.second
+    pixel_scale = 0.563 * u.arcsec / u.pix
+    max_val = 50000 * u.adu
+
+    c = Camera(
+        data_unit=data_unit,
+        gain=gain,
+        read_noise=read_noise,
+        dark_current=dark_current,
+        pixel_scale=pixel_scale,
+        max_data_value=max_val,
+    )
+
+    c2 = Camera.parse_raw(c.json())
+    assert c2 == c
+
+
 # Create several test descriptions for use in base_enhanced_table tests.
 test_descript = {
     "id": None,
