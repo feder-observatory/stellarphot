@@ -351,7 +351,7 @@ class BaseEnhancedTable(QTable):
             except AttributeError:
                 raise TypeError(
                     "You must provide a dict as table_description (input "
-                    f"table_description is type {type(self._table_description)})."
+                    f"table_description is type {type(table_description)})."
                 )
 
             # Check data before copying to avoid recusive loop and non-QTable
