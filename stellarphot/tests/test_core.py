@@ -3,7 +3,7 @@ import warnings
 import pytest
 import numpy as np
 from astropy import units as u
-from astropy.table import Table, Column
+from astropy.table import Table
 from astropy.time import Time
 from astropy.io import ascii, fits
 from astropy.coordinates import EarthLocation, SkyCoord
@@ -438,22 +438,22 @@ photdata = np.array(
             2049.145245206124,
             2054.0849947477964,
             109070.60831212997,
-            154443.9371254444,
+            154443.9371254444,  # has wrong units
             78.17278712191924,
             22.505771480719375,
-            31.798216414544864,
-            31.658750534057617,
-            9.294325523269857,
-            13.02511260943813,
-            13.02511260943813,
-            13.02511260943813,
+            31.798216414544864,  # has wrong units
+            31.658750534057617,  # has wrong units
+            9.294325523269857,  # has wrong units
+            13.02511260943813,  # has wrong units
+            13.02511260943813,  # has wrong units
+            13.02511260943813,  # has wrong units
             29.0,
             2642.079421669016,
             44.0,
             59.0,
             4853.760649796231,
             120.0,
-            "2022-11-27T06:26:29.620",
+            "2022-11-27T06:26:29.620",  # created as a string, not a Time object
             59909,
             25057.195077483062,
             2459910.7754060575,
@@ -464,8 +464,8 @@ photdata = np.array(
             1,
             0.02320185643388203,
             803.1970935659333,
-            535.4647290439556,
-            46.795229859903905,
+            535.4647290439556,  # has wrong units
+            46.795229859903905,  # has wrong units -- maybe??
         ]
     ]
 )
@@ -579,9 +579,12 @@ testphot_data = Table(
 
 # Convert times to correct time format but leave bad units
 testphot_goodTime = testphot_data.copy()
-testphot_goodTime["date-obs"] = Column(
-    data=Time(testphot_goodTime["date-obs"], format="isot", scale="utc"),
-    name="date-obs",
+# The way this was originally written used Column(Time, ...) which
+# led to a column of generic objects rather that Time objects. This
+# prevented Table from being able to write the table to a file because it
+# couldn't figure out how to write the column.
+testphot_goodTime["date-obs"] = Time(
+    testphot_goodTime["date-obs"], format="isot", scale="utc"
 )
 
 # Fix all the units for PhotometryData
@@ -669,6 +672,22 @@ def test_photometry_data():
     # which returned 2459910.775405664 (Uses custom IDL, astropy is SOFA checked).
     # Demand a difference of less than 1/20 of a second.
     assert (phot_data["bjd"][0].value - 2459910.775405664) * 86400 < 0.05
+
+
+def test_photometry_roundtrip_ecsv(tmp_path):
+    # Check that we can save the test data to ECSV and restore it
+    file_path = tmp_path / "test_photometry.ecsv"
+    phot_data = PhotometryData(
+        observatory=feder_obs,
+        camera=feder_cg_16m,
+        passband_map=feder_passbands,
+        input_data=testphot_clean,
+    )
+    phot_data.write(file_path)
+    phot_data2 = PhotometryData.read(file_path)
+    # Check a couple of the columns that are not standard types
+    assert phot_data["date-obs"] == phot_data2["date-obs"]
+    assert phot_data["ra"] == phot_data2["ra"]
 
 
 def test_photometry_slicing():
