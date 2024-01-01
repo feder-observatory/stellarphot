@@ -3,7 +3,7 @@ import warnings
 import pytest
 import numpy as np
 from astropy import units as u
-from astropy.table import Table, Column
+from astropy.table import Table
 from astropy.time import Time
 from astropy.io import ascii, fits
 from astropy.coordinates import EarthLocation, SkyCoord
@@ -567,9 +567,12 @@ testphot_data = Table(
 
 # Convert times to correct time format but leave bad units
 testphot_goodTime = testphot_data.copy()
-testphot_goodTime["date-obs"] = Column(
-    data=Time(testphot_goodTime["date-obs"], format="isot", scale="utc"),
-    name="date-obs",
+# The way this was originally written used Column(Time, ...) which
+# led to a column of generic objects rather that Time objects. This
+# prevented Table from being able to write the table to a file because it
+# couldn't figure out how to write the column.
+testphot_goodTime["date-obs"] = Time(
+    testphot_goodTime["date-obs"], format="isot", scale="utc"
 )
 
 # Fix all the units for PhotometryData
@@ -657,6 +660,22 @@ def test_photometry_data():
     # which returned 2459910.775405664 (Uses custom IDL, astropy is SOFA checked).
     # Demand a difference of less than 1/20 of a second.
     assert (phot_data["bjd"][0].value - 2459910.775405664) * 86400 < 0.05
+
+
+def test_photometry_roundtrip_ecsv(tmp_path):
+    # Check that we can save the test data to ECSV and restore it
+    file_path = tmp_path / "test_photometry.ecsv"
+    phot_data = PhotometryData(
+        observatory=feder_obs,
+        camera=feder_cg_16m,
+        passband_map=feder_passbands,
+        input_data=testphot_clean,
+    )
+    phot_data.write(file_path)
+    phot_data2 = PhotometryData.read(file_path)
+    # Check a couple of the columns that are not standard types
+    assert phot_data["date-obs"] == phot_data2["date-obs"]
+    assert phot_data["ra"] == phot_data2["ra"]
 
 
 def test_photometry_slicing():
