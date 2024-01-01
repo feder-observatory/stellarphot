@@ -113,7 +113,7 @@ def find_center(image, center_guess, cutout_size=30, max_iters=10, match_limit=3
 
 class CenterAndProfile:
     """
-    Class to dentermine center of and hold radial profile information for a star.
+    Class to determine center of and hold radial profile information for a star.
 
     Parameters
     ----------
