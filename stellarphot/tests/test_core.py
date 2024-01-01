@@ -424,6 +424,12 @@ def test_base_enhanced_table_no_desription():
         BaseEnhancedTable(input_data=testdata)
 
 
+def test_base_enhanced_table_no_data():
+    # A missing description should raise a TypeError
+    with pytest.raises(TypeError, match="You must provide an astropy Table"):
+        BaseEnhancedTable(table_description=test_descript)
+
+
 # Define a realistic table of photometry data (a bit corrupted)
 photdata = np.array(
     [
