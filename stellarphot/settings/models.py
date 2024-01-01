@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from pydantic import BaseModel, Field, conint
+from pydantic import BaseModel, Field, conint, validator
 
 from .autowidgets import CustomBoundedIntTex
 
@@ -170,7 +170,7 @@ class Exoplanet(BaseModel):
             QuantityType: lambda v: f"{v.value} {v.unit}",
             Time: lambda v: f"{v.value}",
         }
-
+    @validator
     @classmethod
     def validate_period(cls, values):
         """
