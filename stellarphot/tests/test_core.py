@@ -24,6 +24,16 @@ from stellarphot.core import (
 )
 
 
+TEST_CAMERA_VALUES = dict(
+    data_unit=u.adu,
+    gain=2.0 * u.electron / u.adu,
+    read_noise=10 * u.electron,
+    dark_current=0.01 * u.electron / u.second,
+    pixel_scale=0.563 * u.arcsec / u.pix,
+    max_data_value=50000 * u.adu,
+)
+
+
 def test_camera_attributes():
     # Check that the attributes are set properly
     data_unit = u.adu

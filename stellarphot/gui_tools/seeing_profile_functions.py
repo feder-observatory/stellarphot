@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 from stellarphot.io import TessSubmission
 from stellarphot.gui_tools.fits_opener import FitsOpener
 from stellarphot.photometry import CenterAndProfile
+from stellarphot.photometry.photometry import EXPOSURE_KEYWORDS
 from stellarphot.plotting import seeing_plot
 from stellarphot.settings import ApertureSettings, ui_generator
 
@@ -238,7 +239,16 @@ class SeeingProfileWidget:
         """
         self.fits_file.load_in_image_widget(self.iw)
         self.object_name = self.fits_file.object
-        self.exposure = self.fits_file.header["EXPOSURE"]
+        for key in EXPOSURE_KEYWORDS:
+            if key in self.fits_file.header:
+                self.exposure = self.fits_file.header[key]
+                break
+        else:
+            warnings.warn(
+                "No exposure time keyword found in FITS header. "
+                "Setting exposure to NaN"
+            )
+            self.exposure = np.nan
 
     def _update_file(self, change):
         self.load_fits(change.selected)

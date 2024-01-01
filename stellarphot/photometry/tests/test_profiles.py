@@ -7,7 +7,9 @@ from astropy.utils.exceptions import AstropyUserWarning
 
 from photutils.datasets import make_gaussian_sources_image, make_noise_image
 
+from stellarphot import Camera
 from stellarphot.photometry import find_center, CenterAndProfile
+from stellarphot.tests.test_core import TEST_CAMERA_VALUES
 
 # Make a few round stars
 STARS = Table(
@@ -89,3 +91,18 @@ def test_radial_profile():
         np.testing.assert_allclose(
             rad_prof.curve_of_growth.profile[-1], expected_integral, atol=50
         )
+
+
+def test_radial_profile_exposure_is_nan():
+    # Check that using an exposure value of NaN returns NaN for the SNR and noise
+    image = make_gaussian_sources_image(SHAPE, STARS)
+
+    cen = find_center(image, (50, 50), max_iters=10)
+
+    rad_prof = CenterAndProfile(image, cen, cutout_size=60, profile_radius=30)
+
+    c = Camera(**TEST_CAMERA_VALUES)
+    assert np.isnan(rad_prof.snr(c, np.nan)[-1])
+    assert np.isnan(rad_prof.noise(c, np.nan)[-1])
+    assert all(np.isfinite(rad_prof.curve_of_growth.profile))
+    assert all(np.isfinite(rad_prof.radial_profile.profile))
