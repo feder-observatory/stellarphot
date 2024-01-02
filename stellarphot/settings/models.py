@@ -143,6 +143,9 @@ class Exoplanet(BaseModel):
     To create an `Exoplanet` object, you can pass in the epoch,
      period, identifier, coordinate, depth, and duration as keyword arguments:
 
+    >>> from astropy.time import Time
+    >>> from astropy.coordinates import SkyCoord
+    >>> from astropy import units as u
     >>> planet  = Exoplanet(epoch=Time(2455909.29280, format="jd"),
     ...                     period=1.21749 * u.day,
     ...                     identifier="KELT-1b",
@@ -170,25 +173,30 @@ class Exoplanet(BaseModel):
             QuantityType: lambda v: f"{v.value} {v.unit}",
             Time: lambda v: f"{v.value}",
         }
-    @validator
-    @classmethod
-    def validate_period(cls, values):
-        """
-        Checks that the period has physical units of time and raises an error if that is not true. 
-        """
-        if u.get_physical_type(values["period"]) != "time":
-            raise ValueError(
-                f"Period does not have time units,"
-                f"currently has {values['period'].unit} units."
-            )
 
+    @validator("period")
     @classmethod
-    def validate_duration(cls, values):
+    def validate_period(cls, value):
         """
-        Checks that the duration has physical units of time and raises an error if that is not true. 
+        Checks that the period has physical units of time and raises an error
+        if that is not true.
         """
-        if u.get_physical_type(values["duration"]) != "time":
+        if u.get_physical_type(value) != "time":
+            raise ValueError(
+                f"Period does not have time units," f"currently has {value.unit} units."
+            )
+        return value
+
+    @validator("duration")
+    @classmethod
+    def validate_duration(cls, value):
+        """
+        Checks that the duration has physical units of time and raises an error
+        if that is not true.
+        """
+        if u.get_physical_type(value) != "time":
             raise ValueError(
                 f"Duration does not have time units,"
-                f"currently has {values['duration'].unit} units."
+                f"currently has {value.unit} units."
             )
+        return value

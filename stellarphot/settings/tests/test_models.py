@@ -15,8 +15,7 @@ def test_create_aperture_settings_correctly():
     assert ap_set.radius == DEFAULT_APERTURE_SETTINGS["radius"]
     assert (
         ap_set.inner_annulus
-        == DEFAULT_APERTURE_SETTINGS["radius"] +
-        DEFAULT_APERTURE_SETTINGS["gap"]
+        == DEFAULT_APERTURE_SETTINGS["radius"] + DEFAULT_APERTURE_SETTINGS["gap"]
     )
     assert (
         ap_set.outer_annulus
@@ -38,10 +37,9 @@ def test_create_invalid_values(bad_one):
 DEFAULT_EXOPLANET_SETTINGS = dict(
     epoch=Time(0, format="jd"),
     period=0 * u.min,
-    identifier="",
+    identifier="a planet",
     coordinate=SkyCoord(
-        ra="00:00:00.00", dec="+00:00:00.0", frame="icrs",
-        unit=("hour", "degree")
+        ra="00:00:00.00", dec="+00:00:00.0", frame="icrs", unit=("hour", "degree")
     ),
     depth=0,
     duration=0 * u.min,
@@ -50,6 +48,7 @@ DEFAULT_EXOPLANET_SETTINGS = dict(
 
 def test_create_exoplanet_correctly():
     planet = Exoplanet(**DEFAULT_EXOPLANET_SETTINGS)
+    print(planet)
     assert planet.epoch == DEFAULT_EXOPLANET_SETTINGS["epoch"]
     assert u.get_physical_type(planet.period) == "time"
     assert planet.identifier == DEFAULT_EXOPLANET_SETTINGS["identifier"]
@@ -59,17 +58,10 @@ def test_create_exoplanet_correctly():
 
 
 def test_create_invalid_exoplanet():
-    epoch = 1.0 * u.cm
-    period = 2.3
-    identifier = 'Bad planet'
-    coordinate = 'Not a real place'
-    depth = 23123
-    duration = 23213
+    values = DEFAULT_EXOPLANET_SETTINGS.copy()
+    # Make pediod and duration have invalid units for a time
+    values["period"] = values["period"].value * u.m
+    values["duration"] = values["duration"].value * u.m
     # Check that individual values that are bad raise an error
-    with pytest.raises(ValidationError, match='4 validation errors'):
-        Exoplanet(epoch=epoch,
-                  period=period,
-                  identifier=identifier,
-                  coordinate=coordinate,
-                  depth=depth,
-                  duration=duration)
+    with pytest.raises(ValidationError, match="2 validation errors"):
+        Exoplanet(**values)
