@@ -72,13 +72,13 @@ def set_up(sample_image_for_finding_stars, directory_with_images="."):
 
     ccd = CCDData.read(path)
     try:
-        vsx = vsx_vizier(ccd.header, radius=0.5 * u.degree)
+        vsx = vsx_vizier(ccd.wcs, radius=0.5 * u.degree)
     except RuntimeError:
         vsx = []
     else:
-        ra = vsx["RAJ2000"]
-        dec = vsx["DEJ2000"]
-        vsx["coords"] = SkyCoord(ra=ra, dec=dec, unit=(u.hour, u.degree))
+        ra = vsx["ra"]
+        dec = vsx["dec"]
+        vsx["coords"] = SkyCoord(ra=ra, dec=dec, unit=u.degree)
 
     return ccd, vsx
 
@@ -112,10 +112,10 @@ def crossmatch_APASS2VSX(CCD, RD, vsx):
     RD_angle : `astropy.units.Quantity`
         Angular separation between APASS stars and input targets.
     """
-    apass = apass_dr9(CCD)
+    apass = apass_dr9(CCD.wcs)
     ra = apass["ra"]
     dec = apass["dec"]
-    apass["coords"] = SkyCoord(ra=ra, dec=dec, unit=(u.hour, u.degree))
+    apass["coords"] = SkyCoord(ra=ra, dec=dec, unit=u.degree)
     apass_coord = apass["coords"]
 
     if vsx:
@@ -166,8 +166,9 @@ def mag_scale(cmag, apass, v_angle, RD_angle, brighter_dmag=0.44, dimmer_dmag=0.
     good_stars : `astropy.table.Table`
         Table with the comparison stars.
     """
-    high_mag = apass["r_mag"] < cmag + dimmer_dmag
-    low_mag = apass["r_mag"] > cmag - brighter_dmag
+    good_filter = apass["passband"] == "r"
+    high_mag = apass["mag"] < cmag + dimmer_dmag
+    low_mag = apass["mag"] > cmag - brighter_dmag
     if len(v_angle) > 0:
         good_v_angle = v_angle > 1.0 * u.arcsec
     else:
@@ -178,7 +179,7 @@ def mag_scale(cmag, apass, v_angle, RD_angle, brighter_dmag=0.44, dimmer_dmag=0.
     else:
         good_RD_angle = True
 
-    good_stars = high_mag & low_mag & good_RD_angle & good_v_angle
+    good_stars = good_filter & high_mag & low_mag & good_RD_angle & good_v_angle
     good_apass = apass[good_stars]
     apass_good_coord = good_apass["coords"]
     return apass_good_coord, good_stars
