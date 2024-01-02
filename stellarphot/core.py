@@ -1089,7 +1089,7 @@ class CatalogData(BaseEnhancedTable):
     @classmethod
     def from_vizier(
         cls,
-        header_or_center,
+        location,
         desired_catalog,
         radius=0.5 * u.degree,
         clip_by_frame=False,
@@ -1106,10 +1106,10 @@ class CatalogData(BaseEnhancedTable):
         Parameters
         ----------
 
-        header_or_center : FITS header or `astropy.coordinates.SkyCoord`
-            Either a FITS header with WCS information or a `SkyCoord` object.
-            The center of the frame or the input coordinate is the center
-            of the cone search.
+        location : `astropy.coordinates.SkyCoord`, `astropy.wcs.WCS`, or FITS header or
+            Either a `~astropy.coordinates.SkyCoord` object, a `~astropy.wcs.WCS` object
+            or  a FITS header with WCS information. The center of the frame or the input
+            coordinate is the center of the cone search.
 
         desired_catalog : str
             Vizier name of the catalog to be searched.
@@ -1164,18 +1164,28 @@ class CatalogData(BaseEnhancedTable):
         followed by a letter or letters.
         """
 
-        if isinstance(header_or_center, SkyCoord):
+        if isinstance(location, SkyCoord):
             # Center was passed in, just use it.
-            center = header_or_center
+            center = location
             if clip_by_frame:
                 raise ValueError(
                     "To clip entries by frame you must use "
                     "a WCS as the first argument."
                 )
+        elif isinstance(location, WCS):
+            center = SkyCoord(*location.wcs.crval, unit="deg")
         else:
-            # Find the center of the frame
-            shape = (header_or_center["NAXIS2"], header_or_center["NAXIS1"])
-            center = WCS(header_or_center).pixel_to_world(shape[1] / 2, shape[0] / 2)
+            wcs = WCS(location)
+            # The header may not have contained WCS information. In that case
+            # the WCS CTYPE will be empty strings and we need to raise an
+            # error.
+            if wcs.wcs.ctype[0] == "" and wcs.wcs.ctype[1] == "":
+                raise ValueError(
+                    f"Invalid coordinates in input {location}. Make sure the "
+                    "header contains valid WCS information or pass in a WCS or "
+                    "coordinate."
+                )
+            center = SkyCoord(*wcs.wcs.crval, unit="deg")
 
         # Get catalog via cone search
         Vizier.ROW_LIMIT = -1  # Set row_limit to have no limit
@@ -1213,7 +1223,7 @@ class CatalogData(BaseEnhancedTable):
         # desired.
         if clip_by_frame:
             cat_coords = SkyCoord(ra=cat["ra"], dec=cat["dec"])
-            wcs = WCS(header_or_center)
+            wcs = WCS(location)
             x, y = wcs.all_world2pix(cat_coords.ra, cat_coords.dec, 0)
             in_x = (x >= padding) & (x <= wcs.pixel_shape[0] - padding)
             in_y = (y >= padding) & (y <= wcs.pixel_shape[1] - padding)
