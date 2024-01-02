@@ -2,11 +2,19 @@
 
 from pathlib import Path
 
-from pydantic import BaseModel, Field, conint
+from pydantic import BaseModel, Field, conint, validator
 
 from .autowidgets import CustomBoundedIntTex
 
-__all__ = ["ApertureSettings", "PhotometryFileSettings"]
+from astropy.time import Time
+from astropy.coordinates import SkyCoord
+from astropy.units import Quantity
+import astropy.units as u
+
+from ..core import QuantityType
+
+
+__all__ = ["ApertureSettings", "PhotometryFileSettings", "Exoplanet"]
 
 
 class ApertureSettings(BaseModel):
@@ -40,7 +48,9 @@ class ApertureSettings(BaseModel):
     To create an `ApertureSettings` object, you can pass in the radius, gap,
     and annulus_width as keyword arguments:
 
-    >>> aperture_settings = ApertureSettings(radius=4, gap=10, annulus_width=15)
+    >>> aperture_settings = ApertureSettings(radius=4,
+    ...                                      gap=10,
+    ...                                      annulus_width=15)
     """
 
     radius: conint(ge=1) = Field(autoui=CustomBoundedIntTex, default=1)
@@ -80,3 +90,113 @@ class PhotometryFileSettings(BaseModel):
     aperture_locations_file: Path = Field(
         filter_pattern=["*.ecsv", "*.csv"], default=""
     )
+
+
+class TimeType(Time):
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, v):
+        return Time(v)
+
+
+class SkyCoordType(SkyCoord):
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, v):
+        return SkyCoord(v)
+
+
+class Exoplanet(BaseModel):
+    """
+    Create an object representing an Exoplanet.
+
+    Parameters
+    ----------
+
+    epoch : `astropy.time.Time`, optional
+        Epoch of the exoplanet.
+
+    period : `astropy.units.Quantity`, optional
+        Period of the exoplanet.
+
+    Identifier : str
+        Identifier of the exoplanet.
+
+    coordinate : `astropy.coordinates.SkyCoord`
+        Coordinates of the exoplanet.
+
+    depth : float
+        Depth of the exoplanet.
+
+    duration : `astropy.units.Quantity`, optional
+        Duration of the exoplanet transit.
+
+    Examples
+    --------
+
+    To create an `Exoplanet` object, you can pass in the epoch,
+     period, identifier, coordinate, depth, and duration as keyword arguments:
+
+    >>> from astropy.time import Time
+    >>> from astropy.coordinates import SkyCoord
+    >>> from astropy import units as u
+    >>> planet  = Exoplanet(epoch=Time(2455909.29280, format="jd"),
+    ...                     period=1.21749 * u.day,
+    ...                     identifier="KELT-1b",
+    ...                     coordinate=SkyCoord(ra="00:01:26.9169",
+    ...                                         dec="+39:23:01.7821",
+    ...                                         frame="icrs",
+    ...                                         unit=("hour", "degree")),
+    ...                     depth=0.006,
+    ...                     duration=120 * u.min)
+    """
+
+    epoch: TimeType | None = None
+    period: QuantityType | None = None
+    identifier: str
+    coordinate: SkyCoordType
+    depth: float | None = None
+    duration: QuantityType | None = None
+
+    class Config:
+        validate_all = True
+        validate_assignment = True
+        extra = "forbid"
+        json_encoders = {
+            Quantity: lambda v: f"{v.value} {v.unit}",
+            QuantityType: lambda v: f"{v.value} {v.unit}",
+            Time: lambda v: f"{v.value}",
+        }
+
+    @validator("period")
+    @classmethod
+    def validate_period(cls, value):
+        """
+        Checks that the period has physical units of time and raises an error
+        if that is not true.
+        """
+        if u.get_physical_type(value) != "time":
+            raise ValueError(
+                f"Period does not have time units," f"currently has {value.unit} units."
+            )
+        return value
+
+    @validator("duration")
+    @classmethod
+    def validate_duration(cls, value):
+        """
+        Checks that the duration has physical units of time and raises an error
+        if that is not true.
+        """
+        if u.get_physical_type(value) != "time":
+            raise ValueError(
+                f"Duration does not have time units,"
+                f"currently has {value.unit} units."
+            )
+        return value
