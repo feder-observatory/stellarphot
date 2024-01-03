@@ -975,14 +975,14 @@ def test_catalog_from_vizier_search_vsx(location_method):
         # We need a WCS for each of these methods, so make that first.
         # The projection doesn't matter because we only need the center
         # coordinate. The code below is more or less copied from
-        #
+        # https://docs.astropy.org/en/stable/wcs/example_create_imaging.html
         wcs = WCS(naxis=2)
         # Put the center in the right place
         wcs.wcs.crpix = [100, 100]
         wcs.wcs.crval = [coordinate.ra.degree, coordinate.dec.degree]
         wcs.array_shape = [200, 200]
 
-        # The rest of these calues shouldn't matter for this test
+        # The rest of these values shouldn't matter for this test
         wcs.wcs.ctype = ["RA---AIR", "DEC--AIR"]
         wcs.wcs.set_pv([(2, 1, 45.0)])
         wcs.wcs.cdelt = np.array([-0.066667, 0.066667])

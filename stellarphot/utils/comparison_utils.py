@@ -103,7 +103,7 @@ def crossmatch_APASS2VSX(CCD, RD, vsx):
     Returns
     -------
 
-    apass : `astropy.table.Table`
+    apass : `stellarphot.CatalogData`
         Table with APASS stars in the field of view.
 
     v_angle : `astropy.units.Quantity`
@@ -113,8 +113,10 @@ def crossmatch_APASS2VSX(CCD, RD, vsx):
         Angular separation between APASS stars and input targets.
     """
     apass = apass_dr9(CCD.wcs)
+    # Use the standard names we have introduced for ra and dec
     ra = apass["ra"]
     dec = apass["dec"]
+    # Coordinate units are in degrees now
     apass["coords"] = SkyCoord(ra=ra, dec=dec, unit=u.degree)
     apass_coord = apass["coords"]
 
