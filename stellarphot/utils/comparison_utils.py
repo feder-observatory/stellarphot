@@ -133,7 +133,9 @@ def crossmatch_APASS2VSX(CCD, RD, vsx):
     return apass, v_angle, RD_angle
 
 
-def mag_scale(cmag, apass, v_angle, RD_angle, brighter_dmag=0.44, dimmer_dmag=0.75):
+def mag_scale(
+    cmag, apass, v_angle, RD_angle, brighter_dmag=0.44, dimmer_dmag=0.75, passband="r"
+):
     """
     Select comparison stars that are 1) not close the VSX stars or to other
     target stars and 2) fall within a particular magnitude range.
@@ -159,6 +161,9 @@ def mag_scale(cmag, apass, v_angle, RD_angle, brighter_dmag=0.44, dimmer_dmag=0.
     dimmer_dmag : float, optional
         Minimum difference in magnitude between the target and comparison stars.
 
+    passband : str, optional
+        Passband to use for selecting the comparison stars.
+
     Returns
     -------
 
@@ -168,7 +173,7 @@ def mag_scale(cmag, apass, v_angle, RD_angle, brighter_dmag=0.44, dimmer_dmag=0.
     good_stars : `astropy.table.Table`
         Table with the comparison stars.
     """
-    good_filter = apass["passband"] == "r"
+    good_filter = apass["passband"] == passband
     high_mag = apass["mag"] < cmag + dimmer_dmag
     low_mag = apass["mag"] > cmag - brighter_dmag
     if len(v_angle) > 0:
