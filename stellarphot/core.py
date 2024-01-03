@@ -541,7 +541,7 @@ class BaseEnhancedTable(QTable):
 class PhotometryData(BaseEnhancedTable):
     """
     A modified `astropy.table.QTable` to hold reduced photometry data that
-    provides the convience of validating the data table is in the proper
+    provides the convenience of validating the data table is in the proper
     format including units.  It returns an `PhotometryData` which is
     a `astropy.table.QTable` with additional attributes describing
     the observatory and camera.
