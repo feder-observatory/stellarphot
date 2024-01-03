@@ -660,6 +660,8 @@ def test_photometry_blank():
     test_base = PhotometryData()
     assert isinstance(test_base, PhotometryData)
     assert len(test_base) == 0
+    assert test_base.camera is None
+    assert test_base.observatory is None
 
 
 def test_photometry_data():
