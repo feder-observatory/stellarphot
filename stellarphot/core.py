@@ -672,20 +672,24 @@ class PhotometryData(BaseEnhancedTable):
         "passband": None,
         "file": None,
     }
-    observatory = None
+
+    observatory = TableAttribute(default=None)
     camera = TableAttribute(default=None)
 
     def __init__(
         self,
         *args,
         input_data=None,
-        observatory=None,
         colname_map=None,
         passband_map=None,
         retain_user_computed=False,
         **kwargs,
     ):
-        if (observatory is None) and (self.camera is None) and (input_data is None):
+        if (
+            (self.observatory is None)
+            and (self.camera is None)
+            and (input_data is None)
+        ):
             super().__init__(*args, **kwargs)
         else:
             # Check the time column is correct format and scale
@@ -697,7 +701,7 @@ class PhotometryData(BaseEnhancedTable):
                         f"not '{input_data['date-obs'][0].scale}'."
                     )
             except AttributeError:
-                # Happens if first item dosn't have a "scale"
+                # Happens if first item doesn't have a "scale"
                 raise ValueError(
                     "input_data['date-obs'] isn't column of "
                     "astropy.time.Time entries."
@@ -712,11 +716,11 @@ class PhotometryData(BaseEnhancedTable):
             )
 
             # Perform input validation
-            if not isinstance(observatory, EarthLocation):
+            if not isinstance(self.observatory, EarthLocation):
                 raise TypeError(
                     "observatory must be an "
                     "astropy.coordinates.EarthLocation object instead "
-                    f"of type {type(observatory)}."
+                    f"of type {type(self.observatory)}."
                 )
             if not isinstance(self.camera, Camera):
                 raise TypeError(
@@ -728,9 +732,9 @@ class PhotometryData(BaseEnhancedTable):
             # functions below) since using TableAttributes results in a
             # inability to access the values to due a
             # AttributeError: 'TableAttribute' object has no attribute 'name'
-            self.meta["lat"] = observatory.lat
-            self.meta["lon"] = observatory.lon
-            self.meta["height"] = observatory.height
+            # self.meta["lat"] = observatory.lat
+            # self.meta["lon"] = observatory.lon
+            # self.meta["height"] = observatory.height
             # self.meta["gain"] = camera.gain
             # self.meta["read_noise"] = camera.read_noise
             # self.meta["dark_current"] = camera.dark_current
@@ -788,13 +792,13 @@ class PhotometryData(BaseEnhancedTable):
                     # python>=3.10)
                     match this_col:
                         case "bjd":
-                            self["bjd"] = self.add_bjd_col(observatory)
+                            self["bjd"] = self.add_bjd_col(self.observatory)
 
                         case "night":
                             # Generate integer counter for nights. This should be
                             # approximately the MJD at noon local before the evening of
                             # the observation.
-                            hr_offset = int(observatory.lon.value / 15)
+                            hr_offset = int(self.observatory.lon.value / 15)
                             # Compute offset to 12pm Local Time before evening
                             LocalTime = Time(self["date-obs"]) + hr_offset * u.hr
                             hr = LocalTime.ymdhms.hour
@@ -856,12 +860,6 @@ class PhotometryData(BaseEnhancedTable):
 
             # Return BJD at midpoint of exposure at each location
             return Time(time_barycenter + self["exposure"] / 2, scale="tdb")
-
-    @property
-    def observatory(self):
-        return EarthLocation(
-            lat=self.meta["lat"], lon=self.meta["lon"], height=self.meta["height"]
-        )
 
 
 class CatalogData(BaseEnhancedTable):
