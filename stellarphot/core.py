@@ -1089,7 +1089,7 @@ class CatalogData(BaseEnhancedTable):
     @classmethod
     def from_vizier(
         cls,
-        location,
+        field_center,
         desired_catalog,
         radius=0.5 * u.degree,
         clip_by_frame=False,
@@ -1106,10 +1106,11 @@ class CatalogData(BaseEnhancedTable):
         Parameters
         ----------
 
-        location : `astropy.coordinates.SkyCoord`, `astropy.wcs.WCS`, or FITS header or
+        field_center : `astropy.coordinates.SkyCoord`, `astropy.wcs.WCS`, or FITS header
             Either a `~astropy.coordinates.SkyCoord` object, a `~astropy.wcs.WCS` object
-            or  a FITS header with WCS information. The center of the frame or the input
-            coordinate is the center of the cone search.
+            or a FITS header with WCS information. The input coordinate should be the
+            center of the frame; if a header or WCS is the input then the center of the
+            frame will be determined from the WCS.
 
         desired_catalog : str
             Vizier name of the catalog to be searched.
@@ -1164,24 +1165,24 @@ class CatalogData(BaseEnhancedTable):
         followed by a letter or letters.
         """
 
-        if isinstance(location, SkyCoord):
+        if isinstance(field_center, SkyCoord):
             # Center was passed in, just use it.
-            center = location
+            center = field_center
             if clip_by_frame:
                 raise ValueError(
                     "To clip entries by frame you must use "
                     "a WCS as the first argument."
                 )
-        elif isinstance(location, WCS):
-            center = SkyCoord(*location.wcs.crval, unit="deg")
+        elif isinstance(field_center, WCS):
+            center = SkyCoord(*field_center.wcs.crval, unit="deg")
         else:
-            wcs = WCS(location)
+            wcs = WCS(field_center)
             # The header may not have contained WCS information. In that case
             # the WCS CTYPE will be empty strings and we need to raise an
             # error.
             if wcs.wcs.ctype[0] == "" and wcs.wcs.ctype[1] == "":
                 raise ValueError(
-                    f"Invalid coordinates in input {location}. Make sure the "
+                    f"Invalid coordinates in input {field_center}. Make sure the "
                     "header contains valid WCS information or pass in a WCS or "
                     "coordinate."
                 )
@@ -1223,7 +1224,7 @@ class CatalogData(BaseEnhancedTable):
         # desired.
         if clip_by_frame:
             cat_coords = SkyCoord(ra=cat["ra"], dec=cat["dec"])
-            wcs = WCS(location)
+            wcs = WCS(field_center)
             x, y = wcs.all_world2pix(cat_coords.ra, cat_coords.dec, 0)
             in_x = (x >= padding) & (x <= wcs.pixel_shape[0] - padding)
             in_y = (y >= padding) & (y <= wcs.pixel_shape[1] - padding)
@@ -1233,17 +1234,18 @@ class CatalogData(BaseEnhancedTable):
         return cat
 
 
-def apass_dr9(header_or_center, radius=1 * u.degree, clip_by_frame=False, padding=100):
+def apass_dr9(field_center, radius=1 * u.degree, clip_by_frame=False, padding=100):
     """
     Return the items from APASS DR9 that are within the search radius and
     (optionally) within the field of view of a frame.
 
     Parameters
     ----------
-    header_or_center : FITS header or `astropy.coordinates.SkyCoord`
-        Either a FITS header with WCS information or a `SkyCoord` object.
-        The center of the frame or the input coordinate is the center
-        of the cone search.
+    field_center : `astropy.coordinates.SkyCoord`, `astropy.wcs.WCS`, or FITS header
+        Either a `~astropy.coordinates.SkyCoord` object, a `~astropy.wcs.WCS` object
+        or a FITS header with WCS information. The input coordinate should be the
+        center of the frame; if a header or WCS is the input then the center of the
+        frame will be determined from the WCS.
 
     radius : `astropy.units.Quantity`, optional
         Radius around which to search.
@@ -1264,7 +1266,7 @@ def apass_dr9(header_or_center, radius=1 * u.degree, clip_by_frame=False, paddin
         "DEJ2000": "dec",
     }
     return CatalogData.from_vizier(
-        header_or_center,
+        field_center,
         "II/336/apass9",
         radius=radius,
         clip_by_frame=clip_by_frame,
@@ -1273,17 +1275,18 @@ def apass_dr9(header_or_center, radius=1 * u.degree, clip_by_frame=False, paddin
     )
 
 
-def vsx_vizier(header_or_center, radius=1 * u.degree, clip_by_frame=False, padding=100):
+def vsx_vizier(field_center, radius=1 * u.degree, clip_by_frame=False, padding=100):
     """
     Return the items from the copy of VSX on Vizier that are within the search
     radius and (optionally) within the field of view of a frame.
 
     Parameters
     ----------
-    header_or_center : FITS header or `astropy.coordinates.SkyCoord`
-        Either a FITS header with WCS information or a `SkyCoord` object.
-        The center of the frame or the input coordinate is the center
-        of the cone search.
+    field_center : `astropy.coordinates.SkyCoord`, `astropy.wcs.WCS`, or FITS header
+        Either a `~astropy.coordinates.SkyCoord` object, a `~astropy.wcs.WCS` object
+        or a FITS header with WCS information. The input coordinate should be the
+        center of the frame; if a header or WCS is the input then the center of the
+        frame will be determined from the WCS.
 
     radius : `astropy.units.Quantity`, optional
         Radius around which to search.
@@ -1312,7 +1315,7 @@ def vsx_vizier(header_or_center, radius=1 * u.degree, clip_by_frame=False, paddi
         return cat
 
     return CatalogData.from_vizier(
-        header_or_center,
+        field_center,
         "B/vsx/vsx",
         radius=radius,
         clip_by_frame=clip_by_frame,
