@@ -227,15 +227,9 @@ class SeeingProfileWidget:
         self._set_observers()
         self.aperture_settings.description = ""
 
-    def load_fits(self, file):
+    def load_fits(self):
         """
         Load a FITS file into the image widget.
-
-        Parameters
-        ----------
-
-        file : str
-            Filename to open.
         """
         self.fits_file.load_in_image_widget(self.iw)
         self.object_name = self.fits_file.object
@@ -250,8 +244,9 @@ class SeeingProfileWidget:
             )
             self.exposure = np.nan
 
-    def _update_file(self, change):
-        self.load_fits(change.selected)
+    def _update_file(self, change):  # noqa: ARG002
+        # Widget callbacks need to accept a single argument, even if it is not used.
+        self.load_fits()
 
     def _construct_tess_sub(self):
         file = self.fits_file.path
