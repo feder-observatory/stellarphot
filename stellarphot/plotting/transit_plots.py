@@ -8,7 +8,7 @@ from astropy import units as u
 __all__ = ["plot_many_factors", "bin_data", "scale_and_shift"]
 
 
-def plot_many_factors(photometry, low, high, shift, scale, ax=None):
+def plot_many_factors(photometry, shift, scale, ax=None):
     """Plots many factors of photometry against each other.
 
     Parameters
@@ -16,12 +16,6 @@ def plot_many_factors(photometry, low, high, shift, scale, ax=None):
 
     photometry : `stellarphot.PhotometryData`
         The photometry table to plot.
-
-    low : float
-        The lower bound of the y-axis.
-
-    high : float
-        The upper bound of the y-axis.
 
     shift : float
         The amount to shift the data by.
