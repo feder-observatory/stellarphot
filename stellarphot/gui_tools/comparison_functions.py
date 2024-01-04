@@ -17,8 +17,6 @@ except ImportError:
     from astrowidgets.ginga import ImageWidget
 
 from stellarphot import SourceListData
-from stellarphot.differential_photometry import *
-from stellarphot.photometry import *
 from stellarphot.gui_tools.seeing_profile_functions import set_keybindings
 from stellarphot.gui_tools.fits_opener import FitsOpener
 from stellarphot.io import TessSubmission, TOI, TessTargetFile
