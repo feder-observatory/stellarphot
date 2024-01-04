@@ -336,8 +336,8 @@ class SeeingProfileWidget:
 
     def _make_show_event(self):
         def show_event(
-            viewer, event=None, datax=None, datay=None, aperture=None
-        ):  # noqa: ARG001
+            viewer, event=None, datax=None, datay=None, aperture=None  # noqa: ARG001
+        ):
             """
             ginga callbacks require the function signature above.
             """
