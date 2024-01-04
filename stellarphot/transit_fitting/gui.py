@@ -136,7 +136,9 @@ def make_checker(indicator_widget, value_widget):
     return check_name
 
 
-def validate_exposure_time(indicator_widget, value_widget):
+def validate_exposure_time(
+    indicator_widget, value_widget  # noqa: ARG001 (value_widget needed for callback)
+):
     """Validates the exposure time input.
 
     Parameters

@@ -72,7 +72,7 @@ def _raw_photometry_table():
         ],
     )
 
-    photom = PhotometryData(raw_table)
+    _ = PhotometryData(raw_table)
     return expected_flux_ratios, expected_flux_error, raw_table, raw_table[1:4]
 
 

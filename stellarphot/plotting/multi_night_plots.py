@@ -15,9 +15,7 @@ def plot_magnitudes(
     mags=None,
     errors=None,
     times=None,
-    source=None,
     night=None,
-    ref_mag=0,
     alpha=0.25,
     y_range=None,
 ):
@@ -37,14 +35,8 @@ def plot_magnitudes(
     times : array-like, optional
         Times of observations.
 
-    source : `~stellarphot.source.Source`, optional
-        Source object.
-
     night : float, optional
         Night of observations.
-
-    ref_mag : float, optional
-        Reference magnitude of source. Default is 0.
 
     alpha : float, optional
         Alpha value for error bars. Default is 0.25.
@@ -189,9 +181,7 @@ def multi_night(
                 mags=mags[source.id - 1][night_mask],
                 errors=mag_err[source.id - 1][night_mask],
                 times=source.bjd_tdb[night_mask],
-                source=source.id,
                 night=this_night,
-                ref_mag=brightest_mag,
                 y_range=y_range,
             )
             night_means.append(night_mean)
