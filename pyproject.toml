@@ -126,7 +126,6 @@ select = [
 "stellarphot/gui_tools/*" = ["F", "ARG"]
 "stellarphot/photometry/*" = ["F"]
 "stellarphot/plotting/*" = ["ARG"]
-"stellarphot/tests/*" = ["F"]
 "stellarphot/transit_fitting/*" = ["ARG"]
 "stellarphot/utils/*" = ["F", "ARG"]
 
