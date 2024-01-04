@@ -409,7 +409,6 @@ class SeeingProfileWidget:
     def _update_plots(self):
         # DISPLAY THE SCALED PROFILE
         fig_size = (10, 5)
-        profile_size = 60
 
         rad_prof = self.rad_prof
         self.seeing_profile_plot.clear_output(wait=True)
