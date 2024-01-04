@@ -141,7 +141,7 @@ class TransitModelFit:
         Width of the star in pixels at each time. Must be set before fitting.
     """
 
-    def __init__(self, batman_params=None):
+    def __init__(self):
         self._batman_params = batman.TransitParams()
         self._set_default_batman_params()
         self._times = None
@@ -333,7 +333,7 @@ class TransitModelFit:
         """
 
         def transit_model_with_trends(
-            time,
+            time,  # noqa: ARG001  (model needs this argument as independent variable)
             airmass,
             width,
             sky_per_pix,
