@@ -46,6 +46,34 @@ def find_center(image, center_guess, cutout_size=30, max_iters=10, match_limit=3
     cen : array
         The position of the star, in pixels, as found by the centroiding
         algorithm.
+
+
+    Raises
+    ------
+    RuntimeError
+        If the centroiding algorithm fails to converge on a star eitehr because a cutout
+        has only ``NaN`` values or because the centroiding algorithm fails to converge
+        or because the centroid determined by ``centroid_com`` and ``centroid_2dg``
+        differ by more than ``match_limit`` pixels.
+
+    Notes
+    -----
+    This function tries to identify the centroid of a star in a small region around an
+    image position. The original mtivation was to find the star near a mouse click on
+    an image. The approach is to generate a cutout around the initial guess position,
+    then use the centroid_com function from photutils to find the centroid of the star.
+    A new cutout is then generated around the new centroid position, and the process
+    is repeated until the centroid converges.
+
+    Convergence is determined by three criteria:
+
+    1. The centroid of the cutout must be within 3 pixels of the center of the cutout.
+    2. The centroid of the cutout must be within 0.1 pixels of the previous centroid.
+    3. The first two criteria must be met within the maximum number of iterations.
+
+    If the first two criteria are satisfied then the centroid is found by fitting a
+    Gaussian to the cutout. If the two centroids differ by more than match_limit pixels
+    then an error is raised.
     """
     pad = cutout_size // 2
     x, y = center_guess
@@ -58,17 +86,23 @@ def find_center(image, center_guess, cutout_size=30, max_iters=10, match_limit=3
     # ...do stats on it...
     _, sub_med, _ = sigma_clipped_stats(sub_data.data)
     # ...and centroid.
+
+    # Exclude negative pixels from initial centroid. If there is a dim star this helps
+    # ensure the star ends up centered since pixels with negative values are likely
+    # background.
+    # See also Howell, Handbook of CCD Astronomy, 2nd ed., p. 105
     mask = (sub_data.data - sub_med) < 0
     x_cm, y_cm = centroid_com(sub_data.data - sub_med, mask=mask)
 
-    # Translate centroid back to original image (maybe use Cutout2D instead)
+    # Translate centroid back to original image
     cen = np.array(sub_data.to_original_position((x_cm, y_cm)))
-    print(f"{cen=} {x_cm=} {y_cm=}")
+
     # ceno is the "original" center guess, set it to something nonsensical here
     ceno = np.array([-100, -100])
 
-    while cnt <= max_iters and (
-        np.abs(np.array([x_cm, y_cm]) - pad).max() > 3 or np.abs(cen - ceno).max() > 0.1
+    while cnt <= max_iters and (  # Iteration limit has not been reached
+        np.abs(np.array([x_cm, y_cm]) - pad).max() > 3  # Centroid > 3 pix from center
+        or np.abs(cen - ceno).max() > 0.1  # Centroid has not converged
     ):
         try:
             sub_data = Cutout2D(image, cen, (cutout_size, cutout_size), mode="trim")
@@ -237,7 +271,7 @@ class CenterAndProfile:
     @lazyproperty
     def sky_pixel_value(self):
         """
-        Pixel values for the sky, i.e. outside the star.
+        Pixel values for the sky, i.e. more than 3 FWHM from the star.
         """
         grid_x, grid_y = np.mgrid[: self.cutout.shape[0], : self.cutout.shape[1]]
         x_s, y_s = self.cutout.to_cutout_position(self.center)
