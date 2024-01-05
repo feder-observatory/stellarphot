@@ -2,7 +2,8 @@ import re
 
 from astropy import units as u
 from astropy.coordinates import EarthLocation, SkyCoord
-from astropy.table import Column, QTable, Table
+from astropy.io.misc.yaml import AstropyDumper, AstropyLoader
+from astropy.table import Column, QTable, Table, TableAttribute
 from astropy.time import Time
 from astropy.units import Quantity, Unit, IrreducibleUnit
 from astropy.wcs import WCS
@@ -295,6 +296,19 @@ class Camera(BaseModel):
         return v
 
 
+# Add YAML round-tripping for Camera
+def camera_representer(dumper, cam):
+    return dumper.represent_mapping("!Camera", cam.dict())
+
+
+def camera_constructor(loader, node):
+    return Camera(**loader.construct_mapping(node))
+
+
+AstropyDumper.add_representer(Camera, camera_representer)
+AstropyLoader.add_constructor("!Camera", camera_constructor)
+
+
 class BaseEnhancedTable(QTable):
     """
     A class to validate an `astropy.table.QTable` table of astronomical data during
@@ -527,7 +541,7 @@ class BaseEnhancedTable(QTable):
 class PhotometryData(BaseEnhancedTable):
     """
     A modified `astropy.table.QTable` to hold reduced photometry data that
-    provides the convience of validating the data table is in the proper
+    provides the convenience of validating the data table is in the proper
     format including units.  It returns an `PhotometryData` which is
     a `astropy.table.QTable` with additional attributes describing
     the observatory and camera.
@@ -658,36 +672,26 @@ class PhotometryData(BaseEnhancedTable):
         "passband": None,
         "file": None,
     }
-    observatory = None
-    camera = None
+
+    observatory = TableAttribute(default=None)
+    camera = TableAttribute(default=None)
 
     def __init__(
         self,
         *args,
         input_data=None,
-        observatory=None,
-        camera=None,
         colname_map=None,
         passband_map=None,
         retain_user_computed=False,
         **kwargs,
     ):
-        if (observatory is None) and (camera is None) and (input_data is None):
+        if (
+            (self.observatory is None)
+            and (self.camera is None)
+            and (input_data is None)
+        ):
             super().__init__(*args, **kwargs)
         else:
-            # Perform input validation
-            if not isinstance(observatory, EarthLocation):
-                raise TypeError(
-                    "observatory must be an "
-                    "astropy.coordinates.EarthLocation object instead "
-                    f"of type {type(observatory)}."
-                )
-            if not isinstance(camera, Camera):
-                raise TypeError(
-                    "camera must be a stellarphot.Camera object instead "
-                    f"of type {type(camera)}."
-                )
-
             # Check the time column is correct format and scale
             try:
                 if input_data["date-obs"][0].scale != "utc":
@@ -697,7 +701,7 @@ class PhotometryData(BaseEnhancedTable):
                         f"not '{input_data['date-obs'][0].scale}'."
                     )
             except AttributeError:
-                # Happens if first item dosn't have a "scale"
+                # Happens if first item doesn't have a "scale"
                 raise ValueError(
                     "input_data['date-obs'] isn't column of "
                     "astropy.time.Time entries."
@@ -711,19 +715,30 @@ class PhotometryData(BaseEnhancedTable):
                 **kwargs,
             )
 
+            # Perform input validation
+            if not isinstance(self.observatory, EarthLocation):
+                raise TypeError(
+                    "observatory must be an "
+                    "astropy.coordinates.EarthLocation object instead "
+                    f"of type {type(self.observatory)}."
+                )
+            if not isinstance(self.camera, Camera):
+                raise TypeError(
+                    "camera must be a stellarphot.Camera object instead "
+                    f"of type {type(self.camera)}."
+                )
+
             # Add the TableAttributes directly to meta (and adding attribute
             # functions below) since using TableAttributes results in a
             # inability to access the values to due a
             # AttributeError: 'TableAttribute' object has no attribute 'name'
-            self.meta["lat"] = observatory.lat
-            self.meta["lon"] = observatory.lon
-            self.meta["height"] = observatory.height
-            self.meta["data_unit"] = camera.data_unit
-            self.meta["gain"] = camera.gain
-            self.meta["read_noise"] = camera.read_noise
-            self.meta["dark_current"] = camera.dark_current
-            self.meta["pixel_scale"] = camera.pixel_scale
-            self.meta["max_data_value"] = camera.max_data_value
+            # self.meta["lat"] = observatory.lat
+            # self.meta["lon"] = observatory.lon
+            # self.meta["height"] = observatory.height
+            # self.meta["gain"] = camera.gain
+            # self.meta["read_noise"] = camera.read_noise
+            # self.meta["dark_current"] = camera.dark_current
+            # self.meta["pixel_scale"] = camera.pixel_scale
 
             # Check for consistency of counts-related columns
             counts_columns = [
@@ -777,13 +792,13 @@ class PhotometryData(BaseEnhancedTable):
                     # python>=3.10)
                     match this_col:
                         case "bjd":
-                            self["bjd"] = self.add_bjd_col(observatory)
+                            self["bjd"] = self.add_bjd_col(self.observatory)
 
                         case "night":
                             # Generate integer counter for nights. This should be
                             # approximately the MJD at noon local before the evening of
                             # the observation.
-                            hr_offset = int(observatory.lon.value / 15)
+                            hr_offset = int(self.observatory.lon.value / 15)
                             # Compute offset to 12pm Local Time before evening
                             LocalTime = Time(self["date-obs"]) + hr_offset * u.hr
                             hr = LocalTime.ymdhms.hour
@@ -845,23 +860,6 @@ class PhotometryData(BaseEnhancedTable):
 
             # Return BJD at midpoint of exposure at each location
             return Time(time_barycenter + self["exposure"] / 2, scale="tdb")
-
-    @property
-    def camera(self):
-        return Camera(
-            data_unit=self.meta["data_unit"],
-            gain=self.meta["gain"],
-            read_noise=self.meta["read_noise"],
-            dark_current=self.meta["dark_current"],
-            pixel_scale=self.meta["pixel_scale"],
-            max_data_value=self.meta["max_data_value"],
-        )
-
-    @property
-    def observatory(self):
-        return EarthLocation(
-            lat=self.meta["lat"], lon=self.meta["lon"], height=self.meta["height"]
-        )
 
 
 class CatalogData(BaseEnhancedTable):
