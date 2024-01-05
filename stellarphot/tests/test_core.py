@@ -957,10 +957,36 @@ def test_catalog_from_vizier_search_apass():
 
 
 @pytest.mark.remote_data
-def test_catalog_from_vizier_search_vsx():
+@pytest.mark.parametrize("location_method", ["coord", "header", "wcs"])
+def test_catalog_from_vizier_search_vsx(location_method):
     # Do a cone search with a small enough radius to return exaclty one star,
     # DQ Psc, which happens to already be in the test data.
     coordinate = SkyCoord(ra=359.94371 * u.deg, dec=-0.2801 * u.deg)
+
+    if location_method == "coord":
+        center = coordinate
+    else:
+        # We need a WCS for each of these methods, so make that first.
+        # The projection doesn't matter because we only need the center
+        # coordinate. The code below is more or less copied from
+        # https://docs.astropy.org/en/stable/wcs/example_create_imaging.html
+        wcs = WCS(naxis=2)
+        # Put the center in the right place
+        wcs.wcs.crpix = [100, 100]
+        wcs.wcs.crval = [coordinate.ra.degree, coordinate.dec.degree]
+        wcs.array_shape = [200, 200]
+
+        # The rest of these values shouldn't matter for this test
+        wcs.wcs.ctype = ["RA---AIR", "DEC--AIR"]
+        wcs.wcs.set_pv([(2, 1, 45.0)])
+        wcs.wcs.cdelt = np.array([-0.066667, 0.066667])
+        if location_method == "header":
+            center = wcs.to_header()
+            center["NAXIS1"] = wcs.array_shape[0]
+            center["NAXIS2"] = wcs.array_shape[1]
+        else:
+            center = wcs
+
     vsx_map = dict(
         Name="id",
         RAJ2000="ra",
@@ -975,7 +1001,7 @@ def test_catalog_from_vizier_search_vsx():
         return cat
 
     my_cat = CatalogData.from_vizier(
-        coordinate,
+        center,
         "B/vsx/vsx",
         radius=0.1 * u.arcmin,
         clip_by_frame=False,
@@ -1007,6 +1033,16 @@ def test_from_vizier_with_coord_and_frame_clip_fails():
     cen_coord = wcs.pixel_to_world(4096 / 2, 4096 / 2)
     with pytest.raises(ValueError, match="To clip entries by frame"):
         _ = CatalogData.from_vizier(cen_coord, "B/vsx/vsx", clip_by_frame=True)
+
+
+def test_from_vizier_with_header_no_wcs_raise_error():
+    # Check that calling from_vizier with a header that has no WCS
+    # information generates the appropriate error.
+    ccd = CCDData(data=np.ones((10, 10)), unit="adu")
+    header = ccd.to_hdu()[0].header
+
+    with pytest.raises(ValueError, match="Invalid coordinates in input"):
+        CatalogData.from_vizier(header, "B/vsx/vsx", clip_by_frame=True)
 
 
 @pytest.mark.remote_data
