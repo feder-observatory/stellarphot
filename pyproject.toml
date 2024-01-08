@@ -123,7 +123,6 @@ select = [
 
 # Ignore pyflakes and ARGS issues in each subpackage until they are fixed
 "stellarphot/gui_tools/*" = ["F", "ARG"]
-"stellarphot/photometry/*" = ["F"]
 "stellarphot/utils/*" = ["F", "ARG"]
 
 [tool.pytest.ini_options]
