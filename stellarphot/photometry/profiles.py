@@ -124,7 +124,7 @@ def find_center(image, center_guess, cutout_size=30, max_iters=10, match_limit=3
 
     # Is we hit the max number of iterations, raise an error
     if max_iters > 1 and cnt > max_iters:
-        raise RuntimeError(f"Centroid finding did not converge")
+        raise RuntimeError("Centroid finding did not converge")
 
     # Get the final centroid position by fitting a gaussian
     # We may not have converged on a star, so capture any warning about a
