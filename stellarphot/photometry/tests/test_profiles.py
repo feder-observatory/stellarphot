@@ -3,7 +3,6 @@ import numpy as np
 import pytest
 
 from astropy.table import Table
-from astropy.utils.exceptions import AstropyUserWarning
 
 from photutils.datasets import make_gaussian_sources_image, make_noise_image
 
@@ -72,7 +71,7 @@ def test_find_center_no_star():
     )
 
     with pytest.raises(RuntimeError, match="Centroid did not converge on a star"):
-        cen = find_center(image + noise, [50, 200], max_iters=10)
+        find_center(image + noise, [50, 200], max_iters=10)
 
 
 def test_radial_profile():

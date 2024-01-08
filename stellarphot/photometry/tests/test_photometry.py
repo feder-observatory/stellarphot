@@ -544,9 +544,7 @@ def test_photometry_on_directory():
 
         # Here we just check whether any difference is consistent with
         # less than the expected one sigma deviation.
-        assert (
-            np.abs(expected_flux - obs_avg_net_cnts) < np.pi * aperture**2 * noise_dev
-        )
+        assert np.abs(expected_flux - obs_avg_net_cnts) < expected_deviation
 
 
 def test_photometry_on_directory_with_no_ra_dec():
@@ -587,7 +585,7 @@ def test_photometry_on_directory_with_no_ra_dec():
         found_sources.drop_ra_dec()
 
         with pytest.raises(ValueError):
-            phot_data = multi_image_photometry(
+            multi_image_photometry(
                 temp_dir,
                 object_name,
                 found_sources,
@@ -645,7 +643,7 @@ def test_photometry_on_directory_with_bad_fits():
 
         # Since none of the images will be valid, it should raise a RuntimeError
         with pytest.raises(RuntimeError):
-            phot_data = multi_image_photometry(
+            multi_image_photometry(
                 temp_dir,
                 object_name,
                 found_sources,
