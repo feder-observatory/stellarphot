@@ -1,4 +1,3 @@
-from astropy.table import Table
 from astrowidgets import ImageWidget
 
 from stellarphot.gui_tools import seeing_profile_functions as spf

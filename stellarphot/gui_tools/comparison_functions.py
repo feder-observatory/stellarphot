@@ -17,8 +17,6 @@ except ImportError:
     from astrowidgets.ginga import ImageWidget
 
 from stellarphot import SourceListData
-from stellarphot.differential_photometry import *
-from stellarphot.photometry import *
 from stellarphot.gui_tools.seeing_profile_functions import set_keybindings
 from stellarphot.gui_tools.fits_opener import FitsOpener
 from stellarphot.io import TessSubmission, TOI, TessTargetFile
@@ -127,9 +125,7 @@ def wrap(imagewidget, outputwidget):
             imagewidget.next_elim += 1
         except AttributeError:
             imagewidget.next_elim = 1
-        pad = 15
-        x = int(np.floor(event.data_x))
-        y = int(np.floor(event.data_y))
+
         ra, dec = i.wcs.wcs.all_pix2world(event.data_x, event.data_y, 0)
         out_skycoord = SkyCoord(ra=ra, dec=dec, unit=(u.degree, u.degree))
 
