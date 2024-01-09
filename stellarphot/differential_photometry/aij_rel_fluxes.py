@@ -1,8 +1,7 @@
+import astropy.units as u
 import numpy as np
-
 from astropy.coordinates import SkyCoord
 from astropy.table import Table
-import astropy.units as u
 
 __all__ = ["add_in_quadrature", "calc_aij_relative_flux"]
 

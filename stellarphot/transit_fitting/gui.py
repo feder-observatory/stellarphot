@@ -1,12 +1,11 @@
+import json
 import re
 from pathlib import Path
-import json
 
-import numpy as np
 import ipywidgets as ipw
-from traitlets import observe, Bool
-
+import numpy as np
 from astropy.utils.data import get_pkg_data_filename
+from traitlets import Bool, observe
 
 from stellarphot.transit_fitting.io import get_tic_info
 

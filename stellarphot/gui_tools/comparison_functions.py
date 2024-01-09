@@ -2,14 +2,11 @@ import functools
 from pathlib import Path
 
 import ipywidgets as ipw
-
 import numpy as np
-
-from astropy.table import Table
-from astropy.coordinates import SkyCoord
 from astropy import units as u
+from astropy.coordinates import SkyCoord
 from astropy.coordinates.name_resolve import NameResolveError
-
+from astropy.table import Table
 
 try:
     from astrowidgets import ImageWidget
@@ -17,16 +14,15 @@ except ImportError:
     from astrowidgets.ginga import ImageWidget
 
 from stellarphot import SourceListData
-from stellarphot.gui_tools.seeing_profile_functions import set_keybindings
 from stellarphot.gui_tools.fits_opener import FitsOpener
-from stellarphot.io import TessSubmission, TOI, TessTargetFile
+from stellarphot.gui_tools.seeing_profile_functions import set_keybindings
+from stellarphot.io import TOI, TessSubmission, TessTargetFile
 from stellarphot.utils.comparison_utils import (
-    set_up,
     crossmatch_APASS2VSX,
-    mag_scale,
     in_field,
+    mag_scale,
+    set_up,
 )
-
 
 __all__ = ["make_markers", "wrap", "ComparisonViewer"]
 

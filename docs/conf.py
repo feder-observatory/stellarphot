@@ -24,8 +24,8 @@
 # Thus, any C-extensions that are needed to build the documentation will *not*
 # be accessible, and the documentation will not build correctly.
 
-import sys
 import datetime
+import sys
 from importlib import import_module
 from pathlib import Path
 

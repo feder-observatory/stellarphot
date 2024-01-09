@@ -1,14 +1,12 @@
 from pathlib import Path
 
 import pandas as pd
-
-from astropy.table import Table
+from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astropy.nddata import CCDData
-from astropy import units as u
+from astropy.table import Table
 
 from stellarphot import apass_dr9, vsx_vizier
-
 
 __all__ = ["read_file", "set_up", "crossmatch_APASS2VSX", "mag_scale", "in_field"]
 

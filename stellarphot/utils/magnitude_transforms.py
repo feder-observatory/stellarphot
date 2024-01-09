@@ -1,16 +1,14 @@
 from collections import namedtuple
 
 import numpy as np
-from scipy.optimize import curve_fit
-
-from astropy.modeling import models, fitting
+from astropy import units as u
+from astropy.coordinates import SkyCoord, match_coordinates_sky
+from astropy.modeling import fitting, models
 from astropy.stats import sigma_clip
 from astropy.table import MaskedColumn
-from astropy.coordinates import SkyCoord, match_coordinates_sky
-from astropy import units as u
+from scipy.optimize import curve_fit
 
 from ..core import apass_dr9
-
 
 __all__ = [
     "f",

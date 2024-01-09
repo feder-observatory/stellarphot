@@ -1,13 +1,10 @@
 import numpy as np
-
 import pytest
-
 from astropy.table import Table
-
 from photutils.datasets import make_gaussian_sources_image, make_noise_image
 
 from stellarphot import Camera
-from stellarphot.photometry import find_center, CenterAndProfile
+from stellarphot.photometry import CenterAndProfile, find_center
 from stellarphot.tests.test_core import TEST_CAMERA_VALUES
 
 # Make a few round stars

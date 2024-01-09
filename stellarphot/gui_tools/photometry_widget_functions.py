@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from ccdproc import ImageFileCollection
 import ipywidgets as ipw
+from ccdproc import ImageFileCollection
 
 from stellarphot.settings import ApertureSettings, PhotometryFileSettings, ui_generator
 

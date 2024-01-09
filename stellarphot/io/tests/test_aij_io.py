@@ -1,5 +1,4 @@
 import numpy as np
-
 from astropy.coordinates import SkyCoord
 from astropy.table import Table
 from astropy.utils.data import get_pkg_data_filename

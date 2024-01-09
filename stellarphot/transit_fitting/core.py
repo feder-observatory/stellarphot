@@ -1,9 +1,8 @@
 import warnings
 
 import numpy as np
-
-from astropy.modeling.models import custom_model
 from astropy.modeling.fitting import LevMarLSQFitter, _validate_model
+from astropy.modeling.models import custom_model
 
 # Functions below changed from private to public in astropy 5
 try:
@@ -14,6 +13,8 @@ try:
 except ImportError:
     from astropy.modeling.fitting import (
         _fitter_to_model_params as fitter_to_model_params,
+    )
+    from astropy.modeling.fitting import (
         _model_to_fit_params as model_to_fit_params,
     )
 

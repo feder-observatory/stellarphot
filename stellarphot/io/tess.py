@@ -1,15 +1,14 @@
+import re
 from dataclasses import dataclass
 from pathlib import Path
-import re
 from tempfile import NamedTemporaryFile
 
+import requests
+from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astropy.table import Table
 from astropy.time import Time
-from astropy import units as u
 from astropy.utils.data import download_file
-
-import requests
 
 from stellarphot.transit_fitting.io import get_tic_info
 

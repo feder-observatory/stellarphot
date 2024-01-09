@@ -1,11 +1,9 @@
+import astropy.units as u
 import numpy as np
-
 import pytest
-
 from astropy.coordinates import SkyCoord
 from astropy.table import Table
 from astropy.time import Time
-import astropy.units as u
 
 from stellarphot import PhotometryData
 from stellarphot.differential_photometry.aij_rel_fluxes import calc_aij_relative_flux

@@ -114,6 +114,7 @@ select = [
     "UP",
     # check for numpy deprecations
     "NPY",
+    "I",    # isort checks
 ]
 [tool.ruff.lint.per-file-ignores]
 # Ignore `E402` and `F403` (import violations) in all `__init__.py` files.

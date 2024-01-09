@@ -6,3 +6,5 @@ c47587cbfa829b03be1dc2e5a79dc96af6ea712f
 855f1d409a0eaf407e55d0d39a7ee195c19612a3
 # Ignore whitespace changes in comments/docstrings
 1b7139d4e9db54c818293832e89aaca30b662a32
+# Ignore initial isort
+479a2cdb25baa7f40cc73b1f5999e0b61c4d69ed
