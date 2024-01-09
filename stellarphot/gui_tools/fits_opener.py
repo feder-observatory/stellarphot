@@ -1,11 +1,9 @@
-from pathlib import Path
 import warnings
+from pathlib import Path
 
 from astropy.io import fits
 from astropy.nddata import CCDData
-
 from ipyfilechooser import FileChooser
-
 
 __all__ = ["FitsOpener"]
 

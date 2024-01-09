@@ -1,7 +1,7 @@
 import sys
 
-import pytest
 import numpy as np
+import pytest
 
 from stellarphot.transit_fitting import TransitModelFit
 

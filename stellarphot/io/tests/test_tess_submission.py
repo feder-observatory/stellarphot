@@ -2,8 +2,8 @@ import re
 import warnings
 
 import pytest
-
 from astropy.coordinates import SkyCoord
+
 from stellarphot.io.tess import TessSubmission, TessTargetFile
 
 GOOD_HEADER = {

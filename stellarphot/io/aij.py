@@ -1,11 +1,10 @@
-from pathlib import Path
 import re
+from pathlib import Path
 
 import astropy.units as u
+import numpy as np
 from astropy.coordinates import SkyCoord
 from astropy.table import Table
-
-import numpy as np
 
 __all__ = [
     "ApertureAIJ",

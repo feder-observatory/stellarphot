@@ -1,19 +1,16 @@
 import re
 
+import numpy as np
+import pandas as pd
 from astropy import units as u
 from astropy.coordinates import EarthLocation, SkyCoord
 from astropy.io.misc.yaml import AstropyDumper, AstropyLoader
 from astropy.table import Column, QTable, Table, TableAttribute
 from astropy.time import Time
-from astropy.units import Quantity, Unit, IrreducibleUnit
+from astropy.units import IrreducibleUnit, Quantity, Unit
 from astropy.wcs import WCS
-
 from astroquery.vizier import Vizier
-
-import pandas as pd
-from pydantic import BaseModel, root_validator, Field, validator
-
-import numpy as np
+from pydantic import BaseModel, Field, root_validator, validator
 
 __all__ = [
     "Camera",

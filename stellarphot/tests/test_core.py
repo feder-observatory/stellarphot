@@ -1,28 +1,27 @@
 import warnings
 
-import pytest
 import numpy as np
+import pytest
 from astropy import units as u
+from astropy.coordinates import EarthLocation, SkyCoord
+from astropy.io import ascii, fits
+from astropy.nddata import CCDData
 from astropy.table import Table
 from astropy.time import Time
-from astropy.io import ascii, fits
-from astropy.coordinates import EarthLocation, SkyCoord
-from astropy.nddata import CCDData
 from astropy.utils.data import get_pkg_data_filename
 from astropy.wcs import WCS
 from astropy.wcs.wcs import FITSFixedWarning
-
 from pydantic import ValidationError
+
 from stellarphot.core import (
-    Camera,
     BaseEnhancedTable,
-    PhotometryData,
+    Camera,
     CatalogData,
+    PhotometryData,
+    SourceListData,
     apass_dr9,
     vsx_vizier,
-    SourceListData,
 )
-
 
 TEST_CAMERA_VALUES = dict(
     data_unit=u.adu,

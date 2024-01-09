@@ -1,9 +1,8 @@
-from pathlib import Path
 import warnings
+from pathlib import Path
 
-import numpy as np
 import ipywidgets as ipw
-
+import numpy as np
 from astropy.io import fits
 from astropy.table import Table
 
@@ -14,8 +13,8 @@ except ImportError:
 
 import matplotlib.pyplot as plt
 
-from stellarphot.io import TessSubmission
 from stellarphot.gui_tools.fits_opener import FitsOpener
+from stellarphot.io import TessSubmission
 from stellarphot.photometry import CenterAndProfile
 from stellarphot.photometry.photometry import EXPOSURE_KEYWORDS
 from stellarphot.plotting import seeing_plot

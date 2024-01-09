@@ -1,8 +1,7 @@
 import numpy as np
-
-from astropy.table import Table
-from astropy.coordinates import SkyCoord
 from astropy import units as u
+from astropy.coordinates import SkyCoord
+from astropy.table import Table
 
 __all__ = ["calc_multi_vmag", "calc_vmag"]
 

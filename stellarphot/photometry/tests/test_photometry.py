@@ -1,6 +1,6 @@
 import tempfile
-from pathlib import Path
 import warnings
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -9,7 +9,6 @@ from astropy.coordinates import EarthLocation
 from astropy.io import ascii
 from astropy.utils.data import get_pkg_data_filename
 from astropy.utils.metadata.exceptions import MergeConflictWarning
-
 from fake_image import FakeCCDImage, shift_FakeCCDImage
 
 from stellarphot.core import Camera, SourceListData

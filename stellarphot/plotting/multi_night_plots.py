@@ -1,12 +1,9 @@
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
-
 from astropy.stats import mad_std
 from astropy.time import Time
-
 from astropy.timeseries import LombScargle
-
 
 __all__ = ["plot_magnitudes", "multi_night"]
 

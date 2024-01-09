@@ -1,11 +1,10 @@
+import astropy.units as u
+import pytest
+from astropy.coordinates import SkyCoord
 from astropy.time import Time
 from pydantic import ValidationError
-import pytest
 
 from stellarphot.settings.models import ApertureSettings, Exoplanet
-
-from astropy.coordinates import SkyCoord
-import astropy.units as u
 
 DEFAULT_APERTURE_SETTINGS = dict(radius=5, gap=10, annulus_width=15)
 

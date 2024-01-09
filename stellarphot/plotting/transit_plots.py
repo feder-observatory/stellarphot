@@ -1,9 +1,6 @@
-from matplotlib import pyplot as plt
-
 import numpy as np
-
 from astropy import units as u
-
+from matplotlib import pyplot as plt
 
 __all__ = ["plot_many_factors", "bin_data", "scale_and_shift"]
 

@@ -1,20 +1,18 @@
 import warnings
 
 import numpy as np
+import pytest
+from astropy import units as u
+from astropy.modeling import models
+from astropy.table import Column, Table
+from astropy.utils.data import get_pkg_data_filename
+from astropy.utils.exceptions import AstropyUserWarning
 
 from ..magnitude_transforms import (
-    filter_transform,
     calculate_transform_coefficients,
+    filter_transform,
     transform_magnitudes,
 )
-
-import pytest
-
-from astropy.modeling import models
-from astropy.table import Table, Column
-from astropy.utils.data import get_pkg_data_filename
-from astropy import units as u
-from astropy.utils.exceptions import AstropyUserWarning
 
 
 def generate_input_mags(n_stars):

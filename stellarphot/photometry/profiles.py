@@ -1,13 +1,12 @@
 import warnings
 
 import numpy as np
-from astropy.stats import sigma_clipped_stats
 from astropy.nddata import Cutout2D
 from astropy.nddata.utils import NoOverlapError
+from astropy.stats import sigma_clipped_stats
 from astropy.utils import lazyproperty
-
-from photutils.profiles import RadialProfile, CurveOfGrowth
-from photutils.centroids import centroid_com, centroid_2dg
+from photutils.centroids import centroid_2dg, centroid_com
+from photutils.profiles import CurveOfGrowth, RadialProfile
 
 from stellarphot.photometry import calculate_noise
 

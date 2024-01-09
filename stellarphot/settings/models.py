@@ -2,17 +2,14 @@
 
 from pathlib import Path
 
+import astropy.units as u
+from astropy.coordinates import SkyCoord
+from astropy.time import Time
+from astropy.units import Quantity
 from pydantic import BaseModel, Field, conint, validator
 
-from .autowidgets import CustomBoundedIntTex
-
-from astropy.time import Time
-from astropy.coordinates import SkyCoord
-from astropy.units import Quantity
-import astropy.units as u
-
 from ..core import QuantityType
-
+from .autowidgets import CustomBoundedIntTex
 
 __all__ = ["ApertureSettings", "PhotometryFileSettings", "Exoplanet"]
 

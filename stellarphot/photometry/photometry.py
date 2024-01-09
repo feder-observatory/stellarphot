@@ -1,10 +1,9 @@
-import warnings
 import logging
+import warnings
+from pathlib import Path
 
 import bottleneck as bn
 import numpy as np
-from pathlib import Path
-
 from astropy import units as u
 from astropy.coordinates import EarthLocation, SkyCoord
 from astropy.nddata import CCDData, NoOverlapError
@@ -15,7 +14,6 @@ from astropy.wcs import FITSFixedWarning
 from ccdproc import ImageFileCollection
 from photutils.aperture import CircularAnnulus, CircularAperture, aperture_photometry
 from photutils.centroids import centroid_sources
-
 from scipy.spatial.distance import cdist
 
 from stellarphot import Camera, PhotometryData, SourceListData
