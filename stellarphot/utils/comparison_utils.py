@@ -7,7 +7,6 @@ from astropy.coordinates import SkyCoord
 from astropy.nddata import CCDData
 from astropy import units as u
 
-from stellarphot.photometry import *
 from stellarphot import apass_dr9, vsx_vizier
 
 

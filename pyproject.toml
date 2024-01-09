@@ -121,9 +121,6 @@ select = [
 # Ignore F405 (variable may be from star imports) in docs/conf.py
 "docs/conf.py" = ["F405"]
 
-# Ignore pyflakes and ARGS issues in each subpackage until they are fixed
-"stellarphot/utils/*" = ["F", "ARG"]
-
 [tool.pytest.ini_options]
 minversion = 7.0
 testpaths = [

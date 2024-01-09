@@ -304,13 +304,13 @@ def calculate_transform_coefficients(
     mag_diff = catalog_mag - (input_mag - 2.5 * np.log10(gain))
 
     # The error is the errors of those combined in quadrature.
-    combined_error = np.sqrt(input_mag_error**2 + catalog_mag_error**2)
+    # combined_error = np.sqrt(input_mag_error**2 + catalog_mag_error**2)
 
     # If both errors are zero then the error is omitted.
-    if (combined_error == 0).all():
-        dy = None
-    else:
-        dy = combined_error
+    # if (combined_error == 0).all():
+    #     dy = None
+    # else:
+    #     dy = combined_error
 
     g_init = models.Polynomial1D(order)
     fit = fitting.LinearLSQFitter()
@@ -558,7 +558,7 @@ def transform_to_catalog(
 
     """
 
-    if obs_error_column is None:
+    if obs_error_column is None and verbose:
         print("are you sure you want to do that? Error weighting is important!")
 
     fit_bounds_lower = [
@@ -595,9 +595,10 @@ def transform_to_catalog(
     cat = None
     cat_coords = None
 
-    for file, one_image in zip(
+    for file, one_image_inp in zip(
         observed_mags_grouped.groups.keys, observed_mags_grouped.groups
     ):
+        one_image = one_image_inp[one_image_inp["passband"] == obs_filter]
         our_coords = SkyCoord(one_image["RA"], one_image["Dec"], unit="degree")
         if cat is None or cat_coords is None:
             cat = apass_dr9(
