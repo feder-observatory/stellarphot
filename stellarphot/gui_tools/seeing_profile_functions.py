@@ -237,9 +237,12 @@ class SeeingProfileWidget:
                 self.exposure = self.fits_file.header[key]
                 break
         else:
+            # apparently setting a higher stacklevel is better, see
+            # https://docs.astral.sh/ruff/rules/no-explicit-stacklevel/
             warnings.warn(
                 "No exposure time keyword found in FITS header. "
-                "Setting exposure to NaN"
+                "Setting exposure to NaN",
+                stacklevel=2,
             )
             self.exposure = np.nan
 
