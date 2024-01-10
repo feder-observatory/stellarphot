@@ -103,18 +103,14 @@ include = '\.pyi?$'
 
 [tool.ruff.lint]
 select = [
-    # E and W are the checks done by pycodestyle
-    "E",
+    "E",    # E and W are the checks done by pycodestyle
     "W",
-    # pyflakes checks
-    "F",
-    # flake8-unused-arguments
-    "ARG",
-    # language updates
-    "UP",
-    # check for numpy deprecations
-    "NPY",
+    "F",    # pyflakes checks
+    "ARG",  # flake8-unused-arguments
+    "UP",   # language updates
+    "NPY",  # check for numpy deprecations
     "I",    # isort checks
+    "B",    # flake8-bugbear
 ]
 [tool.ruff.lint.per-file-ignores]
 # Ignore `E402` and `F403` (import violations) in all `__init__.py` files.
