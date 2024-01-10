@@ -428,9 +428,9 @@ def set_values_from_json_file(widget, json_file):
         input_values = json.load(f)
 
     planet_type = widget.planet_type.value
-    for k, widget in widget.value_widget[planet_type].items():
+    for k, a_widget in widget.value_widget[planet_type].items():
         k1, k2 = k.split(join_char)
-        widget.value = input_values[k1][k2]
+        a_widget.value = input_values[k1][k2]
 
 
 def get_values_from_widget(exotic_widget, key=None):

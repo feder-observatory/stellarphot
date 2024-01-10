@@ -100,10 +100,13 @@ class VariableArgsFitter(LevMarLSQFitter):
         self.fit_info["message"] = mess
         self.fit_info["ierr"] = ierr
         if ierr not in [1, 2, 3, 4]:
+            # apparently setting a higher stacklevel is better, see
+            # https://docs.astral.sh/ruff/rules/no-explicit-stacklevel/
             warnings.warn(
                 "The fit may be unsuccessful; check "
                 "fit_info['message'] for more information.",
                 AstropyUserWarning,
+                stacklevel=2,
             )
 
         # now try to compute the true covariance matrix

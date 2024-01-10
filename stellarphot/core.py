@@ -68,8 +68,8 @@ class QuantityType(Quantity):
     def validate(cls, v):
         try:
             v = Quantity(v)
-        except TypeError:
-            raise ValueError(f"Invalid value for Quantity: {v}")
+        except TypeError as err:
+            raise ValueError(f"Invalid value for Quantity: {v}") from err
         else:
             if not v.unit.bases:
                 raise ValueError("Must provided a unit")
@@ -105,8 +105,8 @@ class PixelScaleType(Quantity):
     def validate(cls, v):
         try:
             v = Quantity(v)
-        except TypeError:
-            raise ValueError(f"Invalid value for Quantity: {v}")
+        except TypeError as err:
+            raise ValueError(f"Invalid value for Quantity: {v}") from err
         if (
             len(v.unit.bases) != 2
             or v.unit.bases[0].physical_type != "angle"
@@ -360,11 +360,11 @@ class BaseEnhancedTable(QTable):
             # and values)
             try:
                 self._table_description = {k: v for k, v in table_description.items()}
-            except AttributeError:
+            except AttributeError as err:
                 raise TypeError(
                     "You must provide a dict as table_description (input "
                     f"table_description is type {type(table_description)})."
-                )
+                ) from err
 
             # Check data before copying to avoid recusive loop and non-QTable
             # data input.
@@ -385,12 +385,12 @@ class BaseEnhancedTable(QTable):
                 # Confirm a proper colname_map is passed
                 try:
                     self._colname_map = {k: v for k, v in colname_map.items()}
-                except AttributeError:
+                except AttributeError as err:
                     raise TypeError(
                         "You must provide a dict as table_description "
                         "(input table_description is type "
                         f"{type(self._table_description)})."
-                    )
+                    ) from err
 
                 self._update_colnames(self._colname_map, data)
 
@@ -424,17 +424,17 @@ class BaseEnhancedTable(QTable):
                             f"(should be {this_unit} but reported "
                             f"as {data[this_col].unit})."
                         )
-                except KeyError:
+                except KeyError as err:
                     raise ValueError(
                         f"data['{this_col}'] is missing from input " "data."
-                    )
+                    ) from err
             else:  # Check that columns with no units but are required exist!
                 try:
                     _ = data[this_col]
-                except KeyError:
+                except KeyError as err:
                     raise ValueError(
                         f"data['{this_col}'] is missing from input " "data."
-                    )
+                    ) from err
 
     def _update_colnames(self, colname_map, data):
         # Change column names as desired, done before validating the columns,
@@ -442,11 +442,11 @@ class BaseEnhancedTable(QTable):
         for orig_name, new_name in colname_map.items():
             try:
                 data.rename_column(orig_name, new_name)
-            except KeyError:
+            except KeyError as err:
                 raise ValueError(
                     f"data['{orig_name}'] is missing from input "
                     "data but listed in colname_map!"
-                )
+                ) from err
 
     def _update_passbands(self):
         # Converts filter names in filter column to AAVSO standard names
@@ -697,12 +697,12 @@ class PhotometryData(BaseEnhancedTable):
                         "have scale='utc', "
                         f"not '{input_data['date-obs'][0].scale}'."
                     )
-            except AttributeError:
+            except AttributeError as err:
                 # Happens if first item doesn't have a "scale"
                 raise ValueError(
                     "input_data['date-obs'] isn't column of "
                     "astropy.time.Time entries."
-                )
+                ) from err
 
             # Convert input data to QTable (while also checking for required columns)
             super().__init__(
@@ -1015,7 +1015,7 @@ class CatalogData(BaseEnhancedTable):
         # create a single list of all the matches
         matches = [
             m_match if m_match else c_match
-            for m_match, c_match in zip(mag_match, color_match)
+            for m_match, c_match in zip(mag_match, color_match, strict=True)
         ]
 
         # The passband should be the first group match.
@@ -1037,7 +1037,7 @@ class CatalogData(BaseEnhancedTable):
         mag_col_prepend = "magstphot"
         mag_col_map = {
             orig_col: f"{mag_col_prepend}_{passband}"
-            for orig_col, passband in zip(orig_cols, passbands)
+            for orig_col, passband in zip(orig_cols, passbands, strict=True)
         }
 
         # Dictionary to update the magnitude error column names. The
@@ -1046,7 +1046,7 @@ class CatalogData(BaseEnhancedTable):
         mag_err_col_prepend = "errorstphot"
         mag_err_col_map = {
             orig_col: f"{mag_err_col_prepend}_{passband}"
-            for orig_col, passband in zip(mag_err_cols, passbands)
+            for orig_col, passband in zip(mag_err_cols, passbands, strict=True)
         }
 
         # All columns except those we have renamed should be preserved, so make
@@ -1419,11 +1419,11 @@ class SourceListData(BaseEnhancedTable):
                 # Confirm a proper colname_map is passed
                 try:
                     self._colname_map = {k: v for k, v in colname_map.items()}
-                except AttributeError:
+                except AttributeError as err:
                     raise TypeError(
                         "You must provide a dict as table_description (it "
                         f"is type {type(self._colname_map)})."
-                    )
+                    ) from err
                 self._update_colnames(self._colname_map, data)
 
                 # No need to repeat this

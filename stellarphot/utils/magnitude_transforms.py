@@ -63,7 +63,7 @@ def opts_to_str(opts):
     """
     opt_names = ["a", "b", "c", "d", "z"]
     names = []
-    for name, value in zip(opt_names, opts):
+    for name, value in zip(opt_names, opts, strict=True):
         names.append(f"{name}={value:.4f}")
     return ", ".join(names)
 
@@ -594,7 +594,7 @@ def transform_to_catalog(
     cat_coords = None
 
     for file, one_image_inp in zip(
-        observed_mags_grouped.groups.keys, observed_mags_grouped.groups
+        observed_mags_grouped.groups.keys, observed_mags_grouped.groups, strict=True
     ):
         one_image = one_image_inp[one_image_inp["passband"] == obs_filter]
         our_coords = SkyCoord(one_image["RA"], one_image["Dec"], unit="degree")
@@ -653,7 +653,7 @@ def transform_to_catalog(
         )
 
         # Accumulate the parameters
-        for param, value in zip(all_params, popt):
+        for param, value in zip(all_params, popt, strict=True):
             param.extend([value] * len(one_image))
 
         # Calculate and accumulate residual
@@ -688,7 +688,7 @@ def transform_to_catalog(
         ]
     opt_names = ["a", "b", "c", "d", "z"]
 
-    for name, values in zip(opt_names, all_params):
+    for name, values in zip(opt_names, all_params, strict=True):
         result[name] = values
 
     result["mag_cat"] = cat_mags

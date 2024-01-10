@@ -304,11 +304,11 @@ def single_image_photometry(
         too_close = find_too_close(
             sourcelist, aperture_settings.radius, pixel_scale=camera.pixel_scale.value
         )
-    except Exception as e:
+    except Exception as err:
         # Any failure here is BAD, so raise an error
         raise RuntimeError(
-            f"Call to find_too_close() returned {type(e).__name__}: {str(e)}"
-        )
+            f"Call to find_too_close() returned {type(err).__name__}: {str(err)}"
+        ) from err
     too_close_cnt = np.sum(too_close)
     non_overlap = ~too_close
     msg = (
