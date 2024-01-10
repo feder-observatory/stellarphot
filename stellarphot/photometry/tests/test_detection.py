@@ -92,7 +92,7 @@ def test_detect_source_number_location():
     # Do we have the right number of sources?
     assert len(sources) == len(found_sources)
 
-    for inp, out in zip(sources, found_sources):
+    for inp, out in zip(sources, found_sources, strict=True):
         # Do the positions match?
         np.testing.assert_allclose(out["xcenter"], inp["x_mean"], rtol=1e-5, atol=0.05)
         np.testing.assert_allclose(out["ycenter"], inp["y_mean"], rtol=1e-5, atol=0.05)

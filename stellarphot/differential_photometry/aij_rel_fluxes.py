@@ -153,7 +153,7 @@ def calc_aij_relative_flux(
 
     # This seems a little hacky; there must be a better way
     for date_obs, comp_total, comp_error in zip(
-        comp_fluxes.groups.keys, comp_totals, comp_errors
+        comp_fluxes.groups.keys, comp_totals, comp_errors, strict=True
     ):
         this_time = star_data["date-obs"] == date_obs[0]
         comp_total_vector[this_time] *= comp_total

@@ -245,7 +245,9 @@ class CenterAndProfile:
         """
         radii = []
         pixel_values = []
-        for rad, ap in zip(self.radial_profile.radius, self.radial_profile.apertures):
+        for rad, ap in zip(
+            self.radial_profile.radius, self.radial_profile.apertures, strict=True
+        ):
             ap_mask = ap.to_mask(method="center")
             ap_data = ap_mask.multiply(self._data)
             good_data = ap_data != 0

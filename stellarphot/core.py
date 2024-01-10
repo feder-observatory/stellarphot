@@ -1015,7 +1015,7 @@ class CatalogData(BaseEnhancedTable):
         # create a single list of all the matches
         matches = [
             m_match if m_match else c_match
-            for m_match, c_match in zip(mag_match, color_match)
+            for m_match, c_match in zip(mag_match, color_match, strict=True)
         ]
 
         # The passband should be the first group match.
@@ -1037,7 +1037,7 @@ class CatalogData(BaseEnhancedTable):
         mag_col_prepend = "magstphot"
         mag_col_map = {
             orig_col: f"{mag_col_prepend}_{passband}"
-            for orig_col, passband in zip(orig_cols, passbands)
+            for orig_col, passband in zip(orig_cols, passbands, strict=True)
         }
 
         # Dictionary to update the magnitude error column names. The
@@ -1046,7 +1046,7 @@ class CatalogData(BaseEnhancedTable):
         mag_err_col_prepend = "errorstphot"
         mag_err_col_map = {
             orig_col: f"{mag_err_col_prepend}_{passband}"
-            for orig_col, passband in zip(mag_err_cols, passbands)
+            for orig_col, passband in zip(mag_err_cols, passbands, strict=True)
         }
 
         # All columns except those we have renamed should be preserved, so make

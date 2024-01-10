@@ -308,7 +308,7 @@ def test_aperture_photometry_no_outlier_rejection(int_data):
     phot.sort("aperture_sum")
     sources.sort("amplitude")
 
-    for inp, out in zip(sources, phot):
+    for inp, out in zip(sources, phot, strict=True):
         stdev = inp["x_stddev"]
         expected_flux = (
             inp["amplitude"]
@@ -390,7 +390,7 @@ def test_aperture_photometry_with_outlier_rejection(reject):
     phot.sort("aperture_sum")
     sources.sort("amplitude")
 
-    for inp, out in zip(sources, phot):
+    for inp, out in zip(sources, phot, strict=True):
         stdev = inp["x_stddev"]
         expected_flux = (
             inp["amplitude"]
@@ -514,7 +514,7 @@ def test_photometry_on_directory():
     # Get noise level from the first image
     noise_dev = fake_images[0].noise_dev
 
-    for fnd, inp in zip(found_sources, sources):
+    for fnd, inp in zip(found_sources, sources, strict=True):
         star_id_chk = fnd["star_id"]
         # Select the rows in phot_data that correspond to the current star
         # and compute the average of the aperture sums.

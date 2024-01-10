@@ -439,7 +439,7 @@ def generate_aij_table(table_name, comparison_table):
     }
     by_star = table_name.group_by("star_id")
     base_table = by_star.groups[0][list(info_columns.keys())]
-    for star_id, sub_table in zip(by_star.groups.keys, by_star.groups):
+    for star_id, sub_table in zip(by_star.groups.keys, by_star.groups, strict=True):
         star_co = SkyCoord(
             ra=sub_table["RA"][0], dec=sub_table["Dec"][0], unit="degree"
         )
@@ -520,7 +520,7 @@ def parse_aij_table(table_name):
         specifc_column_names = ["_".join([g, source]) for g in generic_source_columns]
         all_names = common_columns + specifc_column_names
         my_table = raw[all_names]
-        for spec, gen in zip(specifc_column_names, generic_source_columns):
+        for spec, gen in zip(specifc_column_names, generic_source_columns, strict=True):
             my_table.rename_column(spec, gen)
         stars.append(Star(my_table, idx + 1))
 
