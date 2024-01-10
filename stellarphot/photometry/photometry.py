@@ -16,7 +16,8 @@ from photutils.aperture import CircularAnnulus, CircularAperture, aperture_photo
 from photutils.centroids import centroid_sources
 from scipy.spatial.distance import cdist
 
-from stellarphot import Camera, PhotometryData, SourceListData
+from stellarphot import PhotometryData, SourceListData
+from stellarphot.settings import Camera
 
 from .source_detection import compute_fwhm
 

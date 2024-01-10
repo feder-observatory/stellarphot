@@ -4,14 +4,194 @@ from pathlib import Path
 
 import astropy.units as u
 from astropy.coordinates import SkyCoord
+from astropy.io.misc.yaml import AstropyDumper, AstropyLoader
 from astropy.time import Time
-from astropy.units import Quantity
-from pydantic import BaseModel, Field, conint, validator
+from astropy.units import IrreducibleUnit, Quantity, Unit
+from pydantic import BaseModel, Field, conint, root_validator, validator
 
-from ..core import QuantityType
+from .astropy_pydantic import PixelScaleType, QuantityType, UnitType
 from .autowidgets import CustomBoundedIntTex
 
-__all__ = ["ApertureSettings", "PhotometryFileSettings", "Exoplanet"]
+__all__ = ["Camera", "ApertureSettings", "PhotometryFileSettings", "Exoplanet"]
+
+
+class Camera(BaseModel):
+    """
+    A class to represent a CCD-based camera.
+
+    Parameters
+    ----------
+
+    data_unit : `astropy.units.Unit`
+        The unit of the data.
+
+    gain : `astropy.units.Quantity`
+        The gain of the camera in units such the product of `gain`
+        times the image data has units equal to that of the `read_noise`.
+
+    read_noise : `astropy.units.Quantity`
+        The read noise of the camera with units.
+
+    dark_current : `astropy.units.Quantity`
+        The dark current of the camera in units such that, when multiplied by
+        exposure time, the unit matches the units of the `read_noise`.
+
+    pixel_scale : `astropy.units.Quantity`
+        The pixel scale of the camera in units of arcseconds per pixel.
+
+    max_data_value : `astropy.units.Quantity`
+        The maximum pixel value to allow while performing photometry. Pixel values
+        above this will be set to ``NaN``. The unit must be ``data_unit``.
+
+    Attributes
+    ----------
+
+    data_unit : `astropy.units.Unit`
+        The unit of the data.
+
+    gain : `astropy.units.Quantity`
+        The gain of the camera in units such the product of `gain`
+        times the image data has units equal to that of the `read_noise`.
+
+    read_noise : `astropy.units.Quantity`
+        The read noise of the camera with units.
+
+    dark_current : `astropy.units.Quantity`
+        The dark current of the camera in units such that, when multiplied by
+        exposure time, the unit matches the units of the `read_noise`.
+
+    pixel_scale : `astropy.units.Quantity`
+        The pixel scale of the camera in units of arcseconds per pixel.
+
+    max_data_value : `astropy.units.Quantity`
+        The maximum pixel value to allow while performing photometry. Pixel values
+        above this will be set to ``NaN``. The unit must be ``data_unit``.
+
+    Notes
+    -----
+    The gain, read noise, and dark current are all assumed to be constant
+    across the entire CCD.
+
+    Examples
+    --------
+    >>> from astropy import units as u
+    >>> from stellarphot.settings import Camera
+    >>> camera = Camera(data_unit="adu",
+    ...                 gain=1.0 * u.electron / u.adu,
+    ...                 read_noise=1.0 * u.electron,
+    ...                 dark_current=0.01 * u.electron / u.second,
+    ...                 pixel_scale=0.563 * u.arcsec / u.pixel,
+    ...                 max_data_value=50000 * u.adu)
+    >>> camera.data_unit
+    Unit("adu")
+    >>> camera.gain
+    <Quantity 1. electron / adu>
+    >>> camera.read_noise
+    <Quantity 1. electron>
+    >>> camera.dark_current
+    <Quantity 0.01 electron / s>
+    >>> camera.pixel_scale
+    <Quantity 0.563 arcsec / pix>
+    >>> camera.max_data_value
+    <Quantity 50000. adu>
+    """
+
+    data_unit: UnitType = Field(
+        description="units of the data", examples=["adu", "counts", "DN", "electrons"]
+    )
+    gain: QuantityType = Field(
+        description="unit should be consistent with data and read noise",
+        examples=["1.0 electron / adu"],
+    )
+    read_noise: QuantityType = Field(
+        description="unit should be consistent with dark current",
+        examples=["10.0 electron"],
+    )
+    dark_current: QuantityType = Field(
+        description="unit consistent with read noise, per unit time",
+        examples=["0.01 electron / second"],
+    )
+    pixel_scale: PixelScaleType = Field(
+        description="units of angle per pixel", examples=["0.6 arcsec / pix"]
+    )
+    max_data_value: QuantityType = Field(
+        description="maximum data value while performing photometry",
+        examples=["50000 adu"],
+    )
+
+    class Config:
+        validate_all = True
+        validate_assignment = True
+        extra = "forbid"
+        json_encoders = {
+            Quantity: lambda v: f"{v.value} {v.unit}",
+            QuantityType: lambda v: f"{v.value} {v.unit}",
+            Unit: lambda v: f"{v}",
+            IrreducibleUnit: lambda v: f"{v}",
+            PixelScaleType: lambda v: f"{v.value} {v.unit}",
+        }
+
+    # When the switch to pydantic v2 happens, this root_validator will need
+    # to be replaced by a model_validator decorator.
+    @root_validator(skip_on_failure=True)
+    @classmethod
+    def validate_gain(cls, values):
+        # Get read noise units
+        rn_unit = Quantity(values["read_noise"]).unit
+
+        # Check that gain and read noise have compatible units, that is that
+        # gain is read noise per data unit.
+        gain = values["gain"]
+        if (
+            len(gain.unit.bases) != 2
+            or gain.unit.bases[0] != rn_unit
+            or gain.unit.bases[1] != values["data_unit"]
+        ):
+            raise ValueError(
+                f"Gain units {gain.unit} are not compatible with "
+                f"read noise units {rn_unit}."
+            )
+
+        # Check that dark current and read noise have compatible units, that is
+        # that dark current is read noise per second.
+        dark_current = values["dark_current"]
+        if (
+            len(dark_current.unit.bases) != 2
+            or dark_current.unit.bases[0] != rn_unit
+            or dark_current.unit.bases[1] != u.s
+        ):
+            raise ValueError(
+                f"Dark current units {dark_current.unit} are not "
+                f"compatible with read noise units {rn_unit}."
+            )
+
+        # Check that maximum data value is consistent with data units
+        if values["max_data_value"].unit != values["data_unit"]:
+            raise ValueError(
+                f"Maximum data value units {values['max_data_value'].unit} "
+                f"are not consistent with data units {values['data_unit']}."
+            )
+        return values
+
+    @validator("max_data_value")
+    @classmethod
+    def validate_max_data_value(cls, v):
+        if v.value <= 0:
+            raise ValueError("max_data_value must be positive")
+        return v
+
+
+# Add YAML round-tripping for Camera
+def camera_representer(dumper, cam):
+    return dumper.represent_mapping("!Camera", cam.dict())
+
+
+def camera_constructor(loader, node):
+    return Camera(**loader.construct_mapping(node))
+
+
+AstropyDumper.add_representer(Camera, camera_representer)
+AstropyLoader.add_constructor("!Camera", camera_constructor)
 
 
 class ApertureSettings(BaseModel):
