@@ -394,11 +394,11 @@ class ComparisonViewer:
         # Export variables as CSV (overwrite existing file if it exists)
         try:
             self.variables.write(filename, overwrite=self.overwrite_outputs)
-        except OSError:
+        except OSError as err:
             raise OSError(
                 f"Existing file ({filename}) can not be overwritten. "
                 "Set overwrite_outputs=True to address this."
-            )
+            ) from err
 
     def _show_label_button_handler(self, change):
         value = change["new"]
@@ -439,11 +439,11 @@ class ComparisonViewer:
         # Export aperture file as CSV (overwrite existing file if it exists)
         try:
             sources.write(filename, overwrite=self.overwrite_outputs)
-        except OSError:
+        except OSError as err:
             raise OSError(
                 f"Existing file ({filename}) can not be overwritten."
                 "Set overwrite_outputs=True to address this."
-            )
+            ) from err
 
     def _make_control_bar(self):
         self._show_labels_button = ipw.ToggleButton(description="Click to show labels")
@@ -592,11 +592,11 @@ class ComparisonViewer:
                 Path(self._field_name.value).unlink()
             try:
                 self.iw.save(self._field_name.value)
-            except OSError:
+            except OSError as err:
                 raise OSError(
                     f"Existing file ({self._field_name.value}) can not be overwritten. "
                     "Set overwrite_outputs=True to address this."
-                )
+                ) from err
 
         if self._zoom_name.value:
             self.tess_field_zoom_view()
@@ -605,11 +605,11 @@ class ComparisonViewer:
                 Path(self._zoom_name.value).unlink()
             try:
                 self.iw.save(self._zoom_name.value)
-            except OSError:
+            except OSError as err:
                 raise OSError(
                     f"Existing file ({self._zoom_name.value}) can not be overwritten. "
                     "Set overwrite_outputs=True to address this."
-                )
+                ) from err
 
     def generate_table(self):
         """

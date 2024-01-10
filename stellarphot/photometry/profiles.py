@@ -105,10 +105,10 @@ def find_center(image, center_guess, cutout_size=30, max_iters=10, match_limit=3
     ):
         try:
             sub_data = Cutout2D(image, cen, (cutout_size, cutout_size), mode="trim")
-        except NoOverlapError:
+        except NoOverlapError as err:
             raise RuntimeError(
                 f"Centroid finding failed, previous was {ceno}, current is {cen}"
-            )
+            ) from err
         _, sub_med, _ = sigma_clipped_stats(sub_data.data)
 
         mask = (sub_data.data - sub_med) < 0
