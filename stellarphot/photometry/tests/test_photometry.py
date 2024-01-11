@@ -37,6 +37,16 @@ FAKE_CAMERA = Camera(
     pixel_scale=1 * u.arcsec / u.pixel,
     max_data_value=40000 * u.adu,
 )
+
+# Camera with no read noise or dark currnet
+ZERO_CAMERA = Camera(
+    data_unit=u.adu,
+    gain=1.0 * u.electron / u.adu,
+    read_noise=0 * u.electron,
+    dark_current=0.0 * u.electron / u.second,
+    pixel_scale=1 * u.arcsec / u.pixel,
+    max_data_value=40000 * u.adu,
+)
 FAKE_OBS = EarthLocation(lat=0 * u.deg, lon=0 * u.deg, height=0 * u.m)
 COORDS2USE = "pixel"
 
@@ -57,14 +67,8 @@ def test_calc_noise_source_only(gain, aperture_area):
     expected = np.sqrt(gain * counts)
 
     # Create camera instance
-    camera = Camera(
-        data_unit=u.adu,
-        gain=gain * u.electron / u.adu,
-        read_noise=0 * u.electron,
-        dark_current=0 * u.electron / u.second,
-        pixel_scale=1 * u.arcsec / u.pixel,
-        max_data_value=40000 * u.adu,
-    )
+    camera = ZERO_CAMERA.copy()
+    camera.gain = gain * camera.gain.unit
 
     np.testing.assert_allclose(
         calculate_noise(camera, counts=counts, aperture_area=aperture_area), expected
@@ -80,14 +84,10 @@ def test_calc_noise_dark_only(gain, aperture_area):
     exposure = 20
 
     # Create camera instance
-    camera = Camera(
-        data_unit=u.adu,
-        gain=gain * u.electron / u.adu,
-        read_noise=0 * u.electron,
-        dark_current=dark_current * u.electron / u.second,
-        pixel_scale=1 * u.arcsec / u.pixel,
-        max_data_value=40000 * u.adu,
-    )
+    camera = ZERO_CAMERA.copy()
+    # Set gain and dark current to values for test
+    camera.dark_current = dark_current * camera.dark_current.unit
+    camera.gain = gain * camera.gain.unit
 
     expected = np.sqrt(dark_current * aperture_area * exposure)
 
@@ -106,14 +106,9 @@ def test_calc_read_noise_only(gain, aperture_area):
     expected = np.sqrt(aperture_area * read_noise**2)
 
     # Create camera instance
-    camera = Camera(
-        data_unit=u.adu,
-        gain=gain * u.electron / u.adu,
-        read_noise=read_noise * u.electron,
-        dark_current=0 * u.electron / u.second,
-        pixel_scale=1 * u.arcsec / u.pixel,
-        max_data_value=40000 * u.adu,
-    )
+    camera = ZERO_CAMERA.copy()
+    camera.read_noise = read_noise * camera.read_noise.unit
+    camera.gain = gain * camera.gain.unit
 
     np.testing.assert_allclose(
         calculate_noise(camera, aperture_area=aperture_area), expected
@@ -128,14 +123,8 @@ def test_calc_sky_only(gain, aperture_area):
     expected = np.sqrt(gain * aperture_area * sky)
 
     # Create camera instance
-    camera = Camera(
-        data_unit=u.adu,
-        gain=gain * u.electron / u.adu,
-        read_noise=0 * u.electron,
-        dark_current=0 * u.electron / u.second,
-        pixel_scale=1 * u.arcsec / u.pixel,
-        max_data_value=40000 * u.adu,
-    )
+    camera = ZERO_CAMERA.copy()
+    camera.gain = gain * camera.gain.unit
 
     np.testing.assert_allclose(
         calculate_noise(camera, aperture_area=aperture_area, sky_per_pix=sky), expected
@@ -153,14 +142,8 @@ def test_annulus_area_term():
     expected = np.sqrt(gain * aperture_area * (1 + aperture_area / annulus_area) * sky)
 
     # Create camera instance
-    camera = Camera(
-        data_unit=u.adu,
-        gain=gain * u.electron / u.adu,
-        read_noise=0 * u.electron,
-        dark_current=0 * u.electron / u.second,
-        pixel_scale=1 * u.arcsec / u.pixel,
-        max_data_value=40000 * u.adu,
-    )
+    camera = ZERO_CAMERA.copy()
+    camera.gain = gain * camera.gain.unit
 
     np.testing.assert_allclose(
         calculate_noise(
@@ -189,14 +172,10 @@ def test_calc_noise_messy_case(digit, expected):
     read_noise = 12
 
     # Create camera instance
-    camera = Camera(
-        data_unit=u.adu,
-        gain=gain * u.electron / u.adu,
-        read_noise=read_noise * u.electron,
-        dark_current=dark_current * u.electron / u.second,
-        pixel_scale=1 * u.arcsec / u.pixel,
-        max_data_value=40000 * u.adu,
-    )
+    camera = ZERO_CAMERA.copy()
+    camera.gain = gain * camera.gain.unit
+    camera.dark_current = dark_current * camera.dark_current.unit
+    camera.read_noise = read_noise * camera.read_noise.unit
 
     np.testing.assert_allclose(
         calculate_noise(
