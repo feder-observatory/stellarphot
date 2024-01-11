@@ -299,7 +299,7 @@ class SeeingProfileWidget:
         self.aperture_settings_file_name.observe(
             self._change_aperture_save_location, names="value"
         )
-        self.fits_file.register_callback(self._update_file)
+        self.fits_file.file_chooser.observe(self._update_file, names="_value")
         self.save_toggle.observe(self._save_toggle_action, names="value")
         self.save_seeing.on_click(self._save_seeing_plot)
         self.setting_box.planet_num.observe(self._set_seeing_profile_name)

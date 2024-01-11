@@ -3,7 +3,7 @@ from pathlib import Path
 
 from astropy.io import fits
 from astropy.nddata import CCDData
-from ipyfilechooser import FileChooser
+from ipyautoui.custom import FileChooser
 
 __all__ = ["FitsOpener"]
 
@@ -27,7 +27,7 @@ class FitsOpener:
 
     ccd : `astropy.nddata.CCDData`
 
-    file_chooser : `ipyfilechooser.FileChooser`
+    file_chooser : `ipyautoui.FileChooser`
 
     header : `astropy.io.fits.Header`
 
@@ -47,7 +47,7 @@ class FitsOpener:
         self._header = {}
         self._selected_cache = self._fc.selected
         self.object = ""
-        self.register_callback(lambda _: None)
+        self._fc.observe(self._set_header, names="_value")
 
     @property
     def file_chooser(self):
@@ -78,7 +78,7 @@ class FitsOpener:
         """
         return Path(self._fc.selected)
 
-    def _set_header(self):
+    def _set_header(self, _=None):
         if not self._header or self._fc.selected != self._selected_cache:
             self._selected_cache = self._fc.selected
             try:
@@ -90,27 +90,6 @@ class FitsOpener:
             self.object = self._header["object"]
         except KeyError:
             pass
-
-    def register_callback(self, callable):
-        """
-        Register a callback that is called when the value changes. This is
-        the alternative to observing a value, which is not implemented for
-        some reason. Only one callback function is allowed.
-
-        This wraps the user-supplied callable to also update the header.
-
-        Parameters
-        ----------
-
-        callable : function
-            A function that takes one argument.
-        """
-
-        def wrap_call(change):
-            self._set_header()
-            callable(change)
-
-        self._fc.register_callback(wrap_call)
 
     def load_in_image_widget(self, image_widget):
         """
