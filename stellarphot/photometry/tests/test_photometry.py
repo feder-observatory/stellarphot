@@ -11,7 +11,7 @@ from astropy.utils.data import get_pkg_data_filename
 from astropy.utils.metadata.exceptions import MergeConflictWarning
 from fake_image import FakeCCDImage, shift_FakeCCDImage
 
-from stellarphot.core import Camera, SourceListData
+from stellarphot.core import SourceListData
 from stellarphot.photometry import (
     calculate_noise,
     find_too_close,
@@ -19,7 +19,7 @@ from stellarphot.photometry import (
     single_image_photometry,
     source_detection,
 )
-from stellarphot.settings import ApertureSettings
+from stellarphot.settings import ApertureSettings, Camera
 
 # Constants for the tests
 
