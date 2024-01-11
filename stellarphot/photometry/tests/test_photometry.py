@@ -29,9 +29,12 @@ SEED = 5432985
 
 SHIFT_TOLERANCE = 6
 FWHM_ESTIMATE = 5
+
+# A camera with not unreasonable settings
 FAKE_CAMERA = Camera(
     data_unit=u.adu,
     gain=1.0 * u.electron / u.adu,
+    name="test camera",
     read_noise=0 * u.electron,
     dark_current=0.1 * u.electron / u.second,
     pixel_scale=1 * u.arcsec / u.pixel,
@@ -42,6 +45,7 @@ FAKE_CAMERA = Camera(
 ZERO_CAMERA = Camera(
     data_unit=u.adu,
     gain=1.0 * u.electron / u.adu,
+    name="test camera",
     read_noise=0 * u.electron,
     dark_current=0.0 * u.electron / u.second,
     pixel_scale=1 * u.arcsec / u.pixel,

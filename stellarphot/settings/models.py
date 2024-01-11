@@ -29,6 +29,10 @@ class Camera(BaseModel):
         The gain of the camera in units such the product of `gain`
         times the image data has units equal to that of the `read_noise`.
 
+    name : str
+        The name of the camera; can be anything that helps the user identify
+        the camera.
+
     read_noise : `astropy.units.Quantity`
         The read noise of the camera with units.
 
@@ -52,6 +56,10 @@ class Camera(BaseModel):
     gain : `astropy.units.Quantity`
         The gain of the camera in units such the product of `gain`
         times the image data has units equal to that of the `read_noise`.
+
+    name : str
+        The name of the camera; can be anything that helps the user identify
+        the camera.
 
     read_noise : `astropy.units.Quantity`
         The read noise of the camera with units.
@@ -78,6 +86,7 @@ class Camera(BaseModel):
     >>> from stellarphot.settings import Camera
     >>> camera = Camera(data_unit="adu",
     ...                 gain=1.0 * u.electron / u.adu,
+    ...                 name="test camera",
     ...                 read_noise=1.0 * u.electron,
     ...                 dark_current=0.01 * u.electron / u.second,
     ...                 pixel_scale=0.563 * u.arcsec / u.pixel,
@@ -86,6 +95,8 @@ class Camera(BaseModel):
     Unit("adu")
     >>> camera.gain
     <Quantity 1. electron / adu>
+    >>> camera.name
+    'test camera'
     >>> camera.read_noise
     <Quantity 1. electron>
     >>> camera.dark_current
@@ -103,6 +114,7 @@ class Camera(BaseModel):
         description="unit should be consistent with data and read noise",
         examples=["1.0 electron / adu"],
     )
+    name: str
     read_noise: QuantityType = Field(
         description="unit should be consistent with dark current",
         examples=["10.0 electron"],

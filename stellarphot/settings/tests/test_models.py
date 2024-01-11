@@ -11,6 +11,7 @@ DEFAULT_APERTURE_SETTINGS = dict(radius=5, gap=10, annulus_width=15)
 TEST_CAMERA_VALUES = dict(
     data_unit=u.adu,
     gain=2.0 * u.electron / u.adu,
+    name="test camera",
     read_noise=10 * u.electron,
     dark_current=0.01 * u.electron / u.second,
     pixel_scale=0.563 * u.arcsec / u.pix,
@@ -96,6 +97,7 @@ def test_camera_altunitscheck():
     camera_for_test = dict(
         data_unit=u.adu,
         gain=2.0 * u.count / u.adu,
+        name="test camera",
         read_noise=10 * u.count,
         dark_current=0.01 * u.count / u.second,
         pixel_scale=0.563 * u.arcsec / u.pix,
