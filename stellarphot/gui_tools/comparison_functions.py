@@ -380,7 +380,7 @@ class ComparisonViewer:
         self._show_labels_button.observe(self._show_label_button_handler, names="value")
         self._save_var_info.on_click(self._save_variables_to_file)
         self._save_aperture_file.on_click(self._save_aperture_to_file)
-        self._file_chooser.register_callback(self._set_file)
+        self._file_chooser.file_chooser.observe(self._set_file, names="_value")
         self.tess_save_toggle.observe(self._save_toggle_action, "value")
         self.save_files.on_click(self.save_tess_files)
 
