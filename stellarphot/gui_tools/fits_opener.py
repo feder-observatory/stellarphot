@@ -38,7 +38,10 @@ class FitsOpener:
     """
 
     def __init__(self, title="Choose an image", filter_pattern=None, **kwargs):
-        self._fc = FileChooser(title=title, **kwargs)
+        # ipyautoui.FileChooser doesn't have a title attribute, so we have to
+        # add it after creating the widget
+        self._fc = FileChooser(**kwargs)
+        self._fc.title = title
         if not filter_pattern:
             self._fc.filter_pattern = ["*.fit*", "*.fit*.[bg]z"]
         else:
