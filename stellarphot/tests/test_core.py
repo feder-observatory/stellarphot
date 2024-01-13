@@ -80,6 +80,7 @@ testdata = Table(data, names=colnames, dtype=coltypes, units=colunits)
 feder_cg_16m = Camera(
     data_unit=u.adu,
     gain=1.5 * u.electron / u.adu,
+    name="Andor Aspen CG16M",
     read_noise=10.0 * u.electron,
     dark_current=0.01 * u.electron / u.second,
     pixel_scale=0.563 * u.arcsec / u.pix,
