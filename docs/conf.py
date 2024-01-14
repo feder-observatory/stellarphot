@@ -135,8 +135,7 @@ html_context = {
     "doc_path": "docs",
 }
 
-# Custom sidebar templates, maps document names to template names.
-# html_sidebars = {}
+html_css_files = ["astropy.css"]
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
