@@ -32,7 +32,7 @@ dependencies = [
 [project.optional-dependencies]
 docs = [
     "sphinx",
-    "sphinx-astropy",
+    "sphinx-astropy[confv2]",
     "graphviz",
 ]
 exo_fitting = [
