@@ -980,7 +980,7 @@ def apass_dr9(field_center, radius=1 * u.degree, clip_by_frame=False, padding=10
     APASS DR9 does not include an identifier column. Thought Vizier does provide
     a ``recno`` column, it is does not stay the same over time. This function generates
     an ID based on the coordinates of the APASS star, following the guidelines in
-    `https://cds.unistra.fr/Dic/iau-spec.html`_.
+    `IAU designation specification <https://cds.unistra.fr/Dic/iau-spec.html>`_.
 
     """
     apass_colnames = {
