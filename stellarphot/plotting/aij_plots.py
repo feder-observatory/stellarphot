@@ -60,7 +60,10 @@ def seeing_plot(
     if aperture_settings is None:
         radius = 4 * HWHM
         aperture_settings = PhotometryApertures(
-            radius=radius, inner_annulus=radius + 10, outer_annulus=radius + 25
+            radius=radius,
+            inner_annulus=radius + 10,
+            outer_annulus=radius + 25,
+            fwhm=2 * HWHM,
         )
 
     radius = aperture_settings.radius
