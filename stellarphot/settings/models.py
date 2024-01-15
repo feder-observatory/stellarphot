@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, confloat, conint, root_validator, validat
 from .astropy_pydantic import PixelScaleType, QuantityType, UnitType
 from .autowidgets import CustomBoundedIntTex
 
-__all__ = ["Camera", "ApertureSettings", "PhotometryFileSettings", "Exoplanet"]
+__all__ = ["Camera", "PhotometryApertures", "PhotometryFileSettings", "Exoplanet"]
 
 
 class Camera(BaseModel):
@@ -206,7 +206,7 @@ AstropyDumper.add_representer(Camera, camera_representer)
 AstropyLoader.add_constructor("!Camera", camera_constructor)
 
 
-class ApertureSettings(BaseModel):
+class PhotometryApertures(BaseModel):
     """
     Settings for aperture photometry.
 
@@ -237,10 +237,10 @@ class ApertureSettings(BaseModel):
     Examples
     --------
 
-    To create an `ApertureSettings` object, you can pass in the radius, gap,
+    To create an `PhotometryApertures` object, you can pass in the radius, gap,
     and annulus_width as keyword arguments:
 
-    >>> aperture_settings = ApertureSettings(
+    >>> aperture_settings = PhotometryApertures(
     ...     radius=4,
     ...     gap=10,
     ...     annulus_width=15,

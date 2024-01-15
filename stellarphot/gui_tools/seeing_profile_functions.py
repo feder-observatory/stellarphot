@@ -18,7 +18,7 @@ from stellarphot.io import TessSubmission
 from stellarphot.photometry import CenterAndProfile
 from stellarphot.photometry.photometry import EXPOSURE_KEYWORDS
 from stellarphot.plotting import seeing_plot
-from stellarphot.settings import ApertureSettings, ui_generator
+from stellarphot.settings import PhotometryApertures, ui_generator
 
 __all__ = [
     "set_keybindings",
@@ -182,7 +182,7 @@ class SeeingProfileWidget:
             value="aperture_settings.json",
             layout=layout,
         )
-        self.aperture_settings = ui_generator(ApertureSettings)
+        self.aperture_settings = ui_generator(PhotometryApertures)
         self.aperture_settings.show_savebuttonbar = True
         self.aperture_settings.path = Path(self.aperture_settings_file_name.value)
 
@@ -289,7 +289,7 @@ class SeeingProfileWidget:
     def _set_observers(self):
         def aperture_obs(change):
             self._update_plots()
-            ape = ApertureSettings(**change["new"])
+            ape = PhotometryApertures(**change["new"])
             self.aperture_settings.description = (
                 f"Inner annulus: {ape.inner_annulus}, "
                 f"outer annulus: {ape.outer_annulus}"
@@ -383,7 +383,7 @@ class SeeingProfileWidget:
                 self.rad_prof = rad_prof
 
                 # Make an aperture settings object, but don't update it's widget yet.
-                ap_settings = ApertureSettings(
+                ap_settings = PhotometryApertures(
                     radius=aperture_radius,
                     gap=default_gap,
                     annulus_width=default_annulus_width,
@@ -392,9 +392,9 @@ class SeeingProfileWidget:
             else:
                 # User changed aperture
                 aperture_radius = aperture["radius"]
-                ap_settings = ApertureSettings(
+                ap_settings = PhotometryApertures(
                     **aperture
-                )  # Make an ApertureSettings object
+                )  # Make an aperture settings object, but don't update it's widget yet.
 
             if update_aperture_settings:
                 self._update_ap_settings(ap_settings.dict())
@@ -409,7 +409,7 @@ class SeeingProfileWidget:
 
         rad_prof = self.rad_prof
         self.seeing_profile_plot.clear_output(wait=True)
-        ap_settings = ApertureSettings(**self.aperture_settings.value)
+        ap_settings = PhotometryApertures(**self.aperture_settings.value)
         with self.seeing_profile_plot:
             r_exact, individual_counts = rad_prof.pixel_values_in_profile
             scaled_exact_counts = (

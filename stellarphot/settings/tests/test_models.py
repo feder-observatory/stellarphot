@@ -4,7 +4,7 @@ from astropy.coordinates import SkyCoord
 from astropy.time import Time
 from pydantic import ValidationError
 
-from stellarphot.settings.models import ApertureSettings, Camera, Exoplanet
+from stellarphot.settings.models import Camera, Exoplanet, PhotometryApertures
 
 DEFAULT_APERTURE_SETTINGS = dict(radius=5, gap=10, annulus_width=15, fwhm=3.2)
 
@@ -128,7 +128,7 @@ def test_camera_json_round_trip():
 
 
 def test_create_aperture_settings_correctly():
-    ap_set = ApertureSettings(**DEFAULT_APERTURE_SETTINGS)
+    ap_set = PhotometryApertures(**DEFAULT_APERTURE_SETTINGS)
     assert ap_set.radius == DEFAULT_APERTURE_SETTINGS["radius"]
     assert (
         ap_set.inner_annulus
@@ -148,7 +148,7 @@ def test_create_invalid_values(bad_one):
     bad_settings = DEFAULT_APERTURE_SETTINGS.copy()
     bad_settings[bad_one] = -1
     with pytest.raises(ValidationError, match=bad_one):
-        ApertureSettings(**bad_settings)
+        PhotometryApertures(**bad_settings)
 
 
 DEFAULT_EXOPLANET_SETTINGS = dict(

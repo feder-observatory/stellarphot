@@ -83,7 +83,7 @@ def single_image_photometry(
         Location of the observatory where the images were taken.  Used for calculating
         the BJD.
 
-    aperture_settings : `stellarphot.settings.ApertureSettings`
+    aperture_settings : `stellarphot.settings.PhotometryApertures`
         Radius, inner and outer annulus radii settings and FWHM.
 
     shift_tolerance : float
@@ -633,7 +633,7 @@ def multi_image_photometry(
         Location of the observatory where the images were taken.  Used for calculating
         the BJD.
 
-    aperture_settings : `stellarphot.settings.ApertureSettings`
+    aperture_settings : `stellarphot.settings.PhotometryApertures`
         Radius, inner and outer annulus radii settings.
 
     shift_tolerance : float

@@ -20,7 +20,7 @@ from stellarphot.photometry import (
     single_image_photometry,
     source_detection,
 )
-from stellarphot.settings import ApertureSettings, Camera
+from stellarphot.settings import Camera, PhotometryApertures
 
 # Constants for the tests
 
@@ -63,7 +63,7 @@ COORDS2USE = "pixel"
 FAKE_CCD_IMAGE = FakeCCDImage(seed=SEED)
 
 # Build default PhotometrySettings for the tests based on the fake image
-DEFAULT_PHOTOMETRY_APERTURES = ApertureSettings(
+DEFAULT_PHOTOMETRY_APERTURES = PhotometryApertures(
     radius=FAKE_CCD_IMAGE.sources["aperture"][0],
     gap=FAKE_CCD_IMAGE.sources["aperture"][0],
     annulus_width=FAKE_CCD_IMAGE.sources["aperture"][0],
