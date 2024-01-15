@@ -41,7 +41,6 @@ def single_image_photometry(
     observatory_location,
     aperture_settings,
     shift_tolerance,
-    fwhm_estimate,
     use_coordinates="pixel",
     include_dig_noise=True,
     reject_too_close=True,
@@ -93,11 +92,6 @@ def single_image_photometry(
         the computed positions and the refined positions, in pixels.
         The expected shift shift should not be more than the FWHM, so a
         measured FWHM might be a good value to provide here.
-
-    fwhm_estimate : float
-        Initial estimate of the FWHM in pixels for sources in the image.
-        This is used to determine the size of the box used to fit the FWHM
-        (which is 5 times the FWHM estimate in width).
 
     use_coordinates : str, optional (Default: 'pixel')
         If ``'pixel'``, use the x/y positions in the sourcelist for
@@ -501,7 +495,10 @@ def single_image_photometry(
     with warnings.catch_warnings(record=True) as warned:
         warnings.filterwarnings("always", category=AstropyUserWarning)
         fwhm_x, fwhm_y = compute_fwhm(
-            ccd_image, photom, fwhm_estimate=fwhm_estimate, fit=fwhm_by_fit
+            ccd_image,
+            photom,
+            fwhm_estimate=aperture_settings.fwhm,
+            fit=fwhm_by_fit,
         )
         num_warnings = len(warned)
         msg += f"fitting failed on {num_warnings} of {len(photom)} sources  ... "
@@ -592,7 +589,6 @@ def multi_image_photometry(
     observatory_location,
     aperture_settings,
     shift_tolerance,
-    fwhm_estimate,
     include_dig_noise=True,
     reject_too_close=True,
     reject_background_outliers=True,
@@ -644,11 +640,6 @@ def multi_image_photometry(
         positions and the refined positions, in pixels.  The expected
         shift shift should not be more than the FWHM, so a measured FWHM
         might be a good value to provide here.
-
-    fwhm_estimate : float
-        Initial estimate of the FWHM in pixels for sources in the image.
-        This is used to determine the size of the box used to fit the FWHM
-        (which is 5 times the FWHM estimate in width).
 
     reject_background_outliers : bool, optional (Default: True)
         If ``True``, sigma clip the pixels in the annulus to reject outlying
@@ -781,7 +772,6 @@ def multi_image_photometry(
             observatory_location,
             aperture_settings,
             shift_tolerance,
-            fwhm_estimate,
             use_coordinates="sky",
             include_dig_noise=include_dig_noise,
             reject_too_close=reject_too_close,
