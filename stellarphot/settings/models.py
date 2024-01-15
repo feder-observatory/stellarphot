@@ -256,6 +256,7 @@ class ApertureSettings(BaseModel):
     class Config:
         validate_assignment = True
         validate_all = True
+        extra = "forbid"
 
     @property
     def inner_annulus(self):
