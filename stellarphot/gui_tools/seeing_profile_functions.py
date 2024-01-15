@@ -422,7 +422,7 @@ class SeeingProfileWidget:
                 rad_prof.normalized_profile,
                 rad_prof.HWHM,
                 self.object_name,
-                aperture_settings=ap_settings,
+                photometry_settings=ap_settings,
                 figsize=fig_size,
             )
             plt.show()
