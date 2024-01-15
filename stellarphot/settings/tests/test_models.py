@@ -6,7 +6,7 @@ from pydantic import ValidationError
 
 from stellarphot.settings.models import ApertureSettings, Camera, Exoplanet
 
-DEFAULT_APERTURE_SETTINGS = dict(radius=5, gap=10, annulus_width=15)
+DEFAULT_APERTURE_SETTINGS = dict(radius=5, gap=10, annulus_width=15, fwhm=3.2)
 
 TEST_CAMERA_VALUES = dict(
     data_unit=u.adu,

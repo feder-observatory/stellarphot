@@ -84,7 +84,7 @@ def single_image_photometry(
         the BJD.
 
     aperture_settings : `stellarphot.settings.ApertureSettings`
-        Radius, inner and outer annulus radii settings.
+        Radius, inner and outer annulus radii settings and FWHM.
 
     shift_tolerance : float
         If the x/y position needs to be computed using WCS, then computed
