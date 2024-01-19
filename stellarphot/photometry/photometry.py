@@ -39,9 +39,8 @@ def single_image_photometry(
     sourcelist,
     camera,
     observatory_location,
-    aperture_settings,
+    photometry_apertures,
     shift_tolerance,
-    fwhm_estimate,
     use_coordinates="pixel",
     include_dig_noise=True,
     reject_too_close=True,
@@ -83,8 +82,8 @@ def single_image_photometry(
         Location of the observatory where the images were taken.  Used for calculating
         the BJD.
 
-    aperture_settings : `stellarphot.settings.ApertureSettings`
-        Radius, inner and outer annulus radii settings.
+    photometry_apertures : `stellarphot.settings.PhotometryApertures`
+        Radius, inner and outer annulus radii settings and FWHM.
 
     shift_tolerance : float
         If the x/y position needs to be computed using WCS, then computed
@@ -93,11 +92,6 @@ def single_image_photometry(
         the computed positions and the refined positions, in pixels.
         The expected shift shift should not be more than the FWHM, so a
         measured FWHM might be a good value to provide here.
-
-    fwhm_estimate : float
-        Initial estimate of the FWHM in pixels for sources in the image.
-        This is used to determine the size of the box used to fit the FWHM
-        (which is 5 times the FWHM estimate in width).
 
     use_coordinates : str, optional (Default: 'pixel')
         If ``'pixel'``, use the x/y positions in the sourcelist for
@@ -190,15 +184,15 @@ def single_image_photometry(
             "observatory_location must be a EarthLocation object, but it "
             f"is '{type(observatory_location)}'."
         )
-    if aperture_settings.inner_annulus >= aperture_settings.outer_annulus:
+    if photometry_apertures.inner_annulus >= photometry_apertures.outer_annulus:
         raise ValueError(
-            f"outer_annulus ({aperture_settings.outer_annulus}) must be greater than "
-            f"inner_annulus ({aperture_settings.inner_annulus})."
+            f"outer_annulus ({photometry_apertures.outer_annulus}) must be greater "
+            f"than inner_annulus ({photometry_apertures.inner_annulus})."
         )
-    if aperture_settings.radius >= aperture_settings.inner_annulus:
+    if photometry_apertures.radius >= photometry_apertures.inner_annulus:
         raise ValueError(
-            f"aperture_radius ({aperture_settings.radius}) must be greater than "
-            f"inner_annulus ({aperture_settings.inner_annulus})."
+            f"aperture_radius ({photometry_apertures.radius}) must be greater than "
+            f"inner_annulus ({photometry_apertures.inner_annulus})."
         )
     if shift_tolerance <= 0:
         raise ValueError(
@@ -303,7 +297,9 @@ def single_image_photometry(
     dropped_sources = []
     try:
         too_close = find_too_close(
-            sourcelist, aperture_settings.radius, pixel_scale=camera.pixel_scale.value
+            sourcelist,
+            photometry_apertures.radius,
+            pixel_scale=camera.pixel_scale.value,
         )
     except Exception as err:
         # Any failure here is BAD, so raise an error
@@ -333,7 +329,7 @@ def single_image_photometry(
 
     # Remove all source positions too close to edges of image (where the annulus would
     # extend beyond the image boundaries).
-    padding = aperture_settings.outer_annulus
+    padding = photometry_apertures.outer_annulus
     out_of_bounds = (
         (xs < padding)
         | (xs > (ccd_image.shape[1] - padding))
@@ -366,7 +362,7 @@ def single_image_photometry(
     if use_coordinates == "sky":
         try:
             xcen, ycen = centroid_sources(
-                ccd_image.data, xs, ys, box_size=2 * aperture_settings.radius + 1
+                ccd_image.data, xs, ys, box_size=2 * photometry_apertures.radius + 1
             )
         except NoOverlapError:
             logger.warning(
@@ -401,11 +397,11 @@ def single_image_photometry(
 
     # Define apertures and annuli for the aperture photometry
     aper_locs = np.array([xs, ys]).T
-    apers = CircularAperture(aper_locs, r=aperture_settings.radius)
+    apers = CircularAperture(aper_locs, r=photometry_apertures.radius)
     anuls = CircularAnnulus(
         aper_locs,
-        r_in=aperture_settings.inner_annulus,
-        r_out=aperture_settings.outer_annulus,
+        r_in=photometry_apertures.inner_annulus,
+        r_out=photometry_apertures.outer_annulus,
     )
 
     # Perform the aperture photometry
@@ -501,7 +497,10 @@ def single_image_photometry(
     with warnings.catch_warnings(record=True) as warned:
         warnings.filterwarnings("always", category=AstropyUserWarning)
         fwhm_x, fwhm_y = compute_fwhm(
-            ccd_image, photom, fwhm_estimate=fwhm_estimate, fit=fwhm_by_fit
+            ccd_image,
+            photom,
+            fwhm_estimate=photometry_apertures.fwhm,
+            fit=fwhm_by_fit,
         )
         num_warnings = len(warned)
         msg += f"fitting failed on {num_warnings} of {len(photom)} sources  ... "
@@ -590,9 +589,8 @@ def multi_image_photometry(
     sourcelist,
     camera,
     observatory_location,
-    aperture_settings,
+    photometry_settings,
     shift_tolerance,
-    fwhm_estimate,
     include_dig_noise=True,
     reject_too_close=True,
     reject_background_outliers=True,
@@ -633,8 +631,8 @@ def multi_image_photometry(
         Location of the observatory where the images were taken.  Used for calculating
         the BJD.
 
-    aperture_settings : `stellarphot.settings.ApertureSettings`
-        Radius, inner and outer annulus radii settings.
+    photometry_settings : `stellarphot.settings.PhotometryApertures`
+        Radius, inner and outer annulus radii settings and FWHM.
 
     shift_tolerance : float
         Since source positions need to be computed on each image using
@@ -644,11 +642,6 @@ def multi_image_photometry(
         positions and the refined positions, in pixels.  The expected
         shift shift should not be more than the FWHM, so a measured FWHM
         might be a good value to provide here.
-
-    fwhm_estimate : float
-        Initial estimate of the FWHM in pixels for sources in the image.
-        This is used to determine the size of the box used to fit the FWHM
-        (which is 5 times the FWHM estimate in width).
 
     reject_background_outliers : bool, optional (Default: True)
         If ``True``, sigma clip the pixels in the annulus to reject outlying
@@ -779,9 +772,8 @@ def multi_image_photometry(
             sourcelist,
             camera,
             observatory_location,
-            aperture_settings,
+            photometry_settings,
             shift_tolerance,
-            fwhm_estimate,
             use_coordinates="sky",
             include_dig_noise=include_dig_noise,
             reject_too_close=reject_too_close,

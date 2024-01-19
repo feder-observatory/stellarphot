@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 
-from ..settings import ApertureSettings
+from ..settings import PhotometryApertures
 
 __all__ = ["seeing_plot"]
 
@@ -13,7 +13,7 @@ def seeing_plot(
     HWHM,
     plot_title="",
     file_name="",
-    aperture_settings=None,
+    photometry_settings=None,
     figsize=(20, 10),
 ):
     """
@@ -43,10 +43,11 @@ def seeing_plot(
     file_name : optional, string
         if entered, file will save as png with this name
 
-    aperture_settings : optional, `stellarphot.settings.ApertureSettings`
+    photometry_settings : optional, `stellarphot.settings.PhotometryApertures`
         The aperture settings used to create the plot. If not provided, the
         aperture radius will be set to 4 * HWHM, the inner annulus will be set
-        to radius + 10, and the outer annulus will be set to radius + 25.
+        to radius + 10, and the outer annulus will be set to radius + 25, and the
+        FWHM will be set to 2 * HWHM.
 
     figsize : tuple of int, optional
         Size of figure.
@@ -57,15 +58,18 @@ def seeing_plot(
     `matplotlib.pyplot.figure`
         The figure object containing the seeing plot.
     """
-    if aperture_settings is None:
+    if photometry_settings is None:
         radius = 4 * HWHM
-        aperture_settings = ApertureSettings(
-            radius=radius, inner_annulus=radius + 10, outer_annulus=radius + 25
+        photometry_settings = PhotometryApertures(
+            radius=radius,
+            inner_annulus=radius + 10,
+            outer_annulus=radius + 25,
+            fwhm=2 * HWHM,
         )
 
-    radius = aperture_settings.radius
-    inner_annulus = aperture_settings.inner_annulus
-    outer_annulus = aperture_settings.outer_annulus
+    radius = photometry_settings.radius
+    inner_annulus = photometry_settings.inner_annulus
+    outer_annulus = photometry_settings.outer_annulus
 
     fig = plt.figure(figsize=figsize)
     plt.grid(True)

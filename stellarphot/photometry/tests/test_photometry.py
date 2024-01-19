@@ -1,5 +1,6 @@
 import tempfile
 import warnings
+from copy import deepcopy
 from pathlib import Path
 
 import numpy as np
@@ -19,7 +20,7 @@ from stellarphot.photometry import (
     single_image_photometry,
     source_detection,
 )
-from stellarphot.settings import ApertureSettings, Camera
+from stellarphot.settings import Camera, PhotometryApertures
 
 # Constants for the tests
 
@@ -51,8 +52,23 @@ ZERO_CAMERA = Camera(
     pixel_scale=1 * u.arcsec / u.pixel,
     max_data_value=40000 * u.adu,
 )
+
+# Fake observatory location
 FAKE_OBS = EarthLocation(lat=0 * u.deg, lon=0 * u.deg, height=0 * u.m)
+
+# The default coordinate system to use for the tests
 COORDS2USE = "pixel"
+
+# The fake image used for testing
+FAKE_CCD_IMAGE = FakeCCDImage(seed=SEED)
+
+# Build default PhotometrySettings for the tests based on the fake image
+DEFAULT_PHOTOMETRY_APERTURES = PhotometryApertures(
+    radius=FAKE_CCD_IMAGE.sources["aperture"][0],
+    gap=FAKE_CCD_IMAGE.sources["aperture"][0],
+    annulus_width=FAKE_CCD_IMAGE.sources["aperture"][0],
+    fwhm=FAKE_CCD_IMAGE.sources["x_stddev"].mean(),
+)
 
 
 def test_calc_noise_defaults():
@@ -245,20 +261,10 @@ def test_find_too_close():
 # The True case below is a regression test for #157
 @pytest.mark.parametrize("int_data", [True, False])
 def test_aperture_photometry_no_outlier_rejection(int_data):
-    fake_CCDimage = FakeCCDImage(seed=SEED)
-
-    sources = fake_CCDimage.sources
-    aperture = sources["aperture"][0]
-    inner_annulus = 2 * aperture
-    outer_annulus = 3 * aperture
-    aperture_settings = ApertureSettings(
-        radius=aperture,
-        gap=inner_annulus - aperture,
-        width_annulus=outer_annulus - inner_annulus,
-    )
+    fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
 
     found_sources = source_detection(
-        fake_CCDimage, fwhm=sources["x_stddev"].mean(), threshold=10
+        fake_CCDimage, fwhm=fake_CCDimage.sources["x_stddev"].mean(), threshold=10
     )
 
     # The scale_factor is used to rescale data to integers if needed. It
@@ -279,9 +285,8 @@ def test_aperture_photometry_no_outlier_rejection(int_data):
         found_sources,
         FAKE_CAMERA,
         FAKE_OBS,
-        aperture_settings,
+        DEFAULT_PHOTOMETRY_APERTURES,
         SHIFT_TOLERANCE,
-        FWHM_ESTIMATE,
         use_coordinates=COORDS2USE,
         include_dig_noise=True,
         reject_too_close=False,
@@ -289,7 +294,11 @@ def test_aperture_photometry_no_outlier_rejection(int_data):
     )
 
     phot.sort("aperture_sum")
+    sources = fake_CCDimage.sources
+    # Astropy tables sort in-place so we need to sort the sources table
+    # after the fact.
     sources.sort("amplitude")
+    aperture = DEFAULT_PHOTOMETRY_APERTURES.radius
 
     for inp, out in zip(sources, phot, strict=True):
         stdev = inp["x_stddev"]
@@ -326,22 +335,16 @@ def test_aperture_photometry_with_outlier_rejection(reject):
     the photometry is correct when outliers are rejected and is
     incorrect when outliers are not rejected.
     """
-    fake_CCDimage = FakeCCDImage(seed=SEED)
+    fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
     sources = fake_CCDimage.sources
-    aperture = sources["aperture"][0]
-    inner_annulus = 2 * aperture
-    outer_annulus = 3 * aperture
 
-    aperture_settings = ApertureSettings(
-        radius=aperture,
-        gap=inner_annulus - aperture,
-        width_annulus=outer_annulus - inner_annulus,
-    )
+    aperture_settings = DEFAULT_PHOTOMETRY_APERTURES
+    aperture = aperture_settings.radius
+    inner_annulus = aperture_settings.inner_annulus
+    outer_annulus = aperture_settings.outer_annulus
 
     image = fake_CCDimage.data
 
-    print(f"{fake_CCDimage=}")
-    print(f"{sources['x_stddev'].mean()}")
     found_sources = source_detection(
         fake_CCDimage, fwhm=sources["x_stddev"].mean(), threshold=10
     )
@@ -363,7 +366,6 @@ def test_aperture_photometry_with_outlier_rejection(reject):
         FAKE_OBS,
         aperture_settings,
         SHIFT_TOLERANCE,
-        FWHM_ESTIMATE,
         use_coordinates=COORDS2USE,
         include_dig_noise=True,
         reject_too_close=False,
@@ -410,7 +412,7 @@ def test_aperture_photometry_with_outlier_rejection(reject):
 
 def list_of_fakes(num_files):
     # Generate fake CCDData objects for use in photometry_on_directory tests
-    fake_images = [FakeCCDImage(seed=SEED)]
+    fake_images = [deepcopy(FAKE_CCD_IMAGE)]
 
     # Create additional images, each in a different position.
     for i in range(num_files - 1):
@@ -452,14 +454,8 @@ def test_photometry_on_directory():
 
         object_name = fake_images[0].header["OBJECT"]
         sources = fake_images[0].sources
-        aperture = sources["aperture"][0]
-        inner_annulus = 2 * aperture
-        outer_annulus = 3 * aperture
-        aperture_settings = ApertureSettings(
-            radius=aperture,
-            gap=inner_annulus - aperture,
-            width_annulus=outer_annulus - inner_annulus,
-        )
+        aperture_settings = DEFAULT_PHOTOMETRY_APERTURES
+        aperture = aperture_settings.radius
 
         # Generate the sourcelist
         found_sources = source_detection(
@@ -478,7 +474,6 @@ def test_photometry_on_directory():
                 FAKE_OBS,
                 aperture_settings,
                 SHIFT_TOLERANCE,
-                FWHM_ESTIMATE,
                 include_dig_noise=True,
                 reject_too_close=True,
                 reject_background_outliers=True,
@@ -548,15 +543,7 @@ def test_photometry_on_directory_with_no_ra_dec():
             image.write(temp_file_names[i])
 
         object_name = fake_images[0].header["OBJECT"]
-        sources = fake_images[0].sources
-        aperture = sources["aperture"][0]
-        inner_annulus = 2 * aperture
-        outer_annulus = 3 * aperture
-        aperture_settings = ApertureSettings(
-            radius=aperture,
-            gap=inner_annulus - aperture,
-            width_annulus=outer_annulus - inner_annulus,
-        )
+        aperture_settings = DEFAULT_PHOTOMETRY_APERTURES
 
         # Generate the sourcelist
         found_sources = source_detection(
@@ -575,7 +562,6 @@ def test_photometry_on_directory_with_no_ra_dec():
                 FAKE_OBS,
                 aperture_settings,
                 SHIFT_TOLERANCE,
-                FWHM_ESTIMATE,
                 include_dig_noise=True,
                 reject_too_close=True,
                 reject_background_outliers=True,
@@ -605,16 +591,7 @@ def test_photometry_on_directory_with_bad_fits():
             image.write(temp_file_names[i])
 
         object_name = fake_images[0].header["OBJECT"]
-        sources = fake_images[0].sources
-        aperture = sources["aperture"][0]
-        inner_annulus = 2 * aperture
-        outer_annulus = 3 * aperture
-
-        aperture_settings = ApertureSettings(
-            radius=aperture,
-            gap=inner_annulus - aperture,
-            width_annulus=outer_annulus - inner_annulus,
-        )
+        aperture_settings = DEFAULT_PHOTOMETRY_APERTURES
 
         # Generate the sourcelist with RA/Dec information from a clean image
         found_sources = source_detection(
@@ -633,7 +610,6 @@ def test_photometry_on_directory_with_bad_fits():
                 FAKE_OBS,
                 aperture_settings,
                 SHIFT_TOLERANCE,
-                FWHM_ESTIMATE,
                 include_dig_noise=True,
                 reject_too_close=True,
                 reject_background_outliers=True,

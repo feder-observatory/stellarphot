@@ -3,7 +3,11 @@ from pathlib import Path
 import ipywidgets as ipw
 from ccdproc import ImageFileCollection
 
-from stellarphot.settings import ApertureSettings, PhotometryFileSettings, ui_generator
+from stellarphot.settings import (
+    PhotometryApertures,
+    PhotometryFileSettings,
+    ui_generator,
+)
 
 __all__ = ["PhotometrySettings"]
 
@@ -95,6 +99,6 @@ class PhotometrySettings:
         """
         Widget callbacks need to accept a single argument, even if it is not used.
         """
-        self.aperture_settings = ApertureSettings.parse_file(
+        self.aperture_settings = PhotometryApertures.parse_file(
             self.file_locations.aperture_settings_file
         )

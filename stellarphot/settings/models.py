@@ -7,12 +7,12 @@ from astropy.coordinates import SkyCoord
 from astropy.io.misc.yaml import AstropyDumper, AstropyLoader
 from astropy.time import Time
 from astropy.units import IrreducibleUnit, Quantity, Unit
-from pydantic import BaseModel, Field, conint, root_validator, validator
+from pydantic import BaseModel, Field, confloat, conint, root_validator, validator
 
 from .astropy_pydantic import PixelScaleType, QuantityType, UnitType
 from .autowidgets import CustomBoundedIntTex
 
-__all__ = ["Camera", "ApertureSettings", "PhotometryFileSettings", "Exoplanet"]
+__all__ = ["Camera", "PhotometryApertures", "PhotometryFileSettings", "Exoplanet"]
 
 
 class Camera(BaseModel):
@@ -206,7 +206,7 @@ AstropyDumper.add_representer(Camera, camera_representer)
 AstropyLoader.add_constructor("!Camera", camera_constructor)
 
 
-class ApertureSettings(BaseModel):
+class PhotometryApertures(BaseModel):
     """
     Settings for aperture photometry.
 
@@ -222,6 +222,9 @@ class ApertureSettings(BaseModel):
     annulus_width : int
         Width of the annulus in pixels.
 
+    fwhm : float
+        Full width at half maximum of the typical star in pixels.
+
     Attributes
     ----------
 
@@ -234,21 +237,26 @@ class ApertureSettings(BaseModel):
     Examples
     --------
 
-    To create an `ApertureSettings` object, you can pass in the radius, gap,
+    To create an `PhotometryApertures` object, you can pass in the radius, gap,
     and annulus_width as keyword arguments:
 
-    >>> aperture_settings = ApertureSettings(radius=4,
-    ...                                      gap=10,
-    ...                                      annulus_width=15)
+    >>> aperture_settings = PhotometryApertures(
+    ...     radius=4,
+    ...     gap=10,
+    ...     annulus_width=15,
+    ...     fwhm=3.0
+    ... )
     """
 
     radius: conint(ge=1) = Field(autoui=CustomBoundedIntTex, default=1)
     gap: conint(ge=1) = Field(autoui=CustomBoundedIntTex, default=1)
     annulus_width: conint(ge=1) = Field(autoui=CustomBoundedIntTex, default=1)
+    fwhm: confloat(gt=0)
 
     class Config:
         validate_assignment = True
         validate_all = True
+        extra = "forbid"
 
     @property
     def inner_annulus(self):
