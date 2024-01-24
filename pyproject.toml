@@ -153,4 +153,6 @@ filterwarnings = [
     'ignore:Conversion of an array with ndim > 0 to a scalar:DeprecationWarning',
     # ipywidgets or ipyautoui generates this warning...
     'ignore:Passing unrecognized arguments to super:DeprecationWarning',
+    # pandas will require pyarrow at some point, which is good to know, I guess...
+    'ignore:[.\n]*Pyarrow will become a required dependency of pandas[.\n]*:DeprecationWarning',
 ]
