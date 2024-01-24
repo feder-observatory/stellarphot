@@ -251,7 +251,8 @@ class PhotometryApertures(BaseModel):
     radius: conint(ge=1) = Field(autoui=CustomBoundedIntTex, default=1)
     gap: conint(ge=1) = Field(autoui=CustomBoundedIntTex, default=1)
     annulus_width: conint(ge=1) = Field(autoui=CustomBoundedIntTex, default=1)
-    fwhm: confloat(gt=0)
+    # Disable the UI element by default because it is often calculate from an image
+    fwhm: confloat(gt=0) = Field(disabled=True, default=1.0)
 
     class Config:
         validate_assignment = True
