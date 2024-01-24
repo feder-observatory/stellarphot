@@ -151,4 +151,6 @@ filterwarnings = [
     'ignore:metadata \{.+\} was set from the constructor:DeprecationWarning',
     # Generated from batman
     'ignore:Conversion of an array with ndim > 0 to a scalar:DeprecationWarning',
+    # ipywidgets or ipyautoui generates this warning...
+    'ignore:Passing unrecognized arguments to super:DeprecationWarning',
 ]

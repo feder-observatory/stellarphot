@@ -1,9 +1,12 @@
+import json
+
 import astropy.units as u
 import pytest
 from astropy.coordinates import SkyCoord
 from astropy.time import Time
 from pydantic import ValidationError
 
+from stellarphot.settings import ui_generator
 from stellarphot.settings.models import Camera, Exoplanet, PhotometryApertures
 
 DEFAULT_APERTURE_SETTINGS = dict(radius=5, gap=10, annulus_width=15, fwhm=3.2)
@@ -16,6 +19,18 @@ TEST_CAMERA_VALUES = dict(
     dark_current=0.01 * u.electron / u.second,
     pixel_scale=0.563 * u.arcsec / u.pix,
     max_data_value=50000 * u.adu,
+)
+
+
+DEFAULT_EXOPLANET_SETTINGS = dict(
+    epoch=Time(0, format="jd"),
+    period=0 * u.min,
+    identifier="a planet",
+    coordinate=SkyCoord(
+        ra="00:00:00.00", dec="+00:00:00.0", frame="icrs", unit=("hour", "degree")
+    ),
+    depth=0,
+    duration=0 * u.min,
 )
 
 
@@ -142,6 +157,70 @@ def test_create_aperture_settings_correctly():
     )
 
 
+# Right now Exoplanet doesn't have a schema, so don't test it. Will
+# fix after the pydantic 2 transition.
+# [Exoplanet, DEFAULT_EXOPLANET_SETTINGS]
+@pytest.mark.parametrize(
+    "class_, defaults",
+    (
+        [PhotometryApertures, DEFAULT_APERTURE_SETTINGS],
+        [Camera, TEST_CAMERA_VALUES],
+    ),
+)
+def test_aperture_settings_ui_generation(class_, defaults):
+    # Check a few things about the UI generation:
+    # 1) The UI is generated
+    # 2) The UI model matches our input
+    # 3) The UI widgets contains the titles we expect
+    #
+
+    # 1) The UI is generated from the class
+    ui = ui_generator(class_)
+
+    print(f"{class_=}")
+    print(f"{defaults=}")
+    # 2) The UI model matches our input
+    # Set the ui values to the defaults -- the value needs to be whatever would
+    # go into a **widget** though, not a **model**. It is easiest to create
+    # a model and then use its dict() method to get the widget values.
+    values_dict_as_strings = json.loads(class_(**defaults).json())
+    print(f"{values_dict_as_strings=}")
+    ui.value = values_dict_as_strings
+    print(f"{ui.value=}")
+    assert class_(**ui.value).dict() == defaults
+
+    # 3) The UI widgets contains the titles generated from pydantic.
+    # Pydantic generically is supposed to generate titles from the field names,
+    # replacing "_" with " " and capitalizing the first letter.
+    #
+    # In fact, ipyautoui pre-pydantic-2 seems to either use the field name,
+    # the space-replaced name, or a name with the underscore just removed,
+    # not replaced by a space.
+    # Hopefully that improves in future versions, but for now we'll just
+    # check that the titles are present in the labels.
+    # We'll ignore the case but need to replace the underscores
+    pydantic_titles = {
+        f: [f.replace("_", " "), f.replace("_", "")] for f in defaults.keys()
+    }
+    # pydantic_titles = defaults.keys()
+    title_present = []
+    print(f"{ui.di_labels=}")
+    for title in pydantic_titles.keys():
+        for label in ui.di_labels.values():
+            present = (
+                title.lower() in label.lower()
+                or pydantic_titles[title][0].lower() in label.lower()
+                or pydantic_titles[title][1].lower() in label.lower()
+            )
+            if present:
+                title_present.append(present)
+                break
+        else:
+            title_present.append(False)
+
+    assert all(title_present)
+
+
 @pytest.mark.parametrize("bad_one", ["radius", "gap", "annulus_width"])
 def test_create_invalid_values(bad_one):
     # Check that individual values that are bad raise an error
@@ -149,18 +228,6 @@ def test_create_invalid_values(bad_one):
     bad_settings[bad_one] = -1
     with pytest.raises(ValidationError, match=bad_one):
         PhotometryApertures(**bad_settings)
-
-
-DEFAULT_EXOPLANET_SETTINGS = dict(
-    epoch=Time(0, format="jd"),
-    period=0 * u.min,
-    identifier="a planet",
-    coordinate=SkyCoord(
-        ra="00:00:00.00", dec="+00:00:00.0", frame="icrs", unit=("hour", "degree")
-    ),
-    depth=0,
-    duration=0 * u.min,
-)
 
 
 def test_create_exoplanet_correctly():
