@@ -358,7 +358,9 @@ class SeeingProfileWidget:
                 x = int(np.floor(event.data_x))
                 y = int(np.floor(event.data_y))
 
-                rad_prof = CenterAndProfile(data, (x, y), profile_radius=profile_size)
+                rad_prof = CenterAndProfile(
+                    data, (x, y), profile_radius=profile_size, cutout_size=profile_size
+                )
 
                 try:
                     try:  # Remove previous marker
@@ -387,6 +389,7 @@ class SeeingProfileWidget:
                     radius=aperture_radius,
                     gap=default_gap,
                     annulus_width=default_annulus_width,
+                    fwhm=rad_prof.FWHM,
                 )
                 update_aperture_settings = True
             else:

@@ -1,6 +1,18 @@
+import warnings
+from collections import namedtuple
+
+import ipywidgets as ipw
+import matplotlib
+from astropy.nddata import CCDData
 from astrowidgets import ImageWidget
+from photutils.datasets import make_gaussian_sources_image, make_noise_image
 
 from stellarphot.gui_tools import seeing_profile_functions as spf
+from stellarphot.photometry.tests.test_profiles import RANDOM_SEED, SHAPE, STARS
+from stellarphot.settings import Camera, PhotometryApertures
+from stellarphot.settings.tests.test_models import (
+    TEST_CAMERA_VALUES,
+)
 
 
 def test_keybindings():
@@ -31,3 +43,69 @@ def test_keybindings():
     assert "Nonekp_+" in bound_keys
     # Yes, the line below is correct...
     assert new_bindings[bound_keys["Nonekp_left"]]["name"] == "pan_right"
+
+
+def test_seeing_profile_object_creation():
+    # This test simply makes sure we can create the object
+    profile_widget = spf.SeeingProfileWidget()
+    assert isinstance(profile_widget.box, ipw.Box)
+
+
+def test_seeing_profile_properties(tmp_path):
+    # Here we make a seeing profile then load an image.
+    profile_widget = spf.SeeingProfileWidget(camera=Camera(**TEST_CAMERA_VALUES))
+
+    # Make a fits file
+    image = make_gaussian_sources_image(SHAPE, STARS) + make_noise_image(
+        SHAPE, mean=10, stddev=100, seed=RANDOM_SEED
+    )
+
+    ccd = CCDData(image, unit="adu")
+    ccd.header["exposure"] = 30.0
+    ccd.header["object"] = "test"
+    file_name = tmp_path / "test.fits"
+    ccd.write(file_name)
+
+    # Load the file
+    profile_widget.fits_file.set_file("test.fits", tmp_path)
+    profile_widget.load_fits()
+
+    # Check that a couple of properties are set correctly
+    assert profile_widget.object_name == "test"
+    assert profile_widget.exposure == 30.0
+
+    # Check that the photometry apertures have defaulted to the
+    # default values in the model.
+    assert profile_widget.aperture_settings.value == PhotometryApertures().dict()
+
+    # Get the event handler that updates plots
+    handler = profile_widget._make_show_event()
+
+    # Make a mock event object
+    Event = namedtuple("Event", ["data_x", "data_y"])
+    star_loc_x, star_loc_y = STARS["x_mean"][0], STARS["y_mean"][0]
+    # Sending a mock event will generate plots that we don't want to see
+    # so set the matplotlib backend to a non-interactive one
+    matplotlib.use("agg")
+    # matplotlib generates a warning that we are using a non-interactive backend
+    # so filter that warning out for the remainder of the test. There are at least
+    # a couple of times we generate this warning as values are changed.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        handler(profile_widget.iw, Event(star_loc_x, star_loc_y))
+
+        # The FWHM should be close to 9.6
+        assert 9 < profile_widget.aperture_settings.value["fwhm"] < 10
+
+        # Get a copy of the current aperture settings
+        phot_aps = dict(profile_widget.aperture_settings.value)
+        new_radius = phot_aps["radius"] - 2
+        # Change the radius by directly setting the value of the widget that holds
+        # the value. That ends up being nested fairly deeply...
+        profile_widget.aperture_settings.autowidget.children[0].children[
+            0
+        ].value = new_radius
+
+        # Make sure the settings are updated
+        phot_aps["radius"] = new_radius
+        assert profile_widget.aperture_settings.value == phot_aps

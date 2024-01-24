@@ -128,3 +128,4 @@ class FitsOpener:
 
         self._fc.reset(directory, file)
         self._fc._apply_selection()
+        self._fc._value = self._fc.selected
