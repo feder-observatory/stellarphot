@@ -76,7 +76,7 @@ def test_seeing_profile_properties(tmp_path):
 
     # Check that the photometry apertures have defaulted to the
     # default values in the model.
-    assert profile_widget.aperture_settings.value == PhotometryApertures().dict()
+    assert profile_widget.aperture_settings.value == PhotometryApertures().model_dump()
 
     # Get the event handler that updates plots
     handler = profile_widget._make_show_event()
@@ -102,9 +102,7 @@ def test_seeing_profile_properties(tmp_path):
         new_radius = phot_aps["radius"] - 2
         # Change the radius by directly setting the value of the widget that holds
         # the value. That ends up being nested fairly deeply...
-        profile_widget.aperture_settings.autowidget.children[0].children[
-            0
-        ].value = new_radius
+        profile_widget.aperture_settings.di_widgets["radius"].value = new_radius
 
         # Make sure the settings are updated
         phot_aps["radius"] = new_radius

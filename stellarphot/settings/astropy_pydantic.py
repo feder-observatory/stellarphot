@@ -59,7 +59,7 @@ class _UnitQuantTypePydanticAnnotation:
                 raise ValueError(str(err)) from err
             return result
 
-        # Both Unit and Qunatity can be created from a string or a float or an
+        # Both Unit and Quantity can be created from a string or a float or an
         # instance of the same type. So we need to check for all of those cases.
 
         # core_schema.chain_schema runs the value through each of the schema

@@ -1,3 +1,4 @@
+import json
 from typing import Annotated
 
 import pytest
@@ -119,3 +120,57 @@ def test_with_physical_type():
 def test_quantity_type_with_invalid_quantity():
     with pytest.raises(ValidationError, match="It does not start with a number"):
         _QuantityModel(quantity="meter")
+
+
+@pytest.mark.parametrize(
+    "input_json_string",
+    [
+        '{"quantity": "1 m"}',
+        '{"quantity": "1"}',
+        '{"quantity": "3 second"}',
+    ],
+)
+def test_initialize_quantity_with_json(input_json_string):
+    # Make sure we can initialize a Quantity from a json string
+    # where the quantity value is stored in the json as a string.
+    model = _QuantityModel.model_validate_json(input_json_string)
+    model_json = json.loads(model.model_dump_json())
+    input_json = json.loads(input_json_string)
+
+    assert Quantity(model_json["quantity"]) == Quantity(input_json["quantity"])
+
+
+def test_initialize_quantity_with_json_invalid():
+    # Make sure we get an error when the json string is has a value
+    # that is a float (same fail happens for integer).
+    # Since our json validation assumes the value is a string, this
+    # should fail.
+    with pytest.raises(ValidationError, match="Input should be a valid string"):
+        _QuantityModel.model_validate_json('{"quantity": 14.0}')
+
+
+@pytest.mark.parametrize(
+    "input_json_string",
+    [
+        '{"unit": "m"}',
+        '{"unit": "1"}',
+        '{"unit": "parsec / fortnight"}',
+    ],
+)
+def test_initialize_unit_with_json(input_json_string):
+    # Make sure we can initialize a Unit from a json string
+    # where the quantity value is stored in the json as a string.
+    model = _UnitModel.model_validate_json(input_json_string)
+    model_json = json.loads(model.model_dump_json())
+    input_json = json.loads(input_json_string)
+
+    assert Unit(model_json["unit"]) == Unit(input_json["unit"])
+
+
+def test_initialize_unit_with_json_invalid():
+    # Make sure we get an error when the json string is has a value
+    # that is a float (same fail happens for integer).
+    # Since our json validation assumes the value is a string, this
+    # should fail.
+    with pytest.raises(ValidationError, match="Input should be a valid string"):
+        _UnitModel.model_validate_json('{"unit": 14.0}')

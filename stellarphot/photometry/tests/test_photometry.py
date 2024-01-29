@@ -87,7 +87,7 @@ def test_calc_noise_source_only(gain, aperture_area):
     expected = np.sqrt(gain * counts)
 
     # Create camera instance
-    camera = ZERO_CAMERA.copy()
+    camera = ZERO_CAMERA.model_copy()
     camera.gain = gain * camera.gain.unit
 
     np.testing.assert_allclose(
@@ -104,7 +104,7 @@ def test_calc_noise_dark_only(gain, aperture_area):
     exposure = 20
 
     # Create camera instance
-    camera = ZERO_CAMERA.copy()
+    camera = ZERO_CAMERA.model_copy()
     # Set gain and dark current to values for test
     camera.dark_current = dark_current * camera.dark_current.unit
     camera.gain = gain * camera.gain.unit
@@ -126,7 +126,7 @@ def test_calc_read_noise_only(gain, aperture_area):
     expected = np.sqrt(aperture_area * read_noise**2)
 
     # Create camera instance
-    camera = ZERO_CAMERA.copy()
+    camera = ZERO_CAMERA.model_copy()
     camera.read_noise = read_noise * camera.read_noise.unit
     camera.gain = gain * camera.gain.unit
 
@@ -143,7 +143,7 @@ def test_calc_sky_only(gain, aperture_area):
     expected = np.sqrt(gain * aperture_area * sky)
 
     # Create camera instance
-    camera = ZERO_CAMERA.copy()
+    camera = ZERO_CAMERA.model_copy()
     camera.gain = gain * camera.gain.unit
 
     np.testing.assert_allclose(
@@ -162,7 +162,7 @@ def test_annulus_area_term():
     expected = np.sqrt(gain * aperture_area * (1 + aperture_area / annulus_area) * sky)
 
     # Create camera instance
-    camera = ZERO_CAMERA.copy()
+    camera = ZERO_CAMERA.model_copy()
     camera.gain = gain * camera.gain.unit
 
     np.testing.assert_allclose(
@@ -192,7 +192,7 @@ def test_calc_noise_messy_case(digit, expected):
     read_noise = 12
 
     # Create camera instance
-    camera = ZERO_CAMERA.copy()
+    camera = ZERO_CAMERA.model_copy()
     camera.gain = gain * camera.gain.unit
     camera.dark_current = dark_current * camera.dark_current.unit
     camera.read_noise = read_noise * camera.read_noise.unit
