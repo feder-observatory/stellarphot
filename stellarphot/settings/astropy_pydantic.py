@@ -32,6 +32,15 @@ class _UnitQuantTypePydanticAnnotation:
     whether an instance can be created.
 
     In astropy, this includes `astropy.units.Unit` and `astropy.units.Quantity`.
+
+    We return a pydantic_core.CoreSchema that behaves in the following ways:
+        * When initializing from python:
+            * A Unit or a Quantity will pass validation and be returned as-is
+            * A string or a float will be used to create a Unit or a Quantity.
+            * Nothing else will pass validation
+        * When initializing from json:
+            * The Unit or Quantity must be represented as a string in the json.
+        * Serialization will always represent the Unit or Quantity as a string.
     """
 
     @classmethod
@@ -49,6 +58,7 @@ class _UnitQuantTypePydanticAnnotation:
         * Serialization will always return just a string
         """
 
+        # This function will end up creating the instance from the input value.
         def validate_by_instantiating(value):
             # If the value is valid we will be able to create an instance of the
             # source_type from it. For example, if source_type is astropy.units.Unit,
@@ -56,6 +66,8 @@ class _UnitQuantTypePydanticAnnotation:
             try:
                 result = source_type(value)
             except TypeError as err:
+                # Need to raise a ValueError for pydantic to catch it as a
+                # validation error.
                 raise ValueError(str(err)) from err
             return result
 
@@ -65,13 +77,14 @@ class _UnitQuantTypePydanticAnnotation:
         # core_schema.chain_schema runs the value through each of the schema
         # in the list, in order. The output of one schema is the input to the next.
 
-        # When you do `model_json_schema` with a `chain_schema`, then the first entry is
-        # used if `mode="validation"` and the last is used if `mode="serialization"`
-        # from the schema used to serialize json.
+        # The schema below validates a Unit or Quantity from a string. The first link
+        # in the chain is a schema that validates a string. The second link is a
+        # schema that takes that string value and creates a Unit or Quantity from it.
 
-        # I guess this makes sense, since the first thing in the chain has to handle the
-        # value coming from json, while the last thing generates the python value for
-        # the input.
+        # This schema is used in three places by pydantic:
+        #   1. When validating a python value
+        #   2. When validating a json value
+        #   3. When constructing a JSON schema for the model
         from_str_schema = core_schema.chain_schema(
             [
                 core_schema.str_schema(),
@@ -79,13 +92,37 @@ class _UnitQuantTypePydanticAnnotation:
             ]
         )
 
+        # This schema validates a Unit or Quantity from a float. The first link in the
+        # chain is a schema that validates the input as a number. The second link is a
+        # schema that takes that numeric value and creates a Unit or Quantity from it.
+
+        # This schema is used in just one place by pydantic:
+        #   1. When validating a python value
         from_float_schema = core_schema.chain_schema(
             [
                 core_schema.float_schema(),
                 core_schema.no_info_plain_validator_function(validate_by_instantiating),
             ]
         )
+
         return core_schema.json_or_python_schema(
+            # The next line specifies two things:
+            #   1. The schema used to validate value from JSON. Since we are using the
+            #      schema for a string value, the values in the JSON file must be
+            #      strings, even though something like "{quantity: 1}" i.e. initializing
+            #      from a number, would work in python. The reason for this choice is
+            #      that the serialization is to a string, so that is what we expect from
+            #      JSON. If we wanted to allow initialization from a number in JSON, we
+            #      would need to use a union schema that consisted of
+            #      from_str_schema and from_float_schema.
+            #   2. The schema used to construct a JSON schema for the model. When you do
+            #      `model_json_schema` with a `chain_schema`, then the first entry of
+            #      the chain is used if `mode="validation"` and the last entry of the
+            #      chain is used if `mode="serialization"`. I guess this makes sense,
+            #      since the first thing in the chain has to handle the value coming
+            #      from json,while the last thing generates the python value for the
+            #      input. With the choice below we will *always* want`mode="validation"`
+            #      because pydantic cannot generate a schema fora Unit or Quantity.
             json_schema=from_str_schema,
             # union_schema takes a list of schemas and returns a schema that
             # is the "best" match. See the link below for a description of
@@ -94,6 +131,10 @@ class _UnitQuantTypePydanticAnnotation:
             #
             # In short, schemas are tried from left-to-right, and an exact type match
             # wins.
+            #
+            # The construction below tries to make a value starting from a Unit,
+            # a Quantity, a string, or a float. The first two are instances, so we
+            # use is_instance_schema.
             python_schema=core_schema.union_schema(
                 [
                     # Check if it's an instance first before doing any further work.
@@ -105,7 +146,7 @@ class _UnitQuantTypePydanticAnnotation:
                     from_float_schema,
                 ]
             ),
-            # Serialization by converting to a string.
+            # Serialize by converting the Unit or Quantity to a string.
             serialization=core_schema.plain_serializer_function_ser_schema(
                 lambda instance: str(instance)
             ),
@@ -114,12 +155,58 @@ class _UnitQuantTypePydanticAnnotation:
 
 @dataclass
 class EquivalentTo:
+    """
+    This class is a pydantic "marker" (their word for this kind of thing) that
+    can be used to annotate fields that should be equivalent to a given unit.
+
+    Parameters
+    ----------
+    equivalent_unit : `astropy.units.Unit`
+        The unit that the annotated field should be equivalent to.
+
+    Examples
+    --------
+    >>> from typing import Annotated
+    >>> from pydantic import BaseModel, ValidationError
+    >>> from stellarphot.settings.astropy_pydantic import (
+    ...     WithPhysicalType,
+    ...     UnitType,
+    ...     QuantityType
+    ... )
+    >>> class UnitModel(BaseModel):
+    ...     length: Annotated[UnitType, EquivalentTo("m")]
+    >>> UnitModel(length="lightyear")
+    UnitModel(length=Unit("lyr"))
+    >>> try:
+    ...     UnitModel(length="second")
+    ... except ValidationError as err:
+    ...     print(err)
+    1 validation error for UnitModel
+    length
+      Value error, Unit s is not equivalent to m...
+    >>> # Next let's do a Quantity
+    >>> class QuantityModel(BaseModel):
+    ...     velocity: Annotated[QuantityType, EquivalentTo("m / s")]
+    >>> QuantityModel(velocity="3 lightyear / year")
+    QuantityModel(velocity=<Quantity 3. lyr / yr>)
+    >>> try:
+    ...     QuantityModel(velocity="3 parsec / lightyear")
+    ... except ValidationError as err:
+    ...     print(err)
+    1 validation error for QuantityModel
+    velocity
+      Value error, Unit pc / lyr is not equivalent to m / s...
+    """
+
     equivalent_unit: Unit
+    """Unit that the annotated field should be equivalent to."""
 
     def __get_pydantic_core_schema__(
         self, source_type: Any, handler: GetCoreSchemaHandler
     ):
         def check_equivalent(value):
+            # We are getting either a Unit or a Quantity. If it's a Quantity, we
+            # need to get the unit from it.
             if isinstance(value, UnitBase):
                 value_unit = value
             else:
@@ -128,11 +215,14 @@ class EquivalentTo:
             try:
                 value.to(self.equivalent_unit)
             except UnitConversionError:
+                # Raise a ValueError for pydantic to catch it as a validation error.
                 raise ValueError(
                     f"Unit {value_unit} is not equivalent to {self.equivalent_unit}"
                 ) from None
             return value
 
+        # Calling handler(source_type) will pass the result of this annotation
+        # to the next annotation in the chain.
         return core_schema.no_info_after_validator_function(
             check_equivalent, handler(source_type)
         )
@@ -140,12 +230,57 @@ class EquivalentTo:
 
 @dataclass
 class WithPhysicalType:
+    """
+    This class is a pydantic "marker" (their word for this kind of thing) that
+    can be used to annotate fields that should be of a specific physical type.
+
+    Parameters
+    ----------
+    physical_type : str or `astropy.units.physical.PhysicalType`
+        The physical type of the annotated field.
+
+    Examples
+    --------
+    >>> from typing import Annotated
+    >>> from pydantic import BaseModel, ValidationError
+    >>> from stellarphot.settings.astropy_pydantic import (
+    ...     WithPhysicalType,
+    ...     UnitType,
+    ...     QuantityType
+    ... )
+    >>> class UnitModel(BaseModel):
+    ...     length: Annotated[UnitType, WithPhysicalType("length")]
+    >>> UnitModel(length="meter")
+    UnitModel(length=Unit("m"))
+    >>> try:
+    ...     UnitModel(length="second")
+    ... except ValidationError as err:
+    ...     print(err)
+    1 validation error for UnitModel
+    length
+      Value error, Unit of s is not equivalent to length...
+    >>> # Next let's do a Quantity
+    >>> class QuantityModel(BaseModel):
+    ...     velocity: Annotated[QuantityType, WithPhysicalType("speed")]
+    >>> QuantityModel(velocity="3 meter / second")
+    QuantityModel(velocity=<Quantity 3. m / s>)
+    >>> try:
+    ...     QuantityModel(velocity="3 meter")
+    ... except ValidationError as err:
+    ...     print(err)
+    1 validation error for QuantityModel
+    velocity
+      Value error, Unit of 3.0 m is not equivalent to speed...
+    """
+
     physical_type: str | PhysicalType
 
     def __post_init__(self):
         try:
             get_physical_type(self.physical_type)
         except ValueError as err:
+            # Add a link to the astropy documentation for physical types
+            # to the error message.
             raise ValueError(
                 str(err)
                 + f"\nSee {_PHYSICAL_TYPES_URL} for a list of valid physical types."
@@ -163,6 +298,8 @@ class WithPhysicalType:
                     f"Unit of {value} is not equivalent to {self.physical_type}"
                 ) from None
 
+        # As in the EquivalentTo annotation, calling handler(source_type) will pass
+        # the result of this annotation to the next annotation in the chain.
         return core_schema.no_info_after_validator_function(
             check_physical_type, handler(source_type)
         )
