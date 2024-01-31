@@ -14,7 +14,13 @@ from pydantic import (
 )
 from pydantic_core import core_schema
 
-__all__ = ["UnitType", "QuantityType", "EquivalentTo", "WithPhysicalType"]
+__all__ = [
+    "UnitType",
+    "QuantityType",
+    "EquivalentTo",
+    "WithPhysicalType",
+    "AstropyValidator",
+]
 
 _PHYSICAL_TYPES_URL = "https://docs.astropy.org/en/stable/units/ref_api.html#module-astropy.units.physical"
 
@@ -24,6 +30,39 @@ _PHYSICAL_TYPES_URL = "https://docs.astropy.org/en/stable/units/ref_api.html#mod
 
 # Update for pydantic 2.0, based on the pydantic docs:
 #   https://docs.pydantic.dev/latest/concepts/types/#handling-third-party-types
+
+
+# This function will end up creating the instance from the input value.
+def validate_by_instantiating(source_type):
+    """
+    Return a function that tries to create an instance of source_type from a value.
+    The intended use of this is as a vallidotr in pydantic.
+
+    Parameters
+    ----------
+
+    source_type : Any
+        The type to create an instance of.
+
+    Returns
+    -------
+    function
+        A function that tries to create an instance of source_type from a value.
+    """
+
+    def _validator(value):
+        # If the value is valid we will be able to create an instance of the
+        # source_type from it. For example, if source_type is astropy.units.Unit,
+        # then we should be able to create a Unit from the value.
+        try:
+            result = source_type(value)
+        except TypeError as err:
+            # Need to raise a ValueError for pydantic to catch it as a
+            # validation error.
+            raise ValueError(str(err)) from err
+        return result
+
+    return _validator
 
 
 class _UnitQuantTypePydanticAnnotation:
@@ -57,20 +96,6 @@ class _UnitQuantTypePydanticAnnotation:
         * Nothing else will pass validation
         * Serialization will always return just a string
         """
-
-        # This function will end up creating the instance from the input value.
-        def validate_by_instantiating(value):
-            # If the value is valid we will be able to create an instance of the
-            # source_type from it. For example, if source_type is astropy.units.Unit,
-            # then we should be able to create a Unit from the value.
-            try:
-                result = source_type(value)
-            except TypeError as err:
-                # Need to raise a ValueError for pydantic to catch it as a
-                # validation error.
-                raise ValueError(str(err)) from err
-            return result
-
         # Both Unit and Quantity can be created from a string or a float or an
         # instance of the same type. So we need to check for all of those cases.
 
@@ -88,7 +113,9 @@ class _UnitQuantTypePydanticAnnotation:
         from_str_schema = core_schema.chain_schema(
             [
                 core_schema.str_schema(),
-                core_schema.no_info_plain_validator_function(validate_by_instantiating),
+                core_schema.no_info_plain_validator_function(
+                    validate_by_instantiating(source_type)
+                ),
             ]
         )
 
@@ -101,7 +128,9 @@ class _UnitQuantTypePydanticAnnotation:
         from_float_schema = core_schema.chain_schema(
             [
                 core_schema.float_schema(),
-                core_schema.no_info_plain_validator_function(validate_by_instantiating),
+                core_schema.no_info_plain_validator_function(
+                    validate_by_instantiating(source_type)
+                ),
             ]
         )
 
@@ -319,3 +348,67 @@ QuantityType = Annotated[Quantity, _UnitQuantTypePydanticAnnotation]
 # This is what is used to represent astropy
 # objects in Tables and FITS files. So we can use this to create a json schema
 # for the astropy types.
+def serialize_astropy_type(value):
+    """
+    Two things might happen here:
+
+    1. value serializes to JSON because each value in the dict reperesentation
+        is a type JSON knows how to represent, or
+    2. value does not serialize because one or more of the values in the dict
+        representation is itself an astropy class.
+    """
+
+    def dict_rep(instance):
+        return instance.info._represent_as_dict()
+
+    if isinstance(value, UnitBase | Quantity):
+        return str(value)
+    try:
+        rep = dict_rep(value)
+    except AttributeError:
+        # Either this is not an astropy thing, in which case just return the
+        # value, or this is an astropy unit. Happily, we can already serialize
+        # that.
+        return value if not hasattr(value, "to_string") else value.to_string()
+
+    result = {}
+    for k, v in rep.items():
+        result[k] = serialize_astropy_type(v)
+
+    return result
+
+
+class AstropyValidator:
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls,
+        source_type,
+        _handler,
+    ):
+        def astropy_object_from_dict(value):
+            """
+            This is NOT the right way to be doing this when there are nested
+            definitions, e.g. in a SkyCoord where the RA and Dec are each
+            an angle, which is not a native python type.
+            """
+            return source_type.info._construct_from_dict(value)
+
+        from_dict_schema = core_schema.chain_schema(
+            [
+                core_schema.dict_schema(),
+                core_schema.no_info_plain_validator_function(astropy_object_from_dict),
+            ]
+        )
+
+        return core_schema.json_or_python_schema(
+            json_schema=from_dict_schema,
+            python_schema=core_schema.union_schema(
+                [
+                    core_schema.is_instance_schema(source_type),
+                    from_dict_schema,
+                ]
+            ),
+            serialization=core_schema.plain_serializer_function_ser_schema(
+                serialize_astropy_type
+            ),
+        )

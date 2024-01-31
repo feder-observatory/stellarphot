@@ -1,15 +1,20 @@
 import json
 from typing import Annotated
 
+import numpy as np
 import pytest
+from astropy.coordinates import SkyCoord
+from astropy.time import Time
 from astropy.units import Quantity, Unit, get_physical_type
 from pydantic import BaseModel, ValidationError
 
 from stellarphot.settings.astropy_pydantic import (
+    AstropyValidator,
     EquivalentTo,
     QuantityType,
     UnitType,
     WithPhysicalType,
+    serialize_astropy_type,
 )
 
 
@@ -87,6 +92,11 @@ def test_equivalent_to():
 
     with pytest.raises(ValidationError, match="Unit s is not equivalent to"):
         _ModelEquivalentTo(unit_meter="s", quantity_meter=Quantity("1 m"))
+
+
+def test_equiv_physical_type_can_be_used_in_union():
+    print("https://github.com/pydantic/pydantic/discussions/6412")
+    assert 0
 
 
 def test_with_physical_type():
@@ -174,3 +184,37 @@ def test_initialize_unit_with_json_invalid():
     # should fail.
     with pytest.raises(ValidationError, match="Input should be a valid string"):
         _UnitModel.model_validate_json('{"unit": 14.0}')
+
+
+@pytest.mark.parametrize(
+    "klass,input",
+    [
+        (Time, "2021-01-01T00:00:00"),
+        (SkyCoord, "00h42m44.3s +41d16m9s"),
+    ],
+)
+def test_time_quant_pydantic(klass, input):
+    class Model(BaseModel):
+        value: Annotated[klass, AstropyValidator]
+
+    val = klass(input)
+    model = Model(value=val)
+
+    # Value should be corret
+    assert model.value == val
+
+    # model dump should fully serialize to standard python types
+    assert model.model_dump()["value"] == serialize_astropy_type(val)
+
+    # We should be able to create a new model from the dumped json...
+    # ...but we can't because we apparently aren't serializing right.
+    model2 = Model.model_validate_json(model.model_dump_json())
+
+    if klass is SkyCoord:
+        np.testing.assert_almost_equal(
+            model2.value.separation(model.value).arcsec,
+            0,
+            decimal=10,
+        )
+    else:
+        assert model2.value == model.value

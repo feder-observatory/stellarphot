@@ -3,17 +3,21 @@
 from pathlib import Path
 from typing import Annotated
 
+from astropy.coordinates import SkyCoord
 from astropy.io.misc.yaml import AstropyDumper, AstropyLoader
+from astropy.time import Time
 from astropy.units import Quantity, Unit
 from pydantic import BaseModel, ConfigDict, Field, confloat, conint, model_validator
 
-from .astropy_pydantic import EquivalentTo, QuantityType, UnitType
+from .astropy_pydantic import (
+    AstropyValidator,
+    EquivalentTo,
+    QuantityType,
+    UnitType,
+    WithPhysicalType,
+)
 
-__all__ = [
-    "Camera",
-    "PhotometryApertures",
-    "PhotometryFileSettings",
-]  #  "Exoplanet"]
+__all__ = ["Camera", "PhotometryApertures", "PhotometryFileSettings", "Exoplanet"]
 
 # Most models should use the default configuration, but it can be customized if needed.
 MODEL_DEFAULT_CONFIGURATION = ConfigDict(
@@ -293,113 +297,56 @@ class PhotometryFileSettings(BaseModel):
     )
 
 
-# class TimeType(Time):
-#     @classmethod
-#     def __get_validators__(cls):
-#         yield cls.validate
+class Exoplanet(BaseModel):
+    """
+    Create an object representing an Exoplanet.
 
-#     @classmethod
-#     def validate(cls, v):
-#         return Time(v)
+    Parameters
+    ----------
 
+    epoch : `astropy.time.Time`, optional
+        Epoch of the exoplanet.
 
-# class SkyCoordType(SkyCoord):
-#     @classmethod
-#     def __get_validators__(cls):
-#         yield cls.validate
+    period : `astropy.units.Quantity`, optional
+        Period of the exoplanet.
 
-#     @classmethod
-#     def validate(cls, v):
-#         return SkyCoord(v)
+    Identifier : str
+        Identifier of the exoplanet.
 
+    coordinate : `astropy.coordinates.SkyCoord`
+        Coordinates of the exoplanet.
 
-# class Exoplanet(BaseModel):
-#     """
-#     Create an object representing an Exoplanet.
+    depth : float
+        Depth of the exoplanet.
 
-#     Parameters
-#     ----------
+    duration : `astropy.units.Quantity`, optional
+        Duration of the exoplanet transit.
 
-#     epoch : `astropy.time.Time`, optional
-#         Epoch of the exoplanet.
+    Examples
+    --------
 
-#     period : `astropy.units.Quantity`, optional
-#         Period of the exoplanet.
+    To create an `Exoplanet` object, you can pass in the epoch,
+     period, identifier, coordinate, depth, and duration as keyword arguments:
 
-#     Identifier : str
-#         Identifier of the exoplanet.
+    >>> from astropy.time import Time
+    >>> from astropy.coordinates import SkyCoord
+    >>> from astropy import units as u
+    >>> planet  = Exoplanet(epoch=Time(2455909.29280, format="jd"),
+    ...                     period=1.21749 * u.day,
+    ...                     identifier="KELT-1b",
+    ...                     coordinate=SkyCoord(ra="00:01:26.9169",
+    ...                                         dec="+39:23:01.7821",
+    ...                                         frame="icrs",
+    ...                                         unit=("hour", "degree")),
+    ...                     depth=0.006,
+    ...                     duration=120 * u.min)
+    """
 
-#     coordinate : `astropy.coordinates.SkyCoord`
-#         Coordinates of the exoplanet.
+    model_config = MODEL_DEFAULT_CONFIGURATION
 
-#     depth : float
-#         Depth of the exoplanet.
-
-#     duration : `astropy.units.Quantity`, optional
-#         Duration of the exoplanet transit.
-
-#     Examples
-#     --------
-
-#     To create an `Exoplanet` object, you can pass in the epoch,
-#      period, identifier, coordinate, depth, and duration as keyword arguments:
-
-#     >>> from astropy.time import Time
-#     >>> from astropy.coordinates import SkyCoord
-#     >>> from astropy import units as u
-#     >>> planet  = Exoplanet(epoch=Time(2455909.29280, format="jd"),
-#     ...                     period=1.21749 * u.day,
-#     ...                     identifier="KELT-1b",
-#     ...                     coordinate=SkyCoord(ra="00:01:26.9169",
-#     ...                                         dec="+39:23:01.7821",
-#     ...                                         frame="icrs",
-#     ...                                         unit=("hour", "degree")),
-#     ...                     depth=0.006,
-#     ...                     duration=120 * u.min)
-#     """
-#     model_config = MODEL_DEFAULT_CONFIGURATION
-
-#     epoch: TimeType | None = None
-#     period: QuantityType | None = None
-#     identifier: str
-#     coordinate: SkyCoordType
-#     depth: float | None = None
-#     duration: QuantityType | None = None
-
-#     # class Config:
-#     #     validate_all = True
-#     #     validate_assignment = True
-#     #     extra = "forbid"
-#     #     json_encoders = {
-#     #         Quantity: lambda v: f"{v.value} {v.unit}",
-#     #         QuantityType: lambda v: f"{v.value} {v.unit}",
-#     #         Time: lambda v: f"{v.value}",
-#     #     }
-
-#     @validator("period")
-#     @classmethod
-#     def validate_period(cls, value):
-#         """
-#         Checks that the period has physical units of time and raises an error
-#         if that is not true.
-#         """
-#         if u.get_physical_type(value) != "time":
-#             raise ValueError(
-#                 f"Period does not have time units,"
-#                 f"currently has {value.unit} units."
-#             )
-#         return value
-
-#     @validator("duration")
-#     @classmethod
-#     def validate_duration(cls, value):
-#         """
-#         Checks that the duration has physical units of time and raises an error
-#         if that is not true.
-#         """
-#         if u.get_physical_type(value) != "time":
-#             raise ValueError(
-#                 f"Duration does not have time units,"
-#                 f"currently has {value.unit} units."
-#             )
-#         return value
+    epoch: Annotated[Time, AstropyValidator] | None = None
+    period: Annotated[QuantityType, WithPhysicalType("time")] | None = None
+    identifier: str
+    coordinate: Annotated[SkyCoord, AstropyValidator]
+    depth: float | None = None
+    duration: Annotated[QuantityType, WithPhysicalType("time")] | None = None
