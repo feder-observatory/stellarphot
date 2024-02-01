@@ -194,16 +194,16 @@ class Camera(BaseModel):
 
 
 # Add YAML round-tripping for Camera
-def camera_representer(dumper, cam):
+def _camera_representer(dumper, cam):
     return dumper.represent_mapping("!Camera", cam.dict())
 
 
-def camera_constructor(loader, node):
+def _camera_constructor(loader, node):
     return Camera(**loader.construct_mapping(node))
 
 
-AstropyDumper.add_representer(Camera, camera_representer)
-AstropyLoader.add_constructor("!Camera", camera_constructor)
+AstropyDumper.add_representer(Camera, _camera_representer)
+AstropyLoader.add_constructor("!Camera", _camera_constructor)
 
 
 class PhotometryApertures(BaseModel):
