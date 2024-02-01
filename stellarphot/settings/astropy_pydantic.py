@@ -356,19 +356,38 @@ QuantityType = Annotated[Quantity, _UnitQuantTypePydanticAnnotation]
 # for the astropy types.
 def serialize_astropy_type(value):
     """
-    Two things might happen here:
+    Serialize astropy objects like Time and SkyCoord to a dictionary.
 
-    1. value serializes to JSON because each value in the dict reperesentation
-        is a type JSON knows how to represent, or
-    2. value does not serialize because one or more of the values in the dict
-        representation is itself an astropy class.
+    In principle, we ought to be able to use the astropy serialization stuff
+    that is used in writing tables to ecsv here, but that is not quite working
+    yet.
+
+    Parameters
+    ----------
+    value : Any
+        The value to serialize.
+
+    Returns
+    -------
+    dict
+        A dictionary representation of the astropy object.
     """
 
     def dict_rep(instance):
+        """
+        This is in a function so it only shows up in one place in the event the
+        private astropy API changes.
+        """
         return instance.info._represent_as_dict()
 
+    # The if statement below is a bit of a hack. It's not clear to me how to
+    # use the _represent_as_dict stuff to serialize something like a SkyCoord that
+    # has nested astropy objects in it. So for now, we just return the string
+    # representation of the objects, like Angle (a type of Quantity), that are
+    # entries in the dict representation of a SKyCoord.
     if isinstance(value, UnitBase | Quantity):
         return str(value)
+
     try:
         rep = dict_rep(value)
     except AttributeError:
@@ -378,6 +397,8 @@ def serialize_astropy_type(value):
         return value if not hasattr(value, "to_string") else value.to_string()
 
     result = {}
+
+    # Recurse to handle nested astropy objects
     for k, v in rep.items():
         result[k] = serialize_astropy_type(v)
 
@@ -385,6 +406,32 @@ def serialize_astropy_type(value):
 
 
 class AstropyValidator:
+    """
+    This class is a pydantic "marker" (their word for this kind of thing) that
+    can be used to annotate fields that should be of an astropy type that can be
+    serialized.
+
+    Examples
+    --------
+    >>> from typing import Annotated
+    >>> from pydantic import BaseModel
+    >>> from astropy.time import Time
+    >>> from astropy.coordinates import SkyCoord
+    >>> from stellarphot.settings.astropy_pydantic import AstropyValidator
+    >>> # Making a model with a Time field
+    >>> class TimeModel(BaseModel):
+    ...     time: Annotated[Time, AstropyValidator]
+    >>> # The time must be either a Time object or a dictionary that can be used to
+    >>> TimeModel(time=Time("2021-01-01T00:00:00"))
+    TimeModel(time=<Time object: scale='utc' format='isot' value=...>)
+    >>> # Making a model with a SkyCoord field
+    >>> class SkyCoordModel(BaseModel):
+    ...     coord: Annotated[SkyCoord, AstropyValidator]
+    >>> # The coord must be either a SkyCoord object or a dictionary that can be used to
+    >>> SkyCoordModel(coord=SkyCoord("00h42m44.3s +41d16m9s"))
+    SkyCoordModel(coord=<SkyCoord (ICRS): (ra, dec) in deg...>)
+    """
+
     @classmethod
     def __get_pydantic_core_schema__(
         cls,
@@ -395,7 +442,9 @@ class AstropyValidator:
             """
             This is NOT the right way to be doing this when there are nested
             definitions, e.g. in a SkyCoord where the RA and Dec are each
-            an angle, which is not a native python type.
+            an angle, which is not a native python type. For now, the serialization
+            has been short-circuited compared to what serialization to a Table would
+            do to get this working and released.
             """
             return source_type.info._construct_from_dict(value)
 
