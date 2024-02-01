@@ -256,6 +256,9 @@ class EquivalentTo:
             check_equivalent, handler(source_type)
         )
 
+    def __hash__(self):
+        return hash(self.equivalent_unit)
+
 
 @dataclass
 class WithPhysicalType:
@@ -332,6 +335,9 @@ class WithPhysicalType:
         return core_schema.no_info_after_validator_function(
             check_physical_type, handler(source_type)
         )
+
+    def __hash__(self):
+        return hash(self.physical_type)
 
 
 # We have lost default titles and exmples, but that is maybe not so bad

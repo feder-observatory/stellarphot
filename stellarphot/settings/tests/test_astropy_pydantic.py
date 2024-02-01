@@ -94,9 +94,24 @@ def test_equivalent_to():
         _ModelEquivalentTo(unit_meter="s", quantity_meter=Quantity("1 m"))
 
 
-def test_equiv_physical_type_can_be_used_in_union():
-    print("https://github.com/pydantic/pydantic/discussions/6412")
-    assert 0
+def test_equivalent_to_can_be_used_in_union():
+    class ModelWithUnion(BaseModel):
+        may_be_none: Annotated[QuantityType, EquivalentTo("second")] | None
+
+    model = ModelWithUnion(may_be_none=None)
+    assert model.may_be_none is None
+    model = ModelWithUnion(may_be_none=Quantity(1, "s"))
+    assert model.may_be_none == Quantity(1, "s")
+
+
+def test_physical_type_can_be_used_in_union():
+    class ModelWithUnion(BaseModel):
+        may_be_none: Annotated[QuantityType, WithPhysicalType("time")] | None
+
+    model = ModelWithUnion(may_be_none=None)
+    assert model.may_be_none is None
+    model = ModelWithUnion(may_be_none=Quantity(1, "s"))
+    assert model.may_be_none == Quantity(1, "s")
 
 
 def test_with_physical_type():
