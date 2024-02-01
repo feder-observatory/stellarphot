@@ -8,7 +8,7 @@ from astropy.time import Time
 from pydantic import ValidationError
 
 from stellarphot.settings import ui_generator
-from stellarphot.settings.models import Camera, PhotometryApertures
+from stellarphot.settings.models import Camera, Exoplanet, PhotometryApertures
 
 DEFAULT_APERTURE_SETTINGS = dict(radius=5, gap=10, annulus_width=15, fwhm=3.2)
 
@@ -245,22 +245,22 @@ def test_create_invalid_values(bad_one):
         PhotometryApertures(**bad_settings)
 
 
-# def test_create_exoplanet_correctly():
-#     planet = Exoplanet(**DEFAULT_EXOPLANET_SETTINGS)
-#     print(planet)
-#     assert planet.epoch == DEFAULT_EXOPLANET_SETTINGS["epoch"]
-#     assert u.get_physical_type(planet.period) == "time"
-#     assert planet.identifier == DEFAULT_EXOPLANET_SETTINGS["identifier"]
-#     assert planet.coordinate == DEFAULT_EXOPLANET_SETTINGS["coordinate"]
-#     assert planet.depth == DEFAULT_EXOPLANET_SETTINGS["depth"]
-#     assert u.get_physical_type(planet.duration) == "time"
+def test_create_exoplanet_correctly():
+    planet = Exoplanet(**DEFAULT_EXOPLANET_SETTINGS)
+    print(planet)
+    assert planet.epoch == DEFAULT_EXOPLANET_SETTINGS["epoch"]
+    assert u.get_physical_type(planet.period) == "time"
+    assert planet.identifier == DEFAULT_EXOPLANET_SETTINGS["identifier"]
+    assert planet.coordinate == DEFAULT_EXOPLANET_SETTINGS["coordinate"]
+    assert planet.depth == DEFAULT_EXOPLANET_SETTINGS["depth"]
+    assert u.get_physical_type(planet.duration) == "time"
 
 
-# def test_create_invalid_exoplanet():
-#     values = DEFAULT_EXOPLANET_SETTINGS.copy()
-#     # Make pediod and duration have invalid units for a time
-#     values["period"] = values["period"].value * u.m
-#     values["duration"] = values["duration"].value * u.m
-#     # Check that individual values that are bad raise an error
-#     with pytest.raises(ValidationError, match="2 validation errors"):
-#         Exoplanet(**values)
+def test_create_invalid_exoplanet():
+    values = DEFAULT_EXOPLANET_SETTINGS.copy()
+    # Make pediod and duration have invalid units for a time
+    values["period"] = values["period"].value * u.m
+    values["duration"] = values["duration"].value * u.m
+    # Check that individual values that are bad raise an error
+    with pytest.raises(ValidationError, match="2 validation errors"):
+        Exoplanet(**values)
