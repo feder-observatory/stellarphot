@@ -1,18 +1,29 @@
 # Objects that contains the user settings for the program.
 
 from pathlib import Path
+from typing import Annotated
 
-import astropy.units as u
-from astropy.coordinates import SkyCoord
 from astropy.io.misc.yaml import AstropyDumper, AstropyLoader
-from astropy.time import Time
-from astropy.units import IrreducibleUnit, Quantity, Unit
-from pydantic import BaseModel, Field, confloat, conint, root_validator, validator
+from astropy.units import Quantity, Unit
+from pydantic import BaseModel, ConfigDict, Field, confloat, conint, model_validator
 
-from .astropy_pydantic import PixelScaleType, QuantityType, UnitType
-from .autowidgets import CustomBoundedIntTex
+from .astropy_pydantic import EquivalentTo, QuantityType, UnitType
 
-__all__ = ["Camera", "PhotometryApertures", "PhotometryFileSettings", "Exoplanet"]
+__all__ = [
+    "Camera",
+    "PhotometryApertures",
+    "PhotometryFileSettings",
+]  #  "Exoplanet"]
+
+# Most models should use the default configuration, but it can be customized if needed.
+MODEL_DEFAULT_CONFIGURATION = ConfigDict(
+    # Make sure default values are valid
+    validate_default=True,
+    # Make sure changes to values made after initialization are valid
+    validate_assignment=True,
+    # Make sure there are no extra fields
+    extra="forbid",
+)
 
 
 class Camera(BaseModel):
@@ -107,6 +118,7 @@ class Camera(BaseModel):
     <Quantity 50000. adu>
     """
 
+    model_config = MODEL_DEFAULT_CONFIGURATION
     data_unit: UnitType = Field(
         description="units of the data", examples=["adu", "counts", "DN", "electrons"]
     )
@@ -123,41 +135,34 @@ class Camera(BaseModel):
         description="unit consistent with read noise, per unit time",
         examples=["0.01 electron / second"],
     )
-    pixel_scale: PixelScaleType = Field(
-        description="units of angle per pixel", examples=["0.6 arcsec / pix"]
-    )
-    max_data_value: QuantityType = Field(
-        description="maximum data value while performing photometry",
-        examples=["50000 adu"],
-    )
+    pixel_scale: Annotated[
+        QuantityType,
+        EquivalentTo(Unit("arcsec / pix")),
+        Field(description="units of angle per pixel", examples=["0.6 arcsec / pix"]),
+    ]
+    max_data_value: Annotated[
+        QuantityType,
+        Field(
+            description="maximum data value while performing photometry",
+            examples=["50000 adu"],
+            gt=0,
+        ),
+    ]
 
-    class Config:
-        validate_all = True
-        validate_assignment = True
-        extra = "forbid"
-        json_encoders = {
-            Quantity: lambda v: f"{v.value} {v.unit}",
-            QuantityType: lambda v: f"{v.value} {v.unit}",
-            Unit: lambda v: f"{v}",
-            IrreducibleUnit: lambda v: f"{v}",
-            PixelScaleType: lambda v: f"{v.value} {v.unit}",
-        }
-
-    # When the switch to pydantic v2 happens, this root_validator will need
-    # to be replaced by a model_validator decorator.
-    @root_validator(skip_on_failure=True)
-    @classmethod
-    def validate_gain(cls, values):
+    # Run the model validator after the default validator. Unlike in pydantic 1,
+    # mode="after" passes in an instance as an argument not a value.
+    @model_validator(mode="after")
+    def validate_gain(self):
         # Get read noise units
-        rn_unit = Quantity(values["read_noise"]).unit
+        rn_unit = Quantity(self.read_noise).unit
 
         # Check that gain and read noise have compatible units, that is that
         # gain is read noise per data unit.
-        gain = values["gain"]
+        gain = self.gain
         if (
             len(gain.unit.bases) != 2
             or gain.unit.bases[0] != rn_unit
-            or gain.unit.bases[1] != values["data_unit"]
+            or gain.unit.bases[1] != self.data_unit
         ):
             raise ValueError(
                 f"Gain units {gain.unit} are not compatible with "
@@ -166,11 +171,11 @@ class Camera(BaseModel):
 
         # Check that dark current and read noise have compatible units, that is
         # that dark current is read noise per second.
-        dark_current = values["dark_current"]
+        dark_current = self.dark_current
         if (
             len(dark_current.unit.bases) != 2
             or dark_current.unit.bases[0] != rn_unit
-            or dark_current.unit.bases[1] != u.s
+            or dark_current.unit.bases[1] != Unit("s")
         ):
             raise ValueError(
                 f"Dark current units {dark_current.unit} are not "
@@ -178,24 +183,17 @@ class Camera(BaseModel):
             )
 
         # Check that maximum data value is consistent with data units
-        if values["max_data_value"].unit != values["data_unit"]:
+        if self.max_data_value.unit != self.data_unit:
             raise ValueError(
-                f"Maximum data value units {values['max_data_value'].unit} "
-                f"are not consistent with data units {values['data_unit']}."
+                f"Maximum data value units {self.max_data_value.unit} "
+                f"are not consistent with data units {self.data_unit}."
             )
-        return values
-
-    @validator("max_data_value")
-    @classmethod
-    def validate_max_data_value(cls, v):
-        if v.value <= 0:
-            raise ValueError("max_data_value must be positive")
-        return v
+        return self
 
 
 # Add YAML round-tripping for Camera
-def _camera_representer(dumper, cam):
-    return dumper.represent_mapping("!Camera", cam.dict())
+def camera_representer(dumper, cam):
+    return dumper.represent_mapping("!Camera", cam.model_dump())
 
 
 def _camera_constructor(loader, node):
@@ -248,16 +246,19 @@ class PhotometryApertures(BaseModel):
     ... )
     """
 
-    radius: conint(ge=1) = Field(autoui=CustomBoundedIntTex, default=1)
-    gap: conint(ge=1) = Field(autoui=CustomBoundedIntTex, default=1)
-    annulus_width: conint(ge=1) = Field(autoui=CustomBoundedIntTex, default=1)
+    # model_config = MODEL_DEFAULT_CONFIGURATION
+
+    radius: conint(ge=1) = Field(
+        default=1, json_schema_extra=dict(autoui="ipywidgets.BoundedIntText")
+    )
+    gap: conint(ge=1) = Field(
+        default=1, json_schema_extra=dict(autoui="ipywidgets.BoundedIntText")
+    )
+    annulus_width: conint(ge=1) = Field(
+        default=1, json_schema_extra=dict(autoui="ipywidgets.BoundedIntText")
+    )
     # Disable the UI element by default because it is often calculate from an image
     fwhm: confloat(gt=0) = Field(disabled=True, default=1.0)
-
-    class Config:
-        validate_assignment = True
-        validate_all = True
-        extra = "forbid"
 
     @property
     def inner_annulus(self):
@@ -279,6 +280,8 @@ class PhotometryFileSettings(BaseModel):
     An evolutionary step on the way to having a monolithic set of photometry settings.
     """
 
+    model_config = MODEL_DEFAULT_CONFIGURATION
+
     image_folder: Path = Field(
         show_only_dirs=True,
         default="",
@@ -290,111 +293,113 @@ class PhotometryFileSettings(BaseModel):
     )
 
 
-class TimeType(Time):
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
+# class TimeType(Time):
+#     @classmethod
+#     def __get_validators__(cls):
+#         yield cls.validate
 
-    @classmethod
-    def validate(cls, v):
-        return Time(v)
-
-
-class SkyCoordType(SkyCoord):
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
-
-    @classmethod
-    def validate(cls, v):
-        return SkyCoord(v)
+#     @classmethod
+#     def validate(cls, v):
+#         return Time(v)
 
 
-class Exoplanet(BaseModel):
-    """
-    Create an object representing an Exoplanet.
+# class SkyCoordType(SkyCoord):
+#     @classmethod
+#     def __get_validators__(cls):
+#         yield cls.validate
 
-    Parameters
-    ----------
+#     @classmethod
+#     def validate(cls, v):
+#         return SkyCoord(v)
 
-    epoch : `astropy.time.Time`, optional
-        Epoch of the exoplanet.
 
-    period : `astropy.units.Quantity`, optional
-        Period of the exoplanet.
+# class Exoplanet(BaseModel):
+#     """
+#     Create an object representing an Exoplanet.
 
-    Identifier : str
-        Identifier of the exoplanet.
+#     Parameters
+#     ----------
 
-    coordinate : `astropy.coordinates.SkyCoord`
-        Coordinates of the exoplanet.
+#     epoch : `astropy.time.Time`, optional
+#         Epoch of the exoplanet.
 
-    depth : float
-        Depth of the exoplanet.
+#     period : `astropy.units.Quantity`, optional
+#         Period of the exoplanet.
 
-    duration : `astropy.units.Quantity`, optional
-        Duration of the exoplanet transit.
+#     Identifier : str
+#         Identifier of the exoplanet.
 
-    Examples
-    --------
+#     coordinate : `astropy.coordinates.SkyCoord`
+#         Coordinates of the exoplanet.
 
-    To create an `Exoplanet` object, you can pass in the epoch,
-     period, identifier, coordinate, depth, and duration as keyword arguments:
+#     depth : float
+#         Depth of the exoplanet.
 
-    >>> from astropy.time import Time
-    >>> from astropy.coordinates import SkyCoord
-    >>> from astropy import units as u
-    >>> planet  = Exoplanet(epoch=Time(2455909.29280, format="jd"),
-    ...                     period=1.21749 * u.day,
-    ...                     identifier="KELT-1b",
-    ...                     coordinate=SkyCoord(ra="00:01:26.9169",
-    ...                                         dec="+39:23:01.7821",
-    ...                                         frame="icrs",
-    ...                                         unit=("hour", "degree")),
-    ...                     depth=0.006,
-    ...                     duration=120 * u.min)
-    """
+#     duration : `astropy.units.Quantity`, optional
+#         Duration of the exoplanet transit.
 
-    epoch: TimeType | None = None
-    period: QuantityType | None = None
-    identifier: str
-    coordinate: SkyCoordType
-    depth: float | None = None
-    duration: QuantityType | None = None
+#     Examples
+#     --------
 
-    class Config:
-        validate_all = True
-        validate_assignment = True
-        extra = "forbid"
-        json_encoders = {
-            Quantity: lambda v: f"{v.value} {v.unit}",
-            QuantityType: lambda v: f"{v.value} {v.unit}",
-            Time: lambda v: f"{v.value}",
-        }
+#     To create an `Exoplanet` object, you can pass in the epoch,
+#      period, identifier, coordinate, depth, and duration as keyword arguments:
 
-    @validator("period")
-    @classmethod
-    def validate_period(cls, value):
-        """
-        Checks that the period has physical units of time and raises an error
-        if that is not true.
-        """
-        if u.get_physical_type(value) != "time":
-            raise ValueError(
-                f"Period does not have time units," f"currently has {value.unit} units."
-            )
-        return value
+#     >>> from astropy.time import Time
+#     >>> from astropy.coordinates import SkyCoord
+#     >>> from astropy import units as u
+#     >>> planet  = Exoplanet(epoch=Time(2455909.29280, format="jd"),
+#     ...                     period=1.21749 * u.day,
+#     ...                     identifier="KELT-1b",
+#     ...                     coordinate=SkyCoord(ra="00:01:26.9169",
+#     ...                                         dec="+39:23:01.7821",
+#     ...                                         frame="icrs",
+#     ...                                         unit=("hour", "degree")),
+#     ...                     depth=0.006,
+#     ...                     duration=120 * u.min)
+#     """
+#     model_config = MODEL_DEFAULT_CONFIGURATION
 
-    @validator("duration")
-    @classmethod
-    def validate_duration(cls, value):
-        """
-        Checks that the duration has physical units of time and raises an error
-        if that is not true.
-        """
-        if u.get_physical_type(value) != "time":
-            raise ValueError(
-                f"Duration does not have time units,"
-                f"currently has {value.unit} units."
-            )
-        return value
+#     epoch: TimeType | None = None
+#     period: QuantityType | None = None
+#     identifier: str
+#     coordinate: SkyCoordType
+#     depth: float | None = None
+#     duration: QuantityType | None = None
+
+#     # class Config:
+#     #     validate_all = True
+#     #     validate_assignment = True
+#     #     extra = "forbid"
+#     #     json_encoders = {
+#     #         Quantity: lambda v: f"{v.value} {v.unit}",
+#     #         QuantityType: lambda v: f"{v.value} {v.unit}",
+#     #         Time: lambda v: f"{v.value}",
+#     #     }
+
+#     @validator("period")
+#     @classmethod
+#     def validate_period(cls, value):
+#         """
+#         Checks that the period has physical units of time and raises an error
+#         if that is not true.
+#         """
+#         if u.get_physical_type(value) != "time":
+#             raise ValueError(
+#                 f"Period does not have time units,"
+#                 f"currently has {value.unit} units."
+#             )
+#         return value
+
+#     @validator("duration")
+#     @classmethod
+#     def validate_duration(cls, value):
+#         """
+#         Checks that the duration has physical units of time and raises an error
+#         if that is not true.
+#         """
+#         if u.get_physical_type(value) != "time":
+#             raise ValueError(
+#                 f"Duration does not have time units,"
+#                 f"currently has {value.unit} units."
+#             )
+#         return value
