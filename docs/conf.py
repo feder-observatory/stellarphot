@@ -29,13 +29,12 @@ import sys
 from importlib import import_module
 from pathlib import Path
 
-try:
-    from sphinx_astropy.conf.v1 import *  # noqa
-except ImportError:
-    print(
-        "ERROR: the documentation requires the sphinx-astropy package to be installed"
-    )
-    sys.exit(1)
+from sphinx_astropy.conf.v2 import *  # noqa: E402, F403
+from sphinx_astropy.conf.v2 import (  # noqa: E402
+    exclude_patterns,
+    html_theme_options,
+    rst_epilog,
+)
 
 if sys.version_info < (3, 11):
     import tomli as tomllib
@@ -88,6 +87,10 @@ version = package.__version__.split("-", 1)[0]
 # The full version, including alpha/beta/rc tags.
 release = package.__version__
 
+# Only include dev docs in dev version.
+dev = "dev" in release
+if not dev:
+    exclude_patterns += ["development/*"]
 
 # -- Options for HTML output --------------------------------------------------
 
@@ -108,16 +111,31 @@ release = package.__version__
 # name of a builtin theme or the name of a custom theme in html_theme_path.
 # html_theme = None
 
+html_theme_options.update(
+    {
+        "github_url": "https://github.com/feder-observatory/stellarphot",
+        "use_edit_page_button": True,
+        # "logo": {
+        #     "image_light": "_static/astropy_banner_96.png",
+        #     "image_dark": "_static/astropy_banner_96_dark.png",
+        # },
+        # https://github.com/pydata/pydata-sphinx-theme/issues/1492
+        "navigation_with_keys": False,
+    }
+)
 
-html_theme_options = {
-    "logotext1": "stellarphot",  # white,  semi-bold
-    "logotext2": "",  # orange, light
-    "logotext3": ":docs",  # white,  light
+# A dictionary of values to pass into the template engine's context for all pages.
+html_context = {
+    "default_mode": "dark",
+    "to_be_indexed": ["stable", "latest"],
+    "is_development": dev,
+    "github_user": "feder-observatory",
+    "github_repo": "stellarphot",
+    "github_version": "main",
+    "doc_path": "docs",
 }
 
-
-# Custom sidebar templates, maps document names to template names.
-# html_sidebars = {}
+html_css_files = ["astropy.css"]
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
