@@ -45,10 +45,7 @@ def _raw_photometry_table():
     expected_flux_error = (
         fluxes
         / expected_comp_fluxes
-        * np.sqrt(
-            errors**2 / fluxes**2
-            + comp_error_total**2 / expected_comp_fluxes**2
-        )
+        * np.sqrt(errors**2 / fluxes**2 + comp_error_total**2 / expected_comp_fluxes**2)
     )
 
     raw_table = Table(
