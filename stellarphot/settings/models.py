@@ -196,7 +196,7 @@ class Camera(BaseModel):
 
 
 # Add YAML round-tripping for Camera
-def camera_representer(dumper, cam):
+def _camera_representer(dumper, cam):
     return dumper.represent_mapping("!Camera", cam.model_dump())
 
 
