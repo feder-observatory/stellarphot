@@ -142,6 +142,13 @@ def test_with_physical_type():
         )
 
 
+def test_bad_physical_type_raises_error():
+    with pytest.raises(ValueError, match="'not_a_type' is not a known physical type"):
+
+        class Model(BaseModel):
+            not_a_type: Annotated[QuantityType, WithPhysicalType("not_a_type")]
+
+
 def test_quantity_type_with_invalid_quantity():
     with pytest.raises(ValidationError, match="It does not start with a number"):
         _QuantityModel(quantity="meter")
