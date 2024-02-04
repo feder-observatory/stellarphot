@@ -223,13 +223,14 @@ class PhotometryApertures(BaseModel):
     ----------
 
     radius : int
-        Radius of the aperture in pixels.
+        Radius of the aperture in pixels, must be greater than or equal to 1.
 
     gap : int
-        Distance between the radius and the inner annulus in pixels.
+        Distance between the radius and the inner annulus in pixels, must be greater
+        than or equal to 1.
 
     annulus_width : int
-        Width of the annulus in pixels.
+        Width of the annulus in pixels, must be greater than or equal to 1.
 
     fwhm : float
         Full width at half maximum of the typical star in pixels.
