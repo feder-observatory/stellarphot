@@ -185,8 +185,8 @@ class _UnitQuantTypePydanticAnnotation:
 @dataclass
 class EquivalentTo:
     """
-    This class is a pydantic "marker" (their word for this kind of thing) that
-    can be used to annotate fields that should be equivalent to a given unit.
+    This can be used to annotate pydantic fields where the value should have a unit
+    that is convertible to a given unit.
 
     Parameters
     ----------
@@ -263,8 +263,8 @@ class EquivalentTo:
 @dataclass
 class WithPhysicalType:
     """
-    This class is a pydantic "marker" (their word for this kind of thing) that
-    can be used to annotate fields that should be of a specific physical type.
+    This class can be used to annotate pydantic fields whose value
+    should be of a specific physical type.
 
     Parameters
     ----------
@@ -360,7 +360,8 @@ def serialize_astropy_type(value):
 
     In principle, we ought to be able to use the astropy serialization stuff
     that is used in writing tables to ecsv here, but that is not quite working
-    yet.
+    as of January 2024, so for now we fall back to a string representation when
+    the value is a Unit or Quantity.
 
     Parameters
     ----------
@@ -407,9 +408,8 @@ def serialize_astropy_type(value):
 
 class AstropyValidator:
     """
-    This class is a pydantic "marker" (their word for this kind of thing) that
-    can be used to annotate fields that should be of an astropy type that can be
-    serialized.
+    This class can be used to annotate pydantic fields that are an astropy type
+    (e.g. SkyCoord) to add basic pydantic validation and serialization.
 
     Examples
     --------
