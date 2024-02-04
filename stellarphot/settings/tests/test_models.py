@@ -3,6 +3,7 @@ import json
 import astropy.units as u
 import pytest
 from astropy.coordinates import SkyCoord
+from astropy.table import Table
 from astropy.time import Time
 from pydantic import ValidationError
 
@@ -39,23 +40,27 @@ def test_camera_attributes():
     c = Camera(
         **TEST_CAMERA_VALUES,
     )
-    assert c.dict() == TEST_CAMERA_VALUES
+    assert c.model_dump() == TEST_CAMERA_VALUES
 
 
 def test_camera_unitscheck():
     # Check that the units are checked properly
 
-    # Remove units from all of the Quantity types
-    camera_dict_no_units = {
-        k: v.value if hasattr(v, "value") else v for k, v in TEST_CAMERA_VALUES.items()
+    # Set a clearly incorrect Quantity. Simply removing the units does not lead
+    # to an invalid Quantity -- it turns out Quantity(5) is valid, with units of
+    # dimensionless_unscaled. So we need to set the units to something that is
+    # invalid.
+    camera_dict_bad_unit = {
+        k: "5 cows" if hasattr(v, "value") else v for k, v in TEST_CAMERA_VALUES.items()
     }
     # All 5 of the attributes after data_unit will be checked for units
     # and noted in the ValidationError message. Rather than checking
     # separately for all 5, we just check for the presence of the
-    # right number of errors
-    with pytest.raises(ValidationError, match="5 validation errors"):
+    # right number of errors, which is currently 20 -- 4 for each of the
+    # 5 attributes, because of the union schema in _UnitTypePydanticAnnotation
+    with pytest.raises(ValidationError, match="20 validation errors"):
         Camera(
-            **camera_dict_no_units,
+            **camera_dict_bad_unit,
         )
 
 
@@ -65,7 +70,7 @@ def test_camera_negative_max_adu():
     camera_for_test["max_data_value"] = -1 * camera_for_test["max_data_value"]
 
     # Make sure that a negative max_adu raises an error
-    with pytest.raises(ValidationError, match="must be positive"):
+    with pytest.raises(ValidationError, match="Input should be greater than 0"):
         Camera(
             **camera_for_test,
         )
@@ -103,7 +108,7 @@ def test_camera_copy():
     c = Camera(
         **TEST_CAMERA_VALUES,
     )
-    c2 = c.copy()
+    c2 = c.model_copy()
     assert c2 == c
 
 
@@ -122,14 +127,14 @@ def test_camera_altunitscheck():
     c = Camera(
         **camera_for_test,
     )
-    assert c.dict() == camera_for_test
+    assert c.model_dump() == camera_for_test
 
 
 def test_camera_schema():
     # Check that we can generate a schema for a Camera and that it
     # has the right number of attributes
     c = Camera(**TEST_CAMERA_VALUES)
-    schema = c.schema()
+    schema = c.model_json_schema()
     assert len(schema["properties"]) == len(TEST_CAMERA_VALUES)
 
 
@@ -138,8 +143,21 @@ def test_camera_json_round_trip():
 
     c = Camera(**TEST_CAMERA_VALUES)
 
-    c2 = Camera.parse_raw(c.json())
+    c2 = Camera.model_validate_json(c.model_dump_json())
     assert c2 == c
+
+
+def test_camera_table_round_trip(tmp_path):
+    # Check that a camera can be stored as part of an astropy.table.Table
+    # metadata and retrieved
+    table = Table({"data": [1, 2, 3]})
+    c = Camera(**TEST_CAMERA_VALUES)
+    table.meta["camera"] = c
+    table_path = tmp_path / "test_table.ecsv"
+    table.write(table_path)
+    new_table = Table.read(table_path)
+
+    assert new_table.meta["camera"] == c
 
 
 def test_create_aperture_settings_correctly():
@@ -173,21 +191,18 @@ def test_aperture_settings_ui_generation(class_, defaults):
     # 2) The UI model matches our input
     # 3) The UI widgets contains the titles we expect
     #
-
+    instance = class_(**defaults)
+    instance.model_json_schema()
     # 1) The UI is generated from the class
     ui = ui_generator(class_)
 
-    print(f"{class_=}")
-    print(f"{defaults=}")
     # 2) The UI model matches our input
     # Set the ui values to the defaults -- the value needs to be whatever would
     # go into a **widget** though, not a **model**. It is easiest to create
     # a model and then use its dict() method to get the widget values.
-    values_dict_as_strings = json.loads(class_(**defaults).json())
-    print(f"{values_dict_as_strings=}")
+    values_dict_as_strings = json.loads(class_(**defaults).model_dump_json())
     ui.value = values_dict_as_strings
-    print(f"{ui.value=}")
-    assert class_(**ui.value).dict() == defaults
+    assert class_(**ui.value).model_dump() == defaults
 
     # 3) The UI widgets contains the titles generated from pydantic.
     # Pydantic generically is supposed to generate titles from the field names,
@@ -202,11 +217,11 @@ def test_aperture_settings_ui_generation(class_, defaults):
     pydantic_titles = {
         f: [f.replace("_", " "), f.replace("_", "")] for f in defaults.keys()
     }
-    # pydantic_titles = defaults.keys()
     title_present = []
-    print(f"{ui.di_labels=}")
+
     for title in pydantic_titles.keys():
-        for label in ui.di_labels.values():
+        for box in ui.di_boxes.values():
+            label = box.html_title.value
             present = (
                 title.lower() in label.lower()
                 or pydantic_titles[title][0].lower() in label.lower()

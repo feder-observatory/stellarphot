@@ -19,13 +19,13 @@ dependencies = [
     "bottleneck",
     "ccdproc",
     "ginga",
-    "ipyautoui >=0.5.9",
+    "ipyautoui >=0.7",
     "ipyfilechooser",
     "ipywidgets",
     "matplotlib",
     "pandas",
     "photutils >=1.9",
-    "pydantic<2",
+    "pydantic >=2",
     "pyyaml",
 ]
 
@@ -155,4 +155,6 @@ filterwarnings = [
     'ignore:Passing unrecognized arguments to super:DeprecationWarning',
     # pandas will require pyarrow at some point, which is good to know, I guess...
     'ignore:[.\n]*Pyarrow will become a required dependency of pandas[.\n]*:DeprecationWarning',
+    # ipyautoui is generating this on import because they still have some pydantic changes to make
+    'ignore:Using extra keyword arguments on `Field` is deprecated:'
 ]
