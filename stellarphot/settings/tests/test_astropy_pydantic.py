@@ -33,6 +33,7 @@ class _QuantityModel(BaseModel):
     [
         Unit("m"),
         1,
+        4.0,
         "meter",
         "parsec / fortnight",
         "",
@@ -50,7 +51,9 @@ def test_unit_initialization(init):
     "init",
     [
         -2 * Unit("m"),
+        -2.0 * Unit("m"),
         1,
+        1.0,
         "5 meter",
         "13 parsec / fortnight",
         "42",
@@ -229,7 +232,6 @@ def test_time_quant_pydantic(klass, input):
     assert model.model_dump()["value"] == serialize_astropy_type(val)
 
     # We should be able to create a new model from the dumped json...
-    # ...but we can't because we apparently aren't serializing right.
     model2 = Model.model_validate_json(model.model_dump_json())
 
     if klass is SkyCoord:
@@ -240,3 +242,11 @@ def test_time_quant_pydantic(klass, input):
         )
     else:
         assert model2.value == model.value
+
+
+def test_time_pydantic_invalid_value():
+    class Model(BaseModel):
+        value: Annotated[Time, AstropyValidator]
+
+    with pytest.raises(ValidationError, match="Input should be an instance of Time"):
+        Model(value="not a time")
