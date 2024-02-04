@@ -250,7 +250,7 @@ class PhotometryApertures(BaseModel):
     ... )
     """
 
-    # model_config = MODEL_DEFAULT_CONFIGURATION
+    model_config = MODEL_DEFAULT_CONFIGURATION
 
     radius: conint(ge=1) = Field(
         default=1, json_schema_extra=dict(autoui="ipywidgets.BoundedIntText")
