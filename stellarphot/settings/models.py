@@ -7,7 +7,14 @@ from astropy.coordinates import SkyCoord
 from astropy.io.misc.yaml import AstropyDumper, AstropyLoader
 from astropy.time import Time
 from astropy.units import Quantity, Unit
-from pydantic import BaseModel, ConfigDict, Field, confloat, conint, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PositiveFloat,
+    PositiveInt,
+    model_validator,
+)
 
 from .astropy_pydantic import (
     AstropyValidator,
@@ -252,17 +259,20 @@ class PhotometryApertures(BaseModel):
 
     model_config = MODEL_DEFAULT_CONFIGURATION
 
-    radius: conint(ge=1) = Field(
-        default=1, json_schema_extra=dict(autoui="ipywidgets.BoundedIntText")
-    )
-    gap: conint(ge=1) = Field(
-        default=1, json_schema_extra=dict(autoui="ipywidgets.BoundedIntText")
-    )
-    annulus_width: conint(ge=1) = Field(
-        default=1, json_schema_extra=dict(autoui="ipywidgets.BoundedIntText")
-    )
+    radius: Annotated[
+        PositiveInt,
+        Field(default=1, json_schema_extra=dict(autoui="ipywidgets.BoundedIntText")),
+    ]
+    gap: Annotated[
+        PositiveInt,
+        Field(default=1, json_schema_extra=dict(autoui="ipywidgets.BoundedIntText")),
+    ]
+    annulus_width: Annotated[
+        PositiveInt,
+        Field(default=1, json_schema_extra=dict(autoui="ipywidgets.BoundedIntText")),
+    ]
     # Disable the UI element by default because it is often calculate from an image
-    fwhm: confloat(gt=0) = Field(disabled=True, default=1.0)
+    fwhm: Annotated[PositiveFloat, Field(disabled=True, default=1.0)]
 
     @property
     def inner_annulus(self):
