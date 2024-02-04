@@ -36,7 +36,7 @@ _PHYSICAL_TYPES_URL = "https://docs.astropy.org/en/stable/units/ref_api.html#mod
 def validate_by_instantiating(source_type):
     """
     Return a function that tries to create an instance of source_type from a value.
-    The intended use of this is as a vallidotr in pydantic.
+    The intended use of this is as a validator in pydantic.
 
     Parameters
     ----------
@@ -151,7 +151,7 @@ class _UnitQuantTypePydanticAnnotation:
             #      since the first thing in the chain has to handle the value coming
             #      from json,while the last thing generates the python value for the
             #      input. With the choice below we will *always* want`mode="validation"`
-            #      because pydantic cannot generate a schema fora Unit or Quantity.
+            #      because pydantic cannot generate a schema for a Unit or Quantity.
             json_schema=from_str_schema,
             # union_schema takes a list of schemas and returns a schema that
             # is the "best" match. See the link below for a description of
@@ -340,9 +340,9 @@ class WithPhysicalType:
         return hash(self.physical_type)
 
 
-# We have lost default titles and exmples, but that is maybe not so bad
+# We have lost default titles and examples, but that is maybe not so bad
 
-# This is really nice compared to pydantiv v1...
+# This is really nice compared to pydantic v1...
 UnitType = Annotated[Unit, _UnitQuantTypePydanticAnnotation]
 
 # Quantity type is really clean too
@@ -384,7 +384,7 @@ def serialize_astropy_type(value):
     # use the _represent_as_dict stuff to serialize something like a SkyCoord that
     # has nested astropy objects in it. So for now, we just return the string
     # representation of the objects, like Angle (a type of Quantity), that are
-    # entries in the dict representation of a SKyCoord.
+    # entries in the dict representation of a SkyCoord.
     if isinstance(value, UnitBase | Quantity):
         return str(value)
 
