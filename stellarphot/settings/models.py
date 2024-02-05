@@ -7,8 +7,10 @@ from astropy.coordinates import EarthLocation, Latitude, Longitude, SkyCoord
 from astropy.io.misc.yaml import AstropyDumper, AstropyLoader
 from astropy.time import Time
 from astropy.units import Quantity, Unit
+from astropy.utils import lazyproperty
 from pydantic import (
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
     PositiveFloat,
