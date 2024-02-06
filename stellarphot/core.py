@@ -307,7 +307,8 @@ class PhotometryData(BaseEnhancedTable):
     simply means it can be any unit, but it must be the same for all the columns with
     'consistent count units'.
 
-    name                  unit
+    =================     =======
+    Column name           Unit
     -----------------     -------
     star_id               None
     RA                    u.deg
@@ -338,6 +339,7 @@ class PhotometryData(BaseEnhancedTable):
     airmass               None
     passband              None
     file                  None
+    =================     =======
 
     In addition to these required columns, the following columns are created based
     on the input data during creation.
@@ -624,13 +626,15 @@ class CatalogData(BaseEnhancedTable):
 
     input_data MUST contain the following columns with the following units:
 
-    name                  unit
+    =================     =======
+    Column Name           Unit
     -----------------     -------
     id                    None
     ra                    u.deg
     dec                   u.deg
     mag                   None
     passband              None
+    =================     =======
     """
 
     # Define columns that must be in table and provide information about their type, and
@@ -1102,23 +1106,29 @@ class SourceListData(BaseEnhancedTable):
 
     input_data MUST contain the following columns in the following column:
 
-    name                  unit
+    =================     =======
+    Column Name           Unit
     -----------------     -------
     star_id               None
+    =================     =======
 
     In addition to the star_id columns you must have EITHER
 
-    name                  unit
+    =================     =======
+    Column Name           Unit
     -----------------     -------
     ra                    u.deg
     dec                   u.deg
+    =================     =======
 
     and/or
 
-    name                  unit
+    =================     =======
+    Column Name           Unit
     -----------------     -------
     xcenter               u.pix
     ycenter               u.pix
+    =================     =======
 
     to define the locations of the sources.  If one locaton pair is provided but not
     the other, the missing columns will be added but assigned NaN values.  It is ok
