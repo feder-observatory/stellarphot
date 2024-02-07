@@ -81,3 +81,10 @@ def test_comparison_properties(tmp_path):
     table = table[table["marker name"] != comparison_widget._label_name]
 
     assert len(label_markers) == len(table)
+
+
+def test_no_tess_buttons_at_init():
+    # Make sure TESS controls are not displayed initially
+    comparison_widget = cf.ComparisonViewer()
+    assert comparison_widget.tess_save_toggle.layout.visibility == "hidden"
+    assert comparison_widget._tess_object_info.layout.visibility == "hidden"
