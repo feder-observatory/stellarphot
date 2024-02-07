@@ -3,13 +3,14 @@ from collections import namedtuple
 
 import ipywidgets as ipw
 import matplotlib
+import pytest
 from astropy.nddata import CCDData
 from astrowidgets import ImageWidget
 from photutils.datasets import make_gaussian_sources_image, make_noise_image
 
 from stellarphot.gui_tools import seeing_profile_functions as spf
 from stellarphot.photometry.tests.test_profiles import RANDOM_SEED, SHAPE, STARS
-from stellarphot.settings import Camera, PhotometryApertures
+from stellarphot.settings import Camera, Observatory, PhotometryApertures
 from stellarphot.settings.tests.test_models import (
     TEST_CAMERA_VALUES,
 )
@@ -107,3 +108,30 @@ def test_seeing_profile_properties(tmp_path):
         # Make sure the settings are updated
         phot_aps["radius"] = new_radius
         assert profile_widget.aperture_settings.value == phot_aps
+
+
+def test_seeing_profile_no_observatory():
+    # This test checks that with no observatory set, there is no TESS
+    # related box displayed.
+    profile_widget = spf.SeeingProfileWidget()
+    assert profile_widget.save_toggle is None
+    assert profile_widget.tess_box.layout.visibility == "hidden"
+
+
+@pytest.mark.parametrize("tess_code", [None, "dummy"])
+def test_seeing_profile_with_observatory(tess_code):
+    # Test two cases here:
+    #  1. The observatory has TESS_telescope_code set to a string
+    #  2. The observatory has TESS_telescope_code set to None
+    observatory = Observatory(
+        name="test",
+        latitude=0.0,
+        longitude=0.0,
+        elevation="0.0 m",
+        TESS_telescope_code=tess_code,
+    )
+    profile_widget = spf.SeeingProfileWidget(observatory=observatory)
+    if tess_code is None:
+        assert profile_widget.save_toggle is None
+    else:
+        assert isinstance(profile_widget.save_toggle, ipw.ToggleButton)
