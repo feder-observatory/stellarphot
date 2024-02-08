@@ -13,6 +13,7 @@ from stellarphot.settings.models import (
     Exoplanet,
     Observatory,
     PhotometryApertures,
+    PhotometryOptions,
 )
 
 DEFAULT_APERTURE_SETTINGS = dict(radius=5, gap=10, annulus_width=15, fwhm=3.2)
@@ -48,6 +49,20 @@ DEFAULT_OBSERVATORY_SETTINGS = dict(
 )
 
 
+# The first setting here is required, the rest are optional. The optional
+# settings below are different than the defaults in the model definition.
+DEFAULT_PHOTOMETRY_SETTINGS = dict(
+    shift_tolerance=5,
+    use_coordinates="pixel",
+    include_dig_noise=False,
+    reject_too_close=False,
+    reject_background_outliers=False,
+    fwhm_by_fit=False,
+    logfile="test.log",
+    console_log=False,
+)
+
+
 @pytest.mark.parametrize(
     "model,settings",
     [
@@ -55,6 +70,7 @@ DEFAULT_OBSERVATORY_SETTINGS = dict(
         [PhotometryApertures, DEFAULT_APERTURE_SETTINGS],
         [Exoplanet, DEFAULT_EXOPLANET_SETTINGS],
         [Observatory, DEFAULT_OBSERVATORY_SETTINGS],
+        [PhotometryOptions, DEFAULT_PHOTOMETRY_SETTINGS],
     ],
 )
 class TestModelAgnosticActions:
@@ -286,6 +302,16 @@ def test_observatory_lat_long_as_float():
     settings["longitude"] = settings["longitude"].value
     obs = Observatory(**settings)
     assert obs == Observatory(**DEFAULT_OBSERVATORY_SETTINGS)
+
+
+def test_photometry_settings_negative_shift_tolerance():
+    # Check that a negative shift tolerance raises an error
+    settings = dict(DEFAULT_PHOTOMETRY_SETTINGS)
+    settings["shift_tolerance"] = -1
+    with pytest.raises(
+        ValidationError, match="Input should be greater than or equal to 0"
+    ):
+        PhotometryOptions(**settings)
 
 
 def test_create_invalid_exoplanet():

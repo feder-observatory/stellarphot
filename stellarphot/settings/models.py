@@ -1,7 +1,7 @@
 # Objects that contains the user settings for the program.
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from astropy.coordinates import EarthLocation, Latitude, Longitude, SkyCoord
 from astropy.io.misc.yaml import AstropyDumper, AstropyLoader
@@ -13,6 +13,7 @@ from pydantic import (
     BeforeValidator,
     ConfigDict,
     Field,
+    NonNegativeFloat,
     PositiveFloat,
     PositiveInt,
     model_validator,
@@ -31,6 +32,7 @@ __all__ = [
     "Camera",
     "PhotometryApertures",
     "PhotometryFileSettings",
+    "PhotometryOptions",
     "Exoplanet",
     "Observatory",
 ]
@@ -408,6 +410,68 @@ class Observatory(BaseModelWithTableRep):
         return EarthLocation(
             lat=self.latitude, lon=self.longitude, height=self.elevation
         )
+
+
+class PhotometryOptions(BaseModelWithTableRep):
+    """
+    Options for performing photometry.
+
+    Parameters
+    ----------
+    shift_tolerance : `pydantic.NonNegativeFloat`
+        Since source positions need to be computed on each image using
+        the sky position and WCS, the computed x/y positions are refined
+        afterward by centroiding the sources.  This setting constrols
+        the tolerance in pixels for the shift between the the computed
+        positions and the refined positions, in pixels.  The expected
+        shift shift should not be more than the FWHM, so a measured FWHM
+        might be a good value to provide here.
+
+    use_coordinates : `typing.Literal["sky", "pixel"]`
+        If ``'pixel'``, use the x/y positions in the sourcelist for
+        performing aperture photometry.  If ``'sky'``, use the ra/dec
+        positions in the sourcelist and the WCS of the `ccd_image` to
+        compute the x/y positions on the image.
+
+    include_dig_noise : bool, optional (Default: True)
+        If ``True``, include the digitization noise in the calculation of the
+        noise for each observation.  If ``False``, only the Poisson noise from
+        the source and the sky will be included.
+
+    reject_too_close : bool, optional (Default: True)
+        If ``True``, any sources that are closer than twice the aperture radius
+        are rejected.  If ``False``, all sources in field are used.
+
+    reject_background_outliers : bool, optional (Default: True)
+        If ``True``, sigma clip the pixels in the annulus to reject outlying
+        pixels (e.g. like stars in the annulus)
+
+    fwhm_by_fit : bool, optional (default: True)
+        If ``True``, the FWHM will be calculated by fitting a Gaussian to
+        the star. If ``False``, the FWHM will be calculated by finding the
+        second order moments of the light distribution. Default is ``True``.
+
+    logfile : str, optional (Default: None)
+        Name of the file to which log messages should be written.  It will
+        be created in the `directory_with_images` directory.  If None,
+        all messages are logged to stdout.
+
+    console_log: bool, optional (Default: True)
+        If ``True`` and `logfile` is set, log messages will also be written to
+        stdout.  If ``False``, log messages will not be written to stdout
+        if `logfile` is set.
+    """
+
+    model_config = MODEL_DEFAULT_CONFIGURATION
+
+    shift_tolerance: NonNegativeFloat
+    use_coordinates: Literal["sky", "pixel"] = "sky"
+    include_dig_noise: bool = True
+    reject_too_close: bool = True
+    reject_background_outliers: bool = True
+    fwhm_by_fit: bool = True
+    logfile: str | None = None
+    console_log: bool = True
 
 
 class Exoplanet(BaseModelWithTableRep):
