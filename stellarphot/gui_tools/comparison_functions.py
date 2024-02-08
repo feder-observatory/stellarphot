@@ -195,6 +195,13 @@ class ComparisonViewer:
     overwrite_outputs: bool, optional
         Whether to overwrite existing output files. Defaults to True.
 
+    observatory : `stellarphot.settings.Observatory`, optional
+        Observatory information. If this is set and the observatory has
+        a `stellarphot.settings.Observatory.TESS_telescope_code` attribute,
+        then the TESS submission information will be extracted from the header
+        and a button will appear to save images of the field for a TESS
+        submission.
+
     Attributes
     ----------
 
@@ -242,6 +249,7 @@ class ComparisonViewer:
         object_coordinate=None,
         photom_apertures_file=None,
         overwrite_outputs=True,
+        observatory=None,
     ):
         self._label_name = "labels"
         self._circle_name = "target circle"
@@ -255,6 +263,7 @@ class ComparisonViewer:
         self.tess_submission = None
         self._tess_object_info = None
         self.target_coord = object_coordinate
+        self.observatory = observatory
 
         self.box, self.iw = self._viewer()
 
@@ -269,7 +278,7 @@ class ComparisonViewer:
 
     def _init(self):
         """
-        Handles aspects of initialization that need to be defered until
+        Handles aspects of initialization that need to be deferred until
         a file is chosen.
         """
         if self.tess_submission is not None:
@@ -332,12 +341,7 @@ class ComparisonViewer:
         except NameResolveError:
             pass
 
-        # Maybe this is a tess object?
-        try:
-            self.tess_submission = TessSubmission.from_header(
-                self._file_chooser.header, telescope_code="Paul-P-Feder-0.4m", planet=1
-            )
-        except ValueError:
+        def _settings_for_no_tess():
             # Guess not, time to turn on the coordinates box
             # self._turn_on_coordinates()
             self.tess_submission = None
@@ -346,8 +350,27 @@ class ComparisonViewer:
             self._tess_object_info.layout.visibility = "hidden"
             self.tess_save_toggle.value = False
             self.tess_save_toggle.disabled = True
+            self.tess_save_toggle.layout.visibility = "hidden"
+
+        # Maybe this is a tess object?
+
+        if self.observatory is None or self.observatory.TESS_telescope_code is None:
+            _settings_for_no_tess()
+            return
+
+        try:
+            self.tess_submission = TessSubmission.from_header(
+                self._file_chooser.header,
+                telescope_code=self.observatory.TESS_telescope_code,
+                planet=1,
+            )
+        except ValueError:
+            # Not a TESS object, so turn off the TESS interface
+            _settings_for_no_tess()
         else:
+            # This is a TESS object, so set up the TESS interface
             self.tess_save_toggle.disabled = False
+            self.tess_save_toggle.layout.visibility = "visible"
             self.toi_info = TOI(self.tess_submission.tic_id)
 
             self._target_file_info = TessTargetFile(
@@ -484,11 +507,14 @@ class ComparisonViewer:
         self.tess_save_toggle = ipw.ToggleButton(
             description="TESS files...", disabled=True
         )
+        self.tess_save_toggle.layout.visibility = "hidden"
         self._tess_save_box = ipw.VBox()
         self._tess_save_box.layout.visibility = "hidden"
 
+        tess_scope = self.observatory.TESS_telescope_code if self.observatory else None
+        tess_scope = "" if tess_scope is None else tess_scope
         scope_name = ipw.Text(
-            description="Telescope code", value="Paul-P-Feder-0.4m", style=DESC_STYLE
+            description="Telescope code", value=tess_scope, style=DESC_STYLE
         )
 
         planet_num = ipw.IntText(description="Planet", value=1)

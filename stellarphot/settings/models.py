@@ -3,12 +3,14 @@
 from pathlib import Path
 from typing import Annotated
 
-from astropy.coordinates import SkyCoord
+from astropy.coordinates import EarthLocation, Latitude, Longitude, SkyCoord
 from astropy.io.misc.yaml import AstropyDumper, AstropyLoader
 from astropy.time import Time
 from astropy.units import Quantity, Unit
+from astropy.utils import lazyproperty
 from pydantic import (
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
     PositiveFloat,
@@ -22,9 +24,16 @@ from .astropy_pydantic import (
     QuantityType,
     UnitType,
     WithPhysicalType,
+    _UnitQuantTypePydanticAnnotation,
 )
 
-__all__ = ["Camera", "PhotometryApertures", "PhotometryFileSettings", "Exoplanet"]
+__all__ = [
+    "Camera",
+    "PhotometryApertures",
+    "PhotometryFileSettings",
+    "Exoplanet",
+    "Observatory",
+]
 
 # Most models should use the default configuration, but it can be customized if needed.
 MODEL_DEFAULT_CONFIGURATION = ConfigDict(
@@ -37,7 +46,61 @@ MODEL_DEFAULT_CONFIGURATION = ConfigDict(
 )
 
 
-class Camera(BaseModel):
+def add_degree_to_float(value, _handler):
+    """
+    Translate a value that can be a number to a string with "degree" appended.
+    """
+    try:
+        as_number = float(value)
+    except (ValueError, TypeError):
+        # A value error will happen if the value is not a number.
+        # A type error will happen at least in the case where the value is
+        # an astropy Quantity.
+        return value
+    else:
+        return f"{as_number} degree"
+
+
+class BaseModelWithTableRep(BaseModel):
+    """
+    Class to add to a pydantic model YAML serialization to an Astropy table.
+    """
+
+    def __init__(self, *arg, **kwargs):
+        super().__init__(*arg, **kwargs)
+        self.generate_table_representers()
+
+    def generate_table_representers(self):
+        """
+        Call this method during initialization of a class to add the YAML
+        Table representation for the class.
+        """
+        class_string = f"!{self.__class__.__name__}"
+
+        # Add YAML round-tripping for the model
+        def _representer(dumper, model):
+            # THIS SHOULD TAP INTO ASTROPY'S YAML DUMPER SOMEHOW
+            # This is a little hacky at the moment. It seems like YAML
+            # has trouble reading in a dictionary, so though model.model_dump()
+            # works fine for writing, we can't construct from the dump.
+            #
+            # Instead of figuring out the right way to do that, this just dumps
+            # the json representation as a string.
+            return dumper.represent_mapping(
+                class_string, {"model_json_string": model.model_dump_json()}
+            )
+
+        def _constructor(loader, node):
+            # This loads the simple dictionary we dumped in _representer,
+            # then initializes the model with the json string.
+            mapping = loader.construct_mapping(node)
+            return self.__class__.model_validate_json(mapping["model_json_string"])
+
+        AstropyDumper.add_representer(self.__class__, _representer)
+        AstropyLoader.add_constructor(class_string, _constructor)
+
+
+class Camera(BaseModelWithTableRep):
     """
     A class to represent a CCD-based camera.
 
@@ -202,20 +265,7 @@ class Camera(BaseModel):
         return self
 
 
-# Add YAML round-tripping for Camera
-def _camera_representer(dumper, cam):
-    return dumper.represent_mapping("!Camera", cam.model_dump())
-
-
-def _camera_constructor(loader, node):
-    return Camera(**loader.construct_mapping(node))
-
-
-AstropyDumper.add_representer(Camera, _camera_representer)
-AstropyLoader.add_constructor("!Camera", _camera_constructor)
-
-
-class PhotometryApertures(BaseModel):
+class PhotometryApertures(BaseModelWithTableRep):
     """
     Settings for aperture photometry.
 
@@ -290,7 +340,7 @@ class PhotometryApertures(BaseModel):
         return self.inner_annulus + self.annulus_width
 
 
-class PhotometryFileSettings(BaseModel):
+class PhotometryFileSettings(BaseModelWithTableRep):
     """
     An evolutionary step on the way to having a monolithic set of photometry settings.
     """
@@ -308,7 +358,59 @@ class PhotometryFileSettings(BaseModel):
     )
 
 
-class Exoplanet(BaseModel):
+class Observatory(BaseModelWithTableRep):
+    """
+    Class to represent an observatory.
+
+    Parameters
+    ----------
+    name : str
+        Name of the observatory.
+
+    latitude : `astropy.coordinates.Latitude` or other valid latitude representation
+        Latitude of the observatory. Use a positive number for north and negative
+        for south.
+
+    longitude : `astropy.coordinates.Longitude` or other valid longitude representation
+        Longitude of the observatory. Use a positive number for east and negative
+        for west.
+
+    elevation : `astropy.units.Quantity`
+        Elevation of the observatory.
+
+    AAVSO_code : str, optional
+        AAVSO observer code.
+
+    TESS_telescope_code : str, optional
+        TESS telescope code.
+    """
+
+    model_config = MODEL_DEFAULT_CONFIGURATION
+
+    name: str
+    latitude: Annotated[
+        Latitude, _UnitQuantTypePydanticAnnotation, BeforeValidator(add_degree_to_float)
+    ]
+    longitude: Annotated[
+        Longitude,
+        _UnitQuantTypePydanticAnnotation,
+        BeforeValidator(add_degree_to_float),
+    ]
+    elevation: Annotated[QuantityType, WithPhysicalType("length")]
+    AAVSO_code: str | None = None
+    TESS_telescope_code: str | None = None
+
+    @lazyproperty
+    def earth_location(self):
+        """
+        Return an `astropy.coordinates.EarthLocation` object for the observatory.
+        """
+        return EarthLocation(
+            lat=self.latitude, lon=self.longitude, height=self.elevation
+        )
+
+
+class Exoplanet(BaseModelWithTableRep):
     """
     Create an object representing an Exoplanet.
 

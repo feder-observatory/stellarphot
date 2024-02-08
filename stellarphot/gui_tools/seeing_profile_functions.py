@@ -101,6 +101,15 @@ class SeeingProfileWidget:
     width : int, optional
         Width of the seeing profile widget. Default is 500 pixels.
 
+    camera : `stellarphot.settings.Camera`, optional
+        Camera instance to use for calculating the signal to noise ratio. If
+        ``None``, the signal to noise ratio will not be calculated.
+
+    observatory : `stellarphot.settings.Observatory`, optional
+        Observatory instance to use for setting the TESS telescope information.
+        If `None`, or if the `~stellarphot.settings.Observatory.TESS_telescope_code`
+        is `None`, the TESS settings will not be displayed.
+
     Attributes
     ----------
 
@@ -148,7 +157,7 @@ class SeeingProfileWidget:
 
     """
 
-    def __init__(self, imagewidget=None, width=500, camera=None):
+    def __init__(self, imagewidget=None, width=500, camera=None, observatory=None):
         if not imagewidget:
             imagewidget = ImageWidget(
                 image_width=width, image_height=width, use_opencv=True
@@ -157,6 +166,7 @@ class SeeingProfileWidget:
         self.iw = imagewidget
 
         self.camera = camera
+        self.observatory = observatory
         # Do some set up of the ImageWidget
         set_keybindings(self.iw, scroll_zoom=False)
         bind_map = self.iw._viewer.get_bindmap()
@@ -300,19 +310,33 @@ class SeeingProfileWidget:
             self._change_aperture_save_location, names="value"
         )
         self.fits_file.file_chooser.observe(self._update_file, names="_value")
-        self.save_toggle.observe(self._save_toggle_action, names="value")
-        self.save_seeing.on_click(self._save_seeing_plot)
-        self.setting_box.planet_num.observe(self._set_seeing_profile_name)
-        self.setting_box.telescope_code.observe(self._set_seeing_profile_name)
+        if self.save_toggle:
+            self.save_toggle.observe(self._save_toggle_action, names="value")
+            self.save_seeing.on_click(self._save_seeing_plot)
+            self.setting_box.planet_num.observe(self._set_seeing_profile_name)
+            self.setting_box.telescope_code.observe(self._set_seeing_profile_name)
 
     def _make_tess_box(self):
         box = ipw.VBox()
+
+        if self.observatory is None or self.observatory.TESS_telescope_code is None:
+            """
+            No TESS information, so definitely don't display this group of settings.
+            """
+            box.layout.flex_flow = "row wrap"
+            box.layout.visibility = "hidden"
+
+            self.save_toggle = None
+            return box
+
         setting_box = ipw.HBox()
         self.save_toggle = ipw.ToggleButton(
             description="TESS seeing profile...", disabled=True
         )
         scope_name = ipw.Text(
-            description="Telescope code", value="Paul-P-Feder-0.4m", style=desc_style
+            description="Telescope code",
+            value=self.observatory.TESS_telescope_code,
+            style=desc_style,
         )
         planet_num = ipw.IntText(description="Planet", value=1)
         self.save_seeing = ipw.Button(description="Save")
@@ -346,7 +370,8 @@ class SeeingProfileWidget:
             profile_size = 60
             default_gap = 5  # pixels
             default_annulus_width = 15  # pixels
-            self.save_toggle.disabled = False
+            if self.save_toggle:
+                self.save_toggle.disabled = False
 
             update_aperture_settings = False
             if event is not None:
