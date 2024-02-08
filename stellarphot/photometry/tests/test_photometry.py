@@ -448,9 +448,6 @@ def test_photometry_on_directory(coords):
         ]
         # Write the CCDData objects to files
         for i, image in enumerate(fake_images):
-            from time import sleep
-
-            sleep(1)
             image.write(temp_file_names[i])
 
         object_name = fake_images[0].header["OBJECT"]
