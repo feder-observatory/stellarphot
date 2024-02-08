@@ -278,7 +278,7 @@ class ComparisonViewer:
 
     def _init(self):
         """
-        Handles aspects of initialization that need to be defered until
+        Handles aspects of initialization that need to be deferred until
         a file is chosen.
         """
         if self.tess_submission is not None:
@@ -365,10 +365,10 @@ class ComparisonViewer:
                 planet=1,
             )
         except ValueError:
-            # Guess not, time to turn on the coordinates box
-            # self._turn_on_coordinates()
+            # Not a TESS object, so turn off the TESS interface
             _settings_for_no_tess()
         else:
+            # This is a TESS object, so set up the TESS interface
             self.tess_save_toggle.disabled = False
             self.tess_save_toggle.layout.visibility = "visible"
             self.toi_info = TOI(self.tess_submission.tic_id)
