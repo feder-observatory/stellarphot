@@ -591,6 +591,7 @@ def multi_image_photometry(
     observatory_location,
     photometry_apertures,
     shift_tolerance,
+    use_coordinates="pixel",
     include_dig_noise=True,
     reject_too_close=True,
     reject_background_outliers=True,
@@ -642,6 +643,12 @@ def multi_image_photometry(
         positions and the refined positions, in pixels.  The expected
         shift shift should not be more than the FWHM, so a measured FWHM
         might be a good value to provide here.
+
+    use_coordinates : str, optional (Default: 'sky')
+        If ``'pixel'``, use the x/y positions in the sourcelist for
+        performing aperture photometry.  If ``'sky'``, use the ra/dec
+        positions in the sourcelist and the WCS of the `ccd_image` to
+        compute the x/y positions on the image.
 
     reject_background_outliers : bool, optional (Default: True)
         If ``True``, sigma clip the pixels in the annulus to reject outlying
@@ -774,7 +781,7 @@ def multi_image_photometry(
             observatory_location,
             photometry_apertures,
             shift_tolerance,
-            use_coordinates="sky",
+            use_coordinates=use_coordinates,
             include_dig_noise=include_dig_noise,
             reject_too_close=reject_too_close,
             reject_background_outliers=reject_background_outliers,

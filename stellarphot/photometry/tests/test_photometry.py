@@ -431,7 +431,8 @@ def list_of_fakes(num_files):
     return fake_images
 
 
-def test_photometry_on_directory():
+@pytest.mark.parametrize("coords", ["sky", "pixel"])
+def test_photometry_on_directory(coords):
     # Create list of fake CCDData objects
     num_files = 5
     fake_images = list_of_fakes(num_files)
@@ -474,6 +475,7 @@ def test_photometry_on_directory():
                 FAKE_OBS,
                 aperture_settings,
                 SHIFT_TOLERANCE,
+                use_coordinates=coords,
                 include_dig_noise=True,
                 reject_too_close=True,
                 reject_background_outliers=True,
@@ -514,14 +516,26 @@ def test_photometry_on_directory():
 
         expected_deviation = np.pi * aperture**2 * noise_dev
 
-        # We could require that the result be within some reasonable
-        # number of those expected variations or we could count up the
-        # actual number of background counts at each of the source
-        # positions.
+        # We have two cases to consider: use_coordinates="sky" and
+        # use_coordinates="pixel". In the former case, the expected
+        # result is the test below. In the latter case, the expected
+        # result is that either obs_avg_net_cnts is nan or the difference
+        # is bigger than the expected_deviation.
 
-        # Here we just check whether any difference is consistent with
-        # less than the expected one sigma deviation.
-        assert np.abs(expected_flux - obs_avg_net_cnts) < expected_deviation
+        if coords == "sky":
+            # We could require that the result be within some reasonable
+            # number of those expected variations or we could count up the
+            # actual number of background counts at each of the source
+            # positions.
+
+            # Here we just check whether any difference is consistent with
+            # less than the expected one sigma deviation.
+            assert np.abs(expected_flux - obs_avg_net_cnts) < expected_deviation
+        else:
+            assert (
+                np.isnan(obs_avg_net_cnts)
+                or np.abs(expected_flux - obs_avg_net_cnts) < expected_deviation
+            )
 
 
 def test_photometry_on_directory_with_no_ra_dec():
