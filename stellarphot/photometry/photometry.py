@@ -5,7 +5,7 @@ from pathlib import Path
 import bottleneck as bn
 import numpy as np
 from astropy import units as u
-from astropy.coordinates import EarthLocation, SkyCoord
+from astropy.coordinates import SkyCoord
 from astropy.nddata import CCDData, NoOverlapError
 from astropy.table import Column, vstack
 from astropy.time import Time
@@ -17,7 +17,7 @@ from photutils.centroids import centroid_sources
 from scipy.spatial.distance import cdist
 
 from stellarphot import PhotometryData, SourceListData
-from stellarphot.settings import Camera
+from stellarphot.settings import Camera, Observatory, PhotometryApertures
 
 from .source_detection import compute_fwhm
 
@@ -38,7 +38,7 @@ def single_image_photometry(
     ccd_image,
     sourcelist,
     camera,
-    observatory_location,
+    observatory,
     photometry_apertures,
     shift_tolerance,
     use_coordinates="pixel",
@@ -75,12 +75,11 @@ def single_image_photometry(
         RA/Dec coordinates. If both positions provided, pixel coordinates will be used.
         For RA/Dec coordinates to be used, `ccd_image` must have a valid WCS.
 
-    camera : `stellarphot.Camera`
+    camera : `stellarphot.settings.Camera`
         Camera object which has gain, read noise and dark current set.
 
-    observatory_location : `astropy.coordinates.EarthLocation`
-        Location of the observatory where the images were taken.  Used for calculating
-        the BJD.
+    observatory : `stellarphot.settings.Observatory`
+        Observatory information.  Used for calculating the BJD.
 
     photometry_apertures : `stellarphot.settings.PhotometryApertures`
         Radius, inner and outer annulus radii settings and FWHM.
@@ -179,21 +178,18 @@ def single_image_photometry(
         )
     if not isinstance(camera, Camera):
         raise TypeError(f"camera must be a Camera object, but it is '{type(camera)}'.")
-    if not isinstance(observatory_location, EarthLocation):
+    if not isinstance(observatory, Observatory):
         raise TypeError(
             "observatory_location must be a EarthLocation object, but it "
-            f"is '{type(observatory_location)}'."
+            f"is '{type(observatory)}'."
         )
-    if photometry_apertures.inner_annulus >= photometry_apertures.outer_annulus:
-        raise ValueError(
-            f"outer_annulus ({photometry_apertures.outer_annulus}) must be greater "
-            f"than inner_annulus ({photometry_apertures.inner_annulus})."
+
+    if not isinstance(photometry_apertures, PhotometryApertures):
+        raise TypeError(
+            "photometry_apertures must be a PhotometryApertures object, but it is "
+            f"'{type(photometry_apertures)}'."
         )
-    if photometry_apertures.radius >= photometry_apertures.inner_annulus:
-        raise ValueError(
-            f"aperture_radius ({photometry_apertures.radius}) must be greater than "
-            f"inner_annulus ({photometry_apertures.inner_annulus})."
-        )
+
     if shift_tolerance <= 0:
         raise ValueError(
             f"shift_tolerance ({shift_tolerance}) must be greater than 0 "
@@ -574,7 +570,7 @@ def single_image_photometry(
 
     # Create PhotometryData object to return
     photom_data = PhotometryData(
-        observatory=observatory_location,
+        observatory=observatory,
         camera=camera,
         input_data=photom,
         passband_map=passband_map,
@@ -588,7 +584,7 @@ def multi_image_photometry(
     object_of_interest,
     sourcelist,
     camera,
-    observatory_location,
+    observatory,
     photometry_apertures,
     shift_tolerance,
     use_coordinates="pixel",
@@ -625,12 +621,11 @@ def multi_image_photometry(
         RA/Dec coordinates.  The x/y coordinates in the sourcelist will be ignored,
         WCS derived x/y positions based on sky positions will be computed each image.
 
-    camera : `stellarphot.Camera`
+    camera : `stellarphot.settings.Camera`
         Camera object which has gain, read noise and dark current set.
 
-    observatory_location : `astropy.coordinates.EarthLocation`
-        Location of the observatory where the images were taken.  Used for calculating
-        the BJD.
+    observatory : `stellarphot.settings.Observatory`
+        Observatory information.  Used for calculating the BJD.
 
     photometry_apertures : `stellarphot.settings.PhotometryApertures`
         Radius, inner and outer annulus radii settings and FWHM.
@@ -778,7 +773,7 @@ def multi_image_photometry(
             this_ccd,
             sourcelist,
             camera,
-            observatory_location,
+            observatory,
             photometry_apertures,
             shift_tolerance,
             use_coordinates=use_coordinates,

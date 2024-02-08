@@ -6,7 +6,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 from astropy import units as u
-from astropy.coordinates import EarthLocation
 from astropy.io import ascii
 from astropy.utils.data import get_pkg_data_filename
 from astropy.utils.metadata.exceptions import MergeConflictWarning
@@ -20,7 +19,7 @@ from stellarphot.photometry import (
     single_image_photometry,
     source_detection,
 )
-from stellarphot.settings import Camera, PhotometryApertures
+from stellarphot.settings import Camera, Observatory, PhotometryApertures
 
 # Constants for the tests
 
@@ -54,7 +53,9 @@ ZERO_CAMERA = Camera(
 )
 
 # Fake observatory location
-FAKE_OBS = EarthLocation(lat=0 * u.deg, lon=0 * u.deg, height=0 * u.m)
+FAKE_OBS = Observatory(
+    name="test observatory", latitude=0 * u.deg, longitude=0 * u.deg, elevation=0 * u.m
+)
 
 # The default coordinate system to use for the tests
 COORDS2USE = "pixel"

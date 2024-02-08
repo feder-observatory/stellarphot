@@ -3,13 +3,13 @@ import re
 import numpy as np
 import pandas as pd
 from astropy import units as u
-from astropy.coordinates import EarthLocation, SkyCoord
+from astropy.coordinates import SkyCoord
 from astropy.table import Column, QTable, Table, TableAttribute
 from astropy.time import Time
 from astropy.wcs import WCS
 from astroquery.vizier import Vizier
 
-from .settings import Camera
+from .settings import Camera, Observatory
 
 __all__ = [
     "BaseEnhancedTable",
@@ -267,8 +267,8 @@ class PhotometryData(BaseEnhancedTable):
         to have np.nan values, but if they do, the 'bjd' column will not be
         computed and will also be left with 'np.nan'.
 
-    observatory: `astropy.coordinates.EarthLocation`, optional (Default: None)
-        The location of the observatory.
+    observatory: `stellarphot.settings.Observatory`, optional (Default: None)
+        Information about the observatory.
 
     camera: `stellarphot.Camera`, optional (Default: None)
         A description of the CCD used to perform the photometry.
@@ -293,8 +293,8 @@ class PhotometryData(BaseEnhancedTable):
     camera: `stellarphot.Camera`
         A description of the CCD used to perform the photometry.
 
-    observatory: `astropy.coordinates.EarthLocation`
-        The location of the observatory.
+    observatory: `stellarphot.settings.Observatory`, optional (Default: None)
+        Information about the observatory.
 
     Notes
     -----
@@ -430,10 +430,10 @@ class PhotometryData(BaseEnhancedTable):
             )
 
             # Perform input validation
-            if not isinstance(self.observatory, EarthLocation):
+            if not isinstance(self.observatory, Observatory):
                 raise TypeError(
                     "observatory must be an "
-                    "astropy.coordinates.EarthLocation object instead "
+                    "stellarphot.settings.Observatory object instead "
                     f"of type {type(self.observatory)}."
                 )
             if not isinstance(self.camera, Camera):
@@ -441,18 +441,6 @@ class PhotometryData(BaseEnhancedTable):
                     "camera must be a stellarphot.Camera object instead "
                     f"of type {type(self.camera)}."
                 )
-
-            # Add the TableAttributes directly to meta (and adding attribute
-            # functions below) since using TableAttributes results in a
-            # inability to access the values to due a
-            # AttributeError: 'TableAttribute' object has no attribute 'name'
-            # self.meta["lat"] = observatory.lat
-            # self.meta["lon"] = observatory.lon
-            # self.meta["height"] = observatory.height
-            # self.meta["gain"] = camera.gain
-            # self.meta["read_noise"] = camera.read_noise
-            # self.meta["dark_current"] = camera.dark_current
-            # self.meta["pixel_scale"] = camera.pixel_scale
 
             # Check for consistency of counts-related columns
             counts_columns = [
@@ -512,7 +500,9 @@ class PhotometryData(BaseEnhancedTable):
                             # Generate integer counter for nights. This should be
                             # approximately the MJD at noon local before the evening of
                             # the observation.
-                            hr_offset = int(self.observatory.lon.value / 15)
+                            hr_offset = int(
+                                self.observatory.earth_location.lon.value / 15
+                            )
                             # Compute offset to 12pm Local Time before evening
                             LocalTime = Time(self["date-obs"]) + hr_offset * u.hr
                             hr = LocalTime.ymdhms.hour
@@ -569,7 +559,9 @@ class PhotometryData(BaseEnhancedTable):
 
             # Compute light travel time corrections
             ip_peg = SkyCoord(ra=self["ra"], dec=self["dec"], unit="degree")
-            ltt_bary = times.light_travel_time(ip_peg, location=observatory)
+            ltt_bary = times.light_travel_time(
+                ip_peg, location=observatory.earth_location
+            )
             time_barycenter = times_tdb + ltt_bary
 
             # Return BJD at midpoint of exposure at each location

@@ -3,7 +3,7 @@ import warnings
 import numpy as np
 import pytest
 from astropy import units as u
-from astropy.coordinates import EarthLocation, SkyCoord
+from astropy.coordinates import SkyCoord
 from astropy.io import ascii, fits
 from astropy.nddata import CCDData
 from astropy.table import Table
@@ -20,7 +20,7 @@ from stellarphot.core import (
     apass_dr9,
     vsx_vizier,
 )
-from stellarphot.settings import Camera
+from stellarphot.settings import Camera, Observatory
 
 # Create several test descriptions for use in base_enhanced_table tests.
 test_descript = {
@@ -87,7 +87,9 @@ feder_cg_16m = Camera(
     max_data_value=50000 * u.adu,
 )
 feder_passbands = {"up": "SU", "gp": "SG", "rp": "SR", "zp": "SZ", "ip": "SI"}
-feder_obs = EarthLocation(lat=46.86678, lon=-96.45328, height=311)
+feder_obs = Observatory(
+    name="Feder Observatory", latitude=46.86678, longitude=-96.45328, elevation="311 m"
+)
 
 
 def test_base_enhanced_table_blank():
@@ -480,12 +482,16 @@ def test_photometry_data():
     assert phot_data.camera.read_noise == 10.0 * u.electron
     assert phot_data.camera.dark_current == 0.01 * u.electron / u.second
     assert phot_data.camera.pixel_scale == 0.563 * u.arcsec / u.pix
-    np.testing.assert_almost_equal(phot_data.observatory.lat.value, 46.86678)
-    assert phot_data.observatory.lat.unit == u.deg
-    np.testing.assert_almost_equal(phot_data.observatory.lon.value, -96.45328)
-    assert phot_data.observatory.lon.unit == u.deg
-    assert round(phot_data.observatory.height.value) == 311
-    assert phot_data.observatory.height.unit == u.m
+    np.testing.assert_almost_equal(
+        phot_data.observatory.earth_location.lat.value, 46.86678
+    )
+    assert phot_data.observatory.earth_location.lat.unit == u.deg
+    np.testing.assert_almost_equal(
+        phot_data.observatory.earth_location.lon.value, -96.45328
+    )
+    assert phot_data.observatory.earth_location.lon.unit == u.deg
+    assert round(phot_data.observatory.earth_location.height.value) == 311
+    assert phot_data.observatory.earth_location.height.unit == u.m
     assert phot_data["night"][0] == 59909
 
     # Checking the BJD computation against Ohio State online calculator for
@@ -531,12 +537,16 @@ def test_photometry_slicing():
     assert two_cols.camera.read_noise == 10.0 * u.electron
     assert two_cols.camera.dark_current == 0.01 * u.electron / u.second
     assert two_cols.camera.pixel_scale == 0.563 * u.arcsec / u.pix
-    np.testing.assert_almost_equal(two_cols.observatory.lat.value, 46.86678)
-    assert two_cols.observatory.lat.unit == u.deg
-    np.testing.assert_almost_equal(two_cols.observatory.lon.value, -96.45328)
-    assert two_cols.observatory.lon.unit == u.deg
-    assert round(two_cols.observatory.height.value) == 311
-    assert two_cols.observatory.height.unit == u.m
+    np.testing.assert_almost_equal(
+        two_cols.observatory.earth_location.lat.value, 46.86678
+    )
+    assert two_cols.observatory.earth_location.lat.unit == u.deg
+    np.testing.assert_almost_equal(
+        two_cols.observatory.earth_location.lon.value, -96.45328
+    )
+    assert two_cols.observatory.earth_location.lon.unit == u.deg
+    assert round(two_cols.observatory.earth_location.height.value) == 311
+    assert two_cols.observatory.earth_location.height.unit == u.m
 
 
 def test_photometry_recursive():
