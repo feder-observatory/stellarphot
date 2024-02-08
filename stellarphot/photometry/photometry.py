@@ -45,12 +45,12 @@ def single_image_photometry(
     include_dig_noise=True,
     reject_too_close=True,
     reject_background_outliers=True,
-    passband_map=None,
     fwhm_by_fit=True,
-    fname=None,
-    logline="single_image_photometry:",
     logfile=None,
     console_log=True,
+    passband_map=None,
+    fname=None,
+    logline="single_image_photometry:",
 ):
     """
     Perform aperture photometry on a single image, with an options for estimating
@@ -99,35 +99,23 @@ def single_image_photometry(
         positions in the sourcelist and the WCS of the `ccd_image` to
         compute the x/y positions on the image.
 
-    reject_background_outliers : bool, optional (Default: True)
-        If ``True``, sigma clip the pixels in the annulus to reject outlying
-        pixels (e.g. like stars in the annulus)
-
-    reject_too_close : bool, optional (Default: True)
-        If ``True``, any sources that are closer than twice the aperture radius
-        are rejected.  If ``False``, all sources in field are used.
-
     include_dig_noise : bool, optional (Default: True)
         If ``True``, include the digitization noise in the calculation of the
         noise for each observation.  If ``False``, only the Poisson noise from
         the source and the sky will be included.
 
-    passband_map: dict, optional (Default: None)
-        A dictionary containing instrumental passband names as keys and
-        AAVSO passband names as values. This is used to rename the passband
-        entries in the output photometry table to be AAVSO standard versus
-        whatever is in the source list.
+    reject_too_close : bool, optional (Default: True)
+        If ``True``, any sources that are closer than twice the aperture radius
+        are rejected.  If ``False``, all sources in field are used.
+
+    reject_background_outliers : bool, optional (Default: True)
+        If ``True``, sigma clip the pixels in the annulus to reject outlying
+        pixels (e.g. like stars in the annulus)
 
     fwhm_by_fit : bool, optional (default: True)
         If ``True``, the FWHM will be calculated by fitting a Gaussian to
         the star. If ``False``, the FWHM will be calculated by finding the
         second moments of the light distribution. Default is ``True``.
-
-    fname : str, optional ()
-        Name of the image file on which photometry is being performed.
-
-    logline : str, optional (Default: "single_image_photometry:")
-        String to prepend to all log messages.
 
     logfile : str, optional (Default: None)
         Name of the file to which log messages should be written.  If None,
@@ -137,6 +125,18 @@ def single_image_photometry(
         If ``True`` and `logfile` is set, log messages will also be written to
         stdout.  If ``False``, log messages will not be written to stdout
         if `logfile` is set.
+
+    passband_map: dict, optional (Default: None)
+        A dictionary containing instrumental passband names as keys and
+        AAVSO passband names as values. This is used to rename the passband
+        entries in the output photometry table to be AAVSO standard versus
+        whatever is in the source list.
+
+    fname : str, optional (Default: None)
+        Name of the image file on which photometry is being performed.
+
+    logline : str, optional (Default: "single_image_photometry:")
+        String to prepend to all log messages.
 
     Returns
     -------
@@ -595,11 +595,11 @@ def multi_image_photometry(
     include_dig_noise=True,
     reject_too_close=True,
     reject_background_outliers=True,
-    reject_unmatched=True,
-    passband_map=None,
     fwhm_by_fit=True,
     logfile=None,
     console_log=True,
+    passband_map=None,
+    reject_unmatched=True,
 ):
     """
     Perform aperture photometry on a directory of images.
@@ -650,30 +650,18 @@ def multi_image_photometry(
         positions in the sourcelist and the WCS of the `ccd_image` to
         compute the x/y positions on the image.
 
-    reject_background_outliers : bool, optional (Default: True)
-        If ``True``, sigma clip the pixels in the annulus to reject outlying
-        pixels (e.g. like stars in the annulus)
-
-    reject_too_close : bool, optional (Default: True)
-        If ``True``, any sources that are closer than twice the aperture radius
-        are rejected.  If ``False``, all sources in field are used.
-
-    reject_unmatched : bool, optional (Default: True)
-        If ``True``, any sources that are not detected on all the images are
-        rejected.  If you are interested in a source that can intermittently
-        fall below your detection limits, we suggest setting this to ``False``
-        so that all sources detected on each image are reported.
-
     include_dig_noise : bool, optional (Default: True)
         If ``True``, include the digitization noise in the calculation of the
         noise for each observation.  If ``False``, only the Poisson noise from
         the source and the sky will be included.
 
-    passband_map: dict, optional (Default: None)
-        A dictionary containing instrumental passband names as keys and
-        AAVSO passband names as values. This is used to rename the passband
-        entries in the output photometry table to be AAVSO standard versus
-        whatever is in the source list.
+    reject_too_close : bool, optional (Default: True)
+        If ``True``, any sources that are closer than twice the aperture radius
+        are rejected.  If ``False``, all sources in field are used.
+
+    reject_background_outliers : bool, optional (Default: True)
+        If ``True``, sigma clip the pixels in the annulus to reject outlying
+        pixels (e.g. like stars in the annulus)
 
     fwhm_by_fit : bool, optional (default: True)
         If ``True``, the FWHM will be calculated by fitting a Gaussian to
@@ -689,6 +677,18 @@ def multi_image_photometry(
         If ``True`` and `logfile` is set, log messages will also be written to
         stdout.  If ``False``, log messages will not be written to stdout
         if `logfile` is set.
+
+    passband_map: dict, optional (Default: None)
+        A dictionary containing instrumental passband names as keys and
+        AAVSO passband names as values. This is used to rename the passband
+        entries in the output photometry table to be AAVSO standard versus
+        whatever is in the source list.
+
+    reject_unmatched : bool, optional (Default: True)
+        If ``True``, any sources that are not detected on all the images are
+        rejected.  If you are interested in a source that can intermittently
+        fall below your detection limits, we suggest setting this to ``False``
+        so that all sources detected on each image are reported.
 
     Returns
     -------
