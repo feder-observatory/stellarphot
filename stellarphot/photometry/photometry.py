@@ -589,7 +589,7 @@ def multi_image_photometry(
     sourcelist,
     camera,
     observatory_location,
-    photometry_settings,
+    photometry_apertures,
     shift_tolerance,
     include_dig_noise=True,
     reject_too_close=True,
@@ -631,7 +631,7 @@ def multi_image_photometry(
         Location of the observatory where the images were taken.  Used for calculating
         the BJD.
 
-    photometry_settings : `stellarphot.settings.PhotometryApertures`
+    photometry_apertures : `stellarphot.settings.PhotometryApertures`
         Radius, inner and outer annulus radii settings and FWHM.
 
     shift_tolerance : float
@@ -772,7 +772,7 @@ def multi_image_photometry(
             sourcelist,
             camera,
             observatory_location,
-            photometry_settings,
+            photometry_apertures,
             shift_tolerance,
             use_coordinates="sky",
             include_dig_noise=include_dig_noise,
