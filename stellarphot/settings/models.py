@@ -460,6 +460,42 @@ class PhotometryOptions(BaseModelWithTableRep):
         If ``True`` and `logfile` is set, log messages will also be written to
         stdout.  If ``False``, log messages will not be written to stdout
         if `logfile` is set.
+
+    Examples
+    --------
+
+    The only option that must be set explicitly is the `shift_tolerance`:
+
+    >>> from stellarphot.settings import PhotometryOptions
+    >>> photometry_options = PhotometryOptions(shift_tolerance=5.2)
+    >>> photometry_options
+    PhotometryOptions(shift_tolerance=5.2, use_coordinates='sky',
+    include_dig_noise=True, reject_too_close=True, reject_background_outliers=True,
+    fwhm_by_fit=True, logfile=None, console_log=True)
+
+
+    You can also set the other options explicitly when you create the options:
+
+    >>> photometry_options = PhotometryOptions(
+    ...     shift_tolerance=5.2,
+    ...     use_coordinates="pixel",
+    ...     include_dig_noise=True,
+    ...     reject_too_close=False,
+    ...     reject_background_outliers=True,
+    ...     fwhm_by_fit=True,
+    ...     logfile=None,
+    ...     console_log=True
+    ... )
+    >>> photometry_options
+    PhotometryOptions(shift_tolerance=5.2, use_coordinates='pixel',
+    include_dig_noise=True, reject_too_close=False, reject_background_outliers=True,
+    fwhm_by_fit=True, logfile=None, console_log=True)
+
+    You can also change individual options after the object is created:
+
+    >>> photometry_options.use_coordinates = "sky"
+    >>> photometry_options.use_coordinates
+    'sky'
     """
 
     model_config = MODEL_DEFAULT_CONFIGURATION

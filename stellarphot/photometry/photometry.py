@@ -83,7 +83,8 @@ def single_image_photometry(
         Radius, inner and outer annulus radii settings and FWHM.
 
     photometry_options : `stellarphot.settings.PhotometryOptions`
-        Several options for the details of performing the photometry.
+        Several options for the details of performing the photometry. See the
+        documentation for `~stellarphot.settings.PhotometryOptions` for details.
 
     passband_map: dict, optional (Default: None)
         A dictionary containing instrumental passband names as keys and
@@ -581,7 +582,8 @@ def multi_image_photometry(
         Radius, inner and outer annulus radii settings and FWHM.
 
     photometry_options : `stellarphot.settings.PhotometryOptions`
-        Several options for the details of performing the photometry.
+        Several options for the details of performing the photometry. See the
+        documentation for `~stellarphot.settings.PhotometryOptions` for details.
 
     passband_map: dict, optional (Default: None)
         A dictionary containing instrumental passband names as keys and
