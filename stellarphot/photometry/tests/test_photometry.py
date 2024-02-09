@@ -71,7 +71,7 @@ FAKE_OBS = Observatory(
 # The fake image used for testing
 FAKE_CCD_IMAGE = FakeCCDImage(seed=SEED)
 
-# Build default PhotometrySettings for the tests based on the fake image
+# Build default PhotometryOptions for the tests based on the fake image
 DEFAULT_PHOTOMETRY_APERTURES = PhotometryApertures(
     radius=FAKE_CCD_IMAGE.sources["aperture"][0],
     gap=FAKE_CCD_IMAGE.sources["aperture"][0],
@@ -536,12 +536,10 @@ def test_photometry_on_directory(coords):
         expected_deviation = np.pi * aperture**2 * noise_dev
 
         # We have two cases to consider: use_coordinates="sky" and
-        # use_coordinates="pixel". In the former case, the expected
-        # result is the test below. In the latter case, the expected
-        # result is that either obs_avg_net_cnts is nan or the difference
-        # is bigger than the expected_deviation.
-
+        # use_coordinates="pixel".
         if coords == "sky":
+            # In this case, the expected result is the test below.
+
             # We could require that the result be within some reasonable
             # number of those expected variations or we could count up the
             # actual number of background counts at each of the source
@@ -551,6 +549,8 @@ def test_photometry_on_directory(coords):
             # less than the expected one sigma deviation.
             assert np.abs(expected_flux - obs_avg_net_cnts) < expected_deviation
         else:
+            # The expected result is that either obs_avg_net_cnts is nan or the
+            # difference is bigger than the expected_deviation.
             assert (
                 np.isnan(obs_avg_net_cnts)
                 or np.abs(expected_flux - obs_avg_net_cnts) < expected_deviation

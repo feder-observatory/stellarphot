@@ -421,7 +421,7 @@ class PhotometryOptions(BaseModelWithTableRep):
     shift_tolerance : `pydantic.NonNegativeFloat`
         Since source positions need to be computed on each image using
         the sky position and WCS, the computed x/y positions are refined
-        afterward by centroiding the sources.  This setting constrols
+        afterward by centroiding the sources.  This setting controls
         the tolerance in pixels for the shift between the the computed
         positions and the refined positions, in pixels.  The expected
         shift shift should not be more than the FWHM, so a measured FWHM

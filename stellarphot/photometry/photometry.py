@@ -105,7 +105,7 @@ def single_image_photometry(
         Photometry data for all the locations in which aperture photometry was
         performed.  This may be a subset of the sources in the sourcelist if
         locations were too close to the edge of the image or to each other for
-        successful apeture photometry.  If pixel (x/y) positions were used for
+        successful aperture photometry.  If pixel (x/y) positions were used for
         the photometry, but a valid WCS header was not available for `ccd_image`,
         the output 'ra', 'dec', and 'bjd' columns will have np.nan values
 
@@ -604,7 +604,7 @@ def multi_image_photometry(
         Photometry data for all the sources on which aperture photometry was
         performed in all the images. This may be a subset of the sources in
         the sourcelist if locations were too close to the edge of any one image
-        or to each other for successful apeture photometry.
+        or to each other for successful aperture photometry.
 
     """
 
