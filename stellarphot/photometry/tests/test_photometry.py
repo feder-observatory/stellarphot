@@ -9,7 +9,6 @@ from astropy import units as u
 from astropy.io import ascii
 from astropy.utils.data import get_pkg_data_filename
 from astropy.utils.metadata.exceptions import MergeConflictWarning
-from fake_image import FakeCCDImage, shift_FakeCCDImage
 
 from stellarphot.core import SourceListData
 from stellarphot.photometry import (
@@ -19,6 +18,7 @@ from stellarphot.photometry import (
     single_image_photometry,
     source_detection,
 )
+from stellarphot.photometry.tests.fake_image import FakeCCDImage, shift_FakeCCDImage
 from stellarphot.settings import (
     Camera,
     Observatory,
@@ -549,11 +549,19 @@ def test_photometry_on_directory(coords):
             # less than the expected one sigma deviation.
             assert np.abs(expected_flux - obs_avg_net_cnts) < expected_deviation
         else:
-            # The expected result is that either obs_avg_net_cnts is nan or the
-            # difference is bigger than the expected_deviation.
+            # In this case we are trying to do photometry in pixel coordinates,
+            # using the pixel location of the sources as found in the first image --
+            # see the line where found_sources is defined.
+            #
+            # However, the images are shifted with respect to each other by
+            # list_of_fakes, so there are no long stars at those positions in the
+            # other images.
+            #
+            # Because of that, the expected result is that either obs_avg_net_cnts
+            # is nan or the difference is bigger than the expected_deviation.
             assert (
                 np.isnan(obs_avg_net_cnts)
-                or np.abs(expected_flux - obs_avg_net_cnts) < expected_deviation
+                or np.abs(expected_flux - obs_avg_net_cnts) > expected_deviation
             )
 
 
