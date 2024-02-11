@@ -554,7 +554,7 @@ def test_photometry_on_directory(coords):
             # see the line where found_sources is defined.
             #
             # However, the images are shifted with respect to each other by
-            # list_of_fakes, so there are no long stars at those positions in the
+            # list_of_fakes, so there are no longer stars at those positions in the
             # other images.
             #
             # Because of that, the expected result is that either obs_avg_net_cnts
