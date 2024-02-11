@@ -6,11 +6,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 from astropy import units as u
-from astropy.coordinates import EarthLocation
 from astropy.io import ascii
 from astropy.utils.data import get_pkg_data_filename
 from astropy.utils.metadata.exceptions import MergeConflictWarning
-from fake_image import FakeCCDImage, shift_FakeCCDImage
 
 from stellarphot.core import SourceListData
 from stellarphot.photometry import (
@@ -20,7 +18,13 @@ from stellarphot.photometry import (
     single_image_photometry,
     source_detection,
 )
-from stellarphot.settings import Camera, PhotometryApertures
+from stellarphot.photometry.tests.fake_image import FakeCCDImage, shift_FakeCCDImage
+from stellarphot.settings import (
+    Camera,
+    Observatory,
+    PhotometryApertures,
+    PhotometryOptions,
+)
 
 # Constants for the tests
 
@@ -28,8 +32,14 @@ GAINS = [1.0, 1.5, 2.0]
 # Make sure the tests are deterministic by using a seed
 SEED = 5432985
 
+
+# The default coordinate system and shift tolerance to use for the tests
+COORDS2USE = "pixel"
 SHIFT_TOLERANCE = 6
-FWHM_ESTIMATE = 5
+PHOTOMETRY_OPTIONS = PhotometryOptions(
+    shift_tolerance=SHIFT_TOLERANCE,
+    use_coordinates=COORDS2USE,
+)
 
 # A camera with not unreasonable settings
 FAKE_CAMERA = Camera(
@@ -54,15 +64,14 @@ ZERO_CAMERA = Camera(
 )
 
 # Fake observatory location
-FAKE_OBS = EarthLocation(lat=0 * u.deg, lon=0 * u.deg, height=0 * u.m)
-
-# The default coordinate system to use for the tests
-COORDS2USE = "pixel"
+FAKE_OBS = Observatory(
+    name="test observatory", latitude=0 * u.deg, longitude=0 * u.deg, elevation=0 * u.m
+)
 
 # The fake image used for testing
 FAKE_CCD_IMAGE = FakeCCDImage(seed=SEED)
 
-# Build default PhotometrySettings for the tests based on the fake image
+# Build default PhotometryOptions for the tests based on the fake image
 DEFAULT_PHOTOMETRY_APERTURES = PhotometryApertures(
     radius=FAKE_CCD_IMAGE.sources["aperture"][0],
     gap=FAKE_CCD_IMAGE.sources["aperture"][0],
@@ -280,17 +289,21 @@ def test_aperture_photometry_no_outlier_rejection(int_data):
         data = scale_factor * fake_CCDimage.data
         fake_CCDimage.data = data.astype(int)
 
+    # Make a copy of photometry options
+    phot_options = PhotometryOptions(**PHOTOMETRY_OPTIONS.model_dump())
+
+    # Modify options to match test before we used phot_options
+    phot_options.reject_background_outliers = False
+    phot_options.reject_too_close = False
+    phot_options.include_dig_noise = True
+
     phot, missing_sources = single_image_photometry(
         fake_CCDimage,
         found_sources,
         FAKE_CAMERA,
         FAKE_OBS,
         DEFAULT_PHOTOMETRY_APERTURES,
-        SHIFT_TOLERANCE,
-        use_coordinates=COORDS2USE,
-        include_dig_noise=True,
-        reject_too_close=False,
-        reject_background_outliers=False,
+        phot_options,
     )
 
     phot.sort("aperture_sum")
@@ -359,17 +372,21 @@ def test_aperture_photometry_with_outlier_rejection(reject):
         # Yes, x and y are deliberately reversed below.
         image[center_px[1], begin:end] = 100 * fake_CCDimage.mean_noise
 
+    # Make a copy of photometry options
+    phot_options = PhotometryOptions(**PHOTOMETRY_OPTIONS.model_dump())
+
+    # Modify options to match test before we used phot_options
+    phot_options.reject_background_outliers = reject
+    phot_options.reject_too_close = False
+    phot_options.include_dig_noise = True
+
     phot, missing_sources = single_image_photometry(
         fake_CCDimage,
         found_sources,
         FAKE_CAMERA,
         FAKE_OBS,
         aperture_settings,
-        SHIFT_TOLERANCE,
-        use_coordinates=COORDS2USE,
-        include_dig_noise=True,
-        reject_too_close=False,
-        reject_background_outliers=reject,
+        phot_options,
     )
 
     phot.sort("aperture_sum")
@@ -431,7 +448,8 @@ def list_of_fakes(num_files):
     return fake_images
 
 
-def test_photometry_on_directory():
+@pytest.mark.parametrize("coords", ["sky", "pixel"])
+def test_photometry_on_directory(coords):
     # Create list of fake CCDData objects
     num_files = 5
     fake_images = list_of_fakes(num_files)
@@ -447,9 +465,6 @@ def test_photometry_on_directory():
         ]
         # Write the CCDData objects to files
         for i, image in enumerate(fake_images):
-            from time import sleep
-
-            sleep(1)
             image.write(temp_file_names[i])
 
         object_name = fake_images[0].header["OBJECT"]
@@ -462,6 +477,16 @@ def test_photometry_on_directory():
             fake_images[0], fwhm=fake_images[0].sources["x_stddev"].mean(), threshold=10
         )
 
+        # Make a copy of photometry options
+        phot_options = PhotometryOptions(**PHOTOMETRY_OPTIONS.model_dump())
+
+        # Modify options to match test before we used phot_options
+        phot_options.use_coordinates = coords
+        phot_options.include_dig_noise = True
+        phot_options.reject_too_close = True
+        phot_options.reject_background_outliers = True
+        phot_options.fwhm_by_fit = True
+
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore", message="Cannot merge meta key", category=MergeConflictWarning
@@ -473,12 +498,8 @@ def test_photometry_on_directory():
                 FAKE_CAMERA,
                 FAKE_OBS,
                 aperture_settings,
-                SHIFT_TOLERANCE,
-                include_dig_noise=True,
-                reject_too_close=True,
-                reject_background_outliers=True,
+                phot_options,
                 passband_map=None,
-                fwhm_by_fit=True,
             )
 
     # For following assertion to be true, rad must be small enough that
@@ -514,14 +535,34 @@ def test_photometry_on_directory():
 
         expected_deviation = np.pi * aperture**2 * noise_dev
 
-        # We could require that the result be within some reasonable
-        # number of those expected variations or we could count up the
-        # actual number of background counts at each of the source
-        # positions.
+        # We have two cases to consider: use_coordinates="sky" and
+        # use_coordinates="pixel".
+        if coords == "sky":
+            # In this case, the expected result is the test below.
 
-        # Here we just check whether any difference is consistent with
-        # less than the expected one sigma deviation.
-        assert np.abs(expected_flux - obs_avg_net_cnts) < expected_deviation
+            # We could require that the result be within some reasonable
+            # number of those expected variations or we could count up the
+            # actual number of background counts at each of the source
+            # positions.
+
+            # Here we just check whether any difference is consistent with
+            # less than the expected one sigma deviation.
+            assert np.abs(expected_flux - obs_avg_net_cnts) < expected_deviation
+        else:
+            # In this case we are trying to do photometry in pixel coordinates,
+            # using the pixel location of the sources as found in the first image --
+            # see the line where found_sources is defined.
+            #
+            # However, the images are shifted with respect to each other by
+            # list_of_fakes, so there are no long stars at those positions in the
+            # other images.
+            #
+            # Because of that, the expected result is that either obs_avg_net_cnts
+            # is nan or the difference is bigger than the expected_deviation.
+            assert (
+                np.isnan(obs_avg_net_cnts)
+                or np.abs(expected_flux - obs_avg_net_cnts) > expected_deviation
+            )
 
 
 def test_photometry_on_directory_with_no_ra_dec():
@@ -553,6 +594,15 @@ def test_photometry_on_directory_with_no_ra_dec():
         # Damage the sourcelist by removing the ra and dec columns
         found_sources.drop_ra_dec()
 
+        phot_options = PhotometryOptions(**PHOTOMETRY_OPTIONS.model_dump())
+
+        # Modify options to match test before we used phot_options
+        phot_options.use_coordinates = "sky"  # This was implicit in the old default
+        phot_options.include_dig_noise = True
+        phot_options.reject_too_close = True
+        phot_options.reject_background_outliers = True
+        phot_options.fwhm_by_fit = True
+
         with pytest.raises(ValueError):
             multi_image_photometry(
                 temp_dir,
@@ -561,12 +611,8 @@ def test_photometry_on_directory_with_no_ra_dec():
                 FAKE_CAMERA,
                 FAKE_OBS,
                 aperture_settings,
-                SHIFT_TOLERANCE,
-                include_dig_noise=True,
-                reject_too_close=True,
-                reject_background_outliers=True,
+                phot_options,
                 passband_map=None,
-                fwhm_by_fit=True,
             )
 
 
@@ -600,6 +646,15 @@ def test_photometry_on_directory_with_bad_fits():
             threshold=10,
         )
 
+        phot_options = PhotometryOptions(**PHOTOMETRY_OPTIONS.model_dump())
+
+        # Modify options to match test before we used phot_options
+        phot_options.use_coordinates = "sky"  # This was implicit in the old default
+        phot_options.include_dig_noise = True
+        phot_options.reject_too_close = True
+        phot_options.reject_background_outliers = True
+        phot_options.fwhm_by_fit = True
+
         # Since none of the images will be valid, it should raise a RuntimeError
         with pytest.raises(RuntimeError):
             multi_image_photometry(
@@ -609,10 +664,6 @@ def test_photometry_on_directory_with_bad_fits():
                 FAKE_CAMERA,
                 FAKE_OBS,
                 aperture_settings,
-                SHIFT_TOLERANCE,
-                include_dig_noise=True,
-                reject_too_close=True,
-                reject_background_outliers=True,
+                phot_options,
                 passband_map=None,
-                fwhm_by_fit=True,
             )

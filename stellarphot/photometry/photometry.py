@@ -5,7 +5,7 @@ from pathlib import Path
 import bottleneck as bn
 import numpy as np
 from astropy import units as u
-from astropy.coordinates import EarthLocation, SkyCoord
+from astropy.coordinates import SkyCoord
 from astropy.nddata import CCDData, NoOverlapError
 from astropy.table import Column, vstack
 from astropy.time import Time
@@ -17,7 +17,12 @@ from photutils.centroids import centroid_sources
 from scipy.spatial.distance import cdist
 
 from stellarphot import PhotometryData, SourceListData
-from stellarphot.settings import Camera
+from stellarphot.settings import (
+    Camera,
+    Observatory,
+    PhotometryApertures,
+    PhotometryOptions,
+)
 
 from .source_detection import compute_fwhm
 
@@ -38,19 +43,12 @@ def single_image_photometry(
     ccd_image,
     sourcelist,
     camera,
-    observatory_location,
+    observatory,
     photometry_apertures,
-    shift_tolerance,
-    use_coordinates="pixel",
-    include_dig_noise=True,
-    reject_too_close=True,
-    reject_background_outliers=True,
+    photometry_options,
     passband_map=None,
-    fwhm_by_fit=True,
     fname=None,
     logline="single_image_photometry:",
-    logfile=None,
-    console_log=True,
 ):
     """
     Perform aperture photometry on a single image, with an options for estimating
@@ -75,42 +73,18 @@ def single_image_photometry(
         RA/Dec coordinates. If both positions provided, pixel coordinates will be used.
         For RA/Dec coordinates to be used, `ccd_image` must have a valid WCS.
 
-    camera : `stellarphot.Camera`
+    camera : `stellarphot.settings.Camera`
         Camera object which has gain, read noise and dark current set.
 
-    observatory_location : `astropy.coordinates.EarthLocation`
-        Location of the observatory where the images were taken.  Used for calculating
-        the BJD.
+    observatory : `stellarphot.settings.Observatory`
+        Observatory information.  Used for calculating the BJD.
 
     photometry_apertures : `stellarphot.settings.PhotometryApertures`
         Radius, inner and outer annulus radii settings and FWHM.
 
-    shift_tolerance : float
-        If the x/y position needs to be computed using WCS, then computed
-        x/y positions are refined by afterward centroiding the sources.
-        This reflects the tolerance in pixels for the shift between the
-        the computed positions and the refined positions, in pixels.
-        The expected shift shift should not be more than the FWHM, so a
-        measured FWHM might be a good value to provide here.
-
-    use_coordinates : str, optional (Default: 'pixel')
-        If ``'pixel'``, use the x/y positions in the sourcelist for
-        performing aperture photometry.  If ``'sky'``, use the ra/dec
-        positions in the sourcelist and the WCS of the `ccd_image` to
-        compute the x/y positions on the image.
-
-    reject_background_outliers : bool, optional (Default: True)
-        If ``True``, sigma clip the pixels in the annulus to reject outlying
-        pixels (e.g. like stars in the annulus)
-
-    reject_too_close : bool, optional (Default: True)
-        If ``True``, any sources that are closer than twice the aperture radius
-        are rejected.  If ``False``, all sources in field are used.
-
-    include_dig_noise : bool, optional (Default: True)
-        If ``True``, include the digitization noise in the calculation of the
-        noise for each observation.  If ``False``, only the Poisson noise from
-        the source and the sky will be included.
+    photometry_options : `stellarphot.settings.PhotometryOptions`
+        Several options for the details of performing the photometry. See the
+        documentation for `~stellarphot.settings.PhotometryOptions` for details.
 
     passband_map: dict, optional (Default: None)
         A dictionary containing instrumental passband names as keys and
@@ -118,25 +92,11 @@ def single_image_photometry(
         entries in the output photometry table to be AAVSO standard versus
         whatever is in the source list.
 
-    fwhm_by_fit : bool, optional (default: True)
-        If ``True``, the FWHM will be calculated by fitting a Gaussian to
-        the star. If ``False``, the FWHM will be calculated by finding the
-        second moments of the light distribution. Default is ``True``.
-
-    fname : str, optional ()
+    fname : str, optional (Default: None)
         Name of the image file on which photometry is being performed.
 
     logline : str, optional (Default: "single_image_photometry:")
         String to prepend to all log messages.
-
-    logfile : str, optional (Default: None)
-        Name of the file to which log messages should be written.  If None,
-        then log messages are written to stdout.
-
-    console_log: bool, optional (Default: True)
-        If ``True`` and `logfile` is set, log messages will also be written to
-        stdout.  If ``False``, log messages will not be written to stdout
-        if `logfile` is set.
 
     Returns
     -------
@@ -145,7 +105,7 @@ def single_image_photometry(
         Photometry data for all the locations in which aperture photometry was
         performed.  This may be a subset of the sources in the sourcelist if
         locations were too close to the edge of the image or to each other for
-        successful apeture photometry.  If pixel (x/y) positions were used for
+        successful aperture photometry.  If pixel (x/y) positions were used for
         the photometry, but a valid WCS header was not available for `ccd_image`,
         the output 'ra', 'dec', and 'bjd' columns will have np.nan values
 
@@ -179,33 +139,27 @@ def single_image_photometry(
         )
     if not isinstance(camera, Camera):
         raise TypeError(f"camera must be a Camera object, but it is '{type(camera)}'.")
-    if not isinstance(observatory_location, EarthLocation):
+    if not isinstance(observatory, Observatory):
         raise TypeError(
             "observatory_location must be a EarthLocation object, but it "
-            f"is '{type(observatory_location)}'."
-        )
-    if photometry_apertures.inner_annulus >= photometry_apertures.outer_annulus:
-        raise ValueError(
-            f"outer_annulus ({photometry_apertures.outer_annulus}) must be greater "
-            f"than inner_annulus ({photometry_apertures.inner_annulus})."
-        )
-    if photometry_apertures.radius >= photometry_apertures.inner_annulus:
-        raise ValueError(
-            f"aperture_radius ({photometry_apertures.radius}) must be greater than "
-            f"inner_annulus ({photometry_apertures.inner_annulus})."
-        )
-    if shift_tolerance <= 0:
-        raise ValueError(
-            f"shift_tolerance ({shift_tolerance}) must be greater than 0 "
-            "(should be on order of FWHM)."
+            f"is '{type(observatory)}'."
         )
 
-    if use_coordinates not in ["pixel", "sky"]:
-        raise ValueError(
-            f"input_coordinates ({use_coordinates}) must be either " "'pixel' or 'sky'."
+    if not isinstance(photometry_apertures, PhotometryApertures):
+        raise TypeError(
+            "photometry_apertures must be a PhotometryApertures object, but it is "
+            f"'{type(photometry_apertures)}'."
+        )
+
+    if not isinstance(photometry_options, PhotometryOptions):
+        raise TypeError(
+            "photometry_options must be a PhotometryOptions object, but it is "
+            f"'{type(photometry_options)}'."
         )
 
     # Set up logging
+    logfile = photometry_options.logfile
+    console_log = photometry_options.console_log
     logger = logging.getLogger("single_image_photometry")
     console_format = logging.Formatter("%(message)s")
     if logger.hasHandlers() is False:
@@ -277,7 +231,7 @@ def single_image_photometry(
     src_cnt = len(sourcelist)
 
     # If RA/Dec are available attempt to use them to determine the source positions
-    if use_coordinates == "sky" and sourcelist.has_ra_dec:
+    if photometry_options.use_coordinates == "sky" and sourcelist.has_ra_dec:
         try:
             imgpos = ccd_image.wcs.world_to_pixel(
                 SkyCoord(ra, dec, unit=u.deg, frame="icrs")
@@ -288,7 +242,7 @@ def single_image_photometry(
             msg = f"{logline} ccd_image must have a valid WCS to use RA/Dec!"
             logger.warning(msg)
             return None, None
-    elif use_coordinates == "sky" and not sourcelist.has_ra_dec:
+    elif photometry_options.use_coordinates == "sky" and not sourcelist.has_ra_dec:
         raise ValueError(
             "use_coordinates='sky' but sourcelist does not have" "RA/Dec coordinates!"
         )
@@ -313,7 +267,7 @@ def single_image_photometry(
         "nearest neighbor"
     )
 
-    if reject_too_close:
+    if photometry_options.reject_too_close:
         # Track dropped sources due to being too close together
         dropped_sources.extend(star_ids[too_close].tolist())
         # Remove sources too close together
@@ -359,7 +313,7 @@ def single_image_photometry(
     # particularly useful is processing multiple images of the same field
     # and just passing the same sourcelist when calling single_image_photometry
     # on each image.
-    if use_coordinates == "sky":
+    if photometry_options.use_coordinates == "sky":
         try:
             xcen, ycen = centroid_sources(
                 ccd_image.data, xs, ys, box_size=2 * photometry_apertures.radius + 1
@@ -377,7 +331,7 @@ def single_image_photometry(
 
             # The center really shouldn't move more than about the fwhm, could
             # rework this in the future to use that instead.
-            too_much_shift = center_diff > shift_tolerance
+            too_much_shift = center_diff > photometry_options.shift_tolerance
 
             # If the shift is too large, use the WCS-derived positions instead
             # (these sources are probably too faint for centroiding to work well)
@@ -452,7 +406,7 @@ def single_image_photometry(
     photom["aperture_area"] = apers.area * u.pixel
     photom["annulus_area"] = anuls.area * u.pixel
 
-    if reject_background_outliers:
+    if photometry_options.reject_background_outliers:
         msg = f"{logline} Computing clipped sky stats ... "
         try:
             (
@@ -500,7 +454,7 @@ def single_image_photometry(
             ccd_image,
             photom,
             fwhm_estimate=photometry_apertures.fwhm,
-            fit=fwhm_by_fit,
+            fit=photometry_options.fwhm_by_fit,
         )
         num_warnings = len(warned)
         msg += f"fitting failed on {num_warnings} of {len(photom)} sources  ... "
@@ -551,7 +505,7 @@ def single_image_photometry(
         aperture_area=photom["aperture_area"].value,
         annulus_area=photom["annulus_area"].value,
         exposure=photom["exposure"].value,
-        include_digitization=include_dig_noise,
+        include_digitization=photometry_options.include_dig_noise,
     )
     photom["noise_electrons"] = noise  # Noise in electrons
     photom["noise_electrons"].unit = u.electron
@@ -574,7 +528,7 @@ def single_image_photometry(
 
     # Create PhotometryData object to return
     photom_data = PhotometryData(
-        observatory=observatory_location,
+        observatory=observatory,
         camera=camera,
         input_data=photom,
         passband_map=passband_map,
@@ -588,17 +542,11 @@ def multi_image_photometry(
     object_of_interest,
     sourcelist,
     camera,
-    observatory_location,
-    photometry_settings,
-    shift_tolerance,
-    include_dig_noise=True,
-    reject_too_close=True,
-    reject_background_outliers=True,
-    reject_unmatched=True,
+    observatory,
+    photometry_apertures,
+    photometry_options,
     passband_map=None,
-    fwhm_by_fit=True,
-    logfile=None,
-    console_log=True,
+    reject_unmatched=True,
 ):
     """
     Perform aperture photometry on a directory of images.
@@ -624,43 +572,18 @@ def multi_image_photometry(
         RA/Dec coordinates.  The x/y coordinates in the sourcelist will be ignored,
         WCS derived x/y positions based on sky positions will be computed each image.
 
-    camera : `stellarphot.Camera`
+    camera : `stellarphot.settings.Camera`
         Camera object which has gain, read noise and dark current set.
 
-    observatory_location : `astropy.coordinates.EarthLocation`
-        Location of the observatory where the images were taken.  Used for calculating
-        the BJD.
+    observatory : `stellarphot.settings.Observatory`
+        Observatory information.  Used for calculating the BJD.
 
-    photometry_settings : `stellarphot.settings.PhotometryApertures`
+    photometry_apertures : `stellarphot.settings.PhotometryApertures`
         Radius, inner and outer annulus radii settings and FWHM.
 
-    shift_tolerance : float
-        Since source positions need to be computed on each image using
-        the sky position and WCS, the computed x/y positions are refined
-        afterward by centroiding the sources.  This setting constrols
-        the tolerance in pixels for the shift between the the computed
-        positions and the refined positions, in pixels.  The expected
-        shift shift should not be more than the FWHM, so a measured FWHM
-        might be a good value to provide here.
-
-    reject_background_outliers : bool, optional (Default: True)
-        If ``True``, sigma clip the pixels in the annulus to reject outlying
-        pixels (e.g. like stars in the annulus)
-
-    reject_too_close : bool, optional (Default: True)
-        If ``True``, any sources that are closer than twice the aperture radius
-        are rejected.  If ``False``, all sources in field are used.
-
-    reject_unmatched : bool, optional (Default: True)
-        If ``True``, any sources that are not detected on all the images are
-        rejected.  If you are interested in a source that can intermittently
-        fall below your detection limits, we suggest setting this to ``False``
-        so that all sources detected on each image are reported.
-
-    include_dig_noise : bool, optional (Default: True)
-        If ``True``, include the digitization noise in the calculation of the
-        noise for each observation.  If ``False``, only the Poisson noise from
-        the source and the sky will be included.
+    photometry_options : `stellarphot.settings.PhotometryOptions`
+        Several options for the details of performing the photometry. See the
+        documentation for `~stellarphot.settings.PhotometryOptions` for details.
 
     passband_map: dict, optional (Default: None)
         A dictionary containing instrumental passband names as keys and
@@ -668,20 +591,11 @@ def multi_image_photometry(
         entries in the output photometry table to be AAVSO standard versus
         whatever is in the source list.
 
-    fwhm_by_fit : bool, optional (default: True)
-        If ``True``, the FWHM will be calculated by fitting a Gaussian to
-        the star. If ``False``, the FWHM will be calculated by finding the
-        second order moments of the light distribution. Default is ``True``.
-
-    logfile : str, optional (Default: None)
-        Name of the file to which log messages should be written.  It will
-        be created in the `directory_with_images` directory.  If None,
-        all messages are logged to stdout.
-
-    console_log: bool, optional (Default: True)
-        If ``True`` and `logfile` is set, log messages will also be written to
-        stdout.  If ``False``, log messages will not be written to stdout
-        if `logfile` is set.
+    reject_unmatched : bool, optional (Default: True)
+        If ``True``, any sources that are not detected on all the images are
+        rejected.  If you are interested in a source that can intermittently
+        fall below your detection limits, we suggest setting this to ``False``
+        so that all sources detected on each image are reported.
 
     Returns
     -------
@@ -690,7 +604,7 @@ def multi_image_photometry(
         Photometry data for all the sources on which aperture photometry was
         performed in all the images. This may be a subset of the sources in
         the sourcelist if locations were too close to the edge of any one image
-        or to each other for successful apeture photometry.
+        or to each other for successful aperture photometry.
 
     """
 
@@ -711,6 +625,9 @@ def multi_image_photometry(
     console_format = logging.Formatter("%(message)s")
     for handler in multilogger.handlers[:]:
         multilogger.removeHandler(handler)
+
+    logfile = photometry_options.logfile
+    console_log = photometry_options.console_log
 
     if logfile is not None:
         # Keep original name without path
@@ -771,18 +688,12 @@ def multi_image_photometry(
             this_ccd,
             sourcelist,
             camera,
-            observatory_location,
-            photometry_settings,
-            shift_tolerance,
-            use_coordinates="sky",
-            include_dig_noise=include_dig_noise,
-            reject_too_close=reject_too_close,
-            reject_background_outliers=reject_background_outliers,
+            observatory,
+            photometry_apertures,
+            photometry_options,
             passband_map=passband_map,
-            fwhm_by_fit=fwhm_by_fit,
             fname=this_fname,
             logline="    >",
-            logfile=logfile,
         )
         if (this_phot is None) or (this_missing_sources is None):
             multilogger.info("  single_image_photometry failed for this image.")

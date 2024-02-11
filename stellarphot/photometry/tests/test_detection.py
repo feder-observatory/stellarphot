@@ -6,9 +6,9 @@ from astropy import units as u
 from astropy.stats import gaussian_sigma_to_fwhm
 from astropy.table import QTable
 from astropy.utils.exceptions import AstropyUserWarning
-from fake_image import FakeImage
 
 from stellarphot.photometry import compute_fwhm, source_detection
+from stellarphot.photometry.tests.fake_image import FakeImage
 
 # Make sure the tests are deterministic by using a random seed
 SEED = 5432985
