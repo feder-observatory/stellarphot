@@ -1,6 +1,5 @@
 # Objects that contains the user settings for the program.
 
-from pathlib import Path
 from typing import Annotated, Literal
 
 from astropy.coordinates import EarthLocation, Latitude, Longitude, SkyCoord
@@ -30,8 +29,9 @@ from .astropy_pydantic import (
 
 __all__ = [
     "Camera",
+    "PassbandMap",
     "PhotometryApertures",
-    "PhotometryFileSettings",
+    "PhotometrySettings",
     "PhotometryOptions",
     "Exoplanet",
     "Observatory",
@@ -342,24 +342,6 @@ class PhotometryApertures(BaseModelWithTableRep):
         return self.inner_annulus + self.annulus_width
 
 
-class PhotometryFileSettings(BaseModelWithTableRep):
-    """
-    An evolutionary step on the way to having a monolithic set of photometry settings.
-    """
-
-    model_config = MODEL_DEFAULT_CONFIGURATION
-
-    image_folder: Path = Field(
-        show_only_dirs=True,
-        default="",
-        description="Folder containing the calibrated images",
-    )
-    aperture_settings_file: Path = Field(filter_pattern="*.json", default="")
-    aperture_locations_file: Path = Field(
-        filter_pattern=["*.ecsv", "*.csv"], default=""
-    )
-
-
 class Observatory(BaseModelWithTableRep):
     """
     Class to represent an observatory.
@@ -508,6 +490,64 @@ class PhotometryOptions(BaseModelWithTableRep):
     fwhm_by_fit: bool = True
     logfile: str | None = None
     console_log: bool = True
+
+
+class PassbandMap(BaseModelWithTableRep):
+    """Class to represent a mapping from one set of filter names to another."""
+
+    yours_to_aavso: dict[str, str]
+
+
+class PhotometrySettings(BaseModelWithTableRep):
+    """
+    Settings for performing aperture photometry.
+
+    Parameters
+    ----------
+
+    camera : `stellarphot.settings.Camera`
+        Camera object which has gain, read noise and dark current set.
+
+    observatory : `stellarphot.settings.Observatory`
+        Observatory information.  Used for calculating the BJD.
+
+    photometry_apertures : `stellarphot.settings.PhotometryApertures`
+        Radius, inner and outer annulus radii settings and FWHM.
+
+    photometry_options : `stellarphot.settings.PhotometryOptions`
+        Several options for the details of performing the photometry. See the
+        documentation for `~stellarphot.settings.PhotometryOptions` for details.
+
+    passband_map: `stellarphot.settings.PassbandMap`
+        A dictionary containing instrumental passband names as keys and
+        AAVSO passband names as values. This is used to rename the passband
+        entries in the output photometry table from what is in the source list
+        to be AAVSO standard names, if available for that filter.
+
+    object_of_interest : str
+        Name of the object of interest. The only files on which photometry
+        will be done are those whose header contains the keyword ``OBJECT``
+        whose value is ``object_of_interest``.
+
+    sourcelist : str
+        Name of a file with a table of extracted sources with positions in terms of
+        pixel coordinates OR RA/Dec coordinates. If both positions provided,
+        pixel coordinates will be used. For RA/Dec coordinates to be used, `ccd_image`
+        must have a valid WCS.
+    """
+
+    model_config = MODEL_DEFAULT_CONFIGURATION
+
+    camera: Camera
+    observatory: Observatory
+    photometry_apertures: PhotometryApertures
+    photometry_options: PhotometryOptions
+    passband_map: PassbandMap | None
+    object_of_interest: str
+    source_list_file: str
+    # = Field(
+    #     filter_pattern=["*.ecsv", "*.csv"], default=""
+    # )
 
 
 class Exoplanet(BaseModelWithTableRep):

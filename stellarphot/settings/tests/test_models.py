@@ -12,8 +12,10 @@ from stellarphot.settings.models import (
     Camera,
     Exoplanet,
     Observatory,
+    PassbandMap,
     PhotometryApertures,
     PhotometryOptions,
+    PhotometrySettings,
 )
 
 DEFAULT_APERTURE_SETTINGS = dict(radius=5, gap=10, annulus_width=15, fwhm=3.2)
@@ -48,10 +50,9 @@ DEFAULT_OBSERVATORY_SETTINGS = dict(
     TESS_telescope_code="tess test",
 )
 
-
 # The first setting here is required, the rest are optional. The optional
 # settings below are different than the defaults in the model definition.
-DEFAULT_PHOTOMETRY_SETTINGS = dict(
+DEFAULT_PHOTOMETRY_OPTIONS = dict(
     shift_tolerance=5,
     use_coordinates="pixel",
     include_dig_noise=False,
@@ -62,6 +63,24 @@ DEFAULT_PHOTOMETRY_SETTINGS = dict(
     console_log=False,
 )
 
+DEFAULT_PASSBAND_MAP = dict(
+    yours_to_aavso=dict(
+        V="V",
+        B="B",
+        rp="SR",
+    )
+)
+
+DEFAULT_PHOTOMETRY_SETTINGS = dict(
+    camera=Camera(**TEST_CAMERA_VALUES),
+    observatory=Observatory(**DEFAULT_OBSERVATORY_SETTINGS),
+    photometry_apertures=PhotometryApertures(**DEFAULT_APERTURE_SETTINGS),
+    photometry_options=PhotometryOptions(**DEFAULT_PHOTOMETRY_OPTIONS),
+    passband_map=PassbandMap(**DEFAULT_PASSBAND_MAP),
+    object_of_interest="test",
+    source_list_file="test.ecsv",
+)
+
 
 @pytest.mark.parametrize(
     "model,settings",
@@ -70,7 +89,9 @@ DEFAULT_PHOTOMETRY_SETTINGS = dict(
         [PhotometryApertures, DEFAULT_APERTURE_SETTINGS],
         [Exoplanet, DEFAULT_EXOPLANET_SETTINGS],
         [Observatory, DEFAULT_OBSERVATORY_SETTINGS],
-        [PhotometryOptions, DEFAULT_PHOTOMETRY_SETTINGS],
+        [PhotometryOptions, DEFAULT_PHOTOMETRY_OPTIONS],
+        [PassbandMap, DEFAULT_PASSBAND_MAP],
+        [PhotometrySettings, DEFAULT_PHOTOMETRY_SETTINGS],
     ],
 )
 class TestModelAgnosticActions:
@@ -306,7 +327,7 @@ def test_observatory_lat_long_as_float():
 
 def test_photometry_settings_negative_shift_tolerance():
     # Check that a negative shift tolerance raises an error
-    settings = dict(DEFAULT_PHOTOMETRY_SETTINGS)
+    settings = dict(DEFAULT_PHOTOMETRY_OPTIONS)
     settings["shift_tolerance"] = -1
     with pytest.raises(
         ValidationError, match="Input should be greater than or equal to 0"
