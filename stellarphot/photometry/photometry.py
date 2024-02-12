@@ -14,6 +14,7 @@ from astropy.wcs import FITSFixedWarning
 from ccdproc import ImageFileCollection
 from photutils.aperture import CircularAnnulus, CircularAperture, aperture_photometry
 from photutils.centroids import centroid_sources
+from pydantic import BaseModel, validate_call
 from scipy.spatial.distance import cdist
 
 from stellarphot import PhotometryData, SourceListData
@@ -22,11 +23,13 @@ from stellarphot.settings import (
     Observatory,
     PhotometryApertures,
     PhotometryOptions,
+    PhotometrySettings,
 )
 
 from .source_detection import compute_fwhm
 
 __all__ = [
+    "AperturePhotometry",
     "single_image_photometry",
     "multi_image_photometry",
     "faster_sigma_clip_stats",
@@ -39,14 +42,22 @@ __all__ = [
 EXPOSURE_KEYWORDS = ["EXPOSURE", "EXPTIME", "TELAPSE", "ELAPTIME", "ONTIME", "LIVETIME"]
 
 
+class AperturePhotometry(BaseModel):
+    """Class to perform aperture photometry on one or more images"""
+
+    settings: PhotometrySettings
+
+    @validate_call
+    def __call__(
+        self,
+        file_or_directory: str | Path,
+    ) -> PhotometryData:
+        pass
+
+
 def single_image_photometry(
     ccd_image,
-    sourcelist,
-    camera,
-    observatory,
-    photometry_apertures,
-    photometry_options,
-    passband_map=None,
+    photometry_settings,
     fname=None,
     logline="single_image_photometry:",
 ):
@@ -72,25 +83,6 @@ def single_image_photometry(
         Table of extracted sources with positions in terms of pixel coordinates OR
         RA/Dec coordinates. If both positions provided, pixel coordinates will be used.
         For RA/Dec coordinates to be used, `ccd_image` must have a valid WCS.
-
-    camera : `stellarphot.settings.Camera`
-        Camera object which has gain, read noise and dark current set.
-
-    observatory : `stellarphot.settings.Observatory`
-        Observatory information.  Used for calculating the BJD.
-
-    photometry_apertures : `stellarphot.settings.PhotometryApertures`
-        Radius, inner and outer annulus radii settings and FWHM.
-
-    photometry_options : `stellarphot.settings.PhotometryOptions`
-        Several options for the details of performing the photometry. See the
-        documentation for `~stellarphot.settings.PhotometryOptions` for details.
-
-    passband_map: dict, optional (Default: None)
-        A dictionary containing instrumental passband names as keys and
-        AAVSO passband names as values. This is used to rename the passband
-        entries in the output photometry table to be AAVSO standard versus
-        whatever is in the source list.
 
     fname : str, optional (Default: None)
         Name of the image file on which photometry is being performed.
@@ -126,6 +118,13 @@ def single_image_photometry(
     to compute the x/y positions on each image individually. In this scenario,
     the `use_coordinates` parameter should be set to "sky".
     """
+
+    sourcelist = SourceListData.read(photometry_settings.source_list_file)
+    camera = photometry_settings.camera
+    observatory = photometry_settings.observatory
+    photometry_apertures = photometry_settings.photometry_apertures
+    photometry_options = photometry_settings.photometry_options
+    passband_map = photometry_settings.passband_map
 
     # Check that the input parameters are valid
     if not isinstance(ccd_image, CCDData):
@@ -539,13 +538,9 @@ def single_image_photometry(
 
 def multi_image_photometry(
     directory_with_images,
+    photometry_settings,
     object_of_interest,
     sourcelist,
-    camera,
-    observatory,
-    photometry_apertures,
-    photometry_options,
-    passband_map=None,
     reject_unmatched=True,
 ):
     """
@@ -561,35 +556,6 @@ def multi_image_photometry(
         DATE-OBS, an exposure time header (which can be any of the following: EXPOSURE,
         EXPTIME, TELAPSE, ELAPTIME, ONTIME, or LIVETIME), and FILTER.  If AIRMASS is
         available it will be added to `phot_table`.
-
-    object_of_interest : str
-        Name of the object of interest. The only files on which photometry
-        will be done are those whose header contains the keyword ``OBJECT``
-        whose value is ``object_of_interest``.
-
-    sourcelist : `stellarphot.SourceList`
-        Table of extracted sources with positions in terms of pixel coordinates and
-        RA/Dec coordinates.  The x/y coordinates in the sourcelist will be ignored,
-        WCS derived x/y positions based on sky positions will be computed each image.
-
-    camera : `stellarphot.settings.Camera`
-        Camera object which has gain, read noise and dark current set.
-
-    observatory : `stellarphot.settings.Observatory`
-        Observatory information.  Used for calculating the BJD.
-
-    photometry_apertures : `stellarphot.settings.PhotometryApertures`
-        Radius, inner and outer annulus radii settings and FWHM.
-
-    photometry_options : `stellarphot.settings.PhotometryOptions`
-        Several options for the details of performing the photometry. See the
-        documentation for `~stellarphot.settings.PhotometryOptions` for details.
-
-    passband_map: dict, optional (Default: None)
-        A dictionary containing instrumental passband names as keys and
-        AAVSO passband names as values. This is used to rename the passband
-        entries in the output photometry table to be AAVSO standard versus
-        whatever is in the source list.
 
     reject_unmatched : bool, optional (Default: True)
         If ``True``, any sources that are not detected on all the images are
@@ -626,8 +592,8 @@ def multi_image_photometry(
     for handler in multilogger.handlers[:]:
         multilogger.removeHandler(handler)
 
-    logfile = photometry_options.logfile
-    console_log = photometry_options.console_log
+    logfile = photometry_settings.photometry_options.logfile
+    console_log = photometry_settings.photometry_options.console_log
 
     if logfile is not None:
         # Keep original name without path
@@ -674,6 +640,8 @@ def multi_image_photometry(
     # Suppress the FITSFixedWarning that is raised when reading a FITS file header
     warnings.filterwarnings("ignore", category=FITSFixedWarning)
 
+    object_of_interest = photometry_settings.object_of_interest
+
     # Process all the files
     for this_ccd, this_fname in ifc.ccds(object=object_of_interest, return_fname=True):
         multilogger.info(f"multi_image_photometry: Processing image {this_fname}")
@@ -686,12 +654,7 @@ def multi_image_photometry(
         multilogger.info("  Calling single_image_photometry ...")
         this_phot, this_missing_sources = single_image_photometry(
             this_ccd,
-            sourcelist,
-            camera,
-            observatory,
-            photometry_apertures,
-            photometry_options,
-            passband_map=passband_map,
+            photometry_settings,
             fname=this_fname,
             logline="    >",
         )

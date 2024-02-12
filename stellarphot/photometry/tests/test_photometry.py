@@ -24,6 +24,7 @@ from stellarphot.settings import (
     Observatory,
     PhotometryApertures,
     PhotometryOptions,
+    PhotometrySettings,
 )
 
 # Constants for the tests
@@ -78,6 +79,51 @@ DEFAULT_PHOTOMETRY_APERTURES = PhotometryApertures(
     annulus_width=FAKE_CCD_IMAGE.sources["aperture"][0],
     fwhm=FAKE_CCD_IMAGE.sources["x_stddev"].mean(),
 )
+
+# Passband map for the tests
+PASSBAND_MAP = {
+    "B": "B",
+    "rp": "SR",
+}
+
+
+# class TestAperturePhotometry:
+#     @staticmethod
+#     def create_source_list():
+#         # This has X, Y
+#         sources = FAKE_CCD_IMAGE.sources.copy()
+
+#         # Rename to match the expected names
+#         sources.rename_column("x_mean", "xcenter")
+#         sources.rename_column("y_mean", "ycenter")
+
+#         # Calculate RA/Dec from image WCS
+#         coords = FAKE_CCD_IMAGE.wcs.pixel_to_world(
+#             sources["xcenter"], sources["ycenter"]
+#         )
+#         sources["ra"] = coords.ra
+#         sources["dec"] = coords.dec
+#         sources["star_id"] = list(range(len(sources)))
+#         sources["xcenter"] = sources["xcenter"] * u.pixel
+#         sources["ycenter"] = sources["ycenter"] * u.pixel
+
+#         return SourceListData(input_data=sources, colname_map=None)
+
+#     def test_create_aperture_photometry(self):
+#         source_list = self.create_source_list()
+#         # Create an AperturePhotometry object
+#         ap_phot = AperturePhotometry(
+#             # source_list,
+#             camera=FAKE_CAMERA,
+#             observatory=FAKE_OBS,
+#             photometry_apertures=DEFAULT_PHOTOMETRY_APERTURES,
+#             photometry_options=PHOTOMETRY_OPTIONS,
+#             passband_map=PASSBAND_MAP,
+#         )
+
+#         # Check that the object was created correctly
+#         assert ap_phot.camera is FAKE_CAMERA
+#         assert ap_phot.observatory is FAKE_OBS
 
 
 def test_calc_noise_defaults():
@@ -269,7 +315,7 @@ def test_find_too_close():
 
 # The True case below is a regression test for #157
 @pytest.mark.parametrize("int_data", [True, False])
-def test_aperture_photometry_no_outlier_rejection(int_data):
+def test_aperture_photometry_no_outlier_rejection(int_data, tmp_path):
     fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
 
     found_sources = source_detection(
@@ -297,13 +343,21 @@ def test_aperture_photometry_no_outlier_rejection(int_data):
     phot_options.reject_too_close = False
     phot_options.include_dig_noise = True
 
+    source_list_file = tmp_path / "source_list.ecsv"
+    found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
+
+    photometry_settings = PhotometrySettings(
+        source_list_file=str(source_list_file),
+        camera=FAKE_CAMERA,
+        observatory=FAKE_OBS,
+        photometry_apertures=DEFAULT_PHOTOMETRY_APERTURES,
+        photometry_options=phot_options,
+        passband_map=None,
+        object_of_interest="Test Object",
+    )
     phot, missing_sources = single_image_photometry(
         fake_CCDimage,
-        found_sources,
-        FAKE_CAMERA,
-        FAKE_OBS,
-        DEFAULT_PHOTOMETRY_APERTURES,
-        phot_options,
+        photometry_settings,
     )
 
     phot.sort("aperture_sum")
