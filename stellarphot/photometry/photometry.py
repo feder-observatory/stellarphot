@@ -79,10 +79,11 @@ def single_image_photometry(
         This image  must also have a WCS header associated with it if you want to
         use sky positions as inputs.
 
-    sourcelist : `stellarphot.SourceList`
-        Table of extracted sources with positions in terms of pixel coordinates OR
-        RA/Dec coordinates. If both positions provided, pixel coordinates will be used.
-        For RA/Dec coordinates to be used, `ccd_image` must have a valid WCS.
+    photometry_settings : `stellarphot.settings.PhotometrySettings`
+        Photometry settings to use for the photometry.  This includes the camera,
+        observatory, the aperture and annulus radii to use for the photometry, a map
+        of passbands from your filters to AAVSO filter names, and options for the
+        photometry. See `stellarphot.settings.PhotometrySettings` for more information.
 
     fname : str, optional (Default: None)
         Name of the image file on which photometry is being performed.
@@ -539,8 +540,6 @@ def single_image_photometry(
 def multi_image_photometry(
     directory_with_images,
     photometry_settings,
-    object_of_interest,
-    sourcelist,
     reject_unmatched=True,
 ):
     """
@@ -556,6 +555,12 @@ def multi_image_photometry(
         DATE-OBS, an exposure time header (which can be any of the following: EXPOSURE,
         EXPTIME, TELAPSE, ELAPTIME, ONTIME, or LIVETIME), and FILTER.  If AIRMASS is
         available it will be added to `phot_table`.
+
+    photometry_settings : `stellarphot.settings.PhotometrySettings`
+        Photometry settings to use for the photometry.  This includes the camera,
+        observatory, the aperture and annulus radii to use for the photometry, a map
+        of passbands from your filters to AAVSO filter names, and options for the
+        photometry. See `stellarphot.settings.PhotometrySettings` for more information.
 
     reject_unmatched : bool, optional (Default: True)
         If ``True``, any sources that are not detected on all the images are
@@ -573,6 +578,7 @@ def multi_image_photometry(
         or to each other for successful aperture photometry.
 
     """
+    sourcelist = SourceListData.read(photometry_settings.source_list_file)
 
     # Initialize lists to track all PhotometryData objects and all dropped sources
     phots = []

@@ -86,6 +86,15 @@ PASSBAND_MAP = {
     "rp": "SR",
 }
 
+DEFAULT_PHOTOMETRY_SETTINGS = PhotometrySettings(
+    camera=FAKE_CAMERA,
+    observatory=FAKE_OBS,
+    photometry_apertures=DEFAULT_PHOTOMETRY_APERTURES,
+    photometry_options=PHOTOMETRY_OPTIONS,
+    passband_map=None,
+    object_of_interest="Test Object",
+    source_list_file="",
+)
 
 # class TestAperturePhotometry:
 #     @staticmethod
@@ -396,7 +405,7 @@ def test_aperture_photometry_no_outlier_rejection(int_data, tmp_path):
 
 
 @pytest.mark.parametrize("reject", [True, False])
-def test_aperture_photometry_with_outlier_rejection(reject):
+def test_aperture_photometry_with_outlier_rejection(reject, tmp_path):
     """
     Insert some really large pixel values in the annulus and check that
     the photometry is correct when outliers are rejected and is
@@ -415,6 +424,8 @@ def test_aperture_photometry_with_outlier_rejection(reject):
     found_sources = source_detection(
         fake_CCDimage, fwhm=sources["x_stddev"].mean(), threshold=10
     )
+    source_list_file = tmp_path / "source_list.ecsv"
+    found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
 
     # Add some large pixel values to the annulus for each source.
     # adding these moves the average pixel value by quite a bit,
@@ -434,13 +445,13 @@ def test_aperture_photometry_with_outlier_rejection(reject):
     phot_options.reject_too_close = False
     phot_options.include_dig_noise = True
 
+    photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
+    photometry_settings.source_list_file = str(source_list_file)
+    photometry_settings.photometry_options = phot_options
+
     phot, missing_sources = single_image_photometry(
         fake_CCDimage,
-        found_sources,
-        FAKE_CAMERA,
-        FAKE_OBS,
-        aperture_settings,
-        phot_options,
+        photometry_settings,
     )
 
     phot.sort("aperture_sum")
@@ -531,6 +542,9 @@ def test_photometry_on_directory(coords):
             fake_images[0], fwhm=fake_images[0].sources["x_stddev"].mean(), threshold=10
         )
 
+        source_list_file = Path(temp_dir) / "source_list.ecsv"
+        found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
+
         # Make a copy of photometry options
         phot_options = PhotometryOptions(**PHOTOMETRY_OPTIONS.model_dump())
 
@@ -541,19 +555,17 @@ def test_photometry_on_directory(coords):
         phot_options.reject_background_outliers = True
         phot_options.fwhm_by_fit = True
 
+        photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
+        photometry_settings.source_list_file = str(source_list_file)
+        photometry_settings.photometry_options = phot_options
+        photometry_settings.object_of_interest = object_name
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore", message="Cannot merge meta key", category=MergeConflictWarning
             )
             phot_data = multi_image_photometry(
                 temp_dir,
-                object_name,
-                found_sources,
-                FAKE_CAMERA,
-                FAKE_OBS,
-                aperture_settings,
-                phot_options,
-                passband_map=None,
+                photometry_settings,
             )
 
     # For following assertion to be true, rad must be small enough that
@@ -638,7 +650,6 @@ def test_photometry_on_directory_with_no_ra_dec():
             image.write(temp_file_names[i])
 
         object_name = fake_images[0].header["OBJECT"]
-        aperture_settings = DEFAULT_PHOTOMETRY_APERTURES
 
         # Generate the sourcelist
         found_sources = source_detection(
@@ -647,6 +658,9 @@ def test_photometry_on_directory_with_no_ra_dec():
 
         # Damage the sourcelist by removing the ra and dec columns
         found_sources.drop_ra_dec()
+
+        source_list_file = Path(temp_dir) / "source_list.ecsv"
+        found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
 
         phot_options = PhotometryOptions(**PHOTOMETRY_OPTIONS.model_dump())
 
@@ -657,16 +671,15 @@ def test_photometry_on_directory_with_no_ra_dec():
         phot_options.reject_background_outliers = True
         phot_options.fwhm_by_fit = True
 
+        photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
+        photometry_settings.source_list_file = str(source_list_file)
+        photometry_settings.photometry_options = phot_options
+        photometry_settings.object_of_interest = object_name
+
         with pytest.raises(ValueError):
             multi_image_photometry(
                 temp_dir,
-                object_name,
-                found_sources,
-                FAKE_CAMERA,
-                FAKE_OBS,
-                aperture_settings,
-                phot_options,
-                passband_map=None,
+                photometry_settings,
             )
 
 
@@ -691,7 +704,6 @@ def test_photometry_on_directory_with_bad_fits():
             image.write(temp_file_names[i])
 
         object_name = fake_images[0].header["OBJECT"]
-        aperture_settings = DEFAULT_PHOTOMETRY_APERTURES
 
         # Generate the sourcelist with RA/Dec information from a clean image
         found_sources = source_detection(
@@ -699,6 +711,9 @@ def test_photometry_on_directory_with_bad_fits():
             fwhm=clean_fake_images[0].sources["x_stddev"].mean(),
             threshold=10,
         )
+
+        source_list_file = Path(temp_dir) / "source_list.ecsv"
+        found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
 
         phot_options = PhotometryOptions(**PHOTOMETRY_OPTIONS.model_dump())
 
@@ -709,15 +724,14 @@ def test_photometry_on_directory_with_bad_fits():
         phot_options.reject_background_outliers = True
         phot_options.fwhm_by_fit = True
 
+        photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
+        photometry_settings.source_list_file = str(source_list_file)
+        photometry_settings.photometry_options = phot_options
+        photometry_settings.object_of_interest = object_name
+
         # Since none of the images will be valid, it should raise a RuntimeError
         with pytest.raises(RuntimeError):
             multi_image_photometry(
                 temp_dir,
-                object_name,
-                found_sources,
-                FAKE_CAMERA,
-                FAKE_OBS,
-                aperture_settings,
-                phot_options,
-                passband_map=None,
+                photometry_settings,
             )
