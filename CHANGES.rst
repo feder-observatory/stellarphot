@@ -1,3 +1,10 @@
+1.4.13 (2024-02-14)
+------------------
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
++ Allow exposure keyword in FITS header to be set.
+
 1.4.12 (2024-02-12)
 ------------------
 
