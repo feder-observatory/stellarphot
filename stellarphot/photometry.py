@@ -273,7 +273,7 @@ def clipped_sky_per_pix_stats(data, annulus, sigma=5, iters=5):
 def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
                             star_ids=None, camera=None,
                             bjd_coords=None, observatory_location=None,
-                            fwhm_by_fit=True):
+                            fwhm_by_fit=True, exposure_key='exposure'):
     """
     Calculate several columns for photometry table.
 
@@ -362,7 +362,7 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
     phot['annulus_inner'] = annulus.r_in * u.pixel
     phot['annulus_outer'] = annulus.r_out * u.pixel
     phot['annulus_area'] = annulus.area  # * u.pixel * u.pixel
-    phot['exposure'] = [ccd.header['exposure']] * len(phot) * u.second
+    phot['exposure'] = [ccd.header[exposure_key]] * len(phot) * u.second
     phot['date-obs'] = [ccd.header['DATE-OBS']] * len(phot)
     night = Time(ccd.header['DATE-OBS'], scale='utc')
     night.format = 'mjd'
@@ -403,7 +403,8 @@ def photometry_on_directory(directory_with_images, object_of_interest,
                             camera,
                             bjd_coords=None,
                             observatory_location=None,
-                            fwhm_by_fit=True):
+                            fwhm_by_fit=True,
+                            exposure_key='exposure'):
     """
     Perform aperture photometry on a directory of images.
 
@@ -546,7 +547,8 @@ def photometry_on_directory(directory_with_images, object_of_interest,
                                 fname=fname, star_ids=star_ids[in_bounds],
                                 camera=camera, bjd_coords=bjd_coords,
                                 observatory_location=observatory_location,
-                                fwhm_by_fit=fwhm_by_fit)
+                                fwhm_by_fit=fwhm_by_fit,
+                                exposure_key=exposure_key)
 
         # And add the final table to the list of tables
         phots.append(pho)
