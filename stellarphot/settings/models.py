@@ -30,6 +30,7 @@ from .astropy_pydantic import (
 
 __all__ = [
     "Camera",
+    "LoggingSettings",
     "PassbandMap",
     "PhotometryApertures",
     "PhotometryFileSettings",
@@ -37,6 +38,7 @@ __all__ = [
     "PhotometryOptions",
     "Exoplanet",
     "Observatory",
+    "SourceLocationSettings",
 ]
 
 # Most models should use the default configuration, but it can be customized if needed.
@@ -411,13 +413,25 @@ class Observatory(BaseModelWithTableRep):
         )
 
 
-class PhotometryOptions(BaseModelWithTableRep):
+class SourceLocationSettings(BaseModelWithTableRep):
     """
-    Options for performing photometry.
+    Settings for the location of the source list and the image files.
 
     Parameters
     ----------
-    shift_tolerance : `pydantic.NonNegativeFloat`
+    source_list_file : str
+        Name of a file with a table of extracted sources with positions in terms of
+        pixel coordinates OR RA/Dec coordinates. If both positions provided,
+        the one that will be used is determined by `use_coordinates`. For RA/Dec
+        coordinates to be used, `ccd_image` must have a valid WCS.
+
+    use_coordinates : `typing.Literal["sky", "pixel"]`, optional
+        If ``'pixel'``, use the x/y positions in the sourcelist for
+        performing aperture photometry.  If ``'sky'``, use the ra/dec
+        positions in the sourcelist and the WCS of the `ccd_image` to
+        compute the x/y positions on the image.
+
+    shift_tolerance : `pydantic.NonNegativeFloat`, optional
         Since source positions need to be computed on each image using
         the sky position and WCS, the computed x/y positions are refined
         afterward by centroiding the sources.  This setting controls
@@ -425,13 +439,19 @@ class PhotometryOptions(BaseModelWithTableRep):
         positions and the refined positions, in pixels.  The expected
         shift shift should not be more than the FWHM, so a measured FWHM
         might be a good value to provide here.
+    """
 
-    use_coordinates : `typing.Literal["sky", "pixel"]`
-        If ``'pixel'``, use the x/y positions in the sourcelist for
-        performing aperture photometry.  If ``'sky'``, use the ra/dec
-        positions in the sourcelist and the WCS of the `ccd_image` to
-        compute the x/y positions on the image.
+    source_list_file: str
+    use_coordinates: Literal["sky", "pixel"] = "sky"
+    shift_tolerance: NonNegativeFloat = 5.0
 
+
+class PhotometryOptions(BaseModelWithTableRep):
+    """
+    Options for performing photometry.
+
+    Parameters
+    ----------
     include_dig_noise : bool, optional (Default: True)
         If ``True``, include the digitization noise in the calculation of the
         noise for each observation.  If ``False``, only the Poisson noise from
@@ -450,6 +470,53 @@ class PhotometryOptions(BaseModelWithTableRep):
         the star. If ``False``, the FWHM will be calculated by finding the
         second order moments of the light distribution. Default is ``True``.
 
+    Examples
+    --------
+
+    The only option that must be set explicitly is the `shift_tolerance`:
+
+    >>> from stellarphot.settings import PhotometryOptions
+    >>> photometry_options = PhotometryOptions()
+    >>> photometry_options
+    PhotometryOptions(include_dig_noise=True, reject_too_close=True,...
+
+    You can also set the other options explicitly when you create the options:
+
+    >>> photometry_options = PhotometryOptions(
+    ...     include_dig_noise=True,
+    ...     reject_too_close=False,
+    ...     reject_background_outliers=True,
+    ...     fwhm_by_fit=True,
+    ... )
+    >>> photometry_options
+    PhotometryOptions(include_dig_noise=True, reject_too_close=False,...
+    reject_background_outliers=True, fwhm_by_fit=True)
+
+    You can also change individual options after the object is created:
+
+    >>> photometry_options.reject_background_outliers = False
+    >>> photometry_options.reject_background_outliers
+    False
+    """
+
+    include_dig_noise: bool = True
+    reject_too_close: bool = True
+    reject_background_outliers: bool = True
+    fwhm_by_fit: bool = True
+
+
+class PassbandMap(BaseModelWithTableRep):
+    """Class to represent a mapping from one set of filter names to another."""
+
+    yours_to_aavso: dict[str, str]
+
+
+class LoggingSettings(BaseModelWithTableRep):
+    """
+    Settings for logging.
+
+    Parameters
+    ----------
     logfile : str, optional (Default: None)
         Name of the file to which log messages should be written.  It will
         be created in the `directory_with_images` directory.  If None,
@@ -459,58 +526,10 @@ class PhotometryOptions(BaseModelWithTableRep):
         If ``True`` and `logfile` is set, log messages will also be written to
         stdout.  If ``False``, log messages will not be written to stdout
         if `logfile` is set.
-
-    Examples
-    --------
-
-    The only option that must be set explicitly is the `shift_tolerance`:
-
-    >>> from stellarphot.settings import PhotometryOptions
-    >>> photometry_options = PhotometryOptions(shift_tolerance=5.2)
-    >>> photometry_options
-    PhotometryOptions(shift_tolerance=5.2, use_coordinates='sky',
-    include_dig_noise=True, reject_too_close=True, reject_background_outliers=True,
-    fwhm_by_fit=True, logfile=None, console_log=True)
-
-
-    You can also set the other options explicitly when you create the options:
-
-    >>> photometry_options = PhotometryOptions(
-    ...     shift_tolerance=5.2,
-    ...     use_coordinates="pixel",
-    ...     include_dig_noise=True,
-    ...     reject_too_close=False,
-    ...     reject_background_outliers=True,
-    ...     fwhm_by_fit=True,
-    ...     logfile=None,
-    ...     console_log=True
-    ... )
-    >>> photometry_options
-    PhotometryOptions(shift_tolerance=5.2, use_coordinates='pixel',
-    include_dig_noise=True, reject_too_close=False, reject_background_outliers=True,
-    fwhm_by_fit=True, logfile=None, console_log=True)
-
-    You can also change individual options after the object is created:
-
-    >>> photometry_options.use_coordinates = "sky"
-    >>> photometry_options.use_coordinates
-    'sky'
     """
 
-    shift_tolerance: NonNegativeFloat
-    use_coordinates: Literal["sky", "pixel"] = "sky"
-    include_dig_noise: bool = True
-    reject_too_close: bool = True
-    reject_background_outliers: bool = True
-    fwhm_by_fit: bool = True
     logfile: str | None = None
     console_log: bool = True
-
-
-class PassbandMap(BaseModelWithTableRep):
-    """Class to represent a mapping from one set of filter names to another."""
-
-    yours_to_aavso: dict[str, str]
 
 
 class PhotometrySettings(BaseModelWithTableRep):
@@ -544,23 +563,16 @@ class PhotometrySettings(BaseModelWithTableRep):
         will be done are those whose header contains the keyword ``OBJECT``
         whose value is ``object_of_interest``.
 
-    sourcelist : str
-        Name of a file with a table of extracted sources with positions in terms of
-        pixel coordinates OR RA/Dec coordinates. If both positions provided,
-        pixel coordinates will be used. For RA/Dec coordinates to be used, `ccd_image`
-        must have a valid WCS.
     """
 
     camera: Camera
     observatory: Observatory
     photometry_apertures: PhotometryApertures
+    source_locations: SourceLocationSettings
     photometry_options: PhotometryOptions
     passband_map: PassbandMap | None
+    logging_settings: LoggingSettings
     object_of_interest: str
-    source_list_file: str
-    # = Field(
-    #     filter_pattern=["*.ecsv", "*.csv"], default=""
-    # )
 
 
 class Exoplanet(BaseModelWithTableRep):

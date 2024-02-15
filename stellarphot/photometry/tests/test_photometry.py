@@ -21,10 +21,12 @@ from stellarphot.photometry import (
 from stellarphot.photometry.tests.fake_image import FakeCCDImage, shift_FakeCCDImage
 from stellarphot.settings import (
     Camera,
+    LoggingSettings,
     Observatory,
     PhotometryApertures,
     PhotometryOptions,
     PhotometrySettings,
+    SourceLocationSettings,
 )
 
 # Constants for the tests
@@ -37,10 +39,13 @@ SEED = 5432985
 # The default coordinate system and shift tolerance to use for the tests
 COORDS2USE = "pixel"
 SHIFT_TOLERANCE = 6
-PHOTOMETRY_OPTIONS = PhotometryOptions(
+DEFAULT_SOURCE_LOCATIONS = SourceLocationSettings(
+    source_list_file="",
     shift_tolerance=SHIFT_TOLERANCE,
     use_coordinates=COORDS2USE,
 )
+
+PHOTOMETRY_OPTIONS = PhotometryOptions()
 
 # A camera with not unreasonable settings
 FAKE_CAMERA = Camera(
@@ -86,14 +91,17 @@ PASSBAND_MAP = {
     "rp": "SR",
 }
 
+DEFAULT_LOGGING_SETTINGS = LoggingSettings()
+
 DEFAULT_PHOTOMETRY_SETTINGS = PhotometrySettings(
     camera=FAKE_CAMERA,
     observatory=FAKE_OBS,
     photometry_apertures=DEFAULT_PHOTOMETRY_APERTURES,
+    source_locations=DEFAULT_SOURCE_LOCATIONS,
     photometry_options=PHOTOMETRY_OPTIONS,
     passband_map=None,
+    logging_settings=DEFAULT_LOGGING_SETTINGS,
     object_of_interest="Test Object",
-    source_list_file="",
 )
 
 # class TestAperturePhotometry:
@@ -355,13 +363,16 @@ def test_aperture_photometry_no_outlier_rejection(int_data, tmp_path):
     source_list_file = tmp_path / "source_list.ecsv"
     found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
 
+    source_locations = DEFAULT_SOURCE_LOCATIONS.model_copy()
+    source_locations.source_list_file = str(source_list_file)
     photometry_settings = PhotometrySettings(
-        source_list_file=str(source_list_file),
         camera=FAKE_CAMERA,
         observatory=FAKE_OBS,
         photometry_apertures=DEFAULT_PHOTOMETRY_APERTURES,
+        source_locations=source_locations,
         photometry_options=phot_options,
         passband_map=None,
+        logging_settings=DEFAULT_LOGGING_SETTINGS,
         object_of_interest="Test Object",
     )
     phot, missing_sources = single_image_photometry(
@@ -446,7 +457,7 @@ def test_aperture_photometry_with_outlier_rejection(reject, tmp_path):
     phot_options.include_dig_noise = True
 
     photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
-    photometry_settings.source_list_file = str(source_list_file)
+    photometry_settings.source_locations.source_list_file = str(source_list_file)
     photometry_settings.photometry_options = phot_options
 
     phot, missing_sources = single_image_photometry(
@@ -549,16 +560,16 @@ def test_photometry_on_directory(coords):
         phot_options = PhotometryOptions(**PHOTOMETRY_OPTIONS.model_dump())
 
         # Modify options to match test before we used phot_options
-        phot_options.use_coordinates = coords
         phot_options.include_dig_noise = True
         phot_options.reject_too_close = True
         phot_options.reject_background_outliers = True
         phot_options.fwhm_by_fit = True
 
         photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
-        photometry_settings.source_list_file = str(source_list_file)
         photometry_settings.photometry_options = phot_options
         photometry_settings.object_of_interest = object_name
+        photometry_settings.source_locations.use_coordinates = coords
+        photometry_settings.source_locations.source_list_file = str(source_list_file)
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore", message="Cannot merge meta key", category=MergeConflictWarning
@@ -665,16 +676,17 @@ def test_photometry_on_directory_with_no_ra_dec():
         phot_options = PhotometryOptions(**PHOTOMETRY_OPTIONS.model_dump())
 
         # Modify options to match test before we used phot_options
-        phot_options.use_coordinates = "sky"  # This was implicit in the old default
         phot_options.include_dig_noise = True
         phot_options.reject_too_close = True
         phot_options.reject_background_outliers = True
         phot_options.fwhm_by_fit = True
 
         photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
-        photometry_settings.source_list_file = str(source_list_file)
         photometry_settings.photometry_options = phot_options
         photometry_settings.object_of_interest = object_name
+        photometry_settings.source_locations.source_list_file = str(source_list_file)
+        # The setting below was implicit in the old default
+        photometry_settings.source_locations.use_coordinates = "sky"
 
         with pytest.raises(ValueError):
             multi_image_photometry(
@@ -718,16 +730,17 @@ def test_photometry_on_directory_with_bad_fits():
         phot_options = PhotometryOptions(**PHOTOMETRY_OPTIONS.model_dump())
 
         # Modify options to match test before we used phot_options
-        phot_options.use_coordinates = "sky"  # This was implicit in the old default
         phot_options.include_dig_noise = True
         phot_options.reject_too_close = True
         phot_options.reject_background_outliers = True
         phot_options.fwhm_by_fit = True
 
         photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
-        photometry_settings.source_list_file = str(source_list_file)
         photometry_settings.photometry_options = phot_options
         photometry_settings.object_of_interest = object_name
+        photometry_settings.source_locations.source_list_file = str(source_list_file)
+        # The settings below was implicit in the old default
+        photometry_settings.source_locations.use_coordinates = "sky"
 
         # Since none of the images will be valid, it should raise a RuntimeError
         with pytest.raises(RuntimeError):

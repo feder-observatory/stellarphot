@@ -11,11 +11,13 @@ from stellarphot.settings import ui_generator
 from stellarphot.settings.models import (
     Camera,
     Exoplanet,
+    LoggingSettings,
     Observatory,
     PassbandMap,
     PhotometryApertures,
     PhotometryOptions,
     PhotometrySettings,
+    SourceLocationSettings,
 )
 
 DEFAULT_APERTURE_SETTINGS = dict(radius=5, gap=10, annulus_width=15, fwhm=3.2)
@@ -53,14 +55,10 @@ DEFAULT_OBSERVATORY_SETTINGS = dict(
 # The first setting here is required, the rest are optional. The optional
 # settings below are different than the defaults in the model definition.
 DEFAULT_PHOTOMETRY_OPTIONS = dict(
-    shift_tolerance=5,
-    use_coordinates="pixel",
     include_dig_noise=False,
     reject_too_close=False,
     reject_background_outliers=False,
     fwhm_by_fit=False,
-    logfile="test.log",
-    console_log=False,
 )
 
 DEFAULT_PASSBAND_MAP = dict(
@@ -71,14 +69,26 @@ DEFAULT_PASSBAND_MAP = dict(
     )
 )
 
+DEFAULT_LOGGING_SETTINGS = dict(
+    logfile="test.log",
+    console_log=False,
+)
+
+DEFAULT_SOURCE_LOCATION_SETTINGS = dict(
+    shift_tolerance=5,
+    source_list_file="test.ecsv",
+    use_coordinates="pixel",
+)
+
 DEFAULT_PHOTOMETRY_SETTINGS = dict(
     camera=Camera(**TEST_CAMERA_VALUES),
     observatory=Observatory(**DEFAULT_OBSERVATORY_SETTINGS),
     photometry_apertures=PhotometryApertures(**DEFAULT_APERTURE_SETTINGS),
+    source_locations=SourceLocationSettings(**DEFAULT_SOURCE_LOCATION_SETTINGS),
     photometry_options=PhotometryOptions(**DEFAULT_PHOTOMETRY_OPTIONS),
     passband_map=PassbandMap(**DEFAULT_PASSBAND_MAP),
+    logging_settings=LoggingSettings(**DEFAULT_LOGGING_SETTINGS),
     object_of_interest="test",
-    source_list_file="test.ecsv",
 )
 
 
@@ -92,6 +102,8 @@ DEFAULT_PHOTOMETRY_SETTINGS = dict(
         [PhotometryOptions, DEFAULT_PHOTOMETRY_OPTIONS],
         [PassbandMap, DEFAULT_PASSBAND_MAP],
         [PhotometrySettings, DEFAULT_PHOTOMETRY_SETTINGS],
+        [LoggingSettings, DEFAULT_LOGGING_SETTINGS],
+        [SourceLocationSettings, DEFAULT_SOURCE_LOCATION_SETTINGS],
     ],
 )
 class TestModelAgnosticActions:
@@ -329,14 +341,14 @@ def test_observatory_lat_long_as_float():
     assert obs == Observatory(**DEFAULT_OBSERVATORY_SETTINGS)
 
 
-def test_photometry_settings_negative_shift_tolerance():
+def test_source_locations_negative_shift_tolerance():
     # Check that a negative shift tolerance raises an error
-    settings = dict(DEFAULT_PHOTOMETRY_OPTIONS)
+    settings = dict(DEFAULT_SOURCE_LOCATION_SETTINGS)
     settings["shift_tolerance"] = -1
     with pytest.raises(
         ValidationError, match="Input should be greater than or equal to 0"
     ):
-        PhotometryOptions(**settings)
+        SourceLocationSettings(**settings)
 
 
 def test_create_invalid_exoplanet():

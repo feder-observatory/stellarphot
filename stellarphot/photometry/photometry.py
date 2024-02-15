@@ -120,12 +120,16 @@ def single_image_photometry(
     the `use_coordinates` parameter should be set to "sky".
     """
 
-    sourcelist = SourceListData.read(photometry_settings.source_list_file)
+    sourcelist = SourceListData.read(
+        photometry_settings.source_locations.source_list_file
+    )
     camera = photometry_settings.camera
     observatory = photometry_settings.observatory
     photometry_apertures = photometry_settings.photometry_apertures
     photometry_options = photometry_settings.photometry_options
+    logging_options = photometry_settings.logging_settings
     passband_map = photometry_settings.passband_map
+    use_coordinates = photometry_settings.source_locations.use_coordinates
 
     # Check that the input parameters are valid
     if not isinstance(ccd_image, CCDData):
@@ -158,8 +162,8 @@ def single_image_photometry(
         )
 
     # Set up logging
-    logfile = photometry_options.logfile
-    console_log = photometry_options.console_log
+    logfile = logging_options.logfile
+    console_log = logging_options.console_log
     logger = logging.getLogger("single_image_photometry")
     console_format = logging.Formatter("%(message)s")
     if logger.hasHandlers() is False:
@@ -231,7 +235,7 @@ def single_image_photometry(
     src_cnt = len(sourcelist)
 
     # If RA/Dec are available attempt to use them to determine the source positions
-    if photometry_options.use_coordinates == "sky" and sourcelist.has_ra_dec:
+    if use_coordinates == "sky" and sourcelist.has_ra_dec:
         try:
             imgpos = ccd_image.wcs.world_to_pixel(
                 SkyCoord(ra, dec, unit=u.deg, frame="icrs")
@@ -242,7 +246,7 @@ def single_image_photometry(
             msg = f"{logline} ccd_image must have a valid WCS to use RA/Dec!"
             logger.warning(msg)
             return None, None
-    elif photometry_options.use_coordinates == "sky" and not sourcelist.has_ra_dec:
+    elif use_coordinates == "sky" and not sourcelist.has_ra_dec:
         raise ValueError(
             "use_coordinates='sky' but sourcelist does not have" "RA/Dec coordinates!"
         )
@@ -313,7 +317,7 @@ def single_image_photometry(
     # particularly useful is processing multiple images of the same field
     # and just passing the same sourcelist when calling single_image_photometry
     # on each image.
-    if photometry_options.use_coordinates == "sky":
+    if use_coordinates == "sky":
         try:
             xcen, ycen = centroid_sources(
                 ccd_image.data, xs, ys, box_size=2 * photometry_apertures.radius + 1
@@ -331,7 +335,9 @@ def single_image_photometry(
 
             # The center really shouldn't move more than about the fwhm, could
             # rework this in the future to use that instead.
-            too_much_shift = center_diff > photometry_options.shift_tolerance
+            too_much_shift = (
+                center_diff > photometry_settings.source_locations.shift_tolerance
+            )
 
             # If the shift is too large, use the WCS-derived positions instead
             # (these sources are probably too faint for centroiding to work well)
@@ -578,7 +584,9 @@ def multi_image_photometry(
         or to each other for successful aperture photometry.
 
     """
-    sourcelist = SourceListData.read(photometry_settings.source_list_file)
+    sourcelist = SourceListData.read(
+        photometry_settings.source_locations.source_list_file
+    )
 
     # Initialize lists to track all PhotometryData objects and all dropped sources
     phots = []
@@ -598,8 +606,8 @@ def multi_image_photometry(
     for handler in multilogger.handlers[:]:
         multilogger.removeHandler(handler)
 
-    logfile = photometry_settings.photometry_options.logfile
-    console_log = photometry_settings.photometry_options.console_log
+    logfile = photometry_settings.logging_settings.logfile
+    console_log = photometry_settings.logging_settings.console_log
 
     if logfile is not None:
         # Keep original name without path
