@@ -1,5 +1,6 @@
 # Objects that contains the user settings for the program.
 
+from pathlib import Path
 from typing import Annotated, Literal
 
 from astropy.coordinates import EarthLocation, Latitude, Longitude, SkyCoord
@@ -31,6 +32,7 @@ __all__ = [
     "Camera",
     "PassbandMap",
     "PhotometryApertures",
+    "PhotometryFileSettings",
     "PhotometrySettings",
     "PhotometryOptions",
     "Exoplanet",
@@ -340,6 +342,24 @@ class PhotometryApertures(BaseModelWithTableRep):
         Radius of the outer annulus in pixels.
         """
         return self.inner_annulus + self.annulus_width
+
+
+class PhotometryFileSettings(BaseModelWithTableRep):
+    """
+    An evolutionary step on the way to having a monolithic set of photometry settings.
+    """
+
+    model_config = MODEL_DEFAULT_CONFIGURATION
+
+    image_folder: Path = Field(
+        show_only_dirs=True,
+        default="",
+        description="Folder containing the calibrated images",
+    )
+    aperture_settings_file: Path = Field(filter_pattern="*.json", default="")
+    aperture_locations_file: Path = Field(
+        filter_pattern=["*.ecsv", "*.csv"], default=""
+    )
 
 
 class Observatory(BaseModelWithTableRep):
