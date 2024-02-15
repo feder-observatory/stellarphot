@@ -388,6 +388,34 @@ class Observatory(BaseModelWithTableRep):
 
     TESS_telescope_code : str, optional
         TESS telescope code.
+
+    Examples
+    --------
+    >>> from astropy.coordinates import Latitude, Longitude
+    >>> from astropy import units as u
+    >>> from stellarphot.settings import Observatory
+    >>> observatory = Observatory(
+    ...     name="test observatory",
+    ...     latitude=Latitude(30.0 * u.deg),
+    ...     longitude=Longitude(-100.0 * u.deg),
+    ...     elevation=1000 * u.m,
+    ... )
+    >>> observatory
+    Observatory(name='test observatory', latitude=<Latitude 30. deg>,
+    longitude=<Longitude 260. deg>, elevation=<Quantity 1000. m>, AAVSO_code=None,
+    TESS_telescope_code=None)
+    >>> # You can also just provide numbers for the latitude and longitude
+    >>> observatory = Observatory(
+    ...     name="test observatory",
+    ...     latitude=30.0,
+    ...     longitude=-100.0,
+    ...     elevation=1000 * u.m,
+    ... )
+    >>> observatory
+    Observatory(name='test observatory', latitude=<Latitude 30. deg>,
+    longitude=<Longitude 260. deg>, elevation=<Quantity 1000. m>, AAVSO_code=None,
+    TESS_telescope_code=None)
+
     """
 
     name: str
@@ -439,6 +467,18 @@ class SourceLocationSettings(BaseModelWithTableRep):
         positions and the refined positions, in pixels.  The expected
         shift shift should not be more than the FWHM, so a measured FWHM
         might be a good value to provide here.
+
+    Examples
+    --------
+    >>> from stellarphot.settings import SourceLocationSettings
+    >>> source_location_settings = SourceLocationSettings(
+    ...     source_list_file="source_list.ecsv",
+    ...     use_coordinates="sky",
+    ...     shift_tolerance=5.0
+    ... )
+    >>> source_location_settings
+    SourceLocationSettings(source_list_file='source_list.ecsv', use_coordinates='sky',
+    shift_tolerance=5.0)
     """
 
     source_list_file: str
@@ -506,7 +546,24 @@ class PhotometryOptions(BaseModelWithTableRep):
 
 
 class PassbandMap(BaseModelWithTableRep):
-    """Class to represent a mapping from one set of filter names to another."""
+    """
+    Class to represent a mapping from one set of filter names to another.
+
+    Parameters
+    ----------
+    yours_to_aavso : dict[str, str]
+        A dictionary containing instrumental passband names as keys and
+        AAVSO passband names as values. This is used to rename the passband
+        entries in the output photometry table.
+
+    Examples
+    --------
+    >>> from stellarphot.settings import PassbandMap
+    >>> passband_map = PassbandMap(yours_to_aavso={"B": "B", "V": "V"})
+    >>> passband_map
+    PassbandMap(yours_to_aavso={'B': 'B', 'V': 'V'})
+
+    """
 
     yours_to_aavso: dict[str, str]
 
@@ -526,6 +583,13 @@ class LoggingSettings(BaseModelWithTableRep):
         If ``True`` and `logfile` is set, log messages will also be written to
         stdout.  If ``False``, log messages will not be written to stdout
         if `logfile` is set.
+
+    Examples
+    --------
+    >>> from stellarphot.settings import LoggingSettings
+    >>> logging_settings = LoggingSettings()
+    >>> logging_settings
+    LoggingSettings(logfile=None, console_log=True)
     """
 
     logfile: str | None = None
@@ -548,6 +612,11 @@ class PhotometrySettings(BaseModelWithTableRep):
     photometry_apertures : `stellarphot.settings.PhotometryApertures`
         Radius, inner and outer annulus radii settings and FWHM.
 
+    source_locations : `stellarphot.settings.SourceLocationSettings`
+        Settings for the location of the sources for which photometry
+        will be performed. See the documentation for
+        `~stellarphot.settings.SourceLocationSettings` for details.
+
     photometry_options : `stellarphot.settings.PhotometryOptions`
         Several options for the details of performing the photometry. See the
         documentation for `~stellarphot.settings.PhotometryOptions` for details.
@@ -557,6 +626,10 @@ class PhotometrySettings(BaseModelWithTableRep):
         AAVSO passband names as values. This is used to rename the passband
         entries in the output photometry table from what is in the source list
         to be AAVSO standard names, if available for that filter.
+
+    logging_settings : `stellarphot.settings.LoggingSettings`
+        Settings for logging. See the documentation for
+        `~stellarphot.settings.LoggingSettings` for details.
 
     object_of_interest : str
         Name of the object of interest. The only files on which photometry
