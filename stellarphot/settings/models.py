@@ -70,6 +70,9 @@ class BaseModelWithTableRep(BaseModel):
     Class to add to a pydantic model YAML serialization to an Astropy table.
     """
 
+    # NOTE WELL that this will set the configuration for all subclasses of this
+    model_config = MODEL_DEFAULT_CONFIGURATION
+
     def __init__(self, *arg, **kwargs):
         super().__init__(*arg, **kwargs)
         self.generate_table_representers()
@@ -312,8 +315,6 @@ class PhotometryApertures(BaseModelWithTableRep):
     ... )
     """
 
-    model_config = MODEL_DEFAULT_CONFIGURATION
-
     radius: Annotated[
         PositiveInt,
         Field(default=1, json_schema_extra=dict(autoui="ipywidgets.BoundedIntText")),
@@ -348,8 +349,6 @@ class PhotometryFileSettings(BaseModelWithTableRep):
     """
     An evolutionary step on the way to having a monolithic set of photometry settings.
     """
-
-    model_config = MODEL_DEFAULT_CONFIGURATION
 
     image_folder: Path = Field(
         show_only_dirs=True,
@@ -388,8 +387,6 @@ class Observatory(BaseModelWithTableRep):
     TESS_telescope_code : str, optional
         TESS telescope code.
     """
-
-    model_config = MODEL_DEFAULT_CONFIGURATION
 
     name: str
     latitude: Annotated[
@@ -500,8 +497,6 @@ class PhotometryOptions(BaseModelWithTableRep):
     'sky'
     """
 
-    model_config = MODEL_DEFAULT_CONFIGURATION
-
     shift_tolerance: NonNegativeFloat
     use_coordinates: Literal["sky", "pixel"] = "sky"
     include_dig_noise: bool = True
@@ -555,8 +550,6 @@ class PhotometrySettings(BaseModelWithTableRep):
         pixel coordinates will be used. For RA/Dec coordinates to be used, `ccd_image`
         must have a valid WCS.
     """
-
-    model_config = MODEL_DEFAULT_CONFIGURATION
 
     camera: Camera
     observatory: Observatory
