@@ -137,7 +137,11 @@ class TestModelAgnosticActions:
         new_table = Table.read(table_path)
         assert new_table.meta["model"] == mod
 
-    def test_aperture_settings_ui_generation(self, model, settings):
+    def test_settings_ui_generation(self, model, settings):
+        if model == PhotometrySettings or model == PassbandMap:
+            pytest.xfail(
+                reason="PassbandMap needs a dict widget -- https://github.com/feder-observatory/stellarphot/issues/274"
+            )
         # Check a few things about the UI generation:
         # 1) The UI is generated
         # 2) The UI model matches our input
