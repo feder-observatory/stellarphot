@@ -538,7 +538,7 @@ class PhotometrySettings(BaseModelWithTableRep):
         Several options for the details of performing the photometry. See the
         documentation for `~stellarphot.settings.PhotometryOptions` for details.
 
-    passband_map: `stellarphot.settings.PassbandMap`
+    passband_map: `stellarphot.settings.PassbandMap`, optional
         A dictionary containing instrumental passband names as keys and
         AAVSO passband names as values. This is used to rename the passband
         entries in the output photometry table from what is in the source list
