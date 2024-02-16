@@ -631,11 +631,6 @@ class PhotometrySettings(BaseModelWithTableRep):
         Settings for logging. See the documentation for
         `~stellarphot.settings.LoggingSettings` for details.
 
-    object_of_interest : str
-        Name of the object of interest. The only files on which photometry
-        will be done are those whose header contains the keyword ``OBJECT``
-        whose value is ``object_of_interest``.
-
     """
 
     camera: Camera
@@ -645,7 +640,6 @@ class PhotometrySettings(BaseModelWithTableRep):
     photometry_options: PhotometryOptions
     passband_map: PassbandMap | None
     logging_settings: LoggingSettings
-    object_of_interest: str
 
 
 class Exoplanet(BaseModelWithTableRep):

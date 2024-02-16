@@ -51,8 +51,58 @@ class AperturePhotometry(BaseModel):
     def __call__(
         self,
         file_or_directory: str | Path,
+        **kwargs,
     ) -> PhotometryData:
-        pass
+        """
+        Perform aperture photometry on a single image or a directory of images.
+
+        Parameters
+        ----------
+        file_or_directory : str or Path
+            The file or directory on which to perform aperture photometry.
+
+        fname : str, optional (Default: None)
+            Name of the image file on which photometry is being performed,
+            *only used for single image photometry*.
+
+        logline : str, optional (Default: "single_image_photometry:")
+            String to prepend to all log messages, *only used for single image
+            photometry*.
+
+        reject_unmatched : bool, optional (Default: True)
+            If ``True``, any sources that are not detected on all the images are
+            rejected.  If you are interested in a source that can intermittently
+            fall below your detection limits, we suggest setting this to ``False``
+            so that all sources detected on each image are reported. *Only used for
+            multi-image photometry*.
+
+        object_of_interest : str, optional (Default: None)
+            Name of the object of interest. The only files on which photometry
+            will be done are those whose header contains the keyword ``OBJECT``
+            whose value is ``object_of_interest``. *Only used for multi-image
+            photometry* to select which files to perform photometry on.
+
+        Returns
+        -------
+        photom_data : `stellarphot.PhotometryData`
+            Photometry data for all the sources on which aperture photometry was
+            performed in all the images. This may be a subset of the sources in
+            the source list if locations were too close to the edge of any one
+            image or to each other for successful aperture photometry.
+        """
+        # Make sure we have a Path object
+        path = Path(file_or_directory)
+        if path.is_dir():
+            photom_data = multi_image_photometry(path, self.settings, **kwargs)
+        elif path.is_file():
+            image = CCDData.read(path)
+            photom_data = single_image_photometry(image, self.settings, **kwargs)
+        else:
+            raise ValueError(
+                f"file_or_directory '{path}' is not a valid file or directory."
+            )
+
+        return photom_data
 
 
 def single_image_photometry(
@@ -547,6 +597,7 @@ def multi_image_photometry(
     directory_with_images,
     photometry_settings,
     reject_unmatched=True,
+    object_of_interest=None,
 ):
     """
     Perform aperture photometry on a directory of images.
@@ -573,6 +624,12 @@ def multi_image_photometry(
         rejected.  If you are interested in a source that can intermittently
         fall below your detection limits, we suggest setting this to ``False``
         so that all sources detected on each image are reported.
+
+    object_of_interest : str, optional (Default: None)
+        Name of the object of interest. The only files on which photometry
+        will be done are those whose header contains the keyword ``OBJECT``
+        whose value is ``object_of_interest``. *Only used for multi-image
+        photometry* to select which files to perform photometry on.
 
     Returns
     -------
@@ -653,8 +710,6 @@ def multi_image_photometry(
 
     # Suppress the FITSFixedWarning that is raised when reading a FITS file header
     warnings.filterwarnings("ignore", category=FITSFixedWarning)
-
-    object_of_interest = photometry_settings.object_of_interest
 
     # Process all the files
     for this_ccd, this_fname in ifc.ccds(object=object_of_interest, return_fname=True):

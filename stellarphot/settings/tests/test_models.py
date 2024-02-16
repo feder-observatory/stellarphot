@@ -88,7 +88,6 @@ DEFAULT_PHOTOMETRY_SETTINGS = dict(
     photometry_options=PhotometryOptions(**DEFAULT_PHOTOMETRY_OPTIONS),
     passband_map=PassbandMap(**DEFAULT_PASSBAND_MAP),
     logging_settings=LoggingSettings(**DEFAULT_LOGGING_SETTINGS),
-    object_of_interest="test",
 )
 
 
