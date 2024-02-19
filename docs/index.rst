@@ -1,9 +1,10 @@
 Documentation
 =============
 
-Stellarphot is a package for performing photometry on astronomical images. It
+Stellarphot is a package for performing photometry on calibrated (reduced) astronomical images. It
 provides a simple interface for performing aperture photometry of either a single
-image or a directory with multiple images.
+image or a directory with multiple images. It is designed to be easy to use for both
+non-programmers and programmers.
 
 
 Getting Started
@@ -21,6 +22,9 @@ Using ``stellarphot`` starts with defining a bunch of configuration settings. So
 like details about your observing location and camera, will change infrequently.
 Others, like what size apertures to use for photometry and where in each image those
 apertures should be placed, may change from night to night.
+
+There is a graphical interface for making all of the settings below. They can also be set
+programmatically in Python or by editing a file in your favorite text editor.
 
 Provide your observatory information
 -------------------------------------
