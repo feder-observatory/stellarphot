@@ -61,10 +61,6 @@ class AperturePhotometry(BaseModel):
         file_or_directory : str or Path
             The file or directory on which to perform aperture photometry.
 
-        fname : str, optional (Default: None)
-            Name of the image file on which photometry is being performed,
-            *only used for single image photometry*.
-
         logline : str, optional (Default: "single_image_photometry:")
             String to prepend to all log messages, *only used for single image
             photometry*.
@@ -96,7 +92,9 @@ class AperturePhotometry(BaseModel):
             photom_data = multi_image_photometry(path, self.settings, **kwargs)
         elif path.is_file():
             image = CCDData.read(path)
-            photom_data = single_image_photometry(image, self.settings, **kwargs)
+            photom_data = single_image_photometry(
+                image, self.settings, fname=str(path), **kwargs
+            )
         else:
             raise ValueError(
                 f"file_or_directory '{path}' is not a valid file or directory."
