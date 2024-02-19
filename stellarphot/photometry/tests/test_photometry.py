@@ -575,6 +575,11 @@ class TestAperturePhotometry:
                     object_of_interest=object_name,
                 )
 
+    def test_invalid_path(self):
+        ap = AperturePhotometry(settings=DEFAULT_PHOTOMETRY_SETTINGS)
+        with pytest.raises(ValueError, match="is not a valid file or directory"):
+            ap("invalid_path")
+
 
 def test_calc_noise_defaults():
     # If we put in nothing we should get an error about is missing camera
