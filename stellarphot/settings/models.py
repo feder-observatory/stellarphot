@@ -52,6 +52,21 @@ MODEL_DEFAULT_CONFIGURATION = ConfigDict(
 )
 
 
+def _extract_short_description(docstring: str) -> str:
+    """
+    Extract the first line of the docstring as a short description.
+    """
+    # Everything up the the first blank line is the short description
+    short_desc = docstring.split("\n\n")[0]
+
+    # This may have some extra whitespace at the beginning and end, remove that
+    short_desc = short_desc.strip()
+
+    # split the string and rejoin with spaces in case there are multiple spaces
+    # between words, e.g. caused by a multi-line docstring
+    return " ".join(short_desc.split())
+
+
 def add_degree_to_float(value, _handler):
     """
     Translate a value that can be a number to a string with "degree" appended.
@@ -633,13 +648,34 @@ class PhotometrySettings(BaseModelWithTableRep):
 
     """
 
-    camera: Camera
-    observatory: Observatory
-    photometry_apertures: PhotometryApertures
-    source_locations: SourceLocationSettings
-    photometry_options: PhotometryOptions
-    passband_map: PassbandMap | None
-    logging_settings: LoggingSettings
+    camera: Annotated[Camera, Field(title="Wowza", description="Foo foo")]
+    observatory: Annotated[
+        Observatory,
+        Field(
+            title="Observatory",
+            description=_extract_short_description(Observatory.__doc__),
+        ),
+    ]
+    photometry_apertures: Annotated[
+        PhotometryApertures,
+        Field(description=_extract_short_description(PhotometryApertures.__doc__)),
+    ]
+    source_locations: Annotated[
+        SourceLocationSettings,
+        Field(description=_extract_short_description(SourceLocationSettings.__doc__)),
+    ]
+    photometry_options: Annotated[
+        PhotometryOptions,
+        Field(description=_extract_short_description(PhotometryOptions.__doc__)),
+    ]
+    passband_map: Annotated[
+        PassbandMap | None,
+        Field(description=_extract_short_description(PassbandMap.__doc__)),
+    ]
+    logging_settings: Annotated[
+        LoggingSettings,
+        Field(description=_extract_short_description(LoggingSettings.__doc__)),
+    ]
 
 
 class Exoplanet(BaseModelWithTableRep):
