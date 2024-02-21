@@ -19,6 +19,7 @@ from pydantic import (
     model_validator,
 )
 
+from .aavso_models import AAVSOFilters
 from .astropy_pydantic import (
     AstropyValidator,
     EquivalentTo,
@@ -560,6 +561,25 @@ class PhotometryOptions(BaseModelWithTableRep):
     fwhm_by_fit: bool = True
 
 
+class _PassbandMapEntry(BaseModel):
+    """
+    long loing liong liong liong long long
+    multiline name
+
+    Parameters
+    ----------
+    your_filter_name : str
+        Instrumental filter name.
+
+    aavso_filter_name : `stellarphot.settings.AAVSOFilters`
+        AAVSO filter name.
+
+    """
+
+    your_filter_name: str
+    aavso_filter_name: Annotated[AAVSOFilters, Field(title="AAVSO Filter Name")]
+
+
 class PassbandMap(BaseModelWithTableRep):
     """
     Class to represent a mapping from one set of filter names to another.
@@ -580,7 +600,7 @@ class PassbandMap(BaseModelWithTableRep):
 
     """
 
-    yours_to_aavso: dict[str, str]
+    your_filter_names_to_aavso: list[_PassbandMapEntry]
 
 
 class LoggingSettings(BaseModelWithTableRep):
@@ -614,6 +634,9 @@ class LoggingSettings(BaseModelWithTableRep):
 class PhotometrySettings(BaseModelWithTableRep):
     """
     Settings for performing aperture photometry.
+    """
+
+    """
 
     Parameters
     ----------
