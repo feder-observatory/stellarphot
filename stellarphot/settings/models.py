@@ -600,7 +600,7 @@ class PassbandMap(BaseModelWithTableRep):
 
     """
 
-    your_filter_names_to_aavso: list[_PassbandMapEntry]
+    your_filter_names_to_aavso: list[_PassbandMapEntry] | None
 
 
 class LoggingSettings(BaseModelWithTableRep):
@@ -629,6 +629,9 @@ class LoggingSettings(BaseModelWithTableRep):
 
     logfile: str | None = None
     console_log: bool = True
+
+
+SCHEMA_EXTRAS = dict(show_null=True)
 
 
 class PhotometrySettings(BaseModelWithTableRep):
@@ -671,33 +674,64 @@ class PhotometrySettings(BaseModelWithTableRep):
 
     """
 
-    camera: Annotated[Camera, Field(title="Wowza", description="Foo foo")]
+    # Title must be set below for now to ensure the UI looks good. May be able to be
+    # removed once this bug is fixed:
+    # https://github.com/maxfordham/ipyautoui/issues/290
+    camera: Annotated[
+        Camera,
+        Field(
+            title="Camera ",
+            description=_extract_short_description(Camera.__doc__),
+            json_schema_extra=SCHEMA_EXTRAS,
+        ),
+    ]
     observatory: Annotated[
         Observatory,
         Field(
-            title="Observatory",
+            title="Observatory ",
             description=_extract_short_description(Observatory.__doc__),
+            json_schema_extra=SCHEMA_EXTRAS,
         ),
     ]
     photometry_apertures: Annotated[
         PhotometryApertures,
-        Field(description=_extract_short_description(PhotometryApertures.__doc__)),
+        Field(
+            title="Photometry Apertures",
+            description=_extract_short_description(PhotometryApertures.__doc__),
+            json_schema_extra=SCHEMA_EXTRAS,
+        ),
     ]
     source_locations: Annotated[
         SourceLocationSettings,
-        Field(description=_extract_short_description(SourceLocationSettings.__doc__)),
+        Field(
+            title="Source Locations",
+            description=_extract_short_description(SourceLocationSettings.__doc__),
+            json_schema_extra=SCHEMA_EXTRAS,
+        ),
     ]
     photometry_options: Annotated[
         PhotometryOptions,
-        Field(description=_extract_short_description(PhotometryOptions.__doc__)),
+        Field(
+            title="Optional Settings",
+            description=_extract_short_description(PhotometryOptions.__doc__),
+            json_schema_extra=SCHEMA_EXTRAS,
+        ),
     ]
     passband_map: Annotated[
-        PassbandMap | None,
-        Field(description=_extract_short_description(PassbandMap.__doc__)),
+        PassbandMap,
+        Field(
+            title="Passband Map",
+            description=_extract_short_description(PassbandMap.__doc__),
+            json_schema_extra=SCHEMA_EXTRAS,
+        ),
     ]
     logging_settings: Annotated[
         LoggingSettings,
-        Field(description=_extract_short_description(LoggingSettings.__doc__)),
+        Field(
+            title="Logging options",
+            description=_extract_short_description(LoggingSettings.__doc__),
+            json_schema_extra=SCHEMA_EXTRAS,
+        ),
     ]
 
 
