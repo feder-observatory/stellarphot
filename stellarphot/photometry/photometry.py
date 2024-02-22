@@ -14,6 +14,7 @@ from astropy.wcs import FITSFixedWarning
 from ccdproc import ImageFileCollection
 from photutils.aperture import CircularAnnulus, CircularAperture, aperture_photometry
 from photutils.centroids import centroid_sources
+from pydantic import BaseModel, validate_call
 from scipy.spatial.distance import cdist
 
 from stellarphot import PhotometryData, SourceListData
@@ -22,11 +23,13 @@ from stellarphot.settings import (
     Observatory,
     PhotometryApertures,
     PhotometryOptions,
+    PhotometrySettings,
 )
 
 from .source_detection import compute_fwhm
 
 __all__ = [
+    "AperturePhotometry",
     "single_image_photometry",
     "multi_image_photometry",
     "faster_sigma_clip_stats",
@@ -39,14 +42,70 @@ __all__ = [
 EXPOSURE_KEYWORDS = ["EXPOSURE", "EXPTIME", "TELAPSE", "ELAPTIME", "ONTIME", "LIVETIME"]
 
 
+class AperturePhotometry(BaseModel):
+    """Class to perform aperture photometry on one or more images"""
+
+    settings: PhotometrySettings
+
+    @validate_call
+    def __call__(
+        self,
+        file_or_directory: str | Path,
+        **kwargs,
+    ) -> PhotometryData:
+        """
+        Perform aperture photometry on a single image or a directory of images.
+
+        Parameters
+        ----------
+        file_or_directory : str or Path
+            The file or directory on which to perform aperture photometry.
+
+        logline : str, optional (Default: "single_image_photometry:")
+            String to prepend to all log messages, *only used for single image
+            photometry*.
+
+        reject_unmatched : bool, optional (Default: True)
+            If ``True``, any sources that are not detected on all the images are
+            rejected.  If you are interested in a source that can intermittently
+            fall below your detection limits, we suggest setting this to ``False``
+            so that all sources detected on each image are reported. *Only used for
+            multi-image photometry*.
+
+        object_of_interest : str, optional (Default: None)
+            Name of the object of interest. The only files on which photometry
+            will be done are those whose header contains the keyword ``OBJECT``
+            whose value is ``object_of_interest``. *Only used for multi-image
+            photometry* to select which files to perform photometry on.
+
+        Returns
+        -------
+        photom_data : `stellarphot.PhotometryData`
+            Photometry data for all the sources on which aperture photometry was
+            performed in all the images. This may be a subset of the sources in
+            the source list if locations were too close to the edge of any one
+            image or to each other for successful aperture photometry.
+        """
+        # Make sure we have a Path object
+        path = Path(file_or_directory)
+        if path.is_dir():
+            photom_data = multi_image_photometry(path, self.settings, **kwargs)
+        elif path.is_file():
+            image = CCDData.read(path)
+            photom_data = single_image_photometry(
+                image, self.settings, fname=str(path), **kwargs
+            )
+        else:
+            raise ValueError(
+                f"file_or_directory '{path}' is not a valid file or directory."
+            )
+
+        return photom_data
+
+
 def single_image_photometry(
     ccd_image,
-    sourcelist,
-    camera,
-    observatory,
-    photometry_apertures,
-    photometry_options,
-    passband_map=None,
+    photometry_settings,
     fname=None,
     logline="single_image_photometry:",
 ):
@@ -68,29 +127,11 @@ def single_image_photometry(
         This image  must also have a WCS header associated with it if you want to
         use sky positions as inputs.
 
-    sourcelist : `stellarphot.SourceList`
-        Table of extracted sources with positions in terms of pixel coordinates OR
-        RA/Dec coordinates. If both positions provided, pixel coordinates will be used.
-        For RA/Dec coordinates to be used, `ccd_image` must have a valid WCS.
-
-    camera : `stellarphot.settings.Camera`
-        Camera object which has gain, read noise and dark current set.
-
-    observatory : `stellarphot.settings.Observatory`
-        Observatory information.  Used for calculating the BJD.
-
-    photometry_apertures : `stellarphot.settings.PhotometryApertures`
-        Radius, inner and outer annulus radii settings and FWHM.
-
-    photometry_options : `stellarphot.settings.PhotometryOptions`
-        Several options for the details of performing the photometry. See the
-        documentation for `~stellarphot.settings.PhotometryOptions` for details.
-
-    passband_map: dict, optional (Default: None)
-        A dictionary containing instrumental passband names as keys and
-        AAVSO passband names as values. This is used to rename the passband
-        entries in the output photometry table to be AAVSO standard versus
-        whatever is in the source list.
+    photometry_settings : `stellarphot.settings.PhotometrySettings`
+        Photometry settings to use for the photometry.  This includes the camera,
+        observatory, the aperture and annulus radii to use for the photometry, a map
+        of passbands from your filters to AAVSO filter names, and options for the
+        photometry. See `stellarphot.settings.PhotometrySettings` for more information.
 
     fname : str, optional (Default: None)
         Name of the image file on which photometry is being performed.
@@ -127,6 +168,17 @@ def single_image_photometry(
     the `use_coordinates` parameter should be set to "sky".
     """
 
+    sourcelist = SourceListData.read(
+        photometry_settings.source_locations.source_list_file
+    )
+    camera = photometry_settings.camera
+    observatory = photometry_settings.observatory
+    photometry_apertures = photometry_settings.photometry_apertures
+    photometry_options = photometry_settings.photometry_options
+    logging_options = photometry_settings.logging_settings
+    passband_map = photometry_settings.passband_map
+    use_coordinates = photometry_settings.source_locations.use_coordinates
+
     # Check that the input parameters are valid
     if not isinstance(ccd_image, CCDData):
         raise TypeError(
@@ -158,8 +210,8 @@ def single_image_photometry(
         )
 
     # Set up logging
-    logfile = photometry_options.logfile
-    console_log = photometry_options.console_log
+    logfile = logging_options.logfile
+    console_log = logging_options.console_log
     logger = logging.getLogger("single_image_photometry")
     console_format = logging.Formatter("%(message)s")
     if logger.hasHandlers() is False:
@@ -231,7 +283,7 @@ def single_image_photometry(
     src_cnt = len(sourcelist)
 
     # If RA/Dec are available attempt to use them to determine the source positions
-    if photometry_options.use_coordinates == "sky" and sourcelist.has_ra_dec:
+    if use_coordinates == "sky" and sourcelist.has_ra_dec:
         try:
             imgpos = ccd_image.wcs.world_to_pixel(
                 SkyCoord(ra, dec, unit=u.deg, frame="icrs")
@@ -242,7 +294,7 @@ def single_image_photometry(
             msg = f"{logline} ccd_image must have a valid WCS to use RA/Dec!"
             logger.warning(msg)
             return None, None
-    elif photometry_options.use_coordinates == "sky" and not sourcelist.has_ra_dec:
+    elif use_coordinates == "sky" and not sourcelist.has_ra_dec:
         raise ValueError(
             "use_coordinates='sky' but sourcelist does not have" "RA/Dec coordinates!"
         )
@@ -313,7 +365,7 @@ def single_image_photometry(
     # particularly useful is processing multiple images of the same field
     # and just passing the same sourcelist when calling single_image_photometry
     # on each image.
-    if photometry_options.use_coordinates == "sky":
+    if use_coordinates == "sky":
         try:
             xcen, ycen = centroid_sources(
                 ccd_image.data, xs, ys, box_size=2 * photometry_apertures.radius + 1
@@ -331,7 +383,9 @@ def single_image_photometry(
 
             # The center really shouldn't move more than about the fwhm, could
             # rework this in the future to use that instead.
-            too_much_shift = center_diff > photometry_options.shift_tolerance
+            too_much_shift = (
+                center_diff > photometry_settings.source_locations.shift_tolerance
+            )
 
             # If the shift is too large, use the WCS-derived positions instead
             # (these sources are probably too faint for centroiding to work well)
@@ -539,14 +593,9 @@ def single_image_photometry(
 
 def multi_image_photometry(
     directory_with_images,
-    object_of_interest,
-    sourcelist,
-    camera,
-    observatory,
-    photometry_apertures,
-    photometry_options,
-    passband_map=None,
+    photometry_settings,
     reject_unmatched=True,
+    object_of_interest=None,
 ):
     """
     Perform aperture photometry on a directory of images.
@@ -562,40 +611,23 @@ def multi_image_photometry(
         EXPTIME, TELAPSE, ELAPTIME, ONTIME, or LIVETIME), and FILTER.  If AIRMASS is
         available it will be added to `phot_table`.
 
-    object_of_interest : str
-        Name of the object of interest. The only files on which photometry
-        will be done are those whose header contains the keyword ``OBJECT``
-        whose value is ``object_of_interest``.
-
-    sourcelist : `stellarphot.SourceList`
-        Table of extracted sources with positions in terms of pixel coordinates and
-        RA/Dec coordinates.  The x/y coordinates in the sourcelist will be ignored,
-        WCS derived x/y positions based on sky positions will be computed each image.
-
-    camera : `stellarphot.settings.Camera`
-        Camera object which has gain, read noise and dark current set.
-
-    observatory : `stellarphot.settings.Observatory`
-        Observatory information.  Used for calculating the BJD.
-
-    photometry_apertures : `stellarphot.settings.PhotometryApertures`
-        Radius, inner and outer annulus radii settings and FWHM.
-
-    photometry_options : `stellarphot.settings.PhotometryOptions`
-        Several options for the details of performing the photometry. See the
-        documentation for `~stellarphot.settings.PhotometryOptions` for details.
-
-    passband_map: dict, optional (Default: None)
-        A dictionary containing instrumental passband names as keys and
-        AAVSO passband names as values. This is used to rename the passband
-        entries in the output photometry table to be AAVSO standard versus
-        whatever is in the source list.
+    photometry_settings : `stellarphot.settings.PhotometrySettings`
+        Photometry settings to use for the photometry.  This includes the camera,
+        observatory, the aperture and annulus radii to use for the photometry, a map
+        of passbands from your filters to AAVSO filter names, and options for the
+        photometry. See `stellarphot.settings.PhotometrySettings` for more information.
 
     reject_unmatched : bool, optional (Default: True)
         If ``True``, any sources that are not detected on all the images are
         rejected.  If you are interested in a source that can intermittently
         fall below your detection limits, we suggest setting this to ``False``
         so that all sources detected on each image are reported.
+
+    object_of_interest : str, optional (Default: None)
+        Name of the object of interest. The only files on which photometry
+        will be done are those whose header contains the keyword ``OBJECT``
+        whose value is ``object_of_interest``. *Only used for multi-image
+        photometry* to select which files to perform photometry on.
 
     Returns
     -------
@@ -607,6 +639,9 @@ def multi_image_photometry(
         or to each other for successful aperture photometry.
 
     """
+    sourcelist = SourceListData.read(
+        photometry_settings.source_locations.source_list_file
+    )
 
     # Initialize lists to track all PhotometryData objects and all dropped sources
     phots = []
@@ -626,8 +661,8 @@ def multi_image_photometry(
     for handler in multilogger.handlers[:]:
         multilogger.removeHandler(handler)
 
-    logfile = photometry_options.logfile
-    console_log = photometry_options.console_log
+    logfile = photometry_settings.logging_settings.logfile
+    console_log = photometry_settings.logging_settings.console_log
 
     if logfile is not None:
         # Keep original name without path
@@ -686,12 +721,7 @@ def multi_image_photometry(
         multilogger.info("  Calling single_image_photometry ...")
         this_phot, this_missing_sources = single_image_photometry(
             this_ccd,
-            sourcelist,
-            camera,
-            observatory,
-            photometry_apertures,
-            photometry_options,
-            passband_map=passband_map,
+            photometry_settings,
             fname=this_fname,
             logline="    >",
         )

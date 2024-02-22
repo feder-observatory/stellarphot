@@ -11,9 +11,13 @@ from stellarphot.settings import ui_generator
 from stellarphot.settings.models import (
     Camera,
     Exoplanet,
+    LoggingSettings,
     Observatory,
+    PassbandMap,
     PhotometryApertures,
     PhotometryOptions,
+    PhotometrySettings,
+    SourceLocationSettings,
 )
 
 DEFAULT_APERTURE_SETTINGS = dict(radius=5, gap=10, annulus_width=15, fwhm=3.2)
@@ -48,18 +52,42 @@ DEFAULT_OBSERVATORY_SETTINGS = dict(
     TESS_telescope_code="tess test",
 )
 
-
 # The first setting here is required, the rest are optional. The optional
 # settings below are different than the defaults in the model definition.
-DEFAULT_PHOTOMETRY_SETTINGS = dict(
-    shift_tolerance=5,
-    use_coordinates="pixel",
+DEFAULT_PHOTOMETRY_OPTIONS = dict(
     include_dig_noise=False,
     reject_too_close=False,
     reject_background_outliers=False,
     fwhm_by_fit=False,
+)
+
+DEFAULT_PASSBAND_MAP = dict(
+    yours_to_aavso=dict(
+        V="V",
+        B="B",
+        rp="SR",
+    )
+)
+
+DEFAULT_LOGGING_SETTINGS = dict(
     logfile="test.log",
     console_log=False,
+)
+
+DEFAULT_SOURCE_LOCATION_SETTINGS = dict(
+    shift_tolerance=5,
+    source_list_file="test.ecsv",
+    use_coordinates="pixel",
+)
+
+DEFAULT_PHOTOMETRY_SETTINGS = dict(
+    camera=Camera(**TEST_CAMERA_VALUES),
+    observatory=Observatory(**DEFAULT_OBSERVATORY_SETTINGS),
+    photometry_apertures=PhotometryApertures(**DEFAULT_APERTURE_SETTINGS),
+    source_locations=SourceLocationSettings(**DEFAULT_SOURCE_LOCATION_SETTINGS),
+    photometry_options=PhotometryOptions(**DEFAULT_PHOTOMETRY_OPTIONS),
+    passband_map=PassbandMap(**DEFAULT_PASSBAND_MAP),
+    logging_settings=LoggingSettings(**DEFAULT_LOGGING_SETTINGS),
 )
 
 
@@ -70,7 +98,11 @@ DEFAULT_PHOTOMETRY_SETTINGS = dict(
         [PhotometryApertures, DEFAULT_APERTURE_SETTINGS],
         [Exoplanet, DEFAULT_EXOPLANET_SETTINGS],
         [Observatory, DEFAULT_OBSERVATORY_SETTINGS],
-        [PhotometryOptions, DEFAULT_PHOTOMETRY_SETTINGS],
+        [PhotometryOptions, DEFAULT_PHOTOMETRY_OPTIONS],
+        [PassbandMap, DEFAULT_PASSBAND_MAP],
+        [PhotometrySettings, DEFAULT_PHOTOMETRY_SETTINGS],
+        [LoggingSettings, DEFAULT_LOGGING_SETTINGS],
+        [SourceLocationSettings, DEFAULT_SOURCE_LOCATION_SETTINGS],
     ],
 )
 class TestModelAgnosticActions:
@@ -116,7 +148,11 @@ class TestModelAgnosticActions:
         new_table = Table.read(table_path)
         assert new_table.meta["model"] == mod
 
-    def test_aperture_settings_ui_generation(self, model, settings):
+    def test_settings_ui_generation(self, model, settings):
+        if model == PhotometrySettings or model == PassbandMap:
+            pytest.xfail(
+                reason="PassbandMap needs a dict widget -- https://github.com/feder-observatory/stellarphot/issues/274"
+            )
         # Check a few things about the UI generation:
         # 1) The UI is generated
         # 2) The UI model matches our input
@@ -304,14 +340,14 @@ def test_observatory_lat_long_as_float():
     assert obs == Observatory(**DEFAULT_OBSERVATORY_SETTINGS)
 
 
-def test_photometry_settings_negative_shift_tolerance():
+def test_source_locations_negative_shift_tolerance():
     # Check that a negative shift tolerance raises an error
-    settings = dict(DEFAULT_PHOTOMETRY_SETTINGS)
+    settings = dict(DEFAULT_SOURCE_LOCATION_SETTINGS)
     settings["shift_tolerance"] = -1
     with pytest.raises(
         ValidationError, match="Input should be greater than or equal to 0"
     ):
-        PhotometryOptions(**settings)
+        SourceLocationSettings(**settings)
 
 
 def test_create_invalid_exoplanet():
