@@ -497,7 +497,7 @@ class SourceLocationSettings(BaseModelWithTableRep):
     shift_tolerance=5.0)
     """
 
-    source_list_file: str
+    source_list_file: Path
     use_coordinates: Literal["sky", "pixel"] = "sky"
     shift_tolerance: NonNegativeFloat = 5.0
 
