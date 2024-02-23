@@ -506,6 +506,59 @@ def test_photometry_data():
     assert (phot_data["bjd"][0].value - 2459910.775405664) * 86400 < 0.05
 
 
+def test_photometry_data_short_filter_name():
+    # Regression test for #279.
+    # If the final passband name in the passband_map is longer than the
+    # longest passband name in the input data, the updated passband was
+    # truncated. That should not happen.
+
+    data = testphot_clean.copy()
+    # Delete the original passband column, just in case it is longer than
+    # the new passband name.
+    del data["passband"]
+
+    # Make a new 1-character column for passband
+    data["passband"] = "i"
+
+    phot_data = PhotometryData(
+        observatory=feder_obs,
+        camera=feder_cg_16m,
+        passband_map={"i": "SI"},
+        input_data=data,
+    )
+
+    # Make sure the passband name is not truncated.
+    assert phot_data["passband"][0] == "SI"
+
+
+def test_photometry_data_filter_name_map_preserves_original_names():
+    # If a passband is not in the passband map it should be preserved.
+
+    data = testphot_clean.copy()
+    # Delete the original passband column
+    del data["passband"]
+
+    # Make a new 1-character column for passband
+    data["passband"] = "i"
+
+    # Add a second (identical) row
+    data.add_row(data[0])
+
+    # Change the first entry to a value not in the passband map
+    data["passband"][0] = "Q"
+
+    phot_data = PhotometryData(
+        observatory=feder_obs,
+        camera=feder_cg_16m,
+        passband_map={"i": "SI"},
+        input_data=data,
+    )
+
+    # Make sure the passband names are correct
+    assert phot_data["passband"][0] == "Q"
+    assert phot_data["passband"][1] == "SI"
+
+
 def test_photometry_roundtrip_ecsv(tmp_path):
     # Check that we can save the test data to ECSV and restore it
     file_path = tmp_path / "test_photometry.ecsv"

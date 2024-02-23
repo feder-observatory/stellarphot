@@ -166,9 +166,15 @@ class BaseEnhancedTable(QTable):
     def _update_passbands(self):
         # Converts filter names in filter column to AAVSO standard names
         # Assumes _passband_map is in namespace.
-        for orig_pb, aavso_pb in self._passband_map.items():
-            mask = self["passband"] == orig_pb
-            self["passband"][mask] = aavso_pb
+
+        # Create a list of new passband names instead of trying to change names in place
+        # in case any of the new names are longer than the longest of the old names.
+        # If that happens, astropy by default just truncates the names.
+        new_filter_name = [
+            self._passband_map[orig_pb] if orig_pb in self._passband_map else orig_pb
+            for orig_pb in self["passband"]
+        ]
+        self["passband"] = new_filter_name
 
     def clean(self, remove_rows_with_mask=False, **other_restrictions):
         """
