@@ -21,5 +21,6 @@ dependencies:
     - reproject
     - sphinx
     - sphinx-astropy
+    - sphinx-automodapi=0.16
     - pip:
         - ipyautoui
