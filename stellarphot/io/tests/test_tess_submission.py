@@ -3,6 +3,7 @@ import warnings
 
 import pytest
 from astropy.coordinates import SkyCoord
+from requests import ConnectionError
 
 from stellarphot.io.tess import TessSubmission, TessTargetFile
 
@@ -80,27 +81,40 @@ def test_target_file():
     # object
 
     tic_742648307 = SkyCoord(ra=104.733225, dec=49.968739, unit="degree")
+    server_down = False
 
-    tess_target = TessTargetFile(tic_742648307, magnitude=12, depth=10)
-
-    # Check that the first thing in the list is the tick object
-    check_coords = SkyCoord(
-        ra=tess_target.table["RA"][0],
-        dec=tess_target.table["Dec"][0],
-        unit=("hour", "degree"),
-    )
-    assert tic_742648307.separation(check_coords).arcsecond < 1
-
-    # On windows the temporary file cannot be deleted because if it is
-    # then the file immediately vanished. That means we get a warning
-    # about having an open file handle. We can ignore that warning
-    # because we don't care about it here.
-
-    # The warning doesn't get generated until the last reference to
-    # the object is deleted, so we need to do that here instead of
-    # letting it happen at the end of the test.
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore", message="unclosed file", category=ResourceWarning
+    try:
+        tess_target = TessTargetFile(tic_742648307, magnitude=12, depth=10)
+    except ConnectionError:
+        server_down = True
+        tess_target = None  # Assure tess_target is defined so that we can delete it
+    else:
+        # Check that the first thing in the list is the tick object
+        check_coords = SkyCoord(
+            ra=tess_target.table["RA"][0],
+            dec=tess_target.table["Dec"][0],
+            unit=("hour", "degree"),
         )
-        del tess_target
+        assert tic_742648307.separation(check_coords).arcsecond < 1
+    finally:
+        # Make sure that regardless of whether the server is down we delete
+        # the temporary file that gets created.
+
+        # On windows the temporary file cannot be deleted because if it is
+        # then the file immediately vanished. That means we get a warning
+        # about having an open file handle. We can ignore that warning
+        # because we don't care about it here.
+
+        # The warning doesn't get generated until the last reference to
+        # the object is deleted, so we need to do that here instead of
+        # letting it happen at the end of the test.
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message="unclosed file", category=ResourceWarning
+            )
+            del tess_target
+
+        if server_down:
+            # The server at University of Louisville is down sometimes, so
+            # xfail this test when that happens
+            pytest.xfail("TESS/gaia Server down")
