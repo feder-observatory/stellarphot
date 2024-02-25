@@ -14,7 +14,7 @@ build:
   apt_packages:
     - graphviz
   tools:
-    python: "mambaforge-22.9"
+    python: "mambaforge-latest"
 
 python:
   install:

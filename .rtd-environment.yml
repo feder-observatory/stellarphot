@@ -3,6 +3,7 @@ channels:
     - defaults
 dependencies:
     - python>=3.10
+    - pip
     - astropy >=5
     - astroquery
     - ccdproc
@@ -15,9 +16,11 @@ dependencies:
     - gatspy
     - pyyaml
     - astrowidgets
-    - pydantic<2
+    - pydantic>=2
     - reducer
     - reproject
+    - sphinx
     - sphinx-astropy
+    - sphinx-automodapi=0.16
     - pip:
         - ipyautoui
