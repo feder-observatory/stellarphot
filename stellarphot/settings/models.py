@@ -1,7 +1,7 @@
 # Objects that contains the user settings for the program.
 
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from astropy.coordinates import EarthLocation, Latitude, Longitude, SkyCoord
 from astropy.io.misc.yaml import AstropyDumper, AstropyLoader
@@ -16,6 +16,7 @@ from pydantic import (
     NonNegativeFloat,
     PositiveFloat,
     PositiveInt,
+    field_validator,
     model_validator,
 )
 
@@ -497,7 +498,9 @@ class SourceLocationSettings(BaseModelWithTableRep):
     shift_tolerance=5.0)
     """
 
-    source_list_file: Path
+    source_list_file: Annotated[
+        str, Field(json_schema_extra=dict(autoui="ipyautoui.custom.FileChooser"))
+    ]
     use_coordinates: Literal["sky", "pixel"] = "sky"
     shift_tolerance: NonNegativeFloat = 5.0
 
@@ -561,7 +564,7 @@ class PhotometryOptions(BaseModelWithTableRep):
     fwhm_by_fit: bool = True
 
 
-class _PassbandMapEntry(BaseModel):
+class PassbandMapEntry(BaseModel):
     """
     long loing liong liong liong long long
     multiline name
@@ -586,21 +589,56 @@ class PassbandMap(BaseModelWithTableRep):
 
     Parameters
     ----------
-    yours_to_aavso : dict[str, str]
-        A dictionary containing instrumental passband names as keys and
-        AAVSO passband names as values. This is used to rename the passband
-        entries in the output photometry table.
+    your_filter_names_to_aavso : list[`stellarphot.settings.PassbandMapEntry`]
+        A list of pairs of your filter name and the corresponding AAVSO filter name.
+        This is used to rename the passband entries in the output photometry table.
+        Note that, as shown in the example below, you can intialize this with a
+        dictionary, and it will be converted to a list of `PassbandMapEntry` objects.
 
     Examples
     --------
     >>> from stellarphot.settings import PassbandMap
-    >>> passband_map = PassbandMap(yours_to_aavso={"B": "B", "V": "V"})
+    >>> passband_map = PassbandMap(your_filter_names_to_aavso={"B": "B", "V": "V"})
     >>> passband_map
-    PassbandMap(yours_to_aavso={'B': 'B', 'V': 'V'})
+    PassbandMap(your_filter_names_to_aavso=[PassbandMapEntry(your_filter_name='B',...
 
     """
 
-    your_filter_names_to_aavso: list[_PassbandMapEntry] | None
+    your_filter_names_to_aavso: list[PassbandMapEntry] | None
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.your_filter_names_to_aavso is None:
+            self._dict = {}
+        else:
+            self._dict = {
+                entry.your_filter_name: entry.aavso_filter_name.value
+                for entry in self.your_filter_names_to_aavso
+            }
+
+    @field_validator("your_filter_names_to_aavso", mode="before")
+    @classmethod
+    def validate_your_filter_names_to_aavso(cls, v):
+        if isinstance(v, PassbandMap):
+            return v
+        elif isinstance(v, dict):
+            return [
+                PassbandMapEntry(your_filter_name=k, aavso_filter_name=v)
+                for k, v in v.items()
+            ]
+        else:
+            return v
+
+    def items(self):
+        return self._dict.items()
+
+    def keys(self):
+        return self._dict.keys()
+
+    def values(self):
+        return self._dict.values()
+
+    def __getitem__(self, key):
+        return self._dict[key]
 
 
 class LoggingSettings(BaseModelWithTableRep):

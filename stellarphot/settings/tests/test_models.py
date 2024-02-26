@@ -14,6 +14,7 @@ from stellarphot.settings.models import (
     LoggingSettings,
     Observatory,
     PassbandMap,
+    PassbandMapEntry,
     PhotometryApertures,
     PhotometryOptions,
     PhotometrySettings,
@@ -62,11 +63,20 @@ DEFAULT_PHOTOMETRY_OPTIONS = dict(
 )
 
 DEFAULT_PASSBAND_MAP = dict(
-    yours_to_aavso=dict(
-        V="V",
-        B="B",
-        rp="SR",
-    )
+    your_filter_names_to_aavso=[
+        PassbandMapEntry(
+            your_filter_name="V",
+            aavso_filter_name="V",
+        ),
+        PassbandMapEntry(
+            your_filter_name="B",
+            aavso_filter_name="B",
+        ),
+        PassbandMapEntry(
+            your_filter_name="rp",
+            aavso_filter_name="SR",
+        ),
+    ]
 )
 
 DEFAULT_LOGGING_SETTINGS = dict(

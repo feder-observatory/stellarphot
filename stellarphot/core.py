@@ -171,9 +171,14 @@ class BaseEnhancedTable(QTable):
         # in case any of the new names are longer than the longest of the old names.
         # If that happens, astropy by default just truncates the names.
         new_filter_name = [
-            self._passband_map[orig_pb] if orig_pb in self._passband_map else orig_pb
+            (
+                self._passband_map[orig_pb]
+                if orig_pb in self._passband_map.keys()
+                else orig_pb
+            )
             for orig_pb in self["passband"]
         ]
+        print(new_filter_name)
         self["passband"] = new_filter_name
 
     def clean(self, remove_rows_with_mask=False, **other_restrictions):
@@ -541,7 +546,7 @@ class PhotometryData(BaseEnhancedTable):
 
             # Apply the filter/passband name update
             if passband_map is not None:
-                self._passband_map = passband_map.copy()
+                self._passband_map = passband_map.model_copy()
                 self._update_passbands()
 
     def add_bjd_col(self, observatory):

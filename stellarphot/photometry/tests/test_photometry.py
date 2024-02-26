@@ -24,6 +24,7 @@ from stellarphot.settings import (
     Camera,
     LoggingSettings,
     Observatory,
+    PassbandMap,
     PhotometryApertures,
     PhotometryOptions,
     PhotometrySettings,
@@ -87,10 +88,12 @@ DEFAULT_PHOTOMETRY_APERTURES = PhotometryApertures(
 )
 
 # Passband map for the tests
-PASSBAND_MAP = {
-    "B": "B",
-    "rp": "SR",
-}
+PASSBAND_MAP = PassbandMap(
+    your_filter_names_to_aavso={
+        "B": "B",
+        "rp": "SR",
+    }
+)
 
 DEFAULT_LOGGING_SETTINGS = LoggingSettings()
 
@@ -100,7 +103,7 @@ DEFAULT_PHOTOMETRY_SETTINGS = PhotometrySettings(
     photometry_apertures=DEFAULT_PHOTOMETRY_APERTURES,
     source_locations=DEFAULT_SOURCE_LOCATIONS,
     photometry_options=PHOTOMETRY_OPTIONS,
-    passband_map=None,
+    passband_map=PASSBAND_MAP,
     logging_settings=DEFAULT_LOGGING_SETTINGS,
 )
 
@@ -208,7 +211,7 @@ class TestAperturePhotometry:
             photometry_apertures=DEFAULT_PHOTOMETRY_APERTURES,
             source_locations=source_locations,
             photometry_options=phot_options,
-            passband_map=None,
+            passband_map=PASSBAND_MAP,
             logging_settings=DEFAULT_LOGGING_SETTINGS,
         )
 
@@ -809,7 +812,7 @@ def test_aperture_photometry_no_outlier_rejection(int_data, tmp_path):
         photometry_apertures=DEFAULT_PHOTOMETRY_APERTURES,
         source_locations=source_locations,
         photometry_options=phot_options,
-        passband_map=None,
+        passband_map=PASSBAND_MAP,
         logging_settings=DEFAULT_LOGGING_SETTINGS,
     )
     phot, missing_sources = single_image_photometry(
