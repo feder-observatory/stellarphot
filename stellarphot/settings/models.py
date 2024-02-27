@@ -566,8 +566,7 @@ class PhotometryOptions(BaseModelWithTableRep):
 
 class PassbandMapEntry(BaseModel):
     """
-    long loing liong liong liong long long
-    multiline name
+    A mapping from a single filter name to its corresponding AAVSO filter name.
 
     Parameters
     ----------
@@ -585,7 +584,8 @@ class PassbandMapEntry(BaseModel):
 
 class PassbandMap(BaseModelWithTableRep):
     """
-    Class to represent a mapping from one set of filter names to another.
+    Class to represent a mapping from one set of filter names to another that behaves
+    like a `dict`.
 
     Parameters
     ----------
@@ -595,18 +595,42 @@ class PassbandMap(BaseModelWithTableRep):
         Note that, as shown in the example below, you can intialize this with a
         dictionary, and it will be converted to a list of `PassbandMapEntry` objects.
 
+    Notes
+    -----
+
+    This class behaves like a dictionary interms of accessing individual entries but
+    you _cannot_ use the `dict` methods to modify the object. This means, for example,
+    that if ``my_map`` is a `PassbandMap` object, you can access the AAVSO passband
+    that corresponds to your ``B`` passband with ``my_map["B"]`` but you _cannot_
+    set entries like this ``my_map["B"] = "B"`` and you _cannot_ delete entries like
+    this ``del my_map["B"]``.
+
     Examples
     --------
     >>> from stellarphot.settings import PassbandMap
-    >>> passband_map = PassbandMap(your_filter_names_to_aavso={"B": "B", "V": "V"})
+    >>> passband_map = PassbandMap(your_filter_names_to_aavso={"B": "B", "rp": "SR"})
     >>> passband_map
     PassbandMap(your_filter_names_to_aavso=[PassbandMapEntry(your_filter_name='B',...
+    >>> # You can access the AAVSO filter name for a given filter name using dict syntax
+    >>> passband_map["B"]
+    'B'
+    >>> passband_map["rp"]
+    'SR'
+    >>> # If you prefer you can access the individual entries in
+    >>> # the list of PassbandMapEntry
+    >>> passband_map.your_filter_names_to_aavso[1]
+    PassbandMapEntry(your_filter_name='rp', aavso_filter_name=<AAVSOFilters.SR: 'SR'>)
+    >>> # Getting the AAVSO filter namee this way is a little cumbersome though:
+    >>> passband_map.your_filter_names_to_aavso[1].aavso_filter_name.value
+    'SR'
 
     """
 
     your_filter_names_to_aavso: list[PassbandMapEntry] | None
 
     def model_post_init(self, __context: Any) -> None:
+        # Create a dictionary from the list of entries so that the object
+        # can behave like a dictionary.
         if self.your_filter_names_to_aavso is None:
             self._dict = {}
         else:
@@ -628,6 +652,10 @@ class PassbandMap(BaseModelWithTableRep):
         else:
             return v
 
+    # All of the remaining methods are to make the object behave like a dictionary.
+    # It would have been preferable to subclass `collections.UserDict` but that
+    # doesn't work with pydantic models because UserDict objects have a .data attribute
+    # but we don't want a pydantic field named "data".
     def items(self):
         return self._dict.items()
 
@@ -637,8 +665,17 @@ class PassbandMap(BaseModelWithTableRep):
     def values(self):
         return self._dict.values()
 
+    def get(self, key, default=None):
+        return self._dict.get(key, default)
+
+    def __contains__(self, key):
+        return key in self._dict
+
     def __getitem__(self, key):
         return self._dict[key]
+
+    def __iter__(self):
+        return iter(self._dict)
 
 
 class LoggingSettings(BaseModelWithTableRep):

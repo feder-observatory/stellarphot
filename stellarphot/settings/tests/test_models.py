@@ -360,6 +360,63 @@ def test_source_locations_negative_shift_tolerance():
         SourceLocationSettings(**settings)
 
 
+class TestPassbandMapDictMethods:
+    """Test all of the dict methods we implement for the PassbandMap class."""
+
+    def create_passband_map(self):
+        return PassbandMap(**DEFAULT_PASSBAND_MAP)
+
+    def default_pb_map_keys(self):
+        return [
+            v.your_filter_name
+            for v in DEFAULT_PASSBAND_MAP["your_filter_names_to_aavso"]
+        ]
+
+    def default_pb_map_values(self):
+        return [
+            v.aavso_filter_name.value
+            for v in DEFAULT_PASSBAND_MAP["your_filter_names_to_aavso"]
+        ]
+
+    def test_keys(self):
+        pb_map = self.create_passband_map()
+        assert list(pb_map.keys()) == self.default_pb_map_keys()
+
+    def test_values(self):
+        pb_map = self.create_passband_map()
+        assert list(pb_map.values()) == self.default_pb_map_values()
+
+    def test_item_access(self):
+        pb_map = self.create_passband_map()
+        assert pb_map["rp"] == "SR"
+        assert pb_map.get("rp") == "SR"
+        assert pb_map.get("not a key", "foo") == "foo"
+
+    def test_contains(self):
+        pb_map = self.create_passband_map()
+        assert "rp" in pb_map
+        assert "not a key" not in pb_map
+
+    def test_items(self):
+        pb_map = self.create_passband_map()
+        assert [k for k, v in pb_map.items()] == self.default_pb_map_keys()
+        assert [v for k, v in pb_map.items()] == self.default_pb_map_values()
+
+    def test_iteration(self):
+        pb_map = self.create_passband_map()
+        assert [k for k in pb_map] == self.default_pb_map_keys()
+
+    def test_update_fails(self):
+        pb_map = self.create_passband_map()
+        with pytest.raises(TypeError, match="does not support item assignment"):
+            pb_map["rp"] = "not a band"
+
+    def test_deletion_fails(self):
+        pb_map = self.create_passband_map()
+        with pytest.raises(TypeError, match="does not support item deletion"):
+            del pb_map["rp"]
+
+
 def test_create_invalid_exoplanet():
     # Set some bad values and make sure they raise validation errors
     values = DEFAULT_EXOPLANET_SETTINGS.copy()
