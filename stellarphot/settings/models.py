@@ -37,7 +37,7 @@ __all__ = [
     "PhotometryApertures",
     "PhotometryFileSettings",
     "PhotometrySettings",
-    "PhotometryOptions",
+    "PhotometryOptionalSettings",
     "Exoplanet",
     "Observatory",
     "SourceLocationSettings",
@@ -505,7 +505,7 @@ class SourceLocationSettings(BaseModelWithTableRep):
     shift_tolerance: NonNegativeFloat = 5.0
 
 
-class PhotometryOptions(BaseModelWithTableRep):
+class PhotometryOptionalSettings(BaseModelWithTableRep):
     """
     Options for performing photometry.
 
@@ -534,21 +534,21 @@ class PhotometryOptions(BaseModelWithTableRep):
 
     The only option that must be set explicitly is the `shift_tolerance`:
 
-    >>> from stellarphot.settings import PhotometryOptions
-    >>> photometry_options = PhotometryOptions()
+    >>> from stellarphot.settings import PhotometryOptionalSettings
+    >>> photometry_options = PhotometryOptionalSettings()
     >>> photometry_options
-    PhotometryOptions(include_dig_noise=True, reject_too_close=True,...
+    PhotometryOptionalSettings(include_dig_noise=True, reject_too_close=True,...
 
     You can also set the other options explicitly when you create the options:
 
-    >>> photometry_options = PhotometryOptions(
+    >>> photometry_options = PhotometryOptionalSettings(
     ...     include_dig_noise=True,
     ...     reject_too_close=False,
     ...     reject_background_outliers=True,
     ...     fwhm_by_fit=True,
     ... )
     >>> photometry_options
-    PhotometryOptions(include_dig_noise=True, reject_too_close=False,...
+    PhotometryOptionalSettings(include_dig_noise=True, reject_too_close=False,...
     reject_background_outliers=True, fwhm_by_fit=True)
 
     You can also change individual options after the object is created:
@@ -784,11 +784,10 @@ class PhotometrySettings(BaseModelWithTableRep):
             json_schema_extra=SCHEMA_EXTRAS,
         ),
     ]
-    photometry_options: Annotated[
-        PhotometryOptions,
+    photometry_optional_settings: Annotated[
+        PhotometryOptionalSettings,
         Field(
-            title="Optional Settings",
-            description=_extract_short_description(PhotometryOptions.__doc__),
+            description=_extract_short_description(PhotometryOptionalSettings.__doc__),
             json_schema_extra=SCHEMA_EXTRAS,
         ),
     ]

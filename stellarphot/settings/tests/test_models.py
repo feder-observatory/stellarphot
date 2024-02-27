@@ -16,7 +16,7 @@ from stellarphot.settings.models import (
     PassbandMap,
     PassbandMapEntry,
     PhotometryApertures,
-    PhotometryOptions,
+    PhotometryOptionalSettings,
     PhotometrySettings,
     SourceLocationSettings,
 )
@@ -95,7 +95,9 @@ DEFAULT_PHOTOMETRY_SETTINGS = dict(
     observatory=Observatory(**DEFAULT_OBSERVATORY_SETTINGS),
     photometry_apertures=PhotometryApertures(**DEFAULT_APERTURE_SETTINGS),
     source_locations=SourceLocationSettings(**DEFAULT_SOURCE_LOCATION_SETTINGS),
-    photometry_options=PhotometryOptions(**DEFAULT_PHOTOMETRY_OPTIONS),
+    photometry_optional_settings=PhotometryOptionalSettings(
+        **DEFAULT_PHOTOMETRY_OPTIONS
+    ),
     passband_map=PassbandMap(**DEFAULT_PASSBAND_MAP),
     logging_settings=LoggingSettings(**DEFAULT_LOGGING_SETTINGS),
 )
@@ -108,7 +110,7 @@ DEFAULT_PHOTOMETRY_SETTINGS = dict(
         [PhotometryApertures, DEFAULT_APERTURE_SETTINGS],
         [Exoplanet, DEFAULT_EXOPLANET_SETTINGS],
         [Observatory, DEFAULT_OBSERVATORY_SETTINGS],
-        [PhotometryOptions, DEFAULT_PHOTOMETRY_OPTIONS],
+        [PhotometryOptionalSettings, DEFAULT_PHOTOMETRY_OPTIONS],
         [PassbandMap, DEFAULT_PASSBAND_MAP],
         [PhotometrySettings, DEFAULT_PHOTOMETRY_SETTINGS],
         [LoggingSettings, DEFAULT_LOGGING_SETTINGS],
