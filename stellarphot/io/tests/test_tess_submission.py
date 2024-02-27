@@ -88,6 +88,10 @@ def test_target_file():
     except ConnectionError:
         server_down = True
         tess_target = None  # Assure tess_target is defined so that we can delete it
+    except ValueError:
+        # The server is teechnically back but producing garbage....
+        server_down = True
+        tess_target = None  # Assure tess_target is defined so that we can delete it
     else:
         # Check that the first thing in the list is the tick object
         check_coords = SkyCoord(
@@ -112,7 +116,10 @@ def test_target_file():
             warnings.filterwarnings(
                 "ignore", message="unclosed file", category=ResourceWarning
             )
-            del tess_target
+            try:
+                del tess_target
+            except UnboundLocalError:
+                pass
 
         if server_down:
             # The server at University of Louisville is down sometimes, so
