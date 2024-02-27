@@ -285,7 +285,7 @@ class PhotometryData(BaseEnhancedTable):
         names as values.  This is used to automatically update the column
         names to the desired names before the validation is performed.
 
-    passband_map: dict, optional (Default: None)
+    passband_map: `stellarphot.settings.PassbandMap`, optional (Default: None)
         A dictionary containing instrumental passband names as keys and
         AAVSO passband names as values. This is used to automatically
         update the passband column to AAVSO standard names if desired.
@@ -604,7 +604,7 @@ class CatalogData(BaseEnhancedTable):
         names as values.  This is used to automatically update the column
         names to the desired names BEFORE the validation is performed.
 
-    passband_map: dict, optional (Default: None)
+    passband_map: `stellarphot.settings.PassbandMap`, optional (Default: None)
         A dictionary containing instrumental passband names as keys and
         AAVSO passband names as values. This is used to automatically
         update the passband column to AAVSO standard names if desired.
