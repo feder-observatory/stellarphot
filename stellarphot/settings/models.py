@@ -755,7 +755,6 @@ class PhotometrySettings(BaseModelWithTableRep):
     camera: Annotated[
         Camera,
         Field(
-            title="Camera ",
             description=_extract_short_description(Camera.__doc__),
             json_schema_extra=SCHEMA_EXTRAS,
         ),
@@ -763,7 +762,6 @@ class PhotometrySettings(BaseModelWithTableRep):
     observatory: Annotated[
         Observatory,
         Field(
-            title="Observatory ",
             description=_extract_short_description(Observatory.__doc__),
             json_schema_extra=SCHEMA_EXTRAS,
         ),
@@ -771,7 +769,6 @@ class PhotometrySettings(BaseModelWithTableRep):
     photometry_apertures: Annotated[
         PhotometryApertures,
         Field(
-            title="Photometry Apertures",
             description=_extract_short_description(PhotometryApertures.__doc__),
             json_schema_extra=SCHEMA_EXTRAS,
         ),
@@ -779,7 +776,6 @@ class PhotometrySettings(BaseModelWithTableRep):
     source_locations: Annotated[
         SourceLocationSettings,
         Field(
-            title="Source Locations",
             description=_extract_short_description(SourceLocationSettings.__doc__),
             json_schema_extra=SCHEMA_EXTRAS,
         ),
@@ -794,7 +790,6 @@ class PhotometrySettings(BaseModelWithTableRep):
     passband_map: Annotated[
         PassbandMap,
         Field(
-            title="Passband Map",
             description=_extract_short_description(PassbandMap.__doc__),
             json_schema_extra=SCHEMA_EXTRAS,
         ),
@@ -802,7 +797,6 @@ class PhotometrySettings(BaseModelWithTableRep):
     logging_settings: Annotated[
         LoggingSettings,
         Field(
-            title="Logging options",
             description=_extract_short_description(LoggingSettings.__doc__),
             json_schema_extra=SCHEMA_EXTRAS,
         ),
