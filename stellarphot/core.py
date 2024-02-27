@@ -174,7 +174,7 @@ class BaseEnhancedTable(QTable):
             (self._passband_map[orig_pb] if orig_pb in self._passband_map else orig_pb)
             for orig_pb in self["passband"]
         ]
-        print(new_filter_name)
+
         self["passband"] = new_filter_name
 
     def clean(self, remove_rows_with_mask=False, **other_restrictions):
