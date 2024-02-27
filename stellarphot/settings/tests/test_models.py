@@ -417,6 +417,17 @@ class TestPassbandMapDictMethods:
             del pb_map["rp"]
 
 
+def test_passband_map_init_with_none():
+    pb_map = PassbandMap(your_filter_names_to_aavso=None)
+    assert pb_map._dict == {}
+
+
+def test_passband_map_init_with_passband_map():
+    pb_map = PassbandMap(**DEFAULT_PASSBAND_MAP)
+    pb_map2 = PassbandMap(your_filter_names_to_aavso=pb_map)
+    assert pb_map == pb_map2
+
+
 def test_create_invalid_exoplanet():
     # Set some bad values and make sure they raise validation errors
     values = DEFAULT_EXOPLANET_SETTINGS.copy()

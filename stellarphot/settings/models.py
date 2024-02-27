@@ -643,7 +643,7 @@ class PassbandMap(BaseModelWithTableRep):
     @classmethod
     def validate_your_filter_names_to_aavso(cls, v):
         if isinstance(v, PassbandMap):
-            return v
+            return v.your_filter_names_to_aavso
         elif isinstance(v, dict):
             return [
                 PassbandMapEntry(your_filter_name=k, aavso_filter_name=v)
