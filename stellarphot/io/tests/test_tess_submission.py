@@ -89,7 +89,7 @@ def test_target_file():
         server_down = True
         tess_target = None  # Assure tess_target is defined so that we can delete it
     except ValueError:
-        # The server is teechnically back but producing garbage....
+        # The server is technically back but producing garbage....
         server_down = True
         tess_target = None  # Assure tess_target is defined so that we can delete it
     else:

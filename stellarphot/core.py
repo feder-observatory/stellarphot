@@ -286,9 +286,11 @@ class PhotometryData(BaseEnhancedTable):
         names to the desired names before the validation is performed.
 
     passband_map: `stellarphot.settings.PassbandMap`, optional (Default: None)
-        A dictionary containing instrumental passband names as keys and
-        AAVSO passband names as values. This is used to automatically
-        update the passband column to AAVSO standard names if desired.
+        An object containing a mapping from instrumental passband names to
+        AAVSO passband names. This is used to automatically
+        update the passband column to AAVSO standard names if desired. See
+        the documentation for `stellarphot.settings.PassbandMap` for more
+        information. The object behaves like a dictinoary when accessing it.
 
     retain_user_computed: bool, optional (Default: False)
         If True, any computed columns (see USAGE NOTES below) that already
@@ -605,9 +607,11 @@ class CatalogData(BaseEnhancedTable):
         names to the desired names BEFORE the validation is performed.
 
     passband_map: `stellarphot.settings.PassbandMap`, optional (Default: None)
-        A dictionary containing instrumental passband names as keys and
-        AAVSO passband names as values. This is used to automatically
-        update the passband column to AAVSO standard names if desired.
+        An object containing a mapping from instrumental passband names to
+        AAVSO passband names. This is used to automatically
+        update the passband column to AAVSO standard names if desired. See
+        the documentation for `stellarphot.settings.PassbandMap` for more
+        information. The object behaves like a dictinoary when accessing it.
 
     Attributes
     ----------
