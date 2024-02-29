@@ -171,9 +171,10 @@ class BaseEnhancedTable(QTable):
         # in case any of the new names are longer than the longest of the old names.
         # If that happens, astropy by default just truncates the names.
         new_filter_name = [
-            self._passband_map[orig_pb] if orig_pb in self._passband_map else orig_pb
+            (self._passband_map[orig_pb] if orig_pb in self._passband_map else orig_pb)
             for orig_pb in self["passband"]
         ]
+
         self["passband"] = new_filter_name
 
     def clean(self, remove_rows_with_mask=False, **other_restrictions):
@@ -284,10 +285,12 @@ class PhotometryData(BaseEnhancedTable):
         names as values.  This is used to automatically update the column
         names to the desired names before the validation is performed.
 
-    passband_map: dict, optional (Default: None)
-        A dictionary containing instrumental passband names as keys and
-        AAVSO passband names as values. This is used to automatically
-        update the passband column to AAVSO standard names if desired.
+    passband_map: `stellarphot.settings.PassbandMap`, optional (Default: None)
+        An object containing a mapping from instrumental passband names to
+        AAVSO passband names. This is used to automatically
+        update the passband column to AAVSO standard names if desired. See
+        the documentation for `stellarphot.settings.PassbandMap` for more
+        information. The object behaves like a dictinoary when accessing it.
 
     retain_user_computed: bool, optional (Default: False)
         If True, any computed columns (see USAGE NOTES below) that already
@@ -541,7 +544,7 @@ class PhotometryData(BaseEnhancedTable):
 
             # Apply the filter/passband name update
             if passband_map is not None:
-                self._passband_map = passband_map.copy()
+                self._passband_map = passband_map.model_copy()
                 self._update_passbands()
 
     def add_bjd_col(self, observatory):
@@ -603,10 +606,12 @@ class CatalogData(BaseEnhancedTable):
         names as values.  This is used to automatically update the column
         names to the desired names BEFORE the validation is performed.
 
-    passband_map: dict, optional (Default: None)
-        A dictionary containing instrumental passband names as keys and
-        AAVSO passband names as values. This is used to automatically
-        update the passband column to AAVSO standard names if desired.
+    passband_map: `stellarphot.settings.PassbandMap`, optional (Default: None)
+        An object containing a mapping from instrumental passband names to
+        AAVSO passband names. This is used to automatically
+        update the passband column to AAVSO standard names if desired. See
+        the documentation for `stellarphot.settings.PassbandMap` for more
+        information. The object behaves like a dictinoary when accessing it.
 
     Attributes
     ----------

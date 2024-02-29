@@ -22,7 +22,7 @@ from stellarphot.settings import (
     Camera,
     Observatory,
     PhotometryApertures,
-    PhotometryOptions,
+    PhotometryOptionalSettings,
     PhotometrySettings,
 )
 
@@ -174,7 +174,7 @@ def single_image_photometry(
     camera = photometry_settings.camera
     observatory = photometry_settings.observatory
     photometry_apertures = photometry_settings.photometry_apertures
-    photometry_options = photometry_settings.photometry_options
+    photometry_options = photometry_settings.photometry_optional_settings
     logging_options = photometry_settings.logging_settings
     passband_map = photometry_settings.passband_map
     use_coordinates = photometry_settings.source_locations.use_coordinates
@@ -203,7 +203,7 @@ def single_image_photometry(
             f"'{type(photometry_apertures)}'."
         )
 
-    if not isinstance(photometry_options, PhotometryOptions):
+    if not isinstance(photometry_options, PhotometryOptionalSettings):
         raise TypeError(
             "photometry_options must be a PhotometryOptions object, but it is "
             f"'{type(photometry_options)}'."

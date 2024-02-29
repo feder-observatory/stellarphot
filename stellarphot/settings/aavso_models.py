@@ -1,0 +1,38 @@
+from enum import Enum
+
+
+class AAVSOFilters(str, Enum):
+    U = "U"
+    B = "B"
+    V = "V"
+    R = "R"
+    Rc = "R"
+    I = "I"  # noqa: E741
+    Ic = "I"
+    J = "J"
+    H = "H"
+    K = "K"
+    TG = "TG"
+    TB = "TB"
+    TR = "TR"
+    CV = "CV"
+    CR = "CR"
+    SZ = "SZ"
+    SU = "SU"
+    SG = "SG"
+    SR = "SR"
+    SI = "SI"
+    STU = "STU"
+    STV = "STV"
+    STB = "STB"
+    STY = "STY"
+    STHBW = "STHBW"
+    STHBN = "STHBN"
+    MA = "MA"
+    MB = "MB"
+    MI = "MI"
+    ZS = "ZS"
+    Y = "Y"
+    HA = "HA"
+    HAC = "HAC"
+    O = "O"  # noqa: E741

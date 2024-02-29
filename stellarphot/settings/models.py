@@ -1,7 +1,7 @@
 # Objects that contains the user settings for the program.
 
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from astropy.coordinates import EarthLocation, Latitude, Longitude, SkyCoord
 from astropy.io.misc.yaml import AstropyDumper, AstropyLoader
@@ -16,9 +16,11 @@ from pydantic import (
     NonNegativeFloat,
     PositiveFloat,
     PositiveInt,
+    field_validator,
     model_validator,
 )
 
+from .aavso_models import AAVSOFilters
 from .astropy_pydantic import (
     AstropyValidator,
     EquivalentTo,
@@ -35,7 +37,7 @@ __all__ = [
     "PhotometryApertures",
     "PhotometryFileSettings",
     "PhotometrySettings",
-    "PhotometryOptions",
+    "PhotometryOptionalSettings",
     "Exoplanet",
     "Observatory",
     "SourceLocationSettings",
@@ -50,6 +52,21 @@ MODEL_DEFAULT_CONFIGURATION = ConfigDict(
     # Make sure there are no extra fields
     extra="forbid",
 )
+
+
+def _extract_short_description(docstring: str) -> str:
+    """
+    Extract the first line of the docstring as a short description.
+    """
+    # Everything up the the first blank line is the short description
+    short_desc = docstring.split("\n\n")[0]
+
+    # This may have some extra whitespace at the beginning and end, remove that
+    short_desc = short_desc.strip()
+
+    # split the string and rejoin with spaces in case there are multiple spaces
+    # between words, e.g. caused by a multi-line docstring
+    return " ".join(short_desc.split())
 
 
 def add_degree_to_float(value, _handler):
@@ -481,12 +498,14 @@ class SourceLocationSettings(BaseModelWithTableRep):
     shift_tolerance=5.0)
     """
 
-    source_list_file: str
+    source_list_file: Annotated[
+        str, Field(json_schema_extra=dict(autoui="ipyautoui.custom.FileChooser"))
+    ]
     use_coordinates: Literal["sky", "pixel"] = "sky"
     shift_tolerance: NonNegativeFloat = 5.0
 
 
-class PhotometryOptions(BaseModelWithTableRep):
+class PhotometryOptionalSettings(BaseModelWithTableRep):
     """
     Options for performing photometry.
 
@@ -515,21 +534,21 @@ class PhotometryOptions(BaseModelWithTableRep):
 
     The only option that must be set explicitly is the `shift_tolerance`:
 
-    >>> from stellarphot.settings import PhotometryOptions
-    >>> photometry_options = PhotometryOptions()
+    >>> from stellarphot.settings import PhotometryOptionalSettings
+    >>> photometry_options = PhotometryOptionalSettings()
     >>> photometry_options
-    PhotometryOptions(include_dig_noise=True, reject_too_close=True,...
+    PhotometryOptionalSettings(include_dig_noise=True, reject_too_close=True,...
 
     You can also set the other options explicitly when you create the options:
 
-    >>> photometry_options = PhotometryOptions(
+    >>> photometry_options = PhotometryOptionalSettings(
     ...     include_dig_noise=True,
     ...     reject_too_close=False,
     ...     reject_background_outliers=True,
     ...     fwhm_by_fit=True,
     ... )
     >>> photometry_options
-    PhotometryOptions(include_dig_noise=True, reject_too_close=False,...
+    PhotometryOptionalSettings(include_dig_noise=True, reject_too_close=False,...
     reject_background_outliers=True, fwhm_by_fit=True)
 
     You can also change individual options after the object is created:
@@ -545,27 +564,118 @@ class PhotometryOptions(BaseModelWithTableRep):
     fwhm_by_fit: bool = True
 
 
-class PassbandMap(BaseModelWithTableRep):
+class PassbandMapEntry(BaseModel):
     """
-    Class to represent a mapping from one set of filter names to another.
+    A mapping from a single filter name to its corresponding AAVSO filter name.
 
     Parameters
     ----------
-    yours_to_aavso : dict[str, str]
-        A dictionary containing instrumental passband names as keys and
-        AAVSO passband names as values. This is used to rename the passband
-        entries in the output photometry table.
+    your_filter_name : str
+        Instrumental filter name.
+
+    aavso_filter_name : `stellarphot.settings.AAVSOFilters`
+        AAVSO filter name.
+
+    """
+
+    your_filter_name: str
+    aavso_filter_name: Annotated[AAVSOFilters, Field(title="AAVSO Filter Name")]
+
+
+class PassbandMap(BaseModelWithTableRep):
+    """
+    Class to represent a mapping from one set of filter names to another that behaves
+    like a `dict`.
+
+    Parameters
+    ----------
+    your_filter_names_to_aavso : list[`stellarphot.settings.PassbandMapEntry`]
+        A list of pairs of your filter name and the corresponding AAVSO filter name.
+        This is used to rename the passband entries in the output photometry table.
+        Note that, as shown in the example below, you can intialize this with a
+        dictionary, and it will be converted to a list of `PassbandMapEntry` objects.
+
+    Notes
+    -----
+
+    This class behaves like a dictionary interms of accessing individual entries but
+    you _cannot_ use the `dict` methods to modify the object. This means, for example,
+    that if ``my_map`` is a `PassbandMap` object, you can access the AAVSO passband
+    that corresponds to your ``B`` passband with ``my_map["B"]`` but you _cannot_
+    set entries like this ``my_map["B"] = "B"`` and you _cannot_ delete entries like
+    this ``del my_map["B"]``.
 
     Examples
     --------
     >>> from stellarphot.settings import PassbandMap
-    >>> passband_map = PassbandMap(yours_to_aavso={"B": "B", "V": "V"})
+    >>> passband_map = PassbandMap(your_filter_names_to_aavso={"B": "B", "rp": "SR"})
     >>> passband_map
-    PassbandMap(yours_to_aavso={'B': 'B', 'V': 'V'})
+    PassbandMap(your_filter_names_to_aavso=[PassbandMapEntry(your_filter_name='B',...
+    >>> # You can access the AAVSO filter name for a given filter name using dict syntax
+    >>> passband_map["B"]
+    'B'
+    >>> passband_map["rp"]
+    'SR'
+    >>> # If you prefer you can access the individual entries in
+    >>> # the list of PassbandMapEntry
+    >>> passband_map.your_filter_names_to_aavso[1]
+    PassbandMapEntry(your_filter_name='rp', aavso_filter_name=<AAVSOFilters.SR: 'SR'>)
+    >>> # Getting the AAVSO filter namee this way is a little cumbersome though:
+    >>> passband_map.your_filter_names_to_aavso[1].aavso_filter_name.value
+    'SR'
 
     """
 
-    yours_to_aavso: dict[str, str]
+    your_filter_names_to_aavso: list[PassbandMapEntry] | None
+
+    def model_post_init(self, __context: Any) -> None:
+        # Create a dictionary from the list of entries so that the object
+        # can behave like a dictionary.
+        if self.your_filter_names_to_aavso is None:
+            self._dict = {}
+        else:
+            self._dict = {
+                entry.your_filter_name: entry.aavso_filter_name.value
+                for entry in self.your_filter_names_to_aavso
+            }
+
+    @field_validator("your_filter_names_to_aavso", mode="before")
+    @classmethod
+    def validate_your_filter_names_to_aavso(cls, v):
+        if isinstance(v, PassbandMap):
+            return v.your_filter_names_to_aavso
+        elif isinstance(v, dict):
+            return [
+                PassbandMapEntry(your_filter_name=k, aavso_filter_name=v)
+                for k, v in v.items()
+            ]
+        else:
+            return v
+
+    # All of the remaining methods are to make the object behave like a dictionary.
+    # It would have been preferable to subclass `collections.UserDict` but that
+    # doesn't work with pydantic models because UserDict objects have a .data attribute
+    # but we don't want a pydantic field named "data".
+    def items(self):
+        return self._dict.items()
+
+    def keys(self):
+        return self._dict.keys()
+
+    def values(self):
+        return self._dict.values()
+
+    def get(self, key, default=None):
+        return self._dict.get(key, default)
+
+    def __contains__(self, key):
+        return key in self._dict
+
+    def __getitem__(self, key):
+        return self._dict[key]
+
+    def __iter__(self):
+        return iter(self._dict)
 
 
 class LoggingSettings(BaseModelWithTableRep):
@@ -596,9 +706,15 @@ class LoggingSettings(BaseModelWithTableRep):
     console_log: bool = True
 
 
+SCHEMA_EXTRAS = dict(show_null=True)
+
+
 class PhotometrySettings(BaseModelWithTableRep):
     """
     Settings for performing aperture photometry.
+    """
+
+    """
 
     Parameters
     ----------
@@ -633,13 +749,58 @@ class PhotometrySettings(BaseModelWithTableRep):
 
     """
 
-    camera: Camera
-    observatory: Observatory
-    photometry_apertures: PhotometryApertures
-    source_locations: SourceLocationSettings
-    photometry_options: PhotometryOptions
-    passband_map: PassbandMap | None
-    logging_settings: LoggingSettings
+    # Title must be set below for now to ensure the UI looks good. May be able to be
+    # removed once this bug is fixed:
+    # https://github.com/maxfordham/ipyautoui/issues/290
+    camera: Annotated[
+        Camera,
+        Field(
+            description=_extract_short_description(Camera.__doc__),
+            json_schema_extra=SCHEMA_EXTRAS,
+        ),
+    ]
+    observatory: Annotated[
+        Observatory,
+        Field(
+            description=_extract_short_description(Observatory.__doc__),
+            json_schema_extra=SCHEMA_EXTRAS,
+        ),
+    ]
+    photometry_apertures: Annotated[
+        PhotometryApertures,
+        Field(
+            description=_extract_short_description(PhotometryApertures.__doc__),
+            json_schema_extra=SCHEMA_EXTRAS,
+        ),
+    ]
+    source_locations: Annotated[
+        SourceLocationSettings,
+        Field(
+            description=_extract_short_description(SourceLocationSettings.__doc__),
+            json_schema_extra=SCHEMA_EXTRAS,
+        ),
+    ]
+    photometry_optional_settings: Annotated[
+        PhotometryOptionalSettings,
+        Field(
+            description=_extract_short_description(PhotometryOptionalSettings.__doc__),
+            json_schema_extra=SCHEMA_EXTRAS,
+        ),
+    ]
+    passband_map: Annotated[
+        PassbandMap,
+        Field(
+            description=_extract_short_description(PassbandMap.__doc__),
+            json_schema_extra=SCHEMA_EXTRAS,
+        ),
+    ]
+    logging_settings: Annotated[
+        LoggingSettings,
+        Field(
+            description=_extract_short_description(LoggingSettings.__doc__),
+            json_schema_extra=SCHEMA_EXTRAS,
+        ),
+    ]
 
 
 class Exoplanet(BaseModelWithTableRep):

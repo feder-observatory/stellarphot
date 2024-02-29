@@ -14,8 +14,9 @@ from stellarphot.settings.models import (
     LoggingSettings,
     Observatory,
     PassbandMap,
+    PassbandMapEntry,
     PhotometryApertures,
-    PhotometryOptions,
+    PhotometryOptionalSettings,
     PhotometrySettings,
     SourceLocationSettings,
 )
@@ -62,11 +63,20 @@ DEFAULT_PHOTOMETRY_OPTIONS = dict(
 )
 
 DEFAULT_PASSBAND_MAP = dict(
-    yours_to_aavso=dict(
-        V="V",
-        B="B",
-        rp="SR",
-    )
+    your_filter_names_to_aavso=[
+        PassbandMapEntry(
+            your_filter_name="V",
+            aavso_filter_name="V",
+        ),
+        PassbandMapEntry(
+            your_filter_name="B",
+            aavso_filter_name="B",
+        ),
+        PassbandMapEntry(
+            your_filter_name="rp",
+            aavso_filter_name="SR",
+        ),
+    ]
 )
 
 DEFAULT_LOGGING_SETTINGS = dict(
@@ -85,7 +95,9 @@ DEFAULT_PHOTOMETRY_SETTINGS = dict(
     observatory=Observatory(**DEFAULT_OBSERVATORY_SETTINGS),
     photometry_apertures=PhotometryApertures(**DEFAULT_APERTURE_SETTINGS),
     source_locations=SourceLocationSettings(**DEFAULT_SOURCE_LOCATION_SETTINGS),
-    photometry_options=PhotometryOptions(**DEFAULT_PHOTOMETRY_OPTIONS),
+    photometry_optional_settings=PhotometryOptionalSettings(
+        **DEFAULT_PHOTOMETRY_OPTIONS
+    ),
     passband_map=PassbandMap(**DEFAULT_PASSBAND_MAP),
     logging_settings=LoggingSettings(**DEFAULT_LOGGING_SETTINGS),
 )
@@ -98,7 +110,7 @@ DEFAULT_PHOTOMETRY_SETTINGS = dict(
         [PhotometryApertures, DEFAULT_APERTURE_SETTINGS],
         [Exoplanet, DEFAULT_EXOPLANET_SETTINGS],
         [Observatory, DEFAULT_OBSERVATORY_SETTINGS],
-        [PhotometryOptions, DEFAULT_PHOTOMETRY_OPTIONS],
+        [PhotometryOptionalSettings, DEFAULT_PHOTOMETRY_OPTIONS],
         [PassbandMap, DEFAULT_PASSBAND_MAP],
         [PhotometrySettings, DEFAULT_PHOTOMETRY_SETTINGS],
         [LoggingSettings, DEFAULT_LOGGING_SETTINGS],
@@ -149,10 +161,6 @@ class TestModelAgnosticActions:
         assert new_table.meta["model"] == mod
 
     def test_settings_ui_generation(self, model, settings):
-        if model == PhotometrySettings or model == PassbandMap:
-            pytest.xfail(
-                reason="PassbandMap needs a dict widget -- https://github.com/feder-observatory/stellarphot/issues/274"
-            )
         # Check a few things about the UI generation:
         # 1) The UI is generated
         # 2) The UI model matches our input
@@ -348,6 +356,74 @@ def test_source_locations_negative_shift_tolerance():
         ValidationError, match="Input should be greater than or equal to 0"
     ):
         SourceLocationSettings(**settings)
+
+
+class TestPassbandMapDictMethods:
+    """Test all of the dict methods we implement for the PassbandMap class."""
+
+    def create_passband_map(self):
+        return PassbandMap(**DEFAULT_PASSBAND_MAP)
+
+    def default_pb_map_keys(self):
+        return [
+            v.your_filter_name
+            for v in DEFAULT_PASSBAND_MAP["your_filter_names_to_aavso"]
+        ]
+
+    def default_pb_map_values(self):
+        return [
+            v.aavso_filter_name.value
+            for v in DEFAULT_PASSBAND_MAP["your_filter_names_to_aavso"]
+        ]
+
+    def test_keys(self):
+        pb_map = self.create_passband_map()
+        assert list(pb_map.keys()) == self.default_pb_map_keys()
+
+    def test_values(self):
+        pb_map = self.create_passband_map()
+        assert list(pb_map.values()) == self.default_pb_map_values()
+
+    def test_item_access(self):
+        pb_map = self.create_passband_map()
+        assert pb_map["rp"] == "SR"
+        assert pb_map.get("rp") == "SR"
+        assert pb_map.get("not a key", "foo") == "foo"
+
+    def test_contains(self):
+        pb_map = self.create_passband_map()
+        assert "rp" in pb_map
+        assert "not a key" not in pb_map
+
+    def test_items(self):
+        pb_map = self.create_passband_map()
+        assert [k for k, v in pb_map.items()] == self.default_pb_map_keys()
+        assert [v for k, v in pb_map.items()] == self.default_pb_map_values()
+
+    def test_iteration(self):
+        pb_map = self.create_passband_map()
+        assert [k for k in pb_map] == self.default_pb_map_keys()
+
+    def test_update_fails(self):
+        pb_map = self.create_passband_map()
+        with pytest.raises(TypeError, match="does not support item assignment"):
+            pb_map["rp"] = "not a band"
+
+    def test_deletion_fails(self):
+        pb_map = self.create_passband_map()
+        with pytest.raises(TypeError, match="does not support item deletion"):
+            del pb_map["rp"]
+
+
+def test_passband_map_init_with_none():
+    pb_map = PassbandMap(your_filter_names_to_aavso=None)
+    assert pb_map._dict == {}
+
+
+def test_passband_map_init_with_passband_map():
+    pb_map = PassbandMap(**DEFAULT_PASSBAND_MAP)
+    pb_map2 = PassbandMap(your_filter_names_to_aavso=pb_map)
+    assert pb_map == pb_map2
 
 
 def test_create_invalid_exoplanet():
