@@ -36,9 +36,7 @@ def ui_generator(model):
     # now, we will disable this feature by turning continuous update off for most
     # fields.
     for widget in ui.di_widgets.values():
-        try:
+        if hasattr(widget, "continuous_update"):
             widget.continuous_update = False
-        except AttributeError:
-            pass
 
     return ui
