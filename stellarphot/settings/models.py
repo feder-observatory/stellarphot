@@ -354,9 +354,7 @@ class PhotometryApertures(BaseModelWithTableRep):
         PositiveInt,
         Field(
             default=1,
-            description=(
-                "distance between inner and outer radii of annulus, " "in pixels"
-            ),
+            description=("distance between inner and outer radii of annulus in pixels"),
             json_schema_extra=dict(autoui="ipywidgets.BoundedIntText"),
         ),
     ]
@@ -422,6 +420,10 @@ class Observatory(BaseModelWithTableRep):
 
     Examples
     --------
+
+    The first example shows how to set up an observatory whose latitude and longitude
+    are 30° North and 100° West, respectively, and is at an elevation of 1000 meters.
+
     >>> from astropy.coordinates import Latitude, Longitude
     >>> from astropy import units as u
     >>> from stellarphot.settings import Observatory
@@ -435,6 +437,10 @@ class Observatory(BaseModelWithTableRep):
     Observatory(name='test observatory', latitude=<Latitude 30. deg>,
     longitude=<Longitude 260. deg>, elevation=<Quantity 1000. m>, AAVSO_code=None,
     TESS_telescope_code=None)
+
+    Note that units can be omitted from the latitude and longitude if and only if the
+    units are degrees and the values are in decimal degrees.
+
     >>> # You can also just provide numbers for the latitude and longitude
     >>> observatory = Observatory(
     ...     name="test observatory",
@@ -446,6 +452,24 @@ class Observatory(BaseModelWithTableRep):
     Observatory(name='test observatory', latitude=<Latitude 30. deg>,
     longitude=<Longitude 260. deg>, elevation=<Quantity 1000. m>, AAVSO_code=None,
     TESS_telescope_code=None)
+
+    An observatory located at 46° 00' 00.00" South and 96° 00' 00.00" East, and at an
+    elevation of 2300 meters would be created like this:
+
+    >>> observatory = Observatory(
+    ...     name="test observatory",
+    ...     latitude="-46d00m00.00s",
+    ...     longitude="96d00m00.00s",
+    ...     elevation=2.3 * u.km,
+    ... )
+    >>> observatory
+    Observatory(name='test observatory', latitude=<Latitude -46. deg>,...
+
+
+    It would be fine to use decmial degrees for the latitude and longitude in the
+    above example, but the example is given in part to show how to use sexagesimal
+    notation.
+
 
     """
 
@@ -484,14 +508,14 @@ class Observatory(BaseModelWithTableRep):
         WithPhysicalType("length"),
         Field(
             description="Elevation of the observatory",
-            examples=["1000 m", "1 km", "6.685e-9 au"],
+            examples=["1000 m", "1 km", "3.241e-14 pc"],
         ),
     ]
     AAVSO_code: Annotated[str | None, Field(description="AAVSO code for observer")] = (
         None
     )
     TESS_telescope_code: Annotated[
-        str | None, Field(description="AAVSO code for observer")
+        str | None, Field(description="Code for observatory used by TFOP SG01")
     ] = None
 
     @lazyproperty
@@ -555,7 +579,7 @@ class SourceLocationSettings(BaseModelWithTableRep):
     ]
     use_coordinates: Annotated[
         Literal["sky", "pixel"],
-        Field(description="coordinates to use for locating sources"),
+        Field(description="coordinates to use for locating sources in image"),
     ] = "sky"
 
     shift_tolerance: Annotated[
@@ -635,7 +659,10 @@ class PhotometryOptionalSettings(BaseModelWithTableRep):
     reject_too_close: Annotated[
         bool,
         Field(
-            description="Should sources that are too close be excluded from photometry?"
+            description=(
+                "Should sources that are too close each other be "
+                "excluded from photometry?"
+            )
         ),
     ] = True
 
@@ -643,8 +670,8 @@ class PhotometryOptionalSettings(BaseModelWithTableRep):
         bool,
         Field(
             description=(
-                "Should extreme pixels (e.g. from a star in the annulus) "
-                "in the annulus be rejected?"
+                "Should extreme pixels in the annulus be rejected "
+                "(e.g. from a star in the annulus)?"
             )
         ),
     ] = True
