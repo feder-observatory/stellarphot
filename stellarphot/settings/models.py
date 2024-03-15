@@ -336,15 +336,27 @@ class PhotometryApertures(BaseModelWithTableRep):
 
     radius: Annotated[
         PositiveInt,
-        Field(default=1, json_schema_extra=dict(autoui="ipywidgets.BoundedIntText")),
+        Field(
+            default=1,
+            description="radius of circular annulus, in pixels",
+            json_schema_extra=dict(autoui="ipywidgets.BoundedIntText"),
+        ),
     ]
     gap: Annotated[
         PositiveInt,
-        Field(default=1, json_schema_extra=dict(autoui="ipywidgets.BoundedIntText")),
+        Field(
+            default=1,
+            description="Size of gap between aperture and annulus, in pixels",
+            json_schema_extra=dict(autoui="ipywidgets.BoundedIntText"),
+        ),
     ]
     annulus_width: Annotated[
         PositiveInt,
-        Field(default=1, json_schema_extra=dict(autoui="ipywidgets.BoundedIntText")),
+        Field(
+            default=1,
+            description=("distance between inner and outer radii of annulus in pixels"),
+            json_schema_extra=dict(autoui="ipywidgets.BoundedIntText"),
+        ),
     ]
     # Disable the UI element by default because it is often calculate from an image
     fwhm: Annotated[PositiveFloat, Field(disabled=True, default=1.0)]
@@ -408,6 +420,10 @@ class Observatory(BaseModelWithTableRep):
 
     Examples
     --------
+
+    The first example shows how to set up an observatory whose latitude and longitude
+    are 30° North and 100° West, respectively, and is at an elevation of 1000 meters.
+
     >>> from astropy.coordinates import Latitude, Longitude
     >>> from astropy import units as u
     >>> from stellarphot.settings import Observatory
@@ -421,6 +437,10 @@ class Observatory(BaseModelWithTableRep):
     Observatory(name='test observatory', latitude=<Latitude 30. deg>,
     longitude=<Longitude 260. deg>, elevation=<Quantity 1000. m>, AAVSO_code=None,
     TESS_telescope_code=None)
+
+    Note that units can be omitted from the latitude and longitude if and only if the
+    units are degrees and the values are in decimal degrees.
+
     >>> # You can also just provide numbers for the latitude and longitude
     >>> observatory = Observatory(
     ...     name="test observatory",
@@ -433,20 +453,70 @@ class Observatory(BaseModelWithTableRep):
     longitude=<Longitude 260. deg>, elevation=<Quantity 1000. m>, AAVSO_code=None,
     TESS_telescope_code=None)
 
+    An observatory located at 46° 00' 00.00" South and 96° 00' 00.00" East, and at an
+    elevation of 2300 meters would be created like this:
+
+    >>> observatory = Observatory(
+    ...     name="test observatory",
+    ...     latitude="-46d00m00.00s",
+    ...     longitude="96d00m00.00s",
+    ...     elevation=2.3 * u.km,
+    ... )
+    >>> observatory
+    Observatory(name='test observatory', latitude=<Latitude -46. deg>,...
+
+
+    It would be fine to use decmial degrees for the latitude and longitude in the
+    above example, but the example is given in part to show how to use sexagesimal
+    notation.
+
+
     """
 
-    name: str
+    name: Annotated[str, Field(description="Name of the observatory")]
     latitude: Annotated[
-        Latitude, _UnitQuantTypePydanticAnnotation, BeforeValidator(add_degree_to_float)
+        Latitude,
+        _UnitQuantTypePydanticAnnotation,
+        BeforeValidator(add_degree_to_float),
+        Field(
+            description="Latitude of the observatory",
+            examples=[
+                "46.8738",
+                "46.8738 degree",
+                "46:52:25.68 degree",
+                "46d52m25.68s",
+            ],
+        ),
     ]
     longitude: Annotated[
         Longitude,
         _UnitQuantTypePydanticAnnotation,
         BeforeValidator(add_degree_to_float),
+        Field(
+            description="Longitude of the observatory",
+            examples=[
+                "-96.7678",
+                "-96d46m04.08s",
+                "263.2322",
+                "263.2322 degree",
+                "263d13m55.92s",
+            ],
+        ),
     ]
-    elevation: Annotated[QuantityType, WithPhysicalType("length")]
-    AAVSO_code: str | None = None
-    TESS_telescope_code: str | None = None
+    elevation: Annotated[
+        QuantityType,
+        WithPhysicalType("length"),
+        Field(
+            description="Elevation of the observatory",
+            examples=["1000 m", "1 km", "3.241e-14 pc"],
+        ),
+    ]
+    AAVSO_code: Annotated[str | None, Field(description="AAVSO code for observer")] = (
+        None
+    )
+    TESS_telescope_code: Annotated[
+        str | None, Field(description="Code for observatory used by TFOP SG01")
+    ] = None
 
     @lazyproperty
     def earth_location(self):
@@ -499,10 +569,28 @@ class SourceLocationSettings(BaseModelWithTableRep):
     """
 
     source_list_file: Annotated[
-        str, Field(json_schema_extra=dict(autoui="ipyautoui.custom.FileChooser"))
+        str,
+        Field(
+            json_schema_extra=dict(
+                autoui="ipyautoui.custom.FileChooser",
+                filter_pattern=["*.ecsv", "*.csv"],
+            )
+        ),
     ]
-    use_coordinates: Literal["sky", "pixel"] = "sky"
-    shift_tolerance: NonNegativeFloat = 5.0
+    use_coordinates: Annotated[
+        Literal["sky", "pixel"],
+        Field(description="coordinates to use for locating sources in image"),
+    ] = "sky"
+
+    shift_tolerance: Annotated[
+        NonNegativeFloat,
+        Field(
+            description=(
+                "Maximum shift between source position in list and "
+                "in image, in pixels"
+            )
+        ),
+    ] = 5.0
 
 
 class PhotometryOptionalSettings(BaseModelWithTableRep):
@@ -532,14 +620,14 @@ class PhotometryOptionalSettings(BaseModelWithTableRep):
     Examples
     --------
 
-    The only option that must be set explicitly is the `shift_tolerance`:
+    In many cases the default options are fine:
 
     >>> from stellarphot.settings import PhotometryOptionalSettings
     >>> photometry_options = PhotometryOptionalSettings()
     >>> photometry_options
     PhotometryOptionalSettings(include_dig_noise=True, reject_too_close=True,...
 
-    You can also set the other options explicitly when you create the options:
+    You can also set options explicitly when you create the options:
 
     >>> photometry_options = PhotometryOptionalSettings(
     ...     include_dig_noise=True,
@@ -558,10 +646,45 @@ class PhotometryOptionalSettings(BaseModelWithTableRep):
     False
     """
 
-    include_dig_noise: bool = True
-    reject_too_close: bool = True
-    reject_background_outliers: bool = True
-    fwhm_by_fit: bool = True
+    include_dig_noise: Annotated[
+        bool,
+        Field(
+            description=(
+                "Should the digitization noise be included in the calculation of "
+                "the noise for each observation?"
+            )
+        ),
+    ] = True
+
+    reject_too_close: Annotated[
+        bool,
+        Field(
+            description=(
+                "Should sources that are too close each other be "
+                "excluded from photometry?"
+            )
+        ),
+    ] = True
+
+    reject_background_outliers: Annotated[
+        bool,
+        Field(
+            description=(
+                "Should extreme pixels in the annulus be rejected "
+                "(e.g. from a star in the annulus)?"
+            )
+        ),
+    ] = True
+
+    fwhm_by_fit: Annotated[
+        bool,
+        Field(
+            description=(
+                "Should the FWHM be calculated by fitting a Gaussian to "
+                "the star or from image moments?"
+            )
+        ),
+    ] = True
 
 
 class PassbandMapEntry(BaseModel):
@@ -578,7 +701,7 @@ class PassbandMapEntry(BaseModel):
 
     """
 
-    your_filter_name: str
+    your_filter_name: Annotated[str, Field(description="Instrumental Filter Name")]
     aavso_filter_name: Annotated[AAVSOFilters, Field(title="AAVSO Filter Name")]
 
 
@@ -702,8 +825,8 @@ class LoggingSettings(BaseModelWithTableRep):
     LoggingSettings(logfile=None, console_log=True)
     """
 
-    logfile: str | None = None
-    console_log: bool = True
+    logfile: Annotated[str | None, Field(description="File to save log to")] = None
+    console_log: Annotated[bool, Field(description="Show log on console?")] = True
 
 
 SCHEMA_EXTRAS = dict(show_null=True)
