@@ -622,9 +622,9 @@ class PhotometryOptionalSettings(BaseModelWithTableRep):
         the flux included is the fraction of the pixel within the aperture. If
         ``'center'``, whether a pixel's flux is included is determined by whether the
         center of the pixel is within the aperture. If ``'subpixel'``, the flux included
-        is determineid by breaking  region into subpixels. For more information, see
-        the `photutils documentation <https://photutils.readthedocs.io/en/stable/aperture.html#aperture-and-pixel-overlap>`_.
-
+        is determineid by breaking  region into subpixels. The default is ``exact``.
+        For more information, see the
+        `photutils documentation <https://photutils.readthedocs.io/en/stable/aperture.html#aperture-and-pixel-overlap>`_.
 
     Examples
     --------
