@@ -729,6 +729,10 @@ class PassbandMap(BaseModelWithTableRep):
 
     Parameters
     ----------
+
+    name : str
+        Name of the passband map.
+
     your_filter_names_to_aavso : list[`stellarphot.settings.PassbandMapEntry`]
         A list of pairs of your filter name and the corresponding AAVSO filter name.
         This is used to rename the passband entries in the output photometry table.
@@ -748,9 +752,12 @@ class PassbandMap(BaseModelWithTableRep):
     Examples
     --------
     >>> from stellarphot.settings import PassbandMap
-    >>> passband_map = PassbandMap(your_filter_names_to_aavso={"B": "B", "rp": "SR"})
+    >>> passband_map = PassbandMap(
+    ...     name="Sample map",
+    ...     your_filter_names_to_aavso={"B": "B", "rp": "SR"}
+    ... )
     >>> passband_map
-    PassbandMap(your_filter_names_to_aavso=[PassbandMapEntry(your_filter_name='B',...
+    PassbandMap(name='Sample map', your_filter_names_to_aavso=[PassbandMapEntry(your_...
     >>> # You can access the AAVSO filter name for a given filter name using dict syntax
     >>> passband_map["B"]
     'B'
@@ -766,6 +773,9 @@ class PassbandMap(BaseModelWithTableRep):
 
     """
 
+    name: Annotated[
+        str, Field(description="Name of the passband map", examples=["Filter wheel 1"])
+    ]
     your_filter_names_to_aavso: list[PassbandMapEntry] | None
 
     def model_post_init(self, __context: Any) -> None:

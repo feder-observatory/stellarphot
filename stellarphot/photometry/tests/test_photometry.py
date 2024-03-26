@@ -91,10 +91,11 @@ DEFAULT_PHOTOMETRY_APERTURES = PhotometryApertures(
 
 # Passband map for the tests
 PASSBAND_MAP = PassbandMap(
+    name="Example Passband Map",
     your_filter_names_to_aavso={
         "B": "B",
         "rp": "SR",
-    }
+    },
 )
 
 DEFAULT_LOGGING_SETTINGS = LoggingSettings()
