@@ -60,6 +60,7 @@ DEFAULT_PHOTOMETRY_OPTIONS = dict(
     reject_too_close=False,
     reject_background_outliers=False,
     fwhm_by_fit=False,
+    method="center",
 )
 
 DEFAULT_PASSBAND_MAP = dict(

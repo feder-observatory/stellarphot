@@ -617,6 +617,15 @@ class PhotometryOptionalSettings(BaseModelWithTableRep):
         the star. If ``False``, the FWHM will be calculated by finding the
         second order moments of the light distribution. Default is ``True``.
 
+    method : `typing.Literal["exact", "center", "subpixel"]`, optional
+        How to handle partial pixels in the aperture.  If ``'exact'``, the fraction of
+        the flux included is the fraction of the pixel within the aperture. If
+        ``'center'``, whether a pixel's flux is included is determined by whether the
+        center of the pixel is within the aperture. If ``'subpixel'``, the flux included
+        is determineid by breaking  region into subpixels. The default is ``exact``.
+        For more information, see the
+        `photutils documentation <https://photutils.readthedocs.io/en/stable/aperture.html#aperture-and-pixel-overlap>`_.
+
     Examples
     --------
 
@@ -634,10 +643,11 @@ class PhotometryOptionalSettings(BaseModelWithTableRep):
     ...     reject_too_close=False,
     ...     reject_background_outliers=True,
     ...     fwhm_by_fit=True,
+    ...     method="center"
     ... )
     >>> photometry_options
     PhotometryOptionalSettings(include_dig_noise=True, reject_too_close=False,...
-    reject_background_outliers=True, fwhm_by_fit=True)
+    reject_background_outliers=True, fwhm_by_fit=True, method='center')
 
     You can also change individual options after the object is created:
 
@@ -685,6 +695,13 @@ class PhotometryOptionalSettings(BaseModelWithTableRep):
             )
         ),
     ] = True
+
+    method: Annotated[
+        Literal["exact", "center", "subpixel"],
+        Field(
+            description="How to handle partial pixels in the aperture.",
+        ),
+    ] = "exact"
 
 
 class PassbandMapEntry(BaseModel):

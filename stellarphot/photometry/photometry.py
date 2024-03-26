@@ -414,7 +414,10 @@ def single_image_photometry(
 
     # Perform the aperture photometry
     photom = aperture_photometry(
-        ccd_image.data, (apers, anuls), mask=ccd_image.mask, method="center"
+        ccd_image.data,
+        (apers, anuls),
+        mask=ccd_image.mask,
+        method=photometry_options.method,
     )
 
     # Add source ids to the photometry table

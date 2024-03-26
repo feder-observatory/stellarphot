@@ -48,6 +48,8 @@ DEFAULT_SOURCE_LOCATIONS = SourceLocationSettings(
 )
 
 PHOTOMETRY_OPTIONS = PhotometryOptionalSettings()
+# This used to be the default; it has switched to exact
+PHOTOMETRY_OPTIONS.method = "center"
 
 # A camera with not unreasonable settings
 FAKE_CAMERA = Camera(
@@ -339,6 +341,44 @@ class TestAperturePhotometry:
                         np.abs(expected_flux - out["aperture_net_cnts"].value)
                         < expected_deviation
                     )
+
+    def test_photometry_method_argument(self, tmp_path):
+        """
+        Make sure that setting the method option has an effect on the photometry.
+        """
+        fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
+
+        found_sources = source_detection(
+            fake_CCDimage, fwhm=fake_CCDimage.sources["x_stddev"].mean(), threshold=10
+        )
+
+        source_list_file = tmp_path / "source_list.ecsv"
+        found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
+
+        image_file = tmp_path / "fake_image.fits"
+        fake_CCDimage.write(image_file, overwrite=True)
+
+        # Make a copy of photometry options
+        phot_options = PhotometryOptionalSettings(**PHOTOMETRY_OPTIONS.model_dump())
+
+        # Do the photometry with method = "center" first
+        phot_options.method = "center"
+
+        photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
+        photometry_settings.source_locations.source_list_file = str(source_list_file)
+        photometry_settings.photometry_optional_settings = phot_options
+
+        ap_phot = AperturePhotometry(settings=photometry_settings)
+        phot_center, _ = ap_phot(image_file)
+
+        # Now redo photometry with method="exact". Whether the flux is larger or smaller
+        # in this case depends on the exact position of the sources in the image.
+        # Here we just check that the flux is different.
+        phot_options.method = "exact"
+        photometry_settings.photometry_optional_settings = phot_options
+        ap_phot_exact = AperturePhotometry(settings=photometry_settings)
+        phot_exact, _ = ap_phot_exact(image_file)
+        assert np.all(phot_exact["aperture_sum"] != phot_center["aperture_sum"])
 
     @pytest.mark.parametrize("coords", ["sky", "pixel"])
     def test_photometry_on_directory(self, coords):
