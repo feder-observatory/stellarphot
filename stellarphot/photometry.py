@@ -324,7 +324,7 @@ def add_to_photometry_table(phot, ccd, annulus, apertures, fname='',
         The input table is modified in place.
     """
     phot.rename_column('aperture_sum_0', 'aperture_sum')
-    phot['aperture_sum'].unit = u.adu
+    phot['aperture_sum'].unit = ccd.unit
     phot.rename_column('aperture_sum_1', 'annulus_sum')
     star_locs = ccd.wcs.all_pix2world(phot['xcenter'], phot['ycenter'], 0)
     star_coords = SkyCoord(ra=star_locs[0], dec=star_locs[1],
