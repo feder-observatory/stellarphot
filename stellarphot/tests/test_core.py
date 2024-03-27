@@ -87,13 +87,14 @@ feder_cg_16m = Camera(
     max_data_value=50000 * u.adu,
 )
 feder_passbands = PassbandMap(
+    name="Feder Passbands",
     your_filter_names_to_aavso={
         "up": "SU",
         "gp": "SG",
         "rp": "SR",
         "zp": "SZ",
         "ip": "SI",
-    }
+    },
 )
 feder_obs = Observatory(
     name="Feder Observatory", latitude=46.86678, longitude=-96.45328, elevation="311 m"
@@ -531,7 +532,9 @@ def test_photometry_data_short_filter_name():
     phot_data = PhotometryData(
         observatory=feder_obs,
         camera=feder_cg_16m,
-        passband_map=PassbandMap(your_filter_names_to_aavso={"i": "SI"}),
+        passband_map=PassbandMap(
+            name="Test map", your_filter_names_to_aavso={"i": "SI"}
+        ),
         input_data=data,
     )
 
@@ -558,7 +561,9 @@ def test_photometry_data_filter_name_map_preserves_original_names():
     phot_data = PhotometryData(
         observatory=feder_obs,
         camera=feder_cg_16m,
-        passband_map=PassbandMap(your_filter_names_to_aavso={"i": "SI"}),
+        passband_map=PassbandMap(
+            name="Test map", your_filter_names_to_aavso={"i": "SI"}
+        ),
         input_data=data,
     )
 
