@@ -767,7 +767,7 @@ class PassbandMap(BaseModelWithTableRep):
     >>> # the list of PassbandMapEntry
     >>> passband_map.your_filter_names_to_aavso[1]
     PassbandMapEntry(your_filter_name='rp', aavso_filter_name=<AAVSOFilters.SR: 'SR'>)
-    >>> # Getting the AAVSO filter namee this way is a little cumbersome though:
+    >>> # Getting the AAVSO filter name this way is a little cumbersome though:
     >>> passband_map.your_filter_names_to_aavso[1].aavso_filter_name.value
     'SR'
 
