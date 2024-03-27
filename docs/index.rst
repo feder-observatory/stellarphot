@@ -49,7 +49,13 @@ programmatically in Python or by editing a file in your favorite text editor.
 Provide your observatory information
 -------------------------------------
 
-TBD
+.. autopydantic_field:: stellarphot.settings.Observatory.latitude
+    :field-show-constraints: False
+..     :model-show-config-summary: False
+..     :model-show-field-summary: False
+.. .. autopydantic_model:: stellarphot.settings.Observatory
+..     :model-show-config-summary: False
+..     :model-show-field-summary: False
 
 Provide your camera information
 -------------------------------
