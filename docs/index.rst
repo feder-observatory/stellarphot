@@ -43,8 +43,51 @@ like details about your observing location and camera, will change infrequently.
 Others, like what size apertures to use for photometry and where in each image those
 apertures should be placed, may change from night to night.
 
-There is a graphical interface for making all of the settings below. They can also be set
-programmatically in Python or by editing a file in your favorite text editor.
+All the settings can be made through a graphical interface, via the command line, or by editing
+an existing settings file.
+
+The settings are grouped into these categories:
+
+- Observatory
+- Camera
+- Passband Map
+- Photometry Apertures
+- Source Location Settings
+- Optional Settings
+- Logging Settings
+
+The first three categories each include a ``name`` property, which is used to identify the
+settings and provides a shortcut to re-using those settings in the future.
+
+A copy of the settings are stored in a file called `stellarphot_settings.json` in the working directory
+where you are using stellarphot. It is these settings that are used when you run the photometry.
+
+Settings can be generated using a jupyter notebook with a graphical interface, by using the command line,
+or by editing a settings file directly.
+
+Graphical interface for generating settings
+-------------------------------------------
+
+To generate settings using a graphical interface, start Jupyter lab. In the launcher will be a section called
+"Stellarphot" with a link to "Generate Settings". Clicking on this link will open a notebook where you can enter settings.
+
+Command line interface for generating settings
+----------------------------------------------
+
+To generate settings using the command line, run the following command:
+
+```bash
+stellarphot-settings
+```
+
+This will generate a settings file in the directory in which you run the command
+called `stellarphot_settings.json`. Edit that file in the editor of your choice.
+
+Editing a settings file directly
+--------------------------------
+
+The settings file is a JSON file that can be edited in any text editor.
+
 
 Provide your observatory information
 -------------------------------------
