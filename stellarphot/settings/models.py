@@ -922,6 +922,13 @@ class PhotometrySettings(BaseModelWithTableRep):
             json_schema_extra=SCHEMA_EXTRAS,
         ),
     ]
+    passband_map: Annotated[
+        PassbandMap,
+        Field(
+            description=_extract_short_description(PassbandMap.__doc__),
+            json_schema_extra=SCHEMA_EXTRAS,
+        ),
+    ]
     photometry_apertures: Annotated[
         PhotometryApertures,
         Field(
@@ -940,13 +947,6 @@ class PhotometrySettings(BaseModelWithTableRep):
         PhotometryOptionalSettings,
         Field(
             description=_extract_short_description(PhotometryOptionalSettings.__doc__),
-            json_schema_extra=SCHEMA_EXTRAS,
-        ),
-    ]
-    passband_map: Annotated[
-        PassbandMap,
-        Field(
-            description=_extract_short_description(PassbandMap.__doc__),
             json_schema_extra=SCHEMA_EXTRAS,
         ),
     ]
