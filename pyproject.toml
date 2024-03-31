@@ -27,6 +27,7 @@ dependencies = [
     "photutils >=1.9",
     "pydantic >=2",
     "pyyaml",
+    "platformdirs",
 ]
 
 [project.optional-dependencies]
