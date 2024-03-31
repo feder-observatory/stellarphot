@@ -25,6 +25,17 @@ class SavedFileOperations:
         with file_path.open("w") as f:
             f.write(json_data)
 
+    def get(self, name):
+        """
+        Get the item with the given name.
+
+        Parameters
+        ----------
+        name : str
+            Name of the item to get.
+        """
+        return self.as_dict[name]
+
     @classmethod
     def load_model(cls):
         file_path = cls._settings_path / cls._file_name

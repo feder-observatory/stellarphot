@@ -203,3 +203,13 @@ class TestSavedSettings:
         # Delete the second camera.
         saved_settings.cameras.delete(name=camera2.name, confirm=True)
         assert len(saved_settings.cameras.as_dict) == 1
+
+    def test_revtrieving_item_by_name_works(self, tmp_path):
+        # Test that retrieving an item by name works.
+        saved_settings = SavedSettings(_testing_path=tmp_path)
+        # Add a camera.
+        camera = Camera.model_validate_json(CAMERA)
+        saved_settings.add_item(camera)
+        # Retrieve the camera by name.
+        retrieved_camera = saved_settings.cameras.get(camera.name)
+        assert retrieved_camera == camera
