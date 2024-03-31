@@ -166,14 +166,25 @@ class TestSavedSettings:
         saved_settings.add_item(passband_map)
 
         # Delete all settings.
+        saved_settings.delete(confirm=True, delete_settings_folder=True)
+        assert not (
+            saved_settings.settings_path / saved_settings.cameras._file_name
+        ).exists()
+        assert not (
+            saved_settings.settings_path / saved_settings.observatories._file_name
+        ).exists()
+        assert not (
+            saved_settings.settings_path / saved_settings.passband_maps._file_name
+        ).exists()
+        assert not saved_settings.settings_path.exists()
+
+    def test_delete_all_with_no_settings_works(self, tmp_path):
+        # Test that deleting all settings files works when no settings are present.
+        saved_settings = SavedSettings(_testing_path=tmp_path)
+        # Delete all settings but not the settings folder
         saved_settings.delete(confirm=True)
-        assert not (
-            saved_settings.settings_path / saved_settings.cameras.file_name
-        ).exists()
-        assert not (
-            saved_settings.settings_path / saved_settings.observatories.file_name
-        ).exists()
-        assert not (
-            saved_settings.settings_path / saved_settings.passband_maps.file_name
-        ).exists()
+        assert len(list(saved_settings.settings_path.glob("*"))) == 0
+
+        # Delete all settings and the settings folder
+        saved_settings.delete(confirm=True, delete_settings_folder=True)
         assert not saved_settings.settings_path.exists()

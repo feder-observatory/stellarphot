@@ -172,7 +172,7 @@ class SavedSettings:
         container.as_dict[to_add.name] = to_add
         container.save(self.settings_path)
 
-    def delete(self, confirm=False):
+    def delete(self, confirm=False, delete_settings_folder=False):
         """
         Delete all settings files.
 
@@ -180,10 +180,15 @@ class SavedSettings:
         ----------
         confirm : bool, optional
             If True, the files are deleted. If False, a ValueError is raised.
+
+        delete_settings_folder : bool, optional
+            If True, the directory where settings files are stored is deleted. If False,
+            only the settings files are deleted.
         """
         if not confirm:
             raise ValueError("You must confirm deletion by passing confirm=True")
-        self.cameras.delete(self.settings_path, confirm=confirm)
-        self.observatories.delete(self.settings_path, confirm=confirm)
-        self.passband_maps.delete(self.settings_path, confirm=confirm)
-        self.settings_path.rmdir()
+        Cameras.delete(self.settings_path, confirm=confirm)
+        Observatories.delete(self.settings_path, confirm=confirm)
+        PassbandMaps.delete(self.settings_path, confirm=confirm)
+        if delete_settings_folder:
+            self.settings_path.rmdir()
