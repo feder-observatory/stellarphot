@@ -15,20 +15,21 @@ SETTINGS_FILE_VERSION = "2"  # value chosen to match amjor version of stellarpho
 
 class SavedFileOperations:
     def save(self, path: Path):
-        file_path = path / self.file_name
+        file_path = path / self._file_name
         json_data = self.model_dump_json(indent=4)
         with file_path.open("w") as f:
             f.write(json_data)
 
     @classmethod
     def load_model(cls, path):
-        file_path = path / cls.file_name
+        file_path = path / cls._file_name
         if not file_path.exists():
             return cls(items={})
         with file_path.open() as f:
             return cls.model_validate_json(f.read())
 
-    def delete(self, settings_path, confirm=False):
+    @classmethod
+    def delete(cls, settings_path, confirm=False):
         """
         Delete the settings file for this class.
 
@@ -38,8 +39,8 @@ class SavedFileOperations:
             If True, the file is deleted. If False, a ValueError is raised.
         """
         if confirm:
-            file_path = settings_path / self.file_name
-            file_path.unlink()
+            file_path = settings_path / cls._file_name
+            file_path.unlink(missing_ok=True)
         else:
             raise ValueError("You must confirm deletion by passing confirm=True")
 
@@ -48,7 +49,7 @@ class Cameras(SavedFileOperations, BaseModel):
     # Using the ClassVar annotation means this is treated as a class variable rather
     # than a pydantic field. We don't pydantic storing the name of the settings file in
     # the settings file itself.
-    file_name: ClassVar[str] = "cameras.json"
+    _file_name: ClassVar[str] = "cameras.json"
     "Name of the file where the cameras are saved."
 
     items: dict[str, Camera]
@@ -56,14 +57,14 @@ class Cameras(SavedFileOperations, BaseModel):
 
 
 class Observatories(SavedFileOperations, BaseModel):
-    file_name: ClassVar[str] = "observatories.json"
+    _file_name: ClassVar[str] = "observatories.json"
     "Name of the file where the observatories are saved."
     items: dict[str, Observatory]
     "Dictionary of observatories, keyed by observatory name."
 
 
 class PassbandMaps(SavedFileOperations, BaseModel):
-    file_name: ClassVar[str] = "passband_maps.json"
+    _file_name: ClassVar[str] = "passband_maps.json"
     "Name of the file where the passband maps are saved."
     items: dict[str, PassbandMap]
     "Dictionary of passband maps, keyed by passband map name."
@@ -165,7 +166,7 @@ class SavedSettings:
                 raise ValueError("Unknown item type")
 
         if to_add.name in container.items:
-            raise ValueError(f"{to_add.name} already exists in {container.file_name}")
+            raise ValueError(f"{to_add.name} already exists in {container._file_name}")
 
         container.items[to_add.name] = to_add
         container.save(self.settings_path)

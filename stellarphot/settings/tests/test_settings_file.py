@@ -143,7 +143,7 @@ class TestSavedSettings:
         # Delete the camera.
         saved_settings.cameras.delete(saved_settings.settings_path, confirm=True)
         assert not (
-            saved_settings.settings_path / saved_settings.cameras.file_name
+            saved_settings.settings_path / saved_settings.cameras._file_name
         ).exists()
 
     def test_deleting_all_settings_without_confirm_raises_error(self):
