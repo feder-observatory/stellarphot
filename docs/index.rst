@@ -38,32 +38,7 @@ pip install --pre --upgrade stellarphot
 Overview
 --------
 
-Using ``stellarphot`` starts with defining a bunch of configuration settings. Some of these,
-like details about your observing location and camera, will change infrequently.
-Others, like what size apertures to use for photometry and where in each image those
-apertures should be placed, may change from night to night.
 
-All the settings can be made through a graphical interface, via the command line, or by editing
-an existing settings file.
-
-The settings are grouped into these categories:
-
-- Observatory
-- Camera
-- Passband Map
-- Photometry Apertures
-- Source Location Settings
-- Optional Settings
-- Logging Settings
-
-The first three categories each include a ``name`` property, which is used to identify the
-settings and provides a shortcut to re-using those settings in the future.
-
-A copy of the settings are stored in a file called `stellarphot_settings.json` in the working directory
-where you are using stellarphot. It is these settings that are used when you run the photometry.
-
-Settings can be generated using a jupyter notebook with a graphical interface, by using the command line,
-or by editing a settings file directly.
 
 Graphical interface for generating settings
 -------------------------------------------
@@ -88,32 +63,6 @@ Editing a settings file directly
 
 The settings file is a JSON file that can be edited in any text editor.
 
-
-Provide your observatory information
--------------------------------------
-
-.. autopydantic_field:: stellarphot.settings.Observatory.latitude
-    :field-show-constraints: False
-..     :model-show-config-summary: False
-..     :model-show-field-summary: False
-.. .. autopydantic_model:: stellarphot.settings.Observatory
-..     :model-show-config-summary: False
-..     :model-show-field-summary: False
-
-Provide your camera information
--------------------------------
-
-TBD
-
-Provide a source list
----------------------
-
-TBD
-
-Some optional settings
------------------------
-
-TBD
 
 Performing photometry
 ---------------------
@@ -143,6 +92,7 @@ phot(directory, object_of_interest="M13")
   :maxdepth: 3
 
   stellarphot/index.rst
+  stellarphot/settings.rst
 
 
 Developer Documentation
