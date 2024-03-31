@@ -67,8 +67,8 @@ class TestSavedSettings:
         saved_settings.add_item(item)
         # Load the cameras
         saved_items = saved_settings.get_items(item)
-        assert len(saved_items.items) == 1
-        assert saved_items.items[item.name] == item
+        assert len(saved_items.as_dict) == 1
+        assert saved_items.as_dict[item.name] == item
 
     @pytest.mark.parametrize(
         "klass,item_json",
@@ -88,9 +88,9 @@ class TestSavedSettings:
         # Load the items -- any instance of the class (e.g. Camera) or a
         # string (e.g. "camera") should work for getting the items.
         saved_items = saved_settings.get_items(item1)
-        assert len(saved_items.items) == 2
-        assert saved_items.items[item2.name] == item2
-        assert saved_items.items[item1.name] == item1
+        assert len(saved_items.as_dict) == 2
+        assert saved_items.as_dict[item2.name] == item2
+        assert saved_items.as_dict[item1.name] == item1
 
     def test_add_existing_saved_item_raises_error(self, tmp_path):
         # Test that adding an existing camera raises an error. Other items follow the
@@ -119,18 +119,18 @@ class TestSavedSettings:
         saved_settings.add_item(passband_map)
         # Load the items
         cameras = saved_settings.get_items("camera")
-        assert len(cameras.items) == 1
-        assert cameras.items[camera.name] == camera
+        assert len(cameras.as_dict) == 1
+        assert cameras.as_dict[camera.name] == camera
         observatories = saved_settings.get_items("observatory")
-        assert len(observatories.items) == 1
-        assert observatories.items[observatory.name] == observatory
+        assert len(observatories.as_dict) == 1
+        assert observatories.as_dict[observatory.name] == observatory
         passband_maps = saved_settings.get_items("passband_map")
-        assert len(passband_maps.items) == 1
-        assert passband_maps.items[passband_map.name] == passband_map
+        assert len(passband_maps.as_dict) == 1
+        assert passband_maps.as_dict[passband_map.name] == passband_map
 
-    def test_delete_without_confirm_raises_error(self):
+    def test_delete_without_confirm_raises_error(self, tmp_path):
         # Trying to delete settings without confirming should raise an error.
-        saved_settings = SavedSettings(_create_path=False)
+        saved_settings = SavedSettings(_testing_path=tmp_path)
         with pytest.raises(ValueError, match="You must confirm deletion by passing"):
             saved_settings.cameras.delete(saved_settings.settings_path)
 

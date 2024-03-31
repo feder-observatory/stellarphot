@@ -24,7 +24,7 @@ class SavedFileOperations:
     def load_model(cls, path):
         file_path = path / cls._file_name
         if not file_path.exists():
-            return cls(items={})
+            return cls(as_dict={})
         with file_path.open() as f:
             return cls.model_validate_json(f.read())
 
@@ -52,21 +52,21 @@ class Cameras(SavedFileOperations, BaseModel):
     _file_name: ClassVar[str] = "cameras.json"
     "Name of the file where the cameras are saved."
 
-    items: dict[str, Camera]
+    as_dict: dict[str, Camera]
     "Dictionary of cameras, keyed by camera name."
 
 
 class Observatories(SavedFileOperations, BaseModel):
     _file_name: ClassVar[str] = "observatories.json"
     "Name of the file where the observatories are saved."
-    items: dict[str, Observatory]
+    as_dict: dict[str, Observatory]
     "Dictionary of observatories, keyed by observatory name."
 
 
 class PassbandMaps(SavedFileOperations, BaseModel):
     _file_name: ClassVar[str] = "passband_maps.json"
     "Name of the file where the passband maps are saved."
-    items: dict[str, PassbandMap]
+    as_dict: dict[str, PassbandMap]
     "Dictionary of passband maps, keyed by passband map name."
 
 
@@ -111,6 +111,7 @@ class SavedSettings:
         """
         Cameras stored in the settings.
         """
+        # Note that we always reload in case the file has changed.
         return Cameras.load_model(self.settings_path)
 
     @property
@@ -165,10 +166,10 @@ class SavedSettings:
             case _:
                 raise ValueError("Unknown item type")
 
-        if to_add.name in container.items:
+        if to_add.name in container.as_dict:
             raise ValueError(f"{to_add.name} already exists in {container._file_name}")
 
-        container.items[to_add.name] = to_add
+        container.as_dict[to_add.name] = to_add
         container.save(self.settings_path)
 
     def delete(self, confirm=False):
