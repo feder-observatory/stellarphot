@@ -132,7 +132,7 @@ class TestSavedSettings:
         # Trying to delete settings without confirming should raise an error.
         saved_settings = SavedSettings(_testing_path=tmp_path)
         with pytest.raises(ValueError, match="You must confirm deletion by passing"):
-            saved_settings.cameras.delete(saved_settings.settings_path)
+            saved_settings.cameras.delete()
 
     def test_delete_with_confirm_deletes_file(self, tmp_path):
         # Test that deleting a settings file works.
@@ -141,7 +141,7 @@ class TestSavedSettings:
         camera = Camera.model_validate_json(CAMERA)
         saved_settings.add_item(camera)
         # Delete the camera.
-        saved_settings.cameras.delete(saved_settings.settings_path, confirm=True)
+        saved_settings.cameras.delete(confirm=True)
         assert not (
             saved_settings.settings_path / saved_settings.cameras._file_name
         ).exists()
@@ -188,3 +188,18 @@ class TestSavedSettings:
         # Delete all settings and the settings folder
         saved_settings.delete(confirm=True, delete_settings_folder=True)
         assert not saved_settings.settings_path.exists()
+
+    def test_delete_item_from_collection_works(self, tmp_path):
+        # Test that deleting an item from a collection works.
+        saved_settings = SavedSettings(_testing_path=tmp_path)
+        # Add a camera.
+        camera = Camera.model_validate_json(CAMERA)
+        saved_settings.add_item(camera)
+        camera2 = Camera.model_validate_json(CAMERA.replace("Aspen CG 16m", "foo"))
+        saved_settings.add_item(camera2)
+
+        # Make sure both cameras are in the collection.
+        assert len(saved_settings.cameras.as_dict) == 2
+        # Delete the second camera.
+        saved_settings.cameras.delete(name=camera2.name, confirm=True)
+        assert len(saved_settings.cameras.as_dict) == 1

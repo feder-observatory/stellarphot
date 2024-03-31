@@ -14,22 +14,30 @@ SETTINGS_FILE_VERSION = "2"  # value chosen to match amjor version of stellarpho
 
 
 class SavedFileOperations:
-    def save(self, path: Path):
-        file_path = path / self._file_name
+    # Provide a place to store the path to the settings file. Annotate as a ClassVar
+    # so that pydantic doesn't think it is a field. Also mark it as private to
+    # discourage direct access.
+    _settings_path: ClassVar = None
+
+    def save(self):
+        file_path = self._settings_path / self._file_name
         json_data = self.model_dump_json(indent=4)
         with file_path.open("w") as f:
             f.write(json_data)
 
     @classmethod
-    def load_model(cls, path):
-        file_path = path / cls._file_name
+    def load_model(cls):
+        file_path = cls._settings_path / cls._file_name
         if not file_path.exists():
-            return cls(as_dict={})
-        with file_path.open() as f:
-            return cls.model_validate_json(f.read())
+            instance = cls(as_dict={})
+        else:
+            with file_path.open() as f:
+                instance = cls.model_validate_json(f.read())
+
+        return instance
 
     @classmethod
-    def delete(cls, settings_path, confirm=False):
+    def delete(cls, confirm=False, name=None):
         """
         Delete the settings file for this class.
 
@@ -37,12 +45,25 @@ class SavedFileOperations:
         ----------
         confirm : bool, optional
             If True, the file is deleted. If False, a ValueError is raised.
+
+        name : str, optional
+            Name of the item to delete. If provided, only the item with this name is
+            deleted. If not provided, the entire file is deleted.
         """
-        if confirm:
-            file_path = settings_path / cls._file_name
-            file_path.unlink(missing_ok=True)
-        else:
+        if not confirm:
             raise ValueError("You must confirm deletion by passing confirm=True")
+
+        file_path = cls._settings_path / cls._file_name
+        if name is not None:
+            # Only delete the named item
+            instance = cls.load_model()
+            if name not in instance.as_dict:
+                raise ValueError(f"{name} not found in {cls._file_name}")
+            del instance.as_dict[name]
+            instance.save()
+        else:
+            # Delete the entire file
+            file_path.unlink(missing_ok=True)
 
 
 class Cameras(SavedFileOperations, BaseModel):
@@ -99,6 +120,9 @@ class SavedSettings:
             if not self.settings_path.exists():
                 self.settings_path.mkdir(parents=True)
 
+        # Make the path available to the SavedFileOperations classes.
+        SavedFileOperations._settings_path = self.settings_path
+
     @property
     def settings_path(self):
         """
@@ -112,21 +136,21 @@ class SavedSettings:
         Cameras stored in the settings.
         """
         # Note that we always reload in case the file has changed.
-        return Cameras.load_model(self.settings_path)
+        return Cameras.load_model()
 
     @property
     def observatories(self) -> Observatories:
         """
         Observatories stored in the settings.
         """
-        return Observatories.load_model(self.settings_path)
+        return Observatories.load_model()
 
     @property
     def passband_maps(self) -> PassbandMaps:
         """
         Passband maps stored in the settings.
         """
-        return PassbandMaps.load_model(self.settings_path)
+        return PassbandMaps.load_model()
 
     def get_items(self, item_type):
         """
@@ -170,7 +194,7 @@ class SavedSettings:
             raise ValueError(f"{to_add.name} already exists in {container._file_name}")
 
         container.as_dict[to_add.name] = to_add
-        container.save(self.settings_path)
+        container.save()
 
     def delete(self, confirm=False, delete_settings_folder=False):
         """
@@ -187,8 +211,8 @@ class SavedSettings:
         """
         if not confirm:
             raise ValueError("You must confirm deletion by passing confirm=True")
-        Cameras.delete(self.settings_path, confirm=confirm)
-        Observatories.delete(self.settings_path, confirm=confirm)
-        PassbandMaps.delete(self.settings_path, confirm=confirm)
+        Cameras.delete(confirm=confirm)
+        Observatories.delete(confirm=confirm)
+        PassbandMaps.delete(confirm=confirm)
         if delete_settings_folder:
             self.settings_path.rmdir()
