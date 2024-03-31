@@ -68,7 +68,7 @@ exclude_patterns.append("_templates")
 rst_epilog += """
 """
 
-extensions += ["sphinxcontrib.autodoc_pydantic"]
+# extensions += ["sphinxcontrib.autodoc_pydantic"]
 
 # -- Project information ------------------------------------------------------
 
