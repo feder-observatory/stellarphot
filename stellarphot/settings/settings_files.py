@@ -180,7 +180,11 @@ class SavedSettings:
             case PassbandMap() | "passband_map":
                 return self.passband_maps
             case _:
-                raise ValueError(f"Unknown item type {item_type}")
+                raise ValueError(
+                    f"Unknown item {item_type} of type {type(item_type)}. Must be "
+                    "Camera, Observatory, or PassbandMap, or "
+                    "'camera', 'observatory', or 'passband_map'"
+                )
 
     def add_item(self, item):
         """
@@ -199,7 +203,10 @@ class SavedSettings:
             case PassbandMap() as to_add:
                 container = self.passband_maps
             case _:
-                raise ValueError("Unknown item type")
+                raise ValueError(
+                    f"Unknown item {item} of type {type(item)}. Must be Camera, "
+                    "Observatory, or PassbandMap"
+                )
 
         if to_add.name in container.as_dict:
             raise ValueError(f"{to_add.name} already exists in {container._file_name}")
