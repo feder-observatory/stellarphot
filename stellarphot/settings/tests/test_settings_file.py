@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from stellarphot.settings import (
@@ -53,6 +55,12 @@ class TestSavedSettings:
         saved_settings = SavedSettings(_create_path=False)
         assert "stellarphot" in str(saved_settings.settings_path)
         assert SETTINGS_FILE_VERSION in str(saved_settings.settings_path)
+
+    def test_settings_path_is_created_if_not_exists(self, tmp_path):
+        p = Path(tmp_path / "not a path that exists yet")
+        assert not p.exists()
+        saved_settings = SavedSettings(_testing_path=p)
+        assert saved_settings.settings_path.exists()
 
     @pytest.mark.parametrize(
         "klass,item_json",
@@ -213,3 +221,15 @@ class TestSavedSettings:
         # Retrieve the camera by name.
         retrieved_camera = saved_settings.cameras.get(camera.name)
         assert retrieved_camera == camera
+
+    def test_get_item_with_unknown_item_fails(self, tmp_path):
+        # Test that trying to get an unknown item fails.
+        saved_settings = SavedSettings(_testing_path=tmp_path)
+        with pytest.raises(ValueError, match="Unknown item foo of type"):
+            saved_settings.get_items("foo")
+
+    def test_add_item_with_unknown_item_fails(self, tmp_path):
+        # Test that trying to add an unknown item fails.
+        saved_settings = SavedSettings(_testing_path=tmp_path)
+        with pytest.raises(ValueError, match="Unknown item foo of type"):
+            saved_settings.add_item("foo")
