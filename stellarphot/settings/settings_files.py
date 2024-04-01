@@ -79,8 +79,8 @@ class SavedFileOperations:
 
 class Cameras(SavedFileOperations, BaseModel):
     # Using the ClassVar annotation means this is treated as a class variable rather
-    # than a pydantic field. We don't pydantic storing the name of the settings file in
-    # the settings file itself.
+    # than a pydantic field. We don't want pydantic storing the name of the settings
+    # file in the settings file itself.
     _file_name: ClassVar[str] = "cameras.json"
     "Name of the file where the cameras are saved."
 

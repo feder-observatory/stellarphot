@@ -26,7 +26,7 @@ The settings are grouped into these categories:
 A copy of the settings are stored in a file called `stellarphot_settings.json` in the working directory
 where you are using stellarphot. It is these settings that are used when you run the photometry.
 
-Settings can be generated using a jupyter notebook with a graphical interface, by using the command line,
+Settings can be generated using JupyterLab with a graphical interface, by using the command line,
 or by editing a settings file directly.
 
 Settings groups
@@ -66,13 +66,13 @@ and `~stellarphot.settings.PassbandMap`. The ``name`` property of each of these 
 identify the settings.
 
 For example, if you have a camera that you use frequently, you can save the camera settings to a file
-and then load those settings in future sessions. If you are using the Jupyter-based graphical interface,
+and then load those settings in future sessions. If you are using the JupyterLab graphical interface,
 every new camera you create will be saved when you click the "Save" button. If you are working programmatically,
 you can save the camera settings to a file by using the `add_item` method of a
 `~stellarphot.settings.SavedSettings` object.
 
 Suppose you have saved a camera named "My Fancy Camera". To reuse that camera in a future session, you can select
-it in a dropdown in the Jupyter-based graphical interface, or you can load it programmatically by using the
+it in a dropdown in the JupyterLab graphical interface, or you can load it programmatically by using the
 `get_item` method of the `~stellarphot.settings.SavedSettings` class.
 
 An example of creating such a camera, saving it, and then loading is below::

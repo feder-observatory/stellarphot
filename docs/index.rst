@@ -43,7 +43,7 @@ Overview
 Graphical interface for generating settings
 -------------------------------------------
 
-To generate settings using a graphical interface, start Jupyter lab. In the launcher will be a section called
+To generate settings using a graphical interface, start JupyterLab. In the launcher will be a section called
 "Stellarphot" with a link to "Generate Settings". Clicking on this link will open a notebook where you can enter settings.
 
 Command line interface for generating settings
