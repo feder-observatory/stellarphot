@@ -212,6 +212,14 @@ class TestSavedSettings:
         saved_settings.cameras.delete(name=camera2.name, confirm=True)
         assert len(saved_settings.cameras.as_dict) == 1
 
+    def test_delete_item_from_collection_with_unknown_item_fails(self, tmp_path):
+        # Test that trying to delete an unknown item from a collection fails.
+        saved_settings = SavedSettings(_testing_path=tmp_path)
+        camera = Camera.model_validate_json(CAMERA)
+        saved_settings.add_item(camera)
+        with pytest.raises(ValueError, match="not found in"):
+            saved_settings.cameras.delete(name=camera.name + "foo", confirm=True)
+
     def test_revtrieving_item_by_name_works(self, tmp_path):
         # Test that retrieving an item by name works.
         saved_settings = SavedSettings(_testing_path=tmp_path)
