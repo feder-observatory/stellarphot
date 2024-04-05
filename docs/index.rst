@@ -38,33 +38,31 @@ pip install --pre --upgrade stellarphot
 Overview
 --------
 
-Using ``stellarphot`` starts with defining a bunch of configuration settings. Some of these,
-like details about your observing location and camera, will change infrequently.
-Others, like what size apertures to use for photometry and where in each image those
-apertures should be placed, may change from night to night.
 
-There is a graphical interface for making all of the settings below. They can also be set
-programmatically in Python or by editing a file in your favorite text editor.
 
-Provide your observatory information
--------------------------------------
+Graphical interface for generating settings
+-------------------------------------------
 
-TBD
+To generate settings using a graphical interface, start JupyterLab. In the launcher will be a section called
+"Stellarphot" with a link to "Generate Settings". Clicking on this link will open a notebook where you can enter settings.
 
-Provide your camera information
--------------------------------
+Command line interface for generating settings
+----------------------------------------------
 
-TBD
+To generate settings using the command line, run the following command:
 
-Provide a source list
----------------------
+```bash
+stellarphot-settings
+```
 
-TBD
+This will generate a settings file in the directory in which you run the command
+called `stellarphot_settings.json`. Edit that file in the editor of your choice.
 
-Some optional settings
------------------------
+Editing a settings file directly
+--------------------------------
 
-TBD
+The settings file is a JSON file that can be edited in any text editor.
+
 
 Performing photometry
 ---------------------
@@ -94,6 +92,7 @@ phot(directory, object_of_interest="M13")
   :maxdepth: 3
 
   stellarphot/index.rst
+  stellarphot/settings.rst
 
 
 Developer Documentation

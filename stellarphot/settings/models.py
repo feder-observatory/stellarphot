@@ -133,16 +133,16 @@ class Camera(BaseModelWithTableRep):
     Parameters
     ----------
 
+    name : str
+        The name of the camera; can be anything that helps the user identify
+        the camera.
+
     data_unit : `astropy.units.Unit`
         The unit of the data.
 
     gain : `astropy.units.Quantity`
         The gain of the camera in units such the product of `gain`
         times the image data has units equal to that of the `read_noise`.
-
-    name : str
-        The name of the camera; can be anything that helps the user identify
-        the camera.
 
     read_noise : `astropy.units.Quantity`
         The read noise of the camera with units.
@@ -219,6 +219,13 @@ class Camera(BaseModelWithTableRep):
     """
 
     model_config = MODEL_DEFAULT_CONFIGURATION
+
+    name: Annotated[
+        str,
+        Field(
+            description="Name of the camera", examples=["SBIG ST-8300M", "ZWO ASI1600"]
+        ),
+    ]
     data_unit: UnitType = Field(
         description="units of the data", examples=["adu", "counts", "DN", "electrons"]
     )
@@ -226,7 +233,6 @@ class Camera(BaseModelWithTableRep):
         description="unit should be consistent with data and read noise",
         examples=["1.0 electron / adu"],
     )
-    name: str
     read_noise: QuantityType = Field(
         description="unit should be consistent with dark current",
         examples=["10.0 electron"],
@@ -767,7 +773,7 @@ class PassbandMap(BaseModelWithTableRep):
     >>> # the list of PassbandMapEntry
     >>> passband_map.your_filter_names_to_aavso[1]
     PassbandMapEntry(your_filter_name='rp', aavso_filter_name=<AAVSOFilters.SR: 'SR'>)
-    >>> # Getting the AAVSO filter namee this way is a little cumbersome though:
+    >>> # Getting the AAVSO filter name this way is a little cumbersome though:
     >>> passband_map.your_filter_names_to_aavso[1].aavso_filter_name.value
     'SR'
 
@@ -916,6 +922,13 @@ class PhotometrySettings(BaseModelWithTableRep):
             json_schema_extra=SCHEMA_EXTRAS,
         ),
     ]
+    passband_map: Annotated[
+        PassbandMap,
+        Field(
+            description=_extract_short_description(PassbandMap.__doc__),
+            json_schema_extra=SCHEMA_EXTRAS,
+        ),
+    ]
     photometry_apertures: Annotated[
         PhotometryApertures,
         Field(
@@ -934,13 +947,6 @@ class PhotometrySettings(BaseModelWithTableRep):
         PhotometryOptionalSettings,
         Field(
             description=_extract_short_description(PhotometryOptionalSettings.__doc__),
-            json_schema_extra=SCHEMA_EXTRAS,
-        ),
-    ]
-    passband_map: Annotated[
-        PassbandMap,
-        Field(
-            description=_extract_short_description(PassbandMap.__doc__),
             json_schema_extra=SCHEMA_EXTRAS,
         ),
     ]
