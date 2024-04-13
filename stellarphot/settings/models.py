@@ -1,5 +1,6 @@
 # Objects that contains the user settings for the program.
 
+import re
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -9,6 +10,7 @@ from astropy.time import Time
 from astropy.units import Quantity, Unit
 from astropy.utils import lazyproperty
 from pydantic import (
+    AfterValidator,
     BaseModel,
     BeforeValidator,
     ConfigDict,
@@ -52,6 +54,32 @@ MODEL_DEFAULT_CONFIGURATION = ConfigDict(
     # Make sure there are no extra fields
     extra="forbid",
 )
+
+
+# Make a type for a non-empty string for use in name fields
+# Names may not have any leading or trailing spaces, and cannot simply
+# be spaces. Though this could be implemented as a regular expression
+# pattern, that leads to a validation message likely to confuse users,
+# along the lines of (for pattern r"^\S$|^\S.*\S$"):
+#
+# String should match pattern "^\\S$|^\\S.*\\S$"
+#
+# Instead, the custom validation function below checks for errors and
+# raises a ValueError with a more user-friendly message.
+def _non_empty_string_validator(value):
+    if not value.strip():
+        raise ValueError("name must not be empty or contain only whitespace.")
+
+    if not re.search(r"^\S$|^\S.*\S$", value):
+        # Name must have exactly one non-whitespace character or
+        # at least two non-whitespace characters with any amount of
+        # other characters between them.
+        raise ValueError("name must not have leading or trailing whitespace.")
+
+    return value
+
+
+NonEmptyStr = Annotated[str, AfterValidator(_non_empty_string_validator)]
 
 
 def _extract_short_description(docstring: str) -> str:
@@ -221,9 +249,10 @@ class Camera(BaseModelWithTableRep):
     model_config = MODEL_DEFAULT_CONFIGURATION
 
     name: Annotated[
-        str,
+        NonEmptyStr,
         Field(
-            description="Name of the camera", examples=["SBIG ST-8300M", "ZWO ASI1600"]
+            description="Name of the camera",
+            examples=["SBIG ST-8300M", "ZWO ASI1600"],
         ),
     ]
     data_unit: UnitType = Field(
@@ -479,7 +508,7 @@ class Observatory(BaseModelWithTableRep):
 
     """
 
-    name: Annotated[str, Field(description="Name of the observatory")]
+    name: Annotated[NonEmptyStr, Field(description="Name of the observatory")]
     latitude: Annotated[
         Latitude,
         _UnitQuantTypePydanticAnnotation,
@@ -780,7 +809,11 @@ class PassbandMap(BaseModelWithTableRep):
     """
 
     name: Annotated[
-        str, Field(description="Name of the passband map", examples=["Filter wheel 1"])
+        NonEmptyStr,
+        Field(
+            description="Name of the passband map",
+            examples=["Filter wheel 1"],
+        ),
     ]
     your_filter_names_to_aavso: list[PassbandMapEntry] | None
 
