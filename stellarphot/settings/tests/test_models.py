@@ -215,6 +215,48 @@ class TestModelAgnosticActions:
         assert all(title_present)
 
 
+@pytest.mark.parametrize(
+    "model,settings",
+    [
+        [Camera, TEST_CAMERA_VALUES.copy()],
+        [Observatory, DEFAULT_OBSERVATORY_SETTINGS.copy()],
+        [PassbandMap, DEFAULT_PASSBAND_MAP.copy()],
+    ],
+)
+class TestModelsWithName:
+    """
+    Tests that are specific to models that have a name property.
+    """
+
+    @pytest.mark.parametrize(
+        "bad_name,error_msg",
+        [
+            ("", "name must not be empty or contain only whitespace"),
+            (" ", "name must not be empty or contain only whitespace"),
+            ("  ", "name must not be empty or contain only whitespace"),
+            (
+                "name with trailing spaces ",
+                "name must not have leading or trailing whitespace",
+            ),
+            (
+                " name with leading spaces",
+                "name must not have leading or trailing whitespace",
+            ),
+        ],
+    )
+    def test_name_cannot_have_awkward_whitespace(
+        self, model, settings, bad_name, error_msg
+    ):
+        settings["name"] = bad_name
+        with pytest.raises(ValidationError, match=error_msg):
+            model(**settings)
+
+    def test_name_unicode_is_ok(self, model, settings):
+        # Test that the name field can be unicode
+        settings["name"] = "π"
+        assert model(**settings).name == "π"
+
+
 def test_camera_unitscheck():
     # Check that the units are checked properly
 

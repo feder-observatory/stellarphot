@@ -474,7 +474,13 @@ class TessTargetFile:
         result = requests.get(
             self.aperture_server + "cgi-bin/gaia_to_aij/upload_request.cgi",
             params=params,
+            timeout=15,  # If no response in 15 seconds we won't ever get one...
         )
+        if result.status_code != 200:
+            raise requests.ConnectionError(
+                f"Failed to retrieve target file: {result.text}"
+            )
+
         links = re.search(
             'href="(.+)"',
             result.text.replace("\n", ""),

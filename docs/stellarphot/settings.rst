@@ -127,14 +127,14 @@ Deleting just the camera settings would be done like this::
         from stellarphot.settings import SavedSettings
 
         saved_settings = SavedSettings()
-        saved_settings.cameras(confirm=True)
+        saved_settings.cameras.delete(confirm=True)
 
 Finally, you can delete a single camera from the saved settings like this::
 
         from stellarphot.settings import SavedSettings
 
         saved_settings = SavedSettings()
-        saved_settings.cameras.delete("My Fancy Camera", confirm=True)
+        saved_settings.cameras.delete(name="My Fancy Camera", confirm=True)
 
 Reference/API
 =============

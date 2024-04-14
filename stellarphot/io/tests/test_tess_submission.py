@@ -3,7 +3,7 @@ import warnings
 
 import pytest
 from astropy.coordinates import SkyCoord
-from requests import ConnectionError
+from requests import ConnectionError, ReadTimeout
 
 from stellarphot.io.tess import TessSubmission, TessTargetFile
 
@@ -85,7 +85,7 @@ def test_target_file():
 
     try:
         tess_target = TessTargetFile(tic_742648307, magnitude=12, depth=10)
-    except ConnectionError:
+    except (ConnectionError, ReadTimeout):
         server_down = True
         tess_target = None  # Assure tess_target is defined so that we can delete it
     except ValueError:
