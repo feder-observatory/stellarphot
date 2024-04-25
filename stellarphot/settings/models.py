@@ -815,18 +815,15 @@ class PassbandMap(BaseModelWithTableRep):
             examples=["Filter wheel 1"],
         ),
     ]
-    your_filter_names_to_aavso: list[PassbandMapEntry] | None
+    your_filter_names_to_aavso: list[PassbandMapEntry]
 
     def model_post_init(self, __context: Any) -> None:
         # Create a dictionary from the list of entries so that the object
         # can behave like a dictionary.
-        if self.your_filter_names_to_aavso is None:
-            self._dict = {}
-        else:
-            self._dict = {
-                entry.your_filter_name: entry.aavso_filter_name.value
-                for entry in self.your_filter_names_to_aavso
-            }
+        self._dict = {
+            entry.your_filter_name: entry.aavso_filter_name.value
+            for entry in self.your_filter_names_to_aavso
+        }
 
     @field_validator("your_filter_names_to_aavso", mode="before")
     @classmethod
@@ -956,7 +953,7 @@ class PhotometrySettings(BaseModelWithTableRep):
         ),
     ]
     passband_map: Annotated[
-        PassbandMap,
+        PassbandMap | None,
         Field(
             description=_extract_short_description(PassbandMap.__doc__),
             json_schema_extra=SCHEMA_EXTRAS,

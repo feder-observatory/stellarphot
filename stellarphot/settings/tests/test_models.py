@@ -460,8 +460,8 @@ class TestPassbandMapDictMethods:
 
 
 def test_passband_map_init_with_none():
-    pb_map = PassbandMap(name="Test", your_filter_names_to_aavso=None)
-    assert pb_map._dict == {}
+    with pytest.raises(ValidationError, match="1 validation error for PassbandMap"):
+        PassbandMap(name="Test", your_filter_names_to_aavso=None)
 
 
 def test_passband_map_init_with_passband_map():
