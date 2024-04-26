@@ -157,5 +157,7 @@ filterwarnings = [
     # pandas will require pyarrow at some point, which is good to know, I guess...
     'ignore:[.\n]*Pyarrow will become a required dependency of pandas[.\n]*:DeprecationWarning',
     # ipyautoui is generating this on import because they still have some pydantic changes to make
-    'ignore:Using extra keyword arguments on `Field` is deprecated:'
+    'ignore:Using extra keyword arguments on `Field` is deprecated:',
+    # ipywidgets is using something deprecated in traitlets
+    'ignore:Deprecated in traitlets 4.1, use the instance:DeprecationWarning',
 ]
