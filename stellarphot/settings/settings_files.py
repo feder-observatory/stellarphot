@@ -173,11 +173,11 @@ class SavedSettings:
             The type of item to get.
         """
         match item_type:
-            case Camera() | "camera":
+            case Camera() | "camera" | Camera.__name__:
                 return self.cameras
-            case Observatory() | "observatory":
+            case Observatory() | "observatory" | Observatory.__name__:
                 return self.observatories
-            case PassbandMap() | "passband_map":
+            case PassbandMap() | "passband_map" | PassbandMap.__name__:
                 return self.passband_maps
             case _:
                 raise ValueError(
@@ -234,3 +234,30 @@ class SavedSettings:
         PassbandMaps.delete(confirm=confirm)
         if delete_settings_folder:
             self.settings_path.rmdir()
+
+    def delete_item(self, item, confirm=False):
+        """
+        Delete an item from the settings.
+
+        Parameters
+        ----------
+        item : Camera | Observatory | PassbandMap
+            The item to delete.
+
+        confirm : bool, optional
+            If True, the item is deleted. If False, a ValueError is raised.
+        """
+        match item:
+            case Camera() as to_delete:
+                klass = Cameras
+            case Observatory() as to_delete:
+                klass = Observatories
+            case PassbandMap() as to_delete:
+                klass = PassbandMaps
+            case _:
+                raise ValueError(
+                    f"Unknown item {item} of type {type(item)}. Must be Camera, "
+                    "Observatory, or PassbandMap"
+                )
+
+        klass.delete(confirm=confirm, name=to_delete.name)
