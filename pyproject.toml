@@ -22,6 +22,7 @@ dependencies = [
     "ipyautoui >=0.7.15",
     "ipyfilechooser",
     "ipywidgets",
+    "jupyter-app-launcher",
     "matplotlib",
     "pandas",
     "photutils >=1.9",
@@ -55,6 +56,11 @@ source = "vcs"
 
 [tool.hatch.build.hooks.vcs]
 version-file = "stellarphot/_version.py"
+
+[tool.hatch.build.targets.wheel.shared-data]
+"stellarphot/notebooks/photometry" = "share/jupyter/stellarphot/photometry"
+"stellarphot/notebooks" = "share/jupyter/stellarphot"
+"stellarphot/notebooks/jp_app_launcher_stellarphot.yaml" = "share/jupyter/jupyter_app_launcher/jp_app_launcher_stellarphot.yaml"
 
 [tool.hatch.build.targets.sdist]
 include = [
