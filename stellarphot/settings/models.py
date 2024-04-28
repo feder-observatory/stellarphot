@@ -509,10 +509,12 @@ class Observatory(BaseModelWithTableRep):
     above example, but the example is given in part to show how to use sexagesimal
     notation.
 
-
     """
 
-    name: Annotated[NonEmptyStr, Field(description="Name of the observatory")]
+    name: Annotated[
+        NonEmptyStr,
+        Field(description="Name of the observatory", examples=["My Observatory"]),
+    ]
     latitude: Annotated[
         Latitude,
         _UnitQuantTypePydanticAnnotation,
@@ -536,7 +538,6 @@ class Observatory(BaseModelWithTableRep):
             examples=[
                 "-96.7678",
                 "-96d46m04.08s",
-                "263.2322",
                 "263.2322 degree",
                 "263d13m55.92s",
             ],
@@ -547,7 +548,7 @@ class Observatory(BaseModelWithTableRep):
         WithPhysicalType("length"),
         Field(
             description="Elevation of the observatory",
-            examples=["1000 m", "1 km", "3.241e-14 pc"],
+            examples=["1000 m", "1 km", "3.241e-14 pc", "1e12 nm"],
         ),
     ]
     AAVSO_code: Annotated[str | None, Field(description="AAVSO code for observer")] = (
