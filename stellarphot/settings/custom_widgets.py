@@ -292,6 +292,24 @@ class ChooseOrMakeNew(ipw.VBox):
 
         # Use a closure here to capture the current state of the widget
         def save_confirm_handler(change):
+            """
+            This handles interactions with the confirmation widget, which is displayed
+            when the user either tries to save a new item with the same name as an
+            existing one or tries to save an edited item with the same name as an
+            existing one.
+
+            The widget has three possible values: True (yes), False (no), and None
+
+            This widget is called whent the widget value changes, which can happen two
+            ways:
+
+            1. The user clicks the "yes" or "no" button, in which case the value will
+                be True or False, respectively.
+            2. This handler sets the value to None after the user has clicked Yes or No.
+
+            The second case is the reason most of the handler is wrapped in an
+            if statement.
+            """
             # value of None means the widget has been reset to not answered
             if change["new"] is not None:
                 item = self._item_widget.model(**self._item_widget.value)
