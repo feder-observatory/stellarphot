@@ -296,7 +296,7 @@ class Camera(BaseModelWithTableRep):
         gain = self.gain
 
         try:
-            gain.to(self.read_noise / self.data_unit)
+            gain.to(self.read_noise.unit / self.data_unit)
         except UnitConversionError as e:
             raise ValueError(
                 f"Gain units {gain.unit} are not compatible with "
