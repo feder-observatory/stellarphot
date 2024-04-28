@@ -252,23 +252,27 @@ class Camera(BaseModelWithTableRep):
         NonEmptyStr,
         Field(
             description="Name of the camera",
-            examples=["SBIG ST-8300M", "ZWO ASI1600"],
+            examples=["SBIG FakeCam", "ZWO NadaCam", "CG16m"],
         ),
     ]
     data_unit: UnitType = Field(
-        description="units of the data", examples=["adu", "counts", "DN", "electrons"]
+        description="units of the data", examples=["adu", "DN", "count"]
     )
     gain: QuantityType = Field(
         description="unit should be consistent with data and read noise",
-        examples=["1.0 electron / adu"],
+        examples=["1.5 electron / adu", "1.0 electron / DN", "1.0 photon / count"],
     )
     read_noise: QuantityType = Field(
         description="unit should be consistent with dark current",
-        examples=["10.0 electron"],
+        examples=["10.0 electron", "10.0 electron", "10.0 photon"],
     )
     dark_current: QuantityType = Field(
         description="unit consistent with read noise, per unit time",
-        examples=["0.01 electron / second"],
+        examples=[
+            "0.01 electron / second",
+            "0.01 electron / second",
+            "0.01 photon / second",
+        ],
     )
     pixel_scale: Annotated[
         QuantityType,
@@ -279,7 +283,7 @@ class Camera(BaseModelWithTableRep):
         QuantityType,
         Field(
             description="maximum data value while performing photometry",
-            examples=["50000 adu"],
+            examples=["50000 adu", "50000 DN", "50000 count"],
             gt=0,
         ),
     ]
