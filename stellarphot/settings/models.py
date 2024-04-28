@@ -771,13 +771,13 @@ class PassbandMap(BaseModelWithTableRep):
     your_filter_names_to_aavso : list[`stellarphot.settings.PassbandMapEntry`]
         A list of pairs of your filter name and the corresponding AAVSO filter name.
         This is used to rename the passband entries in the output photometry table.
-        Note that, as shown in the example below, you can intialize this with a
+        Note that, as shown in the example below, you can initialize this with a
         dictionary, and it will be converted to a list of `PassbandMapEntry` objects.
 
     Notes
     -----
 
-    This class behaves like a dictionary interms of accessing individual entries but
+    This class behaves like a dictionary in terms of accessing individual entries but
     you _cannot_ use the `dict` methods to modify the object. This means, for example,
     that if ``my_map`` is a `PassbandMap` object, you can access the AAVSO passband
     that corresponds to your ``B`` passband with ``my_map["B"]`` but you _cannot_
