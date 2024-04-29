@@ -306,10 +306,9 @@ class TestModelExamples:
 
             mod = model(**settings)
 
-            # Really need to compare some fields as quantities/numbers but don't
-            # want to hard code that here. So we try comparing as strings, and if
-            # that fails we try converting to quantitty. If that fails, then the test
-            # fails.
+            # Really need to compare some fields as
+            # latitude/longitude/quantities/numbers but don't want to hard code that
+            # here.
             for k, v in settings.items():
                 model_value = getattr(mod, k)
 
