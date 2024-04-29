@@ -12,6 +12,8 @@ __all__ = ["SavedSettings", "SETTINGS_FILE_VERSION"]
 # or never.
 SETTINGS_FILE_VERSION = "2"  # value chosen to match amjor version of stellarphot
 
+ENCODING = "utf-8"
+
 
 class SavedFileOperations:
     # Provide a place to store the path to the settings file. Annotate as a ClassVar
@@ -22,7 +24,7 @@ class SavedFileOperations:
     def save(self):
         file_path = self._settings_path / self._file_name
         json_data = self.model_dump_json(indent=4)
-        with file_path.open("w") as f:
+        with file_path.open("w", encoding=ENCODING) as f:
             f.write(json_data)
 
     def get(self, name):
@@ -42,7 +44,7 @@ class SavedFileOperations:
         if not file_path.exists():
             instance = cls(as_dict={})
         else:
-            with file_path.open() as f:
+            with file_path.open(encoding=ENCODING) as f:
                 instance = cls.model_validate_json(f.read())
 
         return instance
