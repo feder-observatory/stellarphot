@@ -4,6 +4,7 @@
 import ipywidgets as ipw
 import traitlets as tr
 from ipyautoui.autoobject import AutoObject
+from ipyautoui.custom.iterable import ItemBox
 
 from stellarphot.settings import (
     Camera,
@@ -239,8 +240,16 @@ class ChooseOrMakeNew(ipw.VBox):
             State that ``disabled`` should be set to.
         """
 
-        if hasattr(top, "disabled") or isinstance(top, AutoObject):
+        if isinstance(top, AutoObject):
             top.disabled = value
+        elif isinstance(top, ItemBox):
+            if value:
+                # Disabled, so do not show the add/remove buttons
+                top.add_remove_controls = "none"
+            else:
+                # Enabled, so show the add/remove buttons
+                top.add_remove_controls = "add_remove"
+
         try:
             for child in top.children:
                 self._set_disable_state_nested_models(child, value)

@@ -1,5 +1,6 @@
 import ipywidgets as ipw
 import pytest
+from ipyautoui.custom.iterable import ItemBox, ItemControl
 
 from stellarphot.settings import Camera, Observatory, PassbandMap, SavedSettings
 from stellarphot.settings.custom_widgets import ChooseOrMakeNew, Confirm
@@ -197,6 +198,32 @@ class TestChooseOrMakeNew:
         choose_or_make_new = ChooseOrMakeNew("passband_map", _testing_path=tmp_path)
         assert len(choose_or_make_new._choose_existing.options) == 2
         assert choose_or_make_new._choose_existing.options[0][0] == passband_map.name
+
+    def test_passband_map_buttons_are_disabled(self, tmp_path):
+        # When an existing PassbandMap is selected the add/remove buttons
+        # for individual rows should not be displayed.
+        saved = SavedSettings(_testing_path=tmp_path)
+        passband_map = PassbandMap(**DEFAULT_PASSBAND_MAP)
+        saved.add_item(passband_map)
+
+        choose_or_make_new = ChooseOrMakeNew("passband_map", _testing_path=tmp_path)
+
+        # There is no great way to get to the ItemBox widget that contains and controls
+        # the add/remove buttons, so we keep going down through widget children until we
+        # get to an ItemBox and then check that the buttons are disabled.
+        # Recursion is the easiest way to do that, so recurse we will..
+        def find_item_box(top_widget):
+            for kid in top_widget.children:
+                if isinstance(kid, ItemBox):
+                    return kid
+                if hasattr(kid, "children"):
+                    result = find_item_box(kid)
+                    if result:
+                        return result
+
+        item_box = find_item_box(choose_or_make_new)
+        print(f"{item_box.add_remove_controls=}")
+        assert item_box.add_remove_controls == ItemControl.none
 
 
 class TestConfirm:
