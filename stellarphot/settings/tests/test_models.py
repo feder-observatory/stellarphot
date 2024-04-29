@@ -1,8 +1,9 @@
 import json
+import re
 
 import astropy.units as u
 import pytest
-from astropy.coordinates import EarthLocation, SkyCoord
+from astropy.coordinates import EarthLocation, Latitude, Longitude, SkyCoord
 from astropy.table import Table
 from astropy.time import Time
 from pydantic import ValidationError
@@ -255,6 +256,83 @@ class TestModelsWithName:
         # Test that the name field can be unicode
         settings["name"] = "π"
         assert model(**settings).name == "π"
+
+
+# Only include models here that have examples that should be tested
+@pytest.mark.parametrize(
+    "model,settings",
+    [
+        [Camera, TEST_CAMERA_VALUES.copy()],
+        [Observatory, DEFAULT_OBSERVATORY_SETTINGS.copy()],
+    ],
+)
+class TestModelExamples:
+    """ "
+    Test that you can make a valid model from the examples. The assumption is that
+    all of the first choices in the examples make a valid model, all of the second
+    choices make a valid model, etc.
+
+    The purpose for including this test is that users may use the examples as guidance
+    so we should make sure the guidance isn't nonsense.
+    """
+
+    def test_example(self, model, settings):
+        # Get the model's fields so that we can get their examples. fields is dict
+        # with the field names as keys and the field objects as values.
+        fields = model.model_fields
+
+        examples = {k: f.examples for k, f in fields.items()}
+        example_lengths = set(len(e) for e in examples.values() if e is not None)
+
+        # We can't handle more than two different example lengths in an unambiguous way,
+        # so we raise an error if we have more than two.
+        if len(example_lengths) > 2:
+            raise ValueError(f"Too many different example lengths for {model.__name__}")
+        elif min(example_lengths) > 1 and len(example_lengths) == 2:
+            raise ValueError(
+                "Must have the same number of examples for all fields "
+                "or one example for some fields and the same number for "
+                "the rest."
+            )
+        max_len = max(example_lengths)
+        for k in examples.keys():
+            if examples[k] is None:
+                examples[k] = [None] * max_len
+            elif len(examples[k]) == 1:
+                examples[k] = examples[k] * max_len
+
+        for i in range(max_len):
+            settings = {k: examples[k][i] for k in examples.keys()}
+
+            mod = model(**settings)
+
+            # Really need to compare some fields as
+            # latitude/longitude/quantities/numbers but don't want to hard code that
+            # here.
+            for k, v in settings.items():
+                model_value = getattr(mod, k)
+
+                # For some foolish reason Observatory allows the latitude and longitude
+                # to be entered as floats, which we assume are intended to have unit of
+                # degrees. Test and handle that case...
+                print(k, v)
+                if k.lower() in ["latitude", "longitude"] and re.match(
+                    r"[+-]?\d+\.\d+$", v
+                ):
+                    v = v + " degree"
+
+                # Also, latitude and longitude are not Quantity, so handle that too
+                if k == "latitude":
+                    v = Latitude(v)
+                elif k == "longitude":
+                    v = Longitude(v)
+
+                if isinstance(model_value, u.Quantity):
+                    assert model_value == u.Quantity(v)
+                elif isinstance(model_value, u.UnitBase):
+                    assert model_value == u.Unit(v)
+                else:
+                    assert model_value == v
 
 
 def test_camera_unitscheck():
