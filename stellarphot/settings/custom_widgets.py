@@ -267,6 +267,9 @@ class ChooseOrMakeNew(ipw.VBox):
             except ValueError:
                 # This will happen if the item already exists
                 self._confirm_edit.show()
+            else:
+                # If saving works, we update the choices and select the new item
+                update_choices_and_select_new()
 
         def update_choices_and_select_new():
             """
@@ -277,6 +280,8 @@ class ChooseOrMakeNew(ipw.VBox):
                 value_to_select = new_widget.model(**new_widget.value)
                 self._construct_choices()
                 self._choose_existing.value = value_to_select
+                # Make sure the edit button is displayed
+                self._edit_button.layout.display = "flex"
 
         # This is the mechanism for adding callbacks to the save button.
         new_widget.savebuttonbar.fns_onsave_add_action(saver)
