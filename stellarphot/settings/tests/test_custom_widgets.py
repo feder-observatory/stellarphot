@@ -188,18 +188,7 @@ class TestChooseOrMakeNew:
         # The item widget should now have the values of the second observatory
         assert Observatory(**choose_or_make_new._item_widget.value) == observatory2
 
-    def test_make_passband_map(self, tmp_path):
-        # Make a passband map and save it, then check that it is in the dropdown
-        saved = SavedSettings(_testing_path=tmp_path)
-        passband_map = PassbandMap(**DEFAULT_PASSBAND_MAP)
-        saved.add_item(passband_map)
-
-        # Should create a new passband map
-        choose_or_make_new = ChooseOrMakeNew("passband_map", _testing_path=tmp_path)
-        assert len(choose_or_make_new._choose_existing.options) == 2
-        assert choose_or_make_new._choose_existing.options[0][0] == passband_map.name
-
-    def test_passband_map_buttons_are_disabled(self, tmp_path):
+    def test_passband_map_buttons_are_disabled_or_enabled(self, tmp_path):
         # When an existing PassbandMap is selected the add/remove buttons
         # for individual rows should not be displayed.
         saved = SavedSettings(_testing_path=tmp_path)
@@ -222,8 +211,23 @@ class TestChooseOrMakeNew:
                         return result
 
         item_box = find_item_box(choose_or_make_new)
-        print(f"{item_box.add_remove_controls=}")
         assert item_box.add_remove_controls == ItemControl.none
+
+        # Next, we will click the "Edit" button and check that the buttons are enabled.
+        choose_or_make_new._edit_button.click()
+        item_box = find_item_box(choose_or_make_new)
+        assert item_box.add_remove_controls == ItemControl.add_remove
+
+    def test_make_passband_map(self, tmp_path):
+        # Make a passband map and save it, then check that it is in the dropdown
+        saved = SavedSettings(_testing_path=tmp_path)
+        passband_map = PassbandMap(**DEFAULT_PASSBAND_MAP)
+        saved.add_item(passband_map)
+
+        # Should create a new passband map
+        choose_or_make_new = ChooseOrMakeNew("passband_map", _testing_path=tmp_path)
+        assert len(choose_or_make_new._choose_existing.options) == 2
+        assert choose_or_make_new._choose_existing.options[0][0] == passband_map.name
 
 
 class TestConfirm:
