@@ -22,6 +22,7 @@ dependencies = [
     "ipyautoui >=0.7.15",
     "ipyfilechooser",
     "ipywidgets",
+    "jupyter-app-launcher",
     "matplotlib",
     "pandas",
     "photutils >=1.9",
@@ -55,6 +56,11 @@ source = "vcs"
 
 [tool.hatch.build.hooks.vcs]
 version-file = "stellarphot/_version.py"
+
+[tool.hatch.build.targets.wheel.shared-data]
+"stellarphot/notebooks/photometry" = "share/jupyter/stellarphot/photometry"
+"stellarphot/notebooks" = "share/jupyter/stellarphot"
+"stellarphot/notebooks/jp_app_launcher_stellarphot.yaml" = "share/jupyter/jupyter_app_launcher/jp_app_launcher_stellarphot.yaml"
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -157,5 +163,7 @@ filterwarnings = [
     # pandas will require pyarrow at some point, which is good to know, I guess...
     'ignore:[.\n]*Pyarrow will become a required dependency of pandas[.\n]*:DeprecationWarning',
     # ipyautoui is generating this on import because they still have some pydantic changes to make
-    'ignore:Using extra keyword arguments on `Field` is deprecated:'
+    'ignore:Using extra keyword arguments on `Field` is deprecated:',
+    # ipywidgets is using something deprecated in traitlets
+    'ignore:Deprecated in traitlets 4.1, use the instance:DeprecationWarning',
 ]

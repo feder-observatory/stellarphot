@@ -24,6 +24,10 @@ def ui_generator(model):
     # the user to understand if they are shown but disabled.
     ui.show_null = True
 
+    # In the same spirit, the button to show/hide nullables should be hidden
+    # too.
+    ui.bn_shownull.layout.display = "none"
+
     # Set the description to the first sentence of the docstring. The default is
     # to use the entire docstring, which is often too long.
     ui.description = _extract_short_description(model.__doc__)

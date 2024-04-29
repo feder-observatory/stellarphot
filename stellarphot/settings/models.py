@@ -771,13 +771,13 @@ class PassbandMap(BaseModelWithTableRep):
     your_filter_names_to_aavso : list[`stellarphot.settings.PassbandMapEntry`]
         A list of pairs of your filter name and the corresponding AAVSO filter name.
         This is used to rename the passband entries in the output photometry table.
-        Note that, as shown in the example below, you can intialize this with a
+        Note that, as shown in the example below, you can initialize this with a
         dictionary, and it will be converted to a list of `PassbandMapEntry` objects.
 
     Notes
     -----
 
-    This class behaves like a dictionary interms of accessing individual entries but
+    This class behaves like a dictionary in terms of accessing individual entries but
     you _cannot_ use the `dict` methods to modify the object. This means, for example,
     that if ``my_map`` is a `PassbandMap` object, you can access the AAVSO passband
     that corresponds to your ``B`` passband with ``my_map["B"]`` but you _cannot_
@@ -815,18 +815,15 @@ class PassbandMap(BaseModelWithTableRep):
             examples=["Filter wheel 1"],
         ),
     ]
-    your_filter_names_to_aavso: list[PassbandMapEntry] | None
+    your_filter_names_to_aavso: list[PassbandMapEntry]
 
     def model_post_init(self, __context: Any) -> None:
         # Create a dictionary from the list of entries so that the object
         # can behave like a dictionary.
-        if self.your_filter_names_to_aavso is None:
-            self._dict = {}
-        else:
-            self._dict = {
-                entry.your_filter_name: entry.aavso_filter_name.value
-                for entry in self.your_filter_names_to_aavso
-            }
+        self._dict = {
+            entry.your_filter_name: entry.aavso_filter_name.value
+            for entry in self.your_filter_names_to_aavso
+        }
 
     @field_validator("your_filter_names_to_aavso", mode="before")
     @classmethod
@@ -956,7 +953,7 @@ class PhotometrySettings(BaseModelWithTableRep):
         ),
     ]
     passband_map: Annotated[
-        PassbandMap,
+        PassbandMap | None,
         Field(
             description=_extract_short_description(PassbandMap.__doc__),
             json_schema_extra=SCHEMA_EXTRAS,

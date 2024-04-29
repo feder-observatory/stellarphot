@@ -1,0 +1,7 @@
+- title: Saveable settings for testing
+  description: Settings for camera, observatory and passbands
+  source: ../stellarphot/saveable-settings.ipynb
+  icon: ../stellarphot/photometry/glowing-waffle-3-smaller.svg
+  cwd: not_used
+  type: notebook
+  catalog: Stellarphot

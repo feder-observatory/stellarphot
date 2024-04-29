@@ -241,3 +241,45 @@ class TestSavedSettings:
         saved_settings = SavedSettings(_testing_path=tmp_path)
         with pytest.raises(ValueError, match="Unknown item foo of type"):
             saved_settings.add_item("foo")
+
+    @pytest.mark.parametrize(
+        "klass,item_json",
+        [(Camera, CAMERA), (Observatory, OBSERVATORY), (PassbandMap, PASSBAND_MAP)],
+    )
+    def test_saved_settings_delete_item(self, klass, item_json, tmp_path):
+        # Test that items can be deleted.
+        saved_settings = SavedSettings(_testing_path=tmp_path)
+        # Add item.
+        item = klass.model_validate_json(item_json)
+        saved_settings.add_item(item)
+        # Verify that the item is there
+        assert saved_settings.get_items(klass.__name__).as_dict[item.name] == item
+
+        saved_settings.delete_item(item, confirm=True)
+        # Verify that the item was deleted.
+        assert len(saved_settings.get_items(klass.__name__).as_dict) == 0
+
+    def test_saved_settings_delete_item_with_unknown_item_fails(self, tmp_path):
+        # Test that trying to delete an unknown item fails.
+        saved_settings = SavedSettings(_testing_path=tmp_path)
+        with pytest.raises(ValueError, match="Unknown item foo of type"):
+            saved_settings.delete_item("foo", confirm=True)
+
+    def test_saved_settings_delete_item_with_confirm_false_fails(self, tmp_path):
+        # Test that trying to delete an item without confirming fails.
+        saved_settings = SavedSettings(_testing_path=tmp_path)
+        # Make a camera and save it
+        camera = Camera.model_validate_json(CAMERA)
+        saved_settings.add_item(camera)
+        with pytest.raises(ValueError, match="You must confirm deletion by passing"):
+            saved_settings.delete_item(camera, confirm=False)
+
+    def test_saved_settings_delete_item_valid_item_not_in_collection_fails(
+        self, tmp_path
+    ):
+        # Test that trying to delete an item that is not in the collection fails.
+        saved_settings = SavedSettings(_testing_path=tmp_path)
+        # Make a camera but don't save it
+        camera = Camera.model_validate_json(CAMERA)
+        with pytest.raises(ValueError, match="not found in"):
+            saved_settings.delete_item(camera, confirm=True)
