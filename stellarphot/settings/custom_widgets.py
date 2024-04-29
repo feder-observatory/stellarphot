@@ -91,9 +91,7 @@ class ChooseOrMakeNew(ipw.VBox):
 
         if len(self._choose_existing.options) == 1:
             # There are no items, so we are making a new one
-            self._choose_existing.disabled = True
-            self._choose_existing.layout.display = "none"
-            self._title.value = f"<h2>Make a new {item_type_name}</h2>"
+            self._handle_selection({"new": "none"})
         else:
             self._handle_selection({"new": self._choose_existing.value})
 

@@ -198,6 +198,15 @@ class TestChooseOrMakeNew:
         assert len(choose_or_make_new._choose_existing.options) == 2
         assert choose_or_make_new._choose_existing.options[0][0] == passband_map.name
 
+    def test_no_edit_button_when_there_are_no_items(self, tmp_path):
+        # Should not have an edit button when there are no items
+        saved = SavedSettings(_testing_path=tmp_path)
+        # Make sure there are no cameras
+        assert len(saved.get_items("camera").as_dict) == 0
+
+        choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
+        assert choose_or_make_new._edit_button.layout.display == "none"
+
 
 class TestConfirm:
     def test_initial_value(self):
