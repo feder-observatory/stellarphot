@@ -283,3 +283,23 @@ class TestSavedSettings:
         camera = Camera.model_validate_json(CAMERA)
         with pytest.raises(ValueError, match="not found in"):
             saved_settings.delete_item(camera, confirm=True)
+
+    def test_saved_settings_round_trip_with_unicode_name(self, tmp_path):
+        # Test that items with unicode names can be saved and loaded.
+        saved_settings = SavedSettings(_testing_path=tmp_path)
+        # Add a camera. This particular name causes a failure on Windows because the
+        # default encoding doesn't include Korean characters.
+        camera_name = "크레이그"
+        camera = Camera(
+            name=camera_name,
+            data_unit="adu",
+            gain="1.5 electron / adu",
+            read_noise="10.0 electron",
+            dark_current="0.01 electron / s",
+            pixel_scale="0.6 arcsec / pix",
+            max_data_value="50000.0 adu",
+        )
+        saved_settings.add_item(camera)
+        # Load the camera.
+        loaded_camera = saved_settings.get_items("camera").as_dict[camera_name]
+        assert loaded_camera == camera
