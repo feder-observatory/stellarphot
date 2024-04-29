@@ -302,6 +302,21 @@ def test_camera_incompatible_gain_units():
         )
 
 
+def test_camera_unitsless_gain():
+    # Regression test for #299
+    c = Camera(
+        name="should_work",
+        data_unit="electron",
+        gain="1",
+        dark_current="0.01 electron / second",
+        read_noise="1.2 electron",
+        pixel_scale="0.55 arcsec / pix",
+        max_data_value="80000 electron",
+    )
+
+    assert c.gain == u.Quantity(1)
+
+
 def test_camera_incompatible_max_val_units():
     camera_for_test = TEST_CAMERA_VALUES.copy()
     # data unit is adu, not count

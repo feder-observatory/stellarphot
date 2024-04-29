@@ -7,7 +7,7 @@ from typing import Annotated, Any, Literal
 from astropy.coordinates import EarthLocation, Latitude, Longitude, SkyCoord
 from astropy.io.misc.yaml import AstropyDumper, AstropyLoader
 from astropy.time import Time
-from astropy.units import Quantity, Unit
+from astropy.units import Quantity, Unit, UnitConversionError
 from astropy.utils import lazyproperty
 from pydantic import (
     AfterValidator,
@@ -294,15 +294,14 @@ class Camera(BaseModelWithTableRep):
         # Check that gain and read noise have compatible units, that is that
         # gain is read noise per data unit.
         gain = self.gain
-        if (
-            len(gain.unit.bases) != 2
-            or gain.unit.bases[0] != rn_unit
-            or gain.unit.bases[1] != self.data_unit
-        ):
+
+        try:
+            gain.to(self.read_noise.unit / self.data_unit)
+        except UnitConversionError as e:
             raise ValueError(
                 f"Gain units {gain.unit} are not compatible with "
                 f"read noise units {rn_unit}."
-            )
+            ) from e
 
         # Check that dark current and read noise have compatible units, that is
         # that dark current is read noise per second.
