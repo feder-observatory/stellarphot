@@ -758,11 +758,9 @@ class PassbandMapEntry(BaseModel):
     """
 
     your_filter_name: Annotated[
-        str, Field(description="Instrumental Filter Name", examples=["Sloan r"])
+        NonEmptyStr, Field(description="Instrumental Filter Name")
     ]
-    aavso_filter_name: Annotated[
-        AAVSOFilters, Field(title="AAVSO Filter Name", default="SR")
-    ]
+    aavso_filter_name: Annotated[AAVSOFilters, Field(title="AAVSO Filter Name")]
 
 
 class PassbandMap(BaseModelWithTableRep):

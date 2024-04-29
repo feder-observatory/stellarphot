@@ -563,6 +563,12 @@ def test_passband_map_init_with_passband_map():
     assert pb_map == pb_map2
 
 
+def test_passband_map_entry_empty_name_raises_error():
+    # Name of your filter cannot be empty
+    with pytest.raises(ValidationError, match="name must not be empty"):
+        PassbandMapEntry(your_filter_name="", aavso_filter_name="V")
+
+
 def test_create_invalid_exoplanet():
     # Set some bad values and make sure they raise validation errors
     values = DEFAULT_EXOPLANET_SETTINGS.copy()
