@@ -186,6 +186,9 @@ class ChooseOrMakeNew(ipw.VBox):
             self._item_widget.is_valid.layout.display = "none"
             self._item_widget.value = self._get_item(change["new"].name)
 
+            # Display the edit button
+            self._edit_button.layout.display = "flex"
+
             # Really only applies to PassbandMap, which has nested models,
             # but does no harm in the other cases
             self._set_disable_state_nested_models(self._item_widget, True)

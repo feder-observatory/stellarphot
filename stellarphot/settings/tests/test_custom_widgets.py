@@ -224,6 +224,18 @@ class TestChooseOrMakeNew:
         # The edit button should now be displayed
         assert choose_or_make_new._edit_button.layout.display != "none"
 
+        # Select Make a new camera again
+        choose_or_make_new._choose_existing.value = "none"
+
+        # The edit button should now be hidden
+        assert choose_or_make_new._edit_button.layout.display == "none"
+
+        # Select the camera we made
+        choose_or_make_new._choose_existing.value = Camera(**TEST_CAMERA_VALUES)
+
+        # The edit button should now be displayed
+        assert choose_or_make_new._edit_button.layout.display != "none"
+
 
 class TestConfirm:
     def test_initial_value(self):
