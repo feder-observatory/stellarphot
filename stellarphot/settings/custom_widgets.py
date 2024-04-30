@@ -105,18 +105,10 @@ class ChooseOrMakeNew(ipw.VBox):
         # but does no harm in the other cases (true of both lines below)
         self._item_widget.open_nested = True
 
-        self._item_widget.savebuttonbar.fns_onsave_add_action(self._save_confirmation())
-
-        # Link validation value to save button. The use of directional link
-        # is important to make sure the validation state controls
-        # the save button state and not the other way around.
-        ipw.dlink(
-            (self._item_widget.is_valid, "value"),
-            (self._item_widget.savebuttonbar.bn_save, "disabled"),
-            transform=lambda x: not x,
-        )
-
         # Set up some observers
+
+        # Respond to user clicking the save button
+        self._item_widget.savebuttonbar.fns_onsave_add_action(self._save_confirmation())
 
         # Respond to user interacting with a confirmation widget
         # Hide the save button bar so the user gets the confirmation instead

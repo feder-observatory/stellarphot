@@ -267,6 +267,42 @@ class TestChooseOrMakeNew:
         # The edit button should now be displayed
         assert choose_or_make_new._edit_button.layout.display != "none"
 
+    def test_save_button_disabled_when_no_changes(self, tmp_path):
+        # Immediately after the edit button has been clicked, the save button should be
+        # disabled because no changes have been made yet.
+        #
+        # That should remain true even after the user makes a change and then saves it
+        # and then edits again.
+        saved = SavedSettings(_testing_path=tmp_path)
+        camera = Camera(**TEST_CAMERA_VALUES)
+        saved.add_item(camera)
+
+        choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
+        # Simulate a click on the edit button...
+        choose_or_make_new._edit_button.click()
+
+        # The save button should be disabled
+        assert choose_or_make_new._item_widget.savebuttonbar.bn_save.disabled
+
+        # Edit a value in the camera so the save button is enabled
+        new_gain = 2 * TEST_CAMERA_VALUES["gain"]
+        choose_or_make_new._item_widget.di_widgets["gain"].value = str(new_gain)
+
+        # The save button should now be enabled
+        assert not choose_or_make_new._item_widget.savebuttonbar.bn_save.disabled
+
+        # Save the change
+        choose_or_make_new._item_widget.savebuttonbar.bn_save.click()
+
+        # Confirm the save
+        choose_or_make_new._confirm_edit._yes.click()
+
+        # Edit again...
+        choose_or_make_new._edit_button.click()
+
+        # The save button should be disabled
+        assert choose_or_make_new._item_widget.savebuttonbar.bn_save.disabled
+
 
 class TestConfirm:
     def test_initial_value(self):
