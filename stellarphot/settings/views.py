@@ -32,6 +32,9 @@ def ui_generator(model):
     # to use the entire docstring, which is often too long.
     ui.description = _extract_short_description(model.__doc__)
 
+    # Always show nested models
+    ui.open_nested = True
+
     # Validation is checked every time a value is changed, and the contents of each
     # field are written to the widget if validation passes. In at least one case,
     # the "Observatory" model, this is not helpful because the format of lat/lon is
@@ -43,4 +46,34 @@ def ui_generator(model):
         if hasattr(widget, "continuous_update"):
             widget.continuous_update = False
 
+    # The save and revert buttons should be enabled only when the user has made a
+    # change AND the value in the widget is a valid pydantic model.
+    # We begin by disabling the buttons.
+    ui.savebuttonbar.bn_save.disabled = True
+    ui.savebuttonbar.bn_revert.disabled = True
+
+    # Now we add observers to enable/disable the buttons based on the validity of
+    # the value and whether there are unsaved changes.
+    for button in [ui.savebuttonbar.bn_save, ui.savebuttonbar.bn_revert]:
+        ui.is_valid.observe(_handle_save_revert_button_state(ui, button), "value")
+        ui.savebuttonbar.observe(
+            _handle_save_revert_button_state(ui, button), "unsaved_changes"
+        )
+
     return ui
+
+
+def _handle_save_revert_button_state(widget, button):
+    """
+    Return a callback that will enable/disable the save and revert buttons based
+    on the validity of the value and whether there are unsaved changes.
+    """
+
+    def handler(_):
+        """
+        A handler must take an argument but we don't use it here.
+        """
+        needs_to_save = widget.is_valid and widget.savebuttonbar.unsaved_changes
+        button.disabled = not needs_to_save
+
+    return handler
