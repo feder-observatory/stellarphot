@@ -271,8 +271,8 @@ class TestChooseOrMakeNew:
         # Immediately after the edit button has been clicked, the save button should be
         # disabled because no changes have been made yet.
         #
-        # That should remain true even after the user makes a change and then saves it
-        # and then edits again.
+        # That should remain true even after the user makes a change, then saves it
+        # and then edits again but has not yet made any changes.
         saved = SavedSettings(_testing_path=tmp_path)
         camera = Camera(**TEST_CAMERA_VALUES)
         saved.add_item(camera)
