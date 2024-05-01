@@ -14,7 +14,7 @@ class TestUiGenerator:
         # Which means we don't need the button to show/hide them
         assert ui.bn_shownull.layout.display == "none"
 
-        # For now we do not show the validaation output because it is painfully
+        # For now we do not show the validation output because it is painfully
         # verbose and not very helpful.
         assert not ui.show_validation
 
