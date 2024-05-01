@@ -27,22 +27,24 @@ class TestUiGenerator:
             if hasattr(widget, "continuous_update"):
                 assert not widget.continuous_update
 
-    def test_disabled_state_save_revert_button(self):
-        # We want the save and revert buttons to be enabled only when
+    def test_disabled_state_save_button(self):
+        # We want the save button to be enabled only when
         # 1. The user has made a change, AND
         # 2. The value in the widget is a valid pydantic model
 
         ui = ui_generator(Camera)
         # The save button should be disabled
         assert ui.savebuttonbar.bn_save.disabled
-        assert ui.savebuttonbar.bn_revert.disabled
 
         # Set one field to a valid value....
         ui.value["name"] = "test"
 
-        # ...and the save button should still be disabled
+        # We need to manually indicate a change has been made
+        ui.savebuttonbar.unsaved_changes = True
+
+        # ...and the save button should still be disabled, because
+        # the rest of the fields are not valid.
         assert ui.savebuttonbar.bn_save.disabled
-        assert ui.savebuttonbar.bn_revert.disabled
 
         # Set a valid value
         ui.value = TEST_CAMERA_VALUES
@@ -55,7 +57,6 @@ class TestUiGenerator:
 
         # The save button should now be enabled
         assert not ui.savebuttonbar.bn_save.disabled
-        assert not ui.savebuttonbar.bn_revert.disabled
 
         # Click on save
         ui.savebuttonbar.bn_save.click()
@@ -65,4 +66,29 @@ class TestUiGenerator:
 
         # The save and revert buttons should now be disabled
         assert ui.savebuttonbar.bn_save.disabled
+
+    def test_disabled_state_revert_button(self):
+        # We want the revert button to be enabled whenever the user has made a change,
+        # regardless of whether the value is valid or not.
+
+        ui = ui_generator(Camera)
+        # The revert button should be disabled
         assert ui.savebuttonbar.bn_revert.disabled
+
+        # Set one field to a valid value -- the rest of the fields are still invalid
+        ui.value["name"] = "test"
+
+        # We need to manually indicate a change has been made
+        ui.savebuttonbar.unsaved_changes = True
+
+        # ...and the revert button should be enabled
+        assert not ui.savebuttonbar.bn_revert.disabled
+
+        # Click on revert
+        ui.savebuttonbar.bn_revert.click()
+
+        # The revert button should now be disabled
+        assert ui.savebuttonbar.bn_revert.disabled
+
+        # Unsaved changes should be False
+        assert not ui.savebuttonbar.unsaved_changes
