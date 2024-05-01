@@ -54,26 +54,53 @@ def ui_generator(model):
 
     # Now we add observers to enable/disable the buttons based on the validity of
     # the value and whether there are unsaved changes.
-    for button in [ui.savebuttonbar.bn_save, ui.savebuttonbar.bn_revert]:
-        ui.is_valid.observe(_handle_save_revert_button_state(ui, button), "value")
-        ui.savebuttonbar.observe(
-            _handle_save_revert_button_state(ui, button), "unsaved_changes"
-        )
+
+    # The save button should be enabled only when the user has made a change AND
+    # the value in the widget is a valid pydantic model.
+    ui.is_valid.observe(
+        _handle_save_revert_button_state(ui, ui.savebuttonbar.bn_save), "value"
+    )
+    ui.savebuttonbar.observe(
+        _handle_save_revert_button_state(ui, ui.savebuttonbar.bn_save),
+        "unsaved_changes",
+    )
+
+    # The revert button should be enabled only when there are unsaved changes.
+    ui.savebuttonbar.observe(
+        _handle_save_revert_button_state(
+            ui, ui.savebuttonbar.bn_revert, must_be_valid=False
+        ),
+        "unsaved_changes",
+    )
 
     return ui
 
 
-def _handle_save_revert_button_state(widget, button):
+def _handle_save_revert_button_state(widget, button, must_be_valid=True):
     """
     Return a callback that will enable/disable the save and revert buttons based
     on the validity of the value and whether there are unsaved changes.
+
+    Parameters
+    ----------
+    widget : `ipyautoui.AutoUi`
+        The user interface widget.
+
+    button : `ipywidgets.Button`
+        The button to enable/disable based on the widget state.
+
+    must_be_valid : bool, optional
+        If `True`, the button will only be enabled if the value in the widget is
+        a valid pydantic model. If `False`, the button will be enabled regardless
+        of the validity of the value. Default is `True`.
     """
 
     def handler(_):
         """
         A handler must take an argument but we don't use it here.
         """
-        needs_to_save = widget.is_valid and widget.savebuttonbar.unsaved_changes
+        valid_flag = widget.is_valid.value if must_be_valid else True
+        needs_to_save = valid_flag and widget.savebuttonbar.unsaved_changes
         button.disabled = not needs_to_save
 
     return handler
