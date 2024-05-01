@@ -91,9 +91,7 @@ class ChooseOrMakeNew(ipw.VBox):
 
         if len(self._choose_existing.options) == 1:
             # There are no items, so we are making a new one
-            self._choose_existing.disabled = True
-            self._choose_existing.layout.display = "none"
-            self._title.value = f"<h2>Make a new {item_type_name}</h2>"
+            self._handle_selection({"new": "none"})
         else:
             self._handle_selection({"new": self._choose_existing.value})
 
@@ -188,6 +186,9 @@ class ChooseOrMakeNew(ipw.VBox):
             self._item_widget.is_valid.layout.display = "none"
             self._item_widget.value = self._get_item(change["new"].name)
 
+            # Display the edit button
+            self._edit_button.layout.display = "flex"
+
             # Really only applies to PassbandMap, which has nested models,
             # but does no harm in the other cases
             self._set_disable_state_nested_models(self._item_widget, True)
@@ -269,6 +270,9 @@ class ChooseOrMakeNew(ipw.VBox):
             except ValueError:
                 # This will happen if the item already exists
                 self._confirm_edit.show()
+            else:
+                # If saving works, we update the choices and select the new item
+                update_choices_and_select_new()
 
         def update_choices_and_select_new():
             """
@@ -279,6 +283,8 @@ class ChooseOrMakeNew(ipw.VBox):
                 value_to_select = new_widget.model(**new_widget.value)
                 self._construct_choices()
                 self._choose_existing.value = value_to_select
+                # Make sure the edit button is displayed
+                self._edit_button.layout.display = "flex"
 
         # This is the mechanism for adding callbacks to the save button.
         new_widget.savebuttonbar.fns_onsave_add_action(saver)
