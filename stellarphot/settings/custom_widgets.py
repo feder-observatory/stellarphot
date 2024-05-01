@@ -224,6 +224,9 @@ class ChooseOrMakeNew(ipw.VBox):
         # Update the current state of the widget
         self._editing = True
 
+        # Enable the revert button so that the user can cancel the edit
+        self._item_widget.savebuttonbar.bn_revert.disabled = False
+
     def _set_disable_state_nested_models(self, top, value):
         """
         When a one model contains another and the top-level model widget
@@ -297,9 +300,26 @@ class ChooseOrMakeNew(ipw.VBox):
                 # Make sure the edit button is displayed
                 self._edit_button.layout.display = "flex"
 
+        def revert_to_saved_value():
+            """
+            Revert the widget to the saved value and end editing.
+
+            This should only apply while editing. If you are making a new
+            item you can either select a different item (if there are any) or
+            you really need to make a new one.
+            """
+            if self._editing:
+                # We have a selection so we need to stop editing...
+                self._editing = False
+
+                # ...and trigger the selection handler.
+                self._handle_selection({"new": self._choose_existing.value})
+
         # This is the mechanism for adding callbacks to the save button.
         new_widget.savebuttonbar.fns_onsave_add_action(saver)
         new_widget.savebuttonbar.fns_onsave_add_action(update_choices_and_select_new)
+        new_widget.savebuttonbar.fns_onrevert_add_action(revert_to_saved_value)
+
         return new_widget, new_widget.value.copy()
 
     def _handle_confirmation(self):

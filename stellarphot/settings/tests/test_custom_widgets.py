@@ -331,6 +331,76 @@ class TestChooseOrMakeNew:
         # The save button should be disabled
         assert choose_or_make_new._item_widget.savebuttonbar.bn_save.disabled
 
+    def test_revert_button_is_enabled_after_clicking_edit(self, tmp_path):
+        # The revert button should be enabled after clicking the edit button so
+        # the user can cancel the edit.
+        saved = SavedSettings(_testing_path=tmp_path)
+        camera = Camera(**TEST_CAMERA_VALUES)
+        saved.add_item(camera)
+
+        choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
+        # Simulate a click on the edit button...
+        choose_or_make_new._edit_button.click()
+
+        # The revert button should be enabled
+        assert not choose_or_make_new._item_widget.savebuttonbar.bn_revert.disabled
+
+    def test_clicking_revert_button_cancels_edit(self, tmp_path):
+        # Clicking the revert button should cancel the edit
+        saved = SavedSettings(_testing_path=tmp_path)
+        camera = Camera(**TEST_CAMERA_VALUES)
+        saved.add_item(camera)
+
+        choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
+        # Simulate a click on the edit button...
+        choose_or_make_new._edit_button.click()
+
+        # Simulate a click on the revert button...
+        choose_or_make_new._item_widget.savebuttonbar.bn_revert.click()
+
+        # The camera should not have been changed
+        assert choose_or_make_new._item_widget.value == TEST_CAMERA_VALUES
+
+        # The edit button should be displayed
+        assert choose_or_make_new._edit_button.layout.display != "none"
+
+        # We should not be in editing mode anymore
+        assert not choose_or_make_new._editing
+
+    def test_revert_button_remains_enabled_with_invalid_value_and_actually_reverts(
+        self, tmp_path
+    ):
+        # The revert button should remain enabled if the value is invalid and reverting
+        # should actually revert the value.
+        saved = SavedSettings(_testing_path=tmp_path)
+        camera = Camera(**TEST_CAMERA_VALUES)
+        saved.add_item(camera)
+
+        choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
+        # Simulate a click on the edit button...
+        choose_or_make_new._edit_button.click()
+
+        # Set an invalid value
+        choose_or_make_new._item_widget.di_widgets["name"].value = ""
+
+        # unsaved_changes should be true
+        assert choose_or_make_new._item_widget.savebuttonbar.unsaved_changes
+
+        # Make sure the change is really there
+        assert choose_or_make_new._item_widget.value != TEST_CAMERA_VALUES
+
+        # The revert button should be enabled
+        assert not choose_or_make_new._item_widget.savebuttonbar.bn_revert.disabled
+
+        # Save should still be disabled
+        assert choose_or_make_new._item_widget.savebuttonbar.bn_save.disabled
+
+        # Click the revert button
+        choose_or_make_new._item_widget.savebuttonbar.bn_revert.click()
+
+        # The camera should not have been changed
+        assert choose_or_make_new._item_widget.value == TEST_CAMERA_VALUES
+
 
 class TestConfirm:
     def test_initial_value(self):
