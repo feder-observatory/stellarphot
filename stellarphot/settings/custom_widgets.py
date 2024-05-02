@@ -14,6 +14,8 @@ from stellarphot.settings import (
     ui_generator,
 )
 
+DEFAULT_BUTTON_WIDTH = "300px"
+
 
 class ChooseOrMakeNew(ipw.VBox):
     """
@@ -52,6 +54,9 @@ class ChooseOrMakeNew(ipw.VBox):
         # keep track of whether we are editing an existing item
         self._editing = False
 
+        # also track whether we are in the midst of a delete confirmation
+        self._deleting = False
+
         self._display_name = item_type_name.replace("_", " ")
 
         # Create the child widgets
@@ -61,27 +66,34 @@ class ChooseOrMakeNew(ipw.VBox):
 
         self._choose_existing = ipw.Dropdown(description="")
 
-        self._edit_button = ipw.Button(
-            description=f"Edit this {self._display_name}",
+        self._edit_delete_container = ipw.HBox(
             # width below was chosen to match the dropdown...would prefer to
             # determine this programmatically but don't know how.
-            layout={"width": "300px"},
+            layout={"width": DEFAULT_BUTTON_WIDTH}
         )
 
-        self._confirm_edit = Confirm(
+        self._edit_button = ipw.Button(
+            description=f"Edit this {self._display_name}",
+        )
+
+        self._delete_button = ipw.Button(
+            description=f"Delete this {self._display_name}",
+        )
+
+        self._edit_delete_container.children = [self._edit_button, self._delete_button]
+
+        self._confirm_edit_delete = Confirm(
             message=f"Replace value of this {self._display_name}?",
         )
 
         self._item_widget, self._widget_value_new_item = self._make_new_widget()
 
-        self._edit_button.on_click(self._edit_button_action)
-
         # Build the main widget
         self.children = [
             self._title,
             self._choose_existing,
-            self._edit_button,
-            self._confirm_edit,
+            self._edit_delete_container,
+            self._confirm_edit_delete,
             self._item_widget,
         ]
 
@@ -107,14 +119,20 @@ class ChooseOrMakeNew(ipw.VBox):
 
         # Set up some observers
 
+        # Respond to user clicking the edit button
+        self._edit_button.on_click(self._edit_button_action)
+
+        # Respond to user clicking the delete button
+        self._delete_button.on_click(self._delete_button_action)
+
         # Respond to user clicking the save button
         self._item_widget.savebuttonbar.fns_onsave_add_action(self._save_confirmation())
 
         # Respond to user interacting with a confirmation widget
         # Hide the save button bar so the user gets the confirmation instead
-        self._confirm_edit.widget_to_hide = self._item_widget.savebuttonbar
+        self._confirm_edit_delete.widget_to_hide = self._item_widget.savebuttonbar
         # Add the observer
-        self._confirm_edit.observe(self._handle_confirmation(), names="value")
+        self._confirm_edit_delete.observe(self._handle_confirmation(), names="value")
 
         # Respond when user wants to make a new thing
         self._choose_existing.observe(self._handle_selection, names="value")
@@ -130,7 +148,7 @@ class ChooseOrMakeNew(ipw.VBox):
             # we only want to ask for confirmation if we are editing an existing item
             # rather than saving a new one.
             if self._editing:
-                self._confirm_edit.show()
+                self._confirm_edit_delete.show()
 
         return f
 
@@ -151,7 +169,7 @@ class ChooseOrMakeNew(ipw.VBox):
             # We are making a new item...
 
             # Hide the edit button
-            self._edit_button.layout.display = "none"
+            self._edit_delete_container.layout.display = "none"
 
             # This sets the ui back to its original state when created, i.e.
             # everything is empty.
@@ -188,7 +206,7 @@ class ChooseOrMakeNew(ipw.VBox):
             self._item_widget.value = self._get_item(change["new"].name)
 
             # Display the edit button
-            self._edit_button.layout.display = "flex"
+            self._edit_delete_container.layout.display = "flex"
 
             # Really only applies to PassbandMap, which has nested models,
             # but does no harm in the other cases
@@ -199,7 +217,7 @@ class ChooseOrMakeNew(ipw.VBox):
         Handle the edit button being clicked.
         """
         # Replace the display of the edit button with the save button bar...
-        self._edit_button.layout.display = "none"
+        self._edit_delete_container.layout.display = "none"
         self._item_widget.show_savebuttonbar = True
         # ...enable the widget...
         self._item_widget.disabled = False
@@ -226,6 +244,19 @@ class ChooseOrMakeNew(ipw.VBox):
 
         # Enable the revert button so that the user can cancel the edit
         self._item_widget.savebuttonbar.bn_revert.disabled = False
+
+    def _delete_button_action(self, _):
+        """
+        Handle the delete button being clicked.
+        """
+        # Change our state
+        self._deleting = True
+
+        # Hide the edit/delete buttons
+        self._edit_delete_container.layout.display = "none"
+
+        # Show the confirmation widget
+        self._confirm_edit_delete.show()
 
     def _set_disable_state_nested_models(self, top, value):
         """
@@ -283,7 +314,7 @@ class ChooseOrMakeNew(ipw.VBox):
                 self._saved_settings.add_item(new_widget.model(**new_widget.value))
             except ValueError:
                 # This will happen if the item already exists
-                self._confirm_edit.show()
+                self._confirm_edit_delete.show()
             else:
                 # If saving works, we update the choices and select the new item
                 update_choices_and_select_new()
@@ -298,7 +329,7 @@ class ChooseOrMakeNew(ipw.VBox):
                 self._construct_choices()
                 self._choose_existing.value = value_to_select
                 # Make sure the edit button is displayed
-                self._edit_button.layout.display = "flex"
+                self._edit_delete_container.layout.display = "flex"
 
         def revert_to_saved_value():
             """
@@ -328,16 +359,18 @@ class ChooseOrMakeNew(ipw.VBox):
         """
 
         # Use a closure here to capture the current state of the widget
-        def save_confirm_handler(change):
+        def confirm_handler(change):
             """
             This handles interactions with the confirmation widget, which is displayed
-            when the user either tries to save a new item with the same name as an
-            existing one or tries to save an edited item with the same name as an
-            existing one.
+            when the user has done any of these things:
+
+            + tried to save a new item with the same name as an existing one
+            + tried to save an existing item they have edited
+            + tried to delete an existing item.
 
             The widget has three possible values: True (yes), False (no), and None
 
-            This widget is called whent the widget value changes, which can happen two
+            This widget is called when the widget value changes, which can happen two
             ways:
 
             1. The user clicks the "yes" or "no" button, in which case the value will
@@ -350,28 +383,48 @@ class ChooseOrMakeNew(ipw.VBox):
             # value of None means the widget has been reset to not answered
             if change["new"] is not None:
                 item = self._item_widget.model(**self._item_widget.value)
-                if change["new"]:
-                    # Use has said yes to updating the item, which we do by
-                    # deleting the old one and adding the new one.
-                    self._saved_settings.delete_item(item, confirm=True)
-                    self._saved_settings.add_item(item)
-                    # Rebuild the dropdown list
-                    self._construct_choices()
-                    # Select the edited item
-                    self._choose_existing.value = item
+                if not self._deleting:
+                    if change["new"]:
+                        # Use has said yes to updating the item, which we do by
+                        # deleting the old one and adding the new one.
+                        self._saved_settings.delete_item(item, confirm=True)
+                        self._saved_settings.add_item(item)
+                        # Rebuild the dropdown list
+                        self._construct_choices()
+                        # Select the edited item
+                        self._choose_existing.value = item
+                    else:
+                        # Use has said no to updating the item, so we just
+                        # act as though the user has selected this item.
+                        self._handle_selection({"new": item})
+                    # We are done editing regardless of the confirmation outcome
+                    self._editing = False
+
                 else:
-                    # Use has said no to updating the item, so we just
-                    # act as though the user has selected this item.
-                    self._handle_selection({"new": item})
+                    if change["new"]:
+                        # User has confirmed the deletion
+                        self._saved_settings.delete_item(item, confirm=True)
+                        # Rebuild the dropdown list
+                        self._construct_choices()
+
+                        # Select the first item...
+                        self._choose_existing.value = self._choose_existing.options[0][
+                            1
+                        ]
+                        # ...but if there is only on option, the line above doesn't
+                        # trigger the _choose_existing observer because the value is set
+                        # when the options are set. So we need to trigger it manually.
+                        if len(self._choose_existing.options) == 1:
+                            self._handle_selection({"new": self._choose_existing.value})
+                    else:
+                        # User has decided not to delete the item
+                        self._handle_selection({"new": item})
+                    self._deleting = False
 
                 # Reset the confirmation widget to unanswered
-                self._confirm_edit.value = None
-            # We are done editing regardless of the confirmation outcome
-            self._editing = False
-            # Bring the edit button back
-            self._edit_button.layout.display = "flex"
+                self._confirm_edit_delete.value = None
 
-        return save_confirm_handler
+        return confirm_handler
 
     def _get_item(self, item_name):
         """
