@@ -313,7 +313,14 @@ class ChooseOrMakeNew(ipw.VBox):
             try:
                 self._saved_settings.add_item(new_widget.model(**new_widget.value))
             except ValueError:
-                # This will happen if the item already exists
+                # This will happen in two circumstances if the item already exists:
+                # 1. User is editing an existing item
+                # 2. User is making a new item with the same name as an existing one
+                # In the latter case, self._editing will be False, so we need to
+                # make it True AND display the confirmation widget.
+                if not self._editing:
+                    self._editing = True
+
                 self._confirm_edit_delete.show()
             else:
                 # If saving works, we update the choices and select the new item
@@ -383,7 +390,7 @@ class ChooseOrMakeNew(ipw.VBox):
             # value of None means the widget has been reset to not answered
             if change["new"] is not None:
                 item = self._item_widget.model(**self._item_widget.value)
-                if not self._deleting:
+                if self._editing:
                     if change["new"]:
                         # Use has said yes to updating the item, which we do by
                         # deleting the old one and adding the new one.
@@ -400,7 +407,7 @@ class ChooseOrMakeNew(ipw.VBox):
                     # We are done editing regardless of the confirmation outcome
                     self._editing = False
 
-                else:
+                elif self._deleting:
                     if change["new"]:
                         # User has confirmed the deletion
                         self._saved_settings.delete_item(item, confirm=True)

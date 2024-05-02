@@ -474,6 +474,39 @@ class TestChooseOrMakeNew:
         # Is the correct camera selected?
         assert choose_or_make_new._choose_existing.value == camera2
 
+    @pytest.mark.parametrize("click_yes", [True, False])
+    def test_making_new_with_same_name_as_existing(self, tmp_path, click_yes):
+        # Making a new item with the same name as an existing item should require
+        # confirmation
+        self.make_test_camera(tmp_path)
+
+        choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
+
+        # Click the "Make new" button
+        choose_or_make_new._choose_existing.value = "none"
+
+        # set the item widget value to the existing camera with double the gain
+        camera_values = TEST_CAMERA_VALUES.copy()
+        camera_values["gain"] = 2 * camera_values["gain"]
+        choose_or_make_new._item_widget.value = Camera(**camera_values)
+
+        # Simulate a click on the save button...
+        choose_or_make_new._item_widget.savebuttonbar.bn_save.click()
+
+        if click_yes:
+            # ...click confirm
+            choose_or_make_new._confirm_edit_delete._yes.click()
+            expected_camera = Camera(**camera_values)
+        else:
+            # ...click cancel
+            choose_or_make_new._confirm_edit_delete._no.click()
+            expected_camera = Camera(**TEST_CAMERA_VALUES)
+
+        # Check the value of the camera
+        chosen_cam = Camera(**choose_or_make_new._item_widget.value)
+
+        assert chosen_cam == expected_camera
+
 
 class TestConfirm:
     def test_initial_value(self):
