@@ -455,16 +455,17 @@ class TestChooseOrMakeNew:
         # The correct item should be selected after an item is deleted and the user
         # clicks "Yes" in the confirmation dialog.
         # Make two cameras
+        self.make_test_camera(tmp_path)
         saved = SavedSettings(_testing_path=tmp_path)
-        camera = Camera(**TEST_CAMERA_VALUES)
-        saved.add_item(camera)
         camera2 = Camera(**TEST_CAMERA_VALUES)
         camera2.name = "zzzz" + camera2.name
         saved.add_item(camera2)
 
         choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
         # Select the first camera...
-        choose_or_make_new._choose_existing.value = camera
+        choose_or_make_new._choose_existing.value = saved.cameras.as_dict[
+            TEST_CAMERA_VALUES["name"]
+        ]
         # ...and delete it
         choose_or_make_new._delete_button.click()
         choose_or_make_new._confirm_edit_delete._yes.click()
