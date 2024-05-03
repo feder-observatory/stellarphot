@@ -72,7 +72,7 @@ class ChooseOrMakeNew(ipw.VBox):
             message=f"Replace value of this {self._display_name}?",
         )
 
-        self._item_widget = self._make_new_widget()
+        self._item_widget, self._widget_value_new_item = self._make_new_widget()
 
         self._edit_button.on_click(self._edit_button_action)
 
@@ -156,6 +156,14 @@ class ChooseOrMakeNew(ipw.VBox):
             # This sets the ui back to its original state when created, i.e.
             # everything is empty.
             self._item_widget._init_ui()
+
+            # Fun fact: _init_ui does not reset the value of the widget. Also,
+            # setting the value fails if you try to set it to an empty dict because that
+            # is not a valid value for the pydantic model for the widget.
+            # So we have to set each of the values individually.
+            for key, value in self._widget_value_new_item.items():
+                self._item_widget.value[key] = value
+
             self._item_widget.show_savebuttonbar = True
             self._item_widget.disabled = False
 
@@ -253,6 +261,8 @@ class ChooseOrMakeNew(ipw.VBox):
     def _make_new_widget(self):
         """
         Make a new widget for the item type and set up actions for the save button.
+
+        Also returns the initial value of the widget for resetting the widget value.
         """
         match self._item_type_name:
             case "camera" | Camera.__name__:
@@ -290,7 +300,7 @@ class ChooseOrMakeNew(ipw.VBox):
         # This is the mechanism for adding callbacks to the save button.
         new_widget.savebuttonbar.fns_onsave_add_action(saver)
         new_widget.savebuttonbar.fns_onsave_add_action(update_choices_and_select_new)
-        return new_widget
+        return new_widget, new_widget.value.copy()
 
     def _handle_confirmation(self):
         """
