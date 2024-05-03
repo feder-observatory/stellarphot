@@ -71,6 +71,34 @@ class TestChooseOrMakeNew:
         assert len(cameras.as_dict) == 1
         assert list(cameras.as_dict.values())[0].model_dump() == TEST_CAMERA_VALUES
 
+    @pytest.mark.parametrize(
+        "item_type,setting",
+        [
+            ("camera", TEST_CAMERA_VALUES),
+            ("observatory", DEFAULT_OBSERVATORY_SETTINGS),
+            ("passband_map", DEFAULT_PASSBAND_MAP),
+        ],
+    )
+    def test_make_new_with_existing_item_resets_value(
+        self, tmp_path, item_type, setting
+    ):
+        # When "make a new" item is selected the value of the widget should be
+        # the same as when a widget of that type is created.
+
+        # Make a camera widget just to get the value for a new item.
+        choose_or_make_new = ChooseOrMakeNew(item_type, _testing_path=tmp_path)
+        value_when_new = choose_or_make_new._item_widget.value.copy()
+
+        # Make a camera
+        saved = SavedSettings(_testing_path=tmp_path)
+        item = choose_or_make_new._item_widget.model(**setting)
+        saved.add_item(item)
+
+        # Make a camera widget and select "Make new"
+        choose_or_make_new = ChooseOrMakeNew(item_type, _testing_path=tmp_path)
+        choose_or_make_new._choose_existing.value = "none"
+        assert choose_or_make_new._item_widget.value == value_when_new
+
     def test_edit_requires_confirmation(self, tmp_path):
         # Should require confirmation if the item already exists
         saved = SavedSettings(_testing_path=tmp_path)
