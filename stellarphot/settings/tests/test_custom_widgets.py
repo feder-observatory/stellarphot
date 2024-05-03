@@ -504,8 +504,35 @@ class TestChooseOrMakeNew:
 
         # Check the value of the camera
         chosen_cam = Camera(**choose_or_make_new._item_widget.value)
+        assert chosen_cam == choose_or_make_new._choose_existing.value
 
         assert chosen_cam == expected_camera
+
+    def test_weird_sequence_of_no_clicks(self, tmp_path):
+        # This is a regression test for #320
+        # Make a camera
+        self.make_test_camera(tmp_path)
+
+        # Make a new camera...
+        choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
+        choose_or_make_new._choose_existing.value = "none"
+        choose_or_make_new._item_widget.value = TEST_CAMERA_VALUES
+
+        # ...click save...
+        choose_or_make_new._item_widget.savebuttonbar.bn_save.click()
+        # ...but say no to confirm
+        choose_or_make_new._confirm_edit_delete._no.click()
+
+        # Check that we are back to our selected camera
+        assert choose_or_make_new._choose_existing.value == Camera(**TEST_CAMERA_VALUES)
+
+        # Click delete...
+        choose_or_make_new._delete_button.click()
+        # ...but say no to confirm...
+        choose_or_make_new._confirm_edit_delete._no.click()
+
+        # ...the edit/delete buttons should be displayed
+        assert choose_or_make_new._edit_delete_container.layout.display != "none"
 
 
 class TestConfirm:

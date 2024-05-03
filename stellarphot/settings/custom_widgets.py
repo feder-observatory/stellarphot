@@ -57,6 +57,9 @@ class ChooseOrMakeNew(ipw.VBox):
         # also track whether we are in the midst of a delete confirmation
         self._deleting = False
 
+        # and track if we are making a new item
+        self._making_new = False
+
         self._display_name = item_type_name.replace("_", " ")
 
         # Create the child widgets
@@ -198,6 +201,9 @@ class ChooseOrMakeNew(ipw.VBox):
             self._item_widget.open_nested = False
             self._item_widget.open_nested = True
 
+            # Note that we are making a new item
+            self._making_new = True
+
         else:
             # Display the selected item...
             self._item_widget.show_savebuttonbar = False
@@ -316,14 +322,10 @@ class ChooseOrMakeNew(ipw.VBox):
                 # This will happen in two circumstances if the item already exists:
                 # 1. User is editing an existing item
                 # 2. User is making a new item with the same name as an existing one
-                # In the latter case, self._editing will be False, so we need to
-                # make it True AND display the confirmation widget.
-                if not self._editing:
-                    self._editing = True
-
                 self._confirm_edit_delete.show()
             else:
                 # If saving works, we update the choices and select the new item
+                self._making_new = False
                 update_choices_and_select_new()
 
         def update_choices_and_select_new():
@@ -331,7 +333,7 @@ class ChooseOrMakeNew(ipw.VBox):
             Update the choices after a new item is saved, update the choices
             and select the new item.
             """
-            if not self._editing:
+            if not (self._editing or self._making_new):
                 value_to_select = new_widget.model(**new_widget.value)
                 self._construct_choices()
                 self._choose_existing.value = value_to_select
@@ -390,7 +392,7 @@ class ChooseOrMakeNew(ipw.VBox):
             # value of None means the widget has been reset to not answered
             if change["new"] is not None:
                 item = self._item_widget.model(**self._item_widget.value)
-                if self._editing:
+                if self._editing or self._making_new:
                     if change["new"]:
                         # Use has said yes to updating the item, which we do by
                         # deleting the old one and adding the new one.
@@ -403,9 +405,17 @@ class ChooseOrMakeNew(ipw.VBox):
                     else:
                         # Use has said no to updating the item, so we just
                         # act as though the user has selected this item.
-                        self._handle_selection({"new": item})
-                    # We are done editing regardless of the confirmation outcome
+                        if self._editing:
+                            self._handle_selection({"new": item})
+                        else:
+                            # Set the selection to the first choice if there is one
+                            self._choose_existing.value = self._choose_existing.options[
+                                0
+                            ][1]
+                    # We are done editing/making new regardless of
+                    # the confirmation outcome
                     self._editing = False
+                    self._making_new = False
 
                 elif self._deleting:
                     if change["new"]:
