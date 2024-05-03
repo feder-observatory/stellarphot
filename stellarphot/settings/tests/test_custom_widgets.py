@@ -135,6 +135,9 @@ class TestChooseOrMakeNew:
         # The confirm dialog should be displayed
         assert choose_or_make_new._confirm_edit_delete.layout.display != "none"
 
+        # The confirmation dialog should contain the word "replace"
+        assert "replace" in choose_or_make_new._confirm_edit_delete.message.lower()
+
     def test_edit_item_saved_after_confirm(self, tmp_path):
         # Should save the item after confirmation
         self.make_test_camera(tmp_path)
@@ -415,6 +418,8 @@ class TestChooseOrMakeNew:
         assert choose_or_make_new._confirm_edit_delete.layout.display != "none"
         # edit/delete buttons should be hidden
         assert choose_or_make_new._edit_delete_container.layout.display == "none"
+        # The confirm dialog should indicate you are deleting
+        assert "delete" in choose_or_make_new._confirm_edit_delete.message.lower()
 
     @pytest.mark.parametrize("click_yes", [True, False])
     def test_delete_actions_after_confirmation(self, tmp_path, click_yes):
@@ -444,6 +449,9 @@ class TestChooseOrMakeNew:
 
         # Regardless of the choice, the confirm dialog should be hidden
         assert choose_or_make_new._confirm_edit_delete.layout.display == "none"
+
+        # We should also no longer be deleting
+        assert not choose_or_make_new._deleting
 
         # If the user clicked "No" the edit/delete buttons should be displayed because
         # there is still an item to edit or delete.
@@ -495,6 +503,11 @@ class TestChooseOrMakeNew:
 
         # Simulate a click on the save button...
         choose_or_make_new._item_widget.savebuttonbar.bn_save.click()
+
+        # The confirm dialog should be displayed
+        assert choose_or_make_new._confirm_edit_delete.layout.display != "none"
+        # The confirm dialog should contain the word "replace"
+        assert "replace" in choose_or_make_new._confirm_edit_delete.message.lower()
 
         if click_yes:
             # ...click confirm

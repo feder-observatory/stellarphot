@@ -85,9 +85,7 @@ class ChooseOrMakeNew(ipw.VBox):
 
         self._edit_delete_container.children = [self._edit_button, self._delete_button]
 
-        self._confirm_edit_delete = Confirm(
-            message=f"Replace value of this {self._display_name}?",
-        )
+        self._confirm_edit_delete = Confirm()
 
         self._item_widget, self._widget_value_new_item = self._make_new_widget()
 
@@ -151,6 +149,7 @@ class ChooseOrMakeNew(ipw.VBox):
             # we only want to ask for confirmation if we are editing an existing item
             # rather than saving a new one.
             if self._editing:
+                self._set_confirm_message()
                 self._confirm_edit_delete.show()
 
         return f
@@ -262,6 +261,7 @@ class ChooseOrMakeNew(ipw.VBox):
         self._edit_delete_container.layout.display = "none"
 
         # Show the confirmation widget
+        self._set_confirm_message()
         self._confirm_edit_delete.show()
 
     def _set_disable_state_nested_models(self, top, value):
@@ -298,6 +298,17 @@ class ChooseOrMakeNew(ipw.VBox):
             # No children...
             pass
 
+    def _set_confirm_message(self):
+        """
+        Set the message for the confirmation widget.
+        """
+        if self._editing or self._making_new:
+            self._confirm_edit_delete.message = (
+                f"Replace value of this {self._display_name}?"
+            )
+        elif self._deleting:
+            self._confirm_edit_delete.message = f"Delete this {self._display_name}?"
+
     def _make_new_widget(self):
         """
         Make a new widget for the item type and set up actions for the save button.
@@ -322,6 +333,7 @@ class ChooseOrMakeNew(ipw.VBox):
                 # This will happen in two circumstances if the item already exists:
                 # 1. User is editing an existing item
                 # 2. User is making a new item with the same name as an existing one
+                self._set_confirm_message()
                 self._confirm_edit_delete.show()
             else:
                 # If saving works, we update the choices and select the new item
