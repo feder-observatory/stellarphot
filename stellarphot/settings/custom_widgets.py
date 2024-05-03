@@ -406,7 +406,7 @@ class ChooseOrMakeNew(ipw.VBox):
                 item = self._item_widget.model(**self._item_widget.value)
                 if self._editing or self._making_new:
                     if change["new"]:
-                        # Use has said yes to updating the item, which we do by
+                        # User has said yes to updating the item, which we do by
                         # deleting the old one and adding the new one.
                         self._saved_settings.delete_item(item, confirm=True)
                         self._saved_settings.add_item(item)
@@ -415,7 +415,7 @@ class ChooseOrMakeNew(ipw.VBox):
                         # Select the edited item
                         self._choose_existing.value = item
                     else:
-                        # Use has said no to updating the item, so we just
+                        # User has said no to updating the item, so we just
                         # act as though the user has selected this item.
                         if self._editing:
                             self._handle_selection({"new": item})
@@ -440,7 +440,7 @@ class ChooseOrMakeNew(ipw.VBox):
                         self._choose_existing.value = self._choose_existing.options[0][
                             1
                         ]
-                        # ...but if there is only on option, the line above doesn't
+                        # ...but if there is only one option, the line above doesn't
                         # trigger the _choose_existing observer because the value is set
                         # when the options are set. So we need to trigger it manually.
                         if len(self._choose_existing.options) == 1:
