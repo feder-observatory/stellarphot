@@ -74,6 +74,9 @@ class TestChooseOrMakeNew:
         # No need for the confirmation dialog because we are not overwriting
         # anything.
 
+        # making sure the widget state is properly updated
+        assert choose_or_make_new._making_new is False
+
         # Check what we created using SavedSettings...
         saved = SavedSettings(_testing_path=tmp_path)
         cameras = saved.get_items("camera")
