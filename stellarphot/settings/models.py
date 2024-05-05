@@ -1,8 +1,9 @@
 # Objects that contains the user settings for the program.
 
 import re
+from copy import deepcopy
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Optional, TypeVar
 
 from astropy.coordinates import EarthLocation, Latitude, Longitude, SkyCoord
 from astropy.io.misc.yaml import AstropyDumper, AstropyLoader
@@ -18,6 +19,7 @@ from pydantic import (
     NonNegativeFloat,
     PositiveFloat,
     PositiveInt,
+    create_model,
     field_validator,
     model_validator,
 )
@@ -35,6 +37,7 @@ from .astropy_pydantic import (
 __all__ = [
     "Camera",
     "LoggingSettings",
+    "PartialPhotometrySettings",
     "PassbandMap",
     "PhotometryApertures",
     "PhotometryFileSettings",
@@ -993,6 +996,32 @@ class PhotometrySettings(BaseModelWithTableRep):
             json_schema_extra=SCHEMA_EXTRAS,
         ),
     ]
+
+
+# The code for _make_partial_model is adapted from
+# https://github.com/pydantic/pydantic/issues/3120#issuecomment-1528030416
+
+BaseModelT = TypeVar("BaseModelT", bound=BaseModel)
+
+
+def _make_partial_model(model: type[BaseModelT], default=None) -> type[BaseModelT]:
+    new_fields = {}
+
+    for field_name, field_info in model.model_fields.items():
+        new = deepcopy(field_info)
+        new.default = default
+        new.annotation = Optional[field_info.annotation]  # type: ignore  # noqa: UP007
+        new_fields[field_name] = (new.annotation, new)
+    return create_model(  # type: ignore
+        f"Partial{model.__name__}",
+        __base__=model,
+        __doc__=model.__doc__,
+        __module__=model.__module__,
+        **new_fields,
+    )
+
+
+PartialPhotometrySettings = _make_partial_model(PhotometrySettings)
 
 
 class Exoplanet(BaseModelWithTableRep):

@@ -1,4 +1,5 @@
 import json
+import random
 import re
 
 import astropy.units as u
@@ -14,6 +15,7 @@ from stellarphot.settings.models import (
     Exoplanet,
     LoggingSettings,
     Observatory,
+    PartialPhotometrySettings,
     PassbandMap,
     PassbandMapEntry,
     PhotometryApertures,
@@ -333,6 +335,28 @@ class TestModelExamples:
                     assert model_value == u.Unit(v)
                 else:
                     assert model_value == v
+
+
+def test_partial_photometry_settings():
+    """
+    Test that we can create a PhotometrySettings object with only a subset of
+    the normally required fields.
+    """
+    # Loop over the individual default photometry settings and make sure we can
+    # create a PartialPhotometrySettings object with just that field.
+
+    for k, v in DEFAULT_PHOTOMETRY_SETTINGS.items():
+        pps = PartialPhotometrySettings(**{k: v})
+        assert getattr(pps, k) == v
+
+    choices = list(DEFAULT_PHOTOMETRY_SETTINGS.items())
+    for i in range(2, 5):
+        # Try a few random subsets of fields
+        fields = random.choices(choices, k=i)
+        settings = {k: v for k, v in fields}
+        pps = PartialPhotometrySettings(**settings)
+        for k, v in settings.items():
+            assert getattr(pps, k) == v
 
 
 def test_camera_unitscheck():
