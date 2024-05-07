@@ -1,12 +1,19 @@
+import re
 from pathlib import Path
 from typing import ClassVar
 
 from platformdirs import PlatformDirs
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
-from .models import Camera, Observatory, PassbandMap
+from .models import (
+    Camera,
+    Observatory,
+    PartialPhotometrySettings,
+    PassbandMap,
+    PhotometrySettings,
+)
 
-__all__ = ["SavedSettings", "SETTINGS_FILE_VERSION"]
+__all__ = ["SavedSettings", "SETTINGS_FILE_VERSION", "PhotometryWorkingDirSettings"]
 
 # We will have to version settings formats, I think. Hopefully this changes rarely
 # or never.
@@ -263,3 +270,204 @@ class SavedSettings:
                 )
 
         klass.delete(confirm=confirm, name=to_delete.name)
+
+
+class PhotometryWorkingDirSettings:
+    """
+    Class to save in-progress and complete photometry settings in the working directory.
+    """
+
+    def __init__(self, settings_file_name="photometry_settings.json"):
+        """
+        Parameters
+        ----------
+        settings_file_name : str, optional
+            Name of the settings file. Must end with '.json', contain only
+            alphanumeric characters, hyphens, underscores, and spaces and begin
+            with an alphanumeric character.
+        """
+        self._working_dir = Path(".")
+        self._check_bad_file_name(settings_file_name)
+        self._settings_file = self._working_dir / Path(settings_file_name)
+        self._partial_settings_file = self._working_dir / Path(
+            "partial_" + settings_file_name
+        )
+        self._partial_settings = None
+        self._settings = None
+
+    @property
+    def settings(self):
+        """
+        The full settings, or None
+        """
+        return self._settings
+
+    @property
+    def partial_settings(self):
+        """
+        The partial settings, or None
+        """
+        return self._partial_settings
+
+    # Properties for seetings file and partial settings file
+    @property
+    def settings_file(self):
+        return self._settings_file
+
+    @property
+    def partial_settings_file(self):
+        return self._partial_settings_file
+
+    def _check_bad_file_name(self, file_name):
+        good_name = re.compile(r"^\w+[\w\d\-_ ]*\.json$")
+        if not good_name.match(file_name):
+            raise ValueError(
+                f"Settings file name {file_name} is not a valid name. The name can "
+                "only contain alphanumeric characters, hyphens, underscores, and "
+                "spaces, and must end with '.json'"
+            )
+
+    def _are_partial_actually_full(self, settings):
+        """
+        Check if the partial settings are actually full settings.
+
+        Parameters
+        ----------
+        settings : PartialPhotometrySettings
+            The settings to check.
+        """
+        try:
+            PhotometrySettings.model_validate(settings.model_dump())
+        except ValidationError:
+            return False
+        else:
+            return True
+
+    def save(self, settings):
+        """
+        Save the partial or full settings to the working directory. Note well that
+        this removes any partial settings file if called with valid full settings.
+
+        Parameters
+        ----------
+        settings : PhotometrySettings
+            The settings to save.
+        """
+        full_settings = False
+        match settings:
+            case PartialPhotometrySettings():
+                # This case MUST come first, because PartialPhotometrySettings is a
+                # subclass of PhotometrySettings.
+
+                # Are there already full settings?
+                # If so, we can't save partial settings.
+                if self._settings_file.exists():
+                    raise ValueError(
+                        "Cannot save partial settings when full settings already exist."
+                    )
+                # Are these settings actually full settings?
+                if self._are_partial_actually_full(settings):
+                    self._settings = settings
+                    file = self._settings_file
+                    full_settings = True
+                else:
+                    self._partial_settings = settings
+                    file = self._partial_settings_file
+            case PhotometrySettings():
+                self._settings = settings
+                file = self._settings_file
+                full_settings = True
+
+            case _:
+                raise ValueError(
+                    "Settings must be PhotometrySettings or PartialPhotometrySettings, "
+                    f"not {type(settings)}"
+                )
+
+        if full_settings:
+            self._partial_settings_file.unlink(missing_ok=True)
+            self._partial_settings = None
+
+        with file.open("w", encoding=ENCODING) as f:
+            f.write(settings.model_dump_json(indent=4))
+
+    def load(self):
+        """
+        Load full or partial settings.
+        """
+        # Assume we have nothing to begin....
+        self._partial_settings = None
+        self._settings = None
+
+        if not (self._settings_file.exists() or self._partial_settings_file.exists()):
+            raise ValueError(f"Settings file {self._settings_file} does not exist")
+
+        # Load PartialPhotometrySettings first, if it exists.
+        if self._partial_settings_file.exists():
+            with self._partial_settings_file.open(encoding=ENCODING) as f:
+                content = f.read()
+
+            try:
+                self._partial_settings = PartialPhotometrySettings.model_validate_json(
+                    content
+                )
+            except ValidationError as e:
+                raise ValueError(f"Error loading partial settings: {e}") from e
+            else:
+                self._valid_partial_settings = True
+
+        if self._settings_file.exists():
+            with self._settings_file.open(encoding=ENCODING) as f:
+                content = f.read()
+
+            try:
+                self._settings = PhotometrySettings.model_validate_json(content)
+            except ValidationError as e:
+                raise ValueError(f"Error loading settings: {e}") from e
+            else:
+                self._valid_full_settings = True
+
+        # Handle case where we have valid partial and valid full settings
+        self._resolve_full_partial_conflict()
+        return self._settings or self._partial_settings
+
+    def _resolve_full_partial_conflict(self):
+        """
+        Resolve the conflict between full and partial settings, if any.
+
+        Five cases:
+        1. No partial settings, no full settings: Nothing to do.
+        2. Partial settings, no full settings: Load partial settings.
+        3. No partial settings, full settings: Nothing to do.
+        4. Partial settings, full settings, and they match: delete partial settings.
+        5. Partial settings, full settings, and they don't match: raise ValueError.
+        """
+        if self._partial_settings is None or self._settings is None:
+            # Nothing to do, return
+            return
+
+        # Both are not None, so try construction full from partial, since partial
+        # settings can be full.
+        try:
+            full_from_partial = PhotometrySettings.model_validate(
+                self._partial_settings.model_dump()
+            )
+        except ValidationError:
+            full_from_partial = None
+
+        if full_from_partial != self._settings:
+            raise ValueError(
+                "Partial settings and full settings do not match. "
+                "Please resolve the discrepancy by deleting one of the "
+                "settings files."
+                f"Folder with settings: {self._working_dir}"
+                f"Partial settings: {self._partial_settings_file} "
+                f"Full settings: {self._settings_file}"
+            )
+
+        # If we reach here, then the partial settings and full settings match, so we
+        # can delete the partial settings.
+        self._partial_settings_file.unlink()
+
+        # and set the partial settings to None
+        self._partial_settings = None

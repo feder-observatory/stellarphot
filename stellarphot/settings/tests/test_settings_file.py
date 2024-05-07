@@ -1,4 +1,6 @@
+import os
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import pytest
 
@@ -6,9 +8,13 @@ from stellarphot.settings import (
     SETTINGS_FILE_VERSION,
     Camera,
     Observatory,
+    PartialPhotometrySettings,
     PassbandMap,
+    PhotometrySettings,
+    PhotometryWorkingDirSettings,
     SavedSettings,
 )
+from stellarphot.settings.tests.test_models import DEFAULT_PHOTOMETRY_SETTINGS
 
 CAMERA = """
 {
@@ -303,3 +309,180 @@ class TestSavedSettings:
         # Load the camera.
         loaded_camera = saved_settings.get_items("camera").as_dict[camera_name]
         assert loaded_camera == camera
+
+
+class TestPhotometryWorkingDirSettings:
+    def setup_class(cls):
+        cls.temp_dir = TemporaryDirectory()
+
+    def teardown_class(cls):
+        cls.temp_dir.cleanup()
+
+    def setup_method(self, _):
+        # Need to accept the second argument, but don't use it.
+        self.original_wdir = Path.cwd()
+        os.chdir(self.temp_dir.name)
+        for file in Path.cwd().glob("*.json"):
+            file.unlink()
+
+    def teardown_method(self, _):
+        os.chdir(self.original_wdir)
+
+    def test_sneaky_name_not_accepted(self):
+        sneaky_names = [
+            "../myfile.json",
+            "/some/absolute/path",
+            "file_with_no_json_extension.txt",
+            "file_with_no_extension",
+            " started with a space",
+        ]
+        for name in sneaky_names:
+            with pytest.raises(ValueError, match="not a valid name. The name can"):
+                PhotometryWorkingDirSettings(settings_file_name=name)
+
+    def test_bad_settings_value_raises_error(self):
+        settings_file = PhotometryWorkingDirSettings()
+        error_message = (
+            "Settings must be PhotometrySettings or PartialPhotometrySettings"
+        )
+        with pytest.raises(ValueError, match=error_message):
+            settings_file.save("foo")
+
+    def test_save_partial_settings(self):
+        # Test that saving partial settings works.
+        settings_file = PhotometryWorkingDirSettings()
+        settings = PartialPhotometrySettings()
+        settings_file.save(settings)
+        assert settings_file.partial_settings_file.exists()
+        assert not settings_file.settings_file.exists()
+        assert settings_file.partial_settings == settings
+
+    def test_save_complete_settings(self):
+        # Test that saving complete settings works.
+        settings_file = PhotometryWorkingDirSettings()
+        settings = PhotometrySettings(**DEFAULT_PHOTOMETRY_SETTINGS)
+        settings_file.save(settings)
+        assert settings_file.settings_file.exists()
+        assert not settings_file.partial_settings_file.exists()
+        assert settings_file.settings == settings
+
+    def test_save_partial_settings_that_are_full_settings(self):
+        # Test that saving partial settings that are actually full settings works.
+        settings_file = PhotometryWorkingDirSettings()
+        settings = PartialPhotometrySettings(**DEFAULT_PHOTOMETRY_SETTINGS)
+        settings_file.save(settings)
+        assert settings_file.settings_file.exists()
+        assert not settings_file.partial_settings_file.exists()
+        assert settings_file.settings == settings
+        assert settings_file.partial_settings is None
+
+    def test_save_partial_then_full_settings(self):
+        # Test that saving partial settings and then full settings works.
+        settings_file = PhotometryWorkingDirSettings()
+        partial_settings = PartialPhotometrySettings()
+        settings_file.save(partial_settings)
+        assert settings_file.partial_settings_file.exists()
+        assert not settings_file.settings_file.exists()
+        assert settings_file.partial_settings == partial_settings
+
+        full_settings = PhotometrySettings(**DEFAULT_PHOTOMETRY_SETTINGS)
+        settings_file.save(full_settings)
+        assert settings_file.settings_file.exists()
+        assert not settings_file.partial_settings_file.exists()
+        assert settings_file.settings == full_settings
+        assert settings_file.partial_settings is None
+
+    def test_save_full_then_partial_settings(self):
+        # Test that saving full settings and then partial settings generates
+        # the expected error.
+        settings_file = PhotometryWorkingDirSettings()
+        full_settings = PhotometrySettings(**DEFAULT_PHOTOMETRY_SETTINGS)
+        settings_file.save(full_settings)
+        assert settings_file.settings_file.exists()
+        assert not settings_file.partial_settings_file.exists()
+        assert settings_file.settings == full_settings
+
+        partial_settings = PartialPhotometrySettings()
+        error_message = "Cannot save partial settings when full settings already exist"
+        with pytest.raises(ValueError, match=error_message):
+            settings_file.save(partial_settings)
+
+        assert not settings_file.partial_settings_file.exists()
+        assert settings_file.settings_file.exists()
+        assert settings_file.partial_settings is None
+        assert settings_file.settings == full_settings
+
+    def test_load_conflicting_partial_and_full_settings(self):
+        # Make a valid partial settings file and a valid full settings file
+        # that conflict with each other.
+        settings_file = PhotometryWorkingDirSettings()
+        camera = Camera.model_validate_json(CAMERA)
+        partial_settings = PartialPhotometrySettings(camera=camera)
+        # write these settings directly to the directory to avoid any conflict
+        # resolution in the save method.
+        with settings_file.partial_settings_file.open("w") as f:
+            f.write(partial_settings.model_dump_json())
+
+        full_settings = PhotometrySettings(**DEFAULT_PHOTOMETRY_SETTINGS)
+        with settings_file.settings_file.open("w") as f:
+            f.write(full_settings.model_dump_json())
+
+        # Try to load the settings. This should raise an error because the
+        # settings conflict.
+        error_message = "Partial settings and full settings do not match"
+        with pytest.raises(ValueError, match=error_message):
+            settings_file.load()
+
+    def test_load_partial_and_full_both_valid(self):
+        # Make a valid partial settings file that is actually a full file and
+        # a valid full settings file that do not conflict with each other.
+        settings_file = PhotometryWorkingDirSettings()
+
+        partial_settings = PartialPhotometrySettings(**DEFAULT_PHOTOMETRY_SETTINGS)
+        # write these settings directly to the directory to avoid any conflict
+        # resolution in the save method.
+        with settings_file.partial_settings_file.open("w") as f:
+            f.write(partial_settings.model_dump_json())
+
+        full_settings = PhotometrySettings(**DEFAULT_PHOTOMETRY_SETTINGS)
+        with settings_file.settings_file.open("w") as f:
+            f.write(full_settings.model_dump_json())
+
+        # Load the settings. This should work because the settings don't conflict.
+        settings = settings_file.load()
+        assert settings == full_settings
+
+        # Should have no partial settings
+        assert not settings_file.partial_settings_file.exists()
+        assert settings_file.partial_settings is None
+
+    def test_load_no_settings(self):
+        # Test that loading settings when no settings exist raise error.
+        settings_file = PhotometryWorkingDirSettings()
+        error_message = f"Settings file {settings_file.settings_file} does not exist"
+        with pytest.raises(ValueError, match=error_message):
+            settings_file.load()
+
+    @pytest.mark.parametrize("full_settings", [True, False])
+    def test_load_bad_settings(self, full_settings):
+        # Test that loading bad settings raises an error.
+        settings_file = PhotometryWorkingDirSettings()
+        if full_settings:
+            file = settings_file.settings_file
+        else:
+            file = settings_file.partial_settings_file
+        with file.open("w") as f:
+            f.write("{bad: settings}")
+        error_message = "Error loading "
+        with pytest.raises(ValueError, match=error_message):
+            settings_file.load()
+
+    def test_load_one_setting_present(self):
+        # Test that loading settings when only one setting is present raises an error.
+        settings_file = PhotometryWorkingDirSettings()
+        partial_settings = PartialPhotometrySettings()
+        with settings_file.partial_settings_file.open("w") as f:
+            f.write(partial_settings.model_dump_json())
+
+        settings = settings_file.load()
+        assert settings == partial_settings
