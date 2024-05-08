@@ -17,7 +17,7 @@ __all__ = ["SavedSettings", "SETTINGS_FILE_VERSION", "PhotometryWorkingDirSettin
 
 # We will have to version settings formats, I think. Hopefully this changes rarely
 # or never.
-SETTINGS_FILE_VERSION = "2"  # value chosen to match amjor version of stellarphot
+SETTINGS_FILE_VERSION = "2"  # value chosen to match major version of stellarphot
 
 ENCODING = "utf-8"
 
@@ -309,7 +309,7 @@ class PhotometryWorkingDirSettings:
         """
         return self._partial_settings
 
-    # Properties for seetings file and partial settings file
+    # Properties for settings file and partial settings file
     @property
     def settings_file(self):
         return self._settings_file
@@ -365,7 +365,8 @@ class PhotometryWorkingDirSettings:
                     raise ValueError(
                         "Cannot save partial settings when full settings already exist."
                     )
-                # Are these settings actually full settings?
+                # set variable file to point to appropriate (partial or full)
+                # settings file location.
                 if self._are_partial_actually_full(settings):
                     self._settings = settings
                     file = self._settings_file
@@ -388,6 +389,9 @@ class PhotometryWorkingDirSettings:
             self._partial_settings_file.unlink(missing_ok=True)
             self._partial_settings = None
 
+        # Write the settings to a file. The settings themselves are models, so we
+        # are guaranteed to write the correct model type (partial or full settings)
+        # to the file.
         with file.open("w", encoding=ENCODING) as f:
             f.write(settings.model_dump_json(indent=4))
 
@@ -416,6 +420,7 @@ class PhotometryWorkingDirSettings:
             else:
                 self._valid_partial_settings = True
 
+        # Now load full settings if they exist
         if self._settings_file.exists():
             with self._settings_file.open(encoding=ENCODING) as f:
                 content = f.read()
@@ -442,6 +447,7 @@ class PhotometryWorkingDirSettings:
         4. Partial settings, full settings, and they match: delete partial settings.
         5. Partial settings, full settings, and they don't match: raise ValueError.
         """
+        # Handle cases 1 through 3 -- no conflicts in these cases
         if self._partial_settings is None or self._settings is None:
             # Nothing to do, return
             return
