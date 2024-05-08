@@ -417,8 +417,6 @@ class PhotometryWorkingDirSettings:
                 )
             except ValidationError as e:
                 raise ValueError(f"Error loading partial settings: {e}") from e
-            else:
-                self._valid_partial_settings = True
 
         # Now load full settings if they exist
         if self._settings_file.exists():
@@ -429,8 +427,6 @@ class PhotometryWorkingDirSettings:
                 self._settings = PhotometrySettings.model_validate_json(content)
             except ValidationError as e:
                 raise ValueError(f"Error loading settings: {e}") from e
-            else:
-                self._valid_full_settings = True
 
         # Handle case where we have valid partial and valid full settings
         self._resolve_full_partial_conflict()
