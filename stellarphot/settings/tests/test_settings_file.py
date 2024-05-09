@@ -486,3 +486,52 @@ class TestPhotometryWorkingDirSettings:
 
         settings = settings_file.load()
         assert settings == partial_settings
+
+    def test_save_updates_instead_of_replacing(self):
+        # Test that saving settings adds to whatever partial settings have
+        # already been saved instead of dumping anything that used to be
+        # there.
+        settings_file = PhotometryWorkingDirSettings()
+
+        # Save a Camera first
+        partial_settings_cam = PartialPhotometrySettings(
+            camera=DEFAULT_PHOTOMETRY_SETTINGS["camera"]
+        )
+        settings_file.save(partial_settings_cam, update=True)
+        from_file = settings_file.load()
+        # Make sure the camera is there
+        assert from_file.camera == DEFAULT_PHOTOMETRY_SETTINGS["camera"]
+
+        # Save a different item, like an observatory
+        partial_settings_obs = PartialPhotometrySettings(
+            observatory=DEFAULT_PHOTOMETRY_SETTINGS["observatory"]
+        )
+        settings_file.save(partial_settings_obs, update=True)
+        from_file2 = settings_file.load()
+        # Make sure the camera is still there
+        assert from_file2.camera == DEFAULT_PHOTOMETRY_SETTINGS["camera"]
+        # Make sure the observatory is there
+        assert from_file2.observatory == DEFAULT_PHOTOMETRY_SETTINGS["observatory"]
+
+    def test_save_update_completing_partial_makes_full(self):
+        # Test that saving a partial settings file and then updating it to a
+        # full settings file works.
+        settings_file = PhotometryWorkingDirSettings()
+        almost_complete_settings = DEFAULT_PHOTOMETRY_SETTINGS.copy()
+        the_observatory = almost_complete_settings.pop("observatory")
+
+        # Make and save an object that has all settings except observatory
+        partial_settings = PartialPhotometrySettings(**almost_complete_settings)
+        settings_file.save(partial_settings, update=True)
+        from_file = settings_file.load()
+        # Make sure we have the partial settings
+        assert from_file == partial_settings
+
+        # Save the observatory
+        the_last_setting = PartialPhotometrySettings(observatory=the_observatory)
+        settings_file.save(the_last_setting, update=True)
+        from_file2 = settings_file.load()
+        # Make sure we have the full settings
+        assert from_file2 == PhotometrySettings(**DEFAULT_PHOTOMETRY_SETTINGS)
+        # Make sure we have no partial settings
+        assert settings_file.partial_settings is None
