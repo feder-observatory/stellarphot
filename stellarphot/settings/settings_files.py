@@ -394,18 +394,18 @@ class PhotometryWorkingDirSettings:
                     # Grab a dict of the settings, only keeping values that are not
                     # None. Making it dict so that the update method can be used to
                     # merge the two sets of settings.
-                    temp_settings_arg = {
+                    passed_partial_settings = {
                         k: v for k, v in settings.model_dump().items() if v is not None
                     }
-                    temp_settings_file = self._partial_settings.model_dump()
+                    existing_partial_settings = self._partial_settings.model_dump()
 
                     # The order matters here. Keys in the argument version of the
                     # settings will overwrite the keys in the file version of the
                     # settings. Note that update works in-place.
-                    temp_settings_file.update(temp_settings_arg)
+                    existing_partial_settings.update(passed_partial_settings)
 
                     settings = PartialPhotometrySettings.model_validate(
-                        temp_settings_file
+                        existing_partial_settings
                     )
                 # set variable file to point to appropriate (partial or full)
                 # settings file location.
