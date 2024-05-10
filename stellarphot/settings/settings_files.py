@@ -343,7 +343,7 @@ class PhotometryWorkingDirSettings:
         else:
             return True
 
-    def save(self, settings):
+    def save(self, settings, update=False):
         """
         Save the partial or full settings to the working directory. Note well that
         this removes any partial settings file if called with valid full settings.
@@ -352,8 +352,32 @@ class PhotometryWorkingDirSettings:
         ----------
         settings : PhotometrySettings
             The settings to save.
+
+        update : bool, optional
+            If True, the settings are updated -- see Note below for more description.
+            If False, the settings are overwritten.
+
+        Notes
+        -----
+
+        If ``update`` is True, then the settings are updated. This means that if the
+        settings passed in are partial and there is already a partial setting saved on
+        disk, then the settings from disk that are not in the new settings are added to
+        the new settings.
+
+        This means that in the event that the settings in the argument have, say,
+        a `~stellarphot.settings.Camera`, and the file on disk also has one, the one
+        in the argument is the one that will be kept.
         """
         full_settings = False
+
+        try:
+            _ = self.load()
+        except ValueError:
+            # If we catch a ValueError, then we are in a situation where we have no
+            # settings files. We can proceed to save the settings.
+            pass
+
         match settings:
             case PartialPhotometrySettings():
                 # This case MUST come first, because PartialPhotometrySettings is a
@@ -365,6 +389,24 @@ class PhotometryWorkingDirSettings:
                     raise ValueError(
                         "Cannot save partial settings when full settings already exist."
                     )
+                # Are we updating or replacing partial settings?
+                if update and self._partial_settings is not None:
+                    # Grab a dict of the settings, only keeping values that are not
+                    # None. Making it dict so that the update method can be used to
+                    # merge the two sets of settings.
+                    passed_partial_settings = {
+                        k: v for k, v in settings.model_dump().items() if v is not None
+                    }
+                    existing_partial_settings = self._partial_settings.model_dump()
+
+                    # The order matters here. Keys in the argument version of the
+                    # settings will overwrite the keys in the file version of the
+                    # settings. Note that update works in-place.
+                    existing_partial_settings.update(passed_partial_settings)
+
+                    settings = PartialPhotometrySettings.model_validate(
+                        existing_partial_settings
+                    )
                 # set variable file to point to appropriate (partial or full)
                 # settings file location.
                 if self._are_partial_actually_full(settings):
@@ -372,6 +414,7 @@ class PhotometryWorkingDirSettings:
                     file = self._settings_file
                     full_settings = True
                 else:
+                    # Update the partial settings with the new settings
                     self._partial_settings = settings
                     file = self._partial_settings_file
             case PhotometrySettings():
