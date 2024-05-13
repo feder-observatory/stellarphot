@@ -552,7 +552,10 @@ class TestChooseOrMakeNew:
 
     @pytest.mark.parametrize("hideable", [True, False])
     def test_details_hideable_or_not(self, tmp_path, hideable):
-        # The details should be hideable
+        # The details should be hideable if requested
+
+        # Make a camera so that the details can be hidden
+        self.make_test_camera(tmp_path)
         choose_or_make_new = ChooseOrMakeNew(
             "camera", details_hideable=hideable, _testing_path=tmp_path
         )
