@@ -550,6 +550,141 @@ class TestChooseOrMakeNew:
         # ...the edit/delete buttons should be displayed
         assert choose_or_make_new._edit_delete_container.layout.display != "none"
 
+    @pytest.mark.parametrize("hideable", [True, False])
+    def test_details_hideable_or_not(self, tmp_path, hideable):
+        # The details should be hideable
+        choose_or_make_new = ChooseOrMakeNew(
+            "camera", details_hideable=hideable, _testing_path=tmp_path
+        )
+
+        # New UI element should be in the big box
+        assert choose_or_make_new._show_details_ui in choose_or_make_new.children
+
+        if hideable:
+            # The "show/hide details" widget should be visible
+            assert choose_or_make_new._show_details_ui.layout.display != "none"
+        else:
+            # The "show/hide details" widget should not be visible
+            assert choose_or_make_new._show_details_ui.layout.display == "none"
+
+        # Set "show details" box to unchecked
+        choose_or_make_new._show_details_ui.value = False
+
+        # If hideable then details should not be displayed
+        if hideable:
+            assert choose_or_make_new._details_box.layout.display == "none"
+        else:
+            assert choose_or_make_new._details_box.layout.display != "none"
+
+        # Settings show_details back to true should display details again,
+        # regardless of hideable
+        choose_or_make_new._show_details_ui.value = True
+        assert choose_or_make_new._details_box.layout.display != "none"
+
+    def test_details_hideable_plays_nicely_with_new_item(self, tmp_path):
+        # The details should be hideable and should play nicely with making a new item
+        # Make an item so that selecting "Make new" will count as a value
+        # change later.
+        self.make_test_camera(tmp_path)
+
+        choose_or_make_new = ChooseOrMakeNew(
+            "camera", details_hideable=True, _testing_path=tmp_path
+        )
+
+        assert choose_or_make_new._details_box.layout.display != "none"
+
+        # Set "show details" box to unchecked so details are hidden
+        choose_or_make_new._show_details_ui.value = False
+
+        # Note whether the "show details" box is checked or not
+        show_state = False
+
+        # Check that details are hidden
+        assert choose_or_make_new._details_box.layout.display == "none"
+
+        # Select make a new camera
+        choose_or_make_new._choose_existing.value = "none"
+
+        # The details should be shown now
+        assert choose_or_make_new._details_box.layout.display != "none"
+
+        # The "show/hide details" widget should be hidden
+        assert choose_or_make_new._show_details_ui.layout.display == "none"
+
+        # Making a new camera and saving it should bring back, and respect,
+        # the hideable details
+        new_camera = TEST_CAMERA_VALUES.copy()
+        new_camera["name"] = "new camera"
+        choose_or_make_new._item_widget.value = new_camera
+        choose_or_make_new._item_widget.savebuttonbar.bn_save.click()
+
+        # "show details" should be visible
+        assert choose_or_make_new._show_details_ui.layout.display != "none"
+
+        # Details should be hidden
+        assert choose_or_make_new._details_box.layout.display == "none"
+        assert choose_or_make_new._show_details_ui.value == show_state
+
+    def test_details_hideable_not_set_preserves_old_behavior(self, tmp_path):
+        # The details should not be hidden if hideable is false
+        # Make a camera
+        self.make_test_camera(tmp_path)
+
+        choose_or_make_new = ChooseOrMakeNew(
+            "camera", details_hideable=False, _testing_path=tmp_path
+        )
+
+        # New UI element should not be in the big box
+        assert choose_or_make_new._show_details_ui.layout.display == "none"
+
+        # Details should be displayed
+        assert choose_or_make_new._details_box.layout.display != "none"
+
+        # Set "show details" box to unchecked
+        choose_or_make_new._show_details_ui.value = False
+
+        # Details should still be displayed
+        assert choose_or_make_new._details_box.layout.display != "none"
+
+    @pytest.mark.parametrize("show_detail_state", [True, False])
+    def test_details_hideable_cancel_making_new_restores_state(
+        self, tmp_path, show_detail_state
+    ):
+        # The details should be hideable and should play nicely with making a new item
+        # Make an item so that selecting "Make new" will count as a value
+        # change later.
+        self.make_test_camera(tmp_path)
+
+        choose_or_make_new = ChooseOrMakeNew(
+            "camera", details_hideable=True, _testing_path=tmp_path
+        )
+
+        assert choose_or_make_new._details_box.layout.display != "none"
+
+        # Note whether the "show details" box is checked or not
+        show_state = show_detail_state
+        choose_or_make_new._show_details_ui.value = show_state
+
+        # Select make a new camera
+        choose_or_make_new._choose_existing.value = "none"
+
+        # The details should be shown now
+        assert choose_or_make_new._details_box.layout.display != "none"
+
+        # The "show/hide details" widget should be hidden
+        assert choose_or_make_new._show_details_ui.layout.display == "none"
+
+        # Making a new camera and then cancelling should restore the state
+        choose_or_make_new._item_widget.value = TEST_CAMERA_VALUES
+        choose_or_make_new._item_widget.savebuttonbar.bn_save.click()
+        choose_or_make_new._confirm_edit_delete._no.click()
+
+        # "show details" should be visible
+        assert choose_or_make_new._show_details_ui.layout.display != "none"
+
+        # Details should match prior state
+        assert choose_or_make_new._show_details_ui.value == show_state
+
 
 class TestConfirm:
     def test_initial_value(self):

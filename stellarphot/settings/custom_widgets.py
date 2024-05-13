@@ -14,6 +14,8 @@ from stellarphot.settings import (
     ui_generator,
 )
 
+__all__ = ["ChooseOrMakeNew", "Confirm"]
+
 DEFAULT_BUTTON_WIDTH = "300px"
 
 
@@ -39,7 +41,9 @@ class ChooseOrMakeNew(ipw.VBox):
         PassbandMap.__name__,
     ]
 
-    def __init__(self, item_type_name, *arg, _testing_path=None, **kwargs):
+    def __init__(
+        self, item_type_name, *arg, details_hideable=False, _testing_path=None, **kwargs
+    ):
         if item_type_name not in self._known_types:
             raise ValueError(
                 f"Unknown item type {item_type_name}. Must "
@@ -60,14 +64,25 @@ class ChooseOrMakeNew(ipw.VBox):
         # and track if we are making a new item
         self._making_new = False
 
+        # keep track of whether there is a "show details" checkbox
+        self._show_details_shown = details_hideable
+
         self._display_name = item_type_name.replace("_", " ")
 
         # Create the child widgets
+
+        # Descriptive title
         self._title = ipw.HTML(
             value=(f"<h2>Choose a {self._display_name} " "or make a new one</h2>")
         )
 
+        # Selector for existing items or to make a new one
         self._choose_existing = ipw.Dropdown(description="")
+
+        # Option to show/hide details, only displayed if user wants it.
+        self._show_details_ui = ipw.Checkbox(description="Show details", value=True)
+        self._show_details_ui.layout.display = "flex" if details_hideable else "none"
+        self._show_details_cached_value = self._show_details_ui.value
 
         self._edit_delete_container = ipw.HBox(
             # width below was chosen to match the dropdown...would prefer to
@@ -83,19 +98,29 @@ class ChooseOrMakeNew(ipw.VBox):
             description=f"Delete this {self._display_name}",
         )
 
+        # Put almost everything into a VBox, which we can perhapds wrap in an
+        # accordian widget.
+        self._details_box = ipw.VBox()
+
         self._edit_delete_container.children = [self._edit_button, self._delete_button]
 
         self._confirm_edit_delete = Confirm()
 
         self._item_widget, self._widget_value_new_item = self._make_new_widget()
 
+        # Put all of the details into a box that can be easily hidden
+        self._details_box.children = [
+            self._edit_delete_container,
+            self._confirm_edit_delete,
+            self._item_widget,
+        ]
+
         # Build the main widget
         self.children = [
             self._title,
             self._choose_existing,
-            self._edit_delete_container,
-            self._confirm_edit_delete,
-            self._item_widget,
+            self._show_details_ui,
+            self._details_box,
         ]
 
         # Set up the dropdown widget
@@ -138,6 +163,17 @@ class ChooseOrMakeNew(ipw.VBox):
         # Respond when user wants to make a new thing
         self._choose_existing.observe(self._handle_selection, names="value")
 
+        # Set up an observer to show/hide the details box if the check box
+        # is clicked
+        self._show_details_ui.observe(self._show_details_handler, names="value")
+
+    @property
+    def value(self):
+        """
+        The value of the widget.
+        """
+        return self._item_widget.model(**self._item_widget.value)
+
     def _save_confirmation(self):
         """
         Function to attach to the save button to show the confirmation widget if
@@ -172,6 +208,12 @@ class ChooseOrMakeNew(ipw.VBox):
 
             # Hide the edit button
             self._edit_delete_container.layout.display = "none"
+
+            # Make sure details are shown and hide the "show details" checkbox
+            if self._show_details_shown:
+                self._show_details_cached_value = self._show_details_ui.value
+                self._show_details_ui.value = True
+                self._show_details_ui.layout.display = "none"
 
             # This sets the ui back to its original state when created, i.e.
             # everything is empty.
@@ -216,6 +258,13 @@ class ChooseOrMakeNew(ipw.VBox):
             # Really only applies to PassbandMap, which has nested models,
             # but does no harm in the other cases
             self._set_disable_state_nested_models(self._item_widget, True)
+
+            # We may have arrived here by choosing a different item while
+            # making a new one, so we restore the state of the "show details"
+            # checkbox.
+            if self._show_details_shown:
+                self._show_details_ui.layout.display = "flex"
+                self._show_details_ui.value = self._show_details_cached_value
 
     def _edit_button_action(self, _):
         """
@@ -263,6 +312,16 @@ class ChooseOrMakeNew(ipw.VBox):
         # Show the confirmation widget
         self._set_confirm_message()
         self._confirm_edit_delete.show()
+
+    def _show_details_handler(self, change):
+        """
+        Show or hide the details box based on the value of the checkbox.
+        """
+        if self._show_details_ui.layout.display == "none":
+            # The element is hidden, so just return
+            return
+
+        self._details_box.layout.display = "flex" if change["new"] else "none"
 
     def _set_disable_state_nested_models(self, top, value):
         """
@@ -338,6 +397,9 @@ class ChooseOrMakeNew(ipw.VBox):
             else:
                 # If saving works, we update the choices and select the new item
                 self._making_new = False
+                if self._show_details_shown:
+                    self._show_details_ui.layout.display = "flex"
+                    self._show_details_ui.value = self._show_details_cached_value
                 update_choices_and_select_new()
 
         def update_choices_and_select_new():
@@ -424,6 +486,13 @@ class ChooseOrMakeNew(ipw.VBox):
                             self._choose_existing.value = self._choose_existing.options[
                                 0
                             ][1]
+                    if self._making_new:
+                        if self._show_details_shown:
+                            self._show_details_ui.layout.display = "flex"
+                            self._show_details_ui.value = (
+                                self._show_details_cached_value
+                            )
+
                     # We are done editing/making new regardless of
                     # the confirmation outcome
                     self._editing = False
