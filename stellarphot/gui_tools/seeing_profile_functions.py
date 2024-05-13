@@ -394,17 +394,19 @@ class SeeingProfileWidget:
                 # User clicked on a star, so generate profile
                 i = self.iw._viewer.get_image()
                 data = i.get_data()
-
-                # Rough location of click in original image
-                x = int(np.floor(event.data_x))
-                y = int(np.floor(event.data_y))
-
-                rad_prof = CenterAndProfile(
-                    data,
-                    (x, y),
-                    profile_radius=profile_size,
-                    centering_cutout_size=centering_cutout_size,
-                )
+                with self.error_console:
+                    # Rough location of click in original image
+                    x = int(np.floor(event.data_x))
+                    y = int(np.floor(event.data_y))
+                    print(f"Clicked at {x}, {y}")
+                    rad_prof = CenterAndProfile(
+                        data,
+                        (x, y),
+                        profile_radius=profile_size,
+                        cutout_size=profile_size,
+                        match_limit=100,
+                    )
+                    print(f"Center: {rad_prof.center} FWHM: {rad_prof.FWHM}")
 
                 try:
                     try:  # Remove previous marker
