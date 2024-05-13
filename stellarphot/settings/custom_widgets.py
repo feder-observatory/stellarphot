@@ -98,8 +98,7 @@ class ChooseOrMakeNew(ipw.VBox):
             description=f"Delete this {self._display_name}",
         )
 
-        # Put almost everything into a VBox, which we can perhapds wrap in an
-        # accordian widget.
+        # Put almost everything into a VBox
         self._details_box = ipw.VBox()
 
         self._edit_delete_container.children = [self._edit_button, self._delete_button]

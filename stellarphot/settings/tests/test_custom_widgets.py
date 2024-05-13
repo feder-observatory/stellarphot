@@ -599,9 +599,6 @@ class TestChooseOrMakeNew:
         # Set "show details" box to unchecked so details are hidden
         choose_or_make_new._show_details_ui.value = False
 
-        # Note whether the "show details" box is checked or not
-        show_state = False
-
         # Check that details are hidden
         assert choose_or_make_new._details_box.layout.display == "none"
 
@@ -626,7 +623,7 @@ class TestChooseOrMakeNew:
 
         # Details should be hidden
         assert choose_or_make_new._details_box.layout.display == "none"
-        assert choose_or_make_new._show_details_ui.value == show_state
+        assert not choose_or_make_new._show_details_ui.value
 
     def test_details_hideable_not_set_preserves_old_behavior(self, tmp_path):
         # The details should not be hidden if hideable is false
