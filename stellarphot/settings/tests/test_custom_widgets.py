@@ -685,6 +685,13 @@ class TestChooseOrMakeNew:
         # Details should match prior state
         assert choose_or_make_new._show_details_ui.value == show_state
 
+    def test_chooser_has_value(self, tmp_path):
+        # The chooser should have a value
+        self.make_test_camera(tmp_path)
+
+        choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
+        assert choose_or_make_new.value == Camera(**TEST_CAMERA_VALUES)
+
 
 class TestConfirm:
     def test_initial_value(self):
