@@ -19,6 +19,7 @@ from stellarphot.photometry import CenterAndProfile
 from stellarphot.photometry.photometry import EXPOSURE_KEYWORDS
 from stellarphot.plotting import seeing_plot
 from stellarphot.settings import PhotometryApertures, ui_generator
+from stellarphot.settings.custom_widgets import ChooseOrMakeNew
 
 __all__ = [
     "set_keybindings",
@@ -165,7 +166,6 @@ class SeeingProfileWidget:
 
         self.iw = imagewidget
 
-        self.camera = camera
         self.observatory = observatory
         # Do some set up of the ImageWidget
         set_keybindings(self.iw, scroll_zoom=False)
@@ -179,9 +179,15 @@ class SeeingProfileWidget:
         self.seeing_profile_plot = ipw.Output()
         self.curve_growth_plot = ipw.Output()
         self.snr_plot = ipw.Output()
+        self.error_console = ipw.Output()
+
         # Build the larger widget
         self.container = ipw.VBox()
         self.fits_file = FitsOpener(title="Choose an image")
+        self.camera_chooser = ChooseOrMakeNew("camera", details_hideable=True)
+        if camera is not None:
+            self.camera_chooser.value = camera
+
         big_box = ipw.HBox()
         big_box = ipw.GridspecLayout(1, 2)
         layout = ipw.Layout(width="60ch")
@@ -224,7 +230,12 @@ class SeeingProfileWidget:
         # don't jump around as the image value changes.
         big_box.layout.justify_content = "space-between"
         self.big_box = big_box
-        self.container.children = [self.fits_file.file_chooser, self.big_box]
+        self.container.children = [
+            self.fits_file.file_chooser,
+            self.camera_chooser,
+            self.error_console,
+            self.big_box,
+        ]
         self.box = self.container
         self._aperture_name = "aperture"
 
@@ -235,6 +246,10 @@ class SeeingProfileWidget:
         self.exposure = 0
         self._set_observers()
         self.aperture_settings.description = ""
+
+    @property
+    def camera(self):
+        return self.camera_chooser.value
 
     def load_fits(self):
         """
