@@ -178,8 +178,10 @@ class CenterAndProfile:
             profile_radius = cutout_size // 2
 
         radii = np.linspace(0, profile_radius, profile_radius + 1)
-        # Get a rough profile without background subtraction
-        self._radial_profile = RadialProfile(self._data, self._cen, radii)
+        # Get a rough profile with rough background subtraction -- note that
+        # NO background subtraction does not work.
+        background = sigma_clipped_stats(self._cutout.data)[1]
+        self._radial_profile = RadialProfile(self._data - background, self._cen, radii)
 
         self._sky_area = None
 
