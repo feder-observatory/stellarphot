@@ -102,3 +102,21 @@ def test_radial_profile_exposure_is_nan():
     assert np.isnan(rad_prof.noise(c, np.nan)[-1])
     assert all(np.isfinite(rad_prof.curve_of_growth.profile))
     assert all(np.isfinite(rad_prof.radial_profile.profile))
+
+
+def test_radial_profile_with_background():
+    image = make_gaussian_sources_image(SHAPE, STARS) + 100
+    for row in STARS:
+        cen = find_center(image, (row["x_mean"], row["y_mean"]), max_iters=10)
+
+        # The "stars" have FWHM around 9.5, so make the cutouts used for finding the
+        # stars fairly big -- the bare minimum would be a radius of 3 FWHM, which is a
+        # cutout size around 60.
+        rad_prof = CenterAndProfile(image, cen, cutout_size=60, profile_radius=30)
+
+        # Numerical value below is integral of input 2D gaussian, 2pi A sigma^2
+        expected_integral = 2 * np.pi * row["amplitude"] * row["x_stddev"] ** 2
+
+        np.testing.assert_allclose(
+            rad_prof.curve_of_growth.profile[-1], expected_integral, atol=50
+        )
