@@ -117,7 +117,7 @@ def test_radial_profile_exposure_is_nan():
 def test_radial_profile_with_background():
     # Regression test for #328 -- image with a background level
     image = make_gaussian_sources_image(SHAPE, STARS)
-    image = image + +make_noise_image(
+    image = image + make_noise_image(
         image.shape, distribution="gaussian", mean=100, stddev=0.1
     )
     for row in STARS:
