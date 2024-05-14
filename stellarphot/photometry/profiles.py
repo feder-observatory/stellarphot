@@ -257,7 +257,7 @@ class CenterAndProfile:
             radii.extend([rad] * good_data.sum())
         radii = np.array(radii)
         pixel_values = np.array(pixel_values)
-        return radii, pixel_values
+        return radii, pixel_values - self.sky_pixel_value
 
     @lazyproperty
     def curve_of_growth(self):
