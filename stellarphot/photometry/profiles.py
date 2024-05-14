@@ -247,16 +247,31 @@ class CenterAndProfile:
         """
         radii = []
         pixel_values = []
-        for rad, ap in zip(
-            self.radial_profile.radius, self.radial_profile.apertures, strict=True
-        ):
+        for ap in self.radial_profile.apertures:
+            # Calculate the distance of each pixel from the center
+            grid_x, grid_y = np.mgrid[: self._data.shape[0], : self._data.shape[1]]
+            dist_from_cen = np.sqrt(
+                (grid_x - self._cen[1]) ** 2 + (grid_y - self._cen[0]) ** 2
+            )
+
+            # Get only the data in this aperture
             ap_mask = ap.to_mask(method="center")
             ap_data = ap_mask.multiply(self._data)
+            dist_from_cen = ap_mask.multiply(dist_from_cen)
+
+            # Drop any data where the aperture mask was zero and flatten
             good_data = ap_data != 0
-            pixel_values.extend(ap_data[good_data].flatten())
-            radii.extend([rad] * good_data.sum())
+            ap_exact_radius = dist_from_cen[good_data].flatten()
+            ap_data = ap_data[good_data].flatten()
+
+            # Sort so that plots look ok
+            sorted_radii = np.argsort(ap_exact_radius)
+            radii.extend(ap_exact_radius[sorted_radii])
+            pixel_values.extend(ap_data[sorted_radii])
+
         radii = np.array(radii)
         pixel_values = np.array(pixel_values)
+        # Subtract the background
         return radii, pixel_values - self.sky_pixel_value
 
     @lazyproperty

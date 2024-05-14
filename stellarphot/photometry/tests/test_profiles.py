@@ -91,10 +91,12 @@ def test_radial_profile():
             rad_prof.curve_of_growth.profile[-1], expected_integral, atol=50
         )
 
-        # Test that the radial profile is correct
+        # Test that the radial profile is correct by comparing pixel values to a
+        # gaussian fit to the profile.
         data_radii, data_counts = rad_prof.pixel_values_in_profile
         expected_profile = rad_prof.radial_profile.gaussian_fit(data_radii)
-        np.testing.assert_allclose(data_counts, expected_profile)
+
+        np.testing.assert_allclose(data_counts, expected_profile, atol=20)
 
 
 def test_radial_profile_exposure_is_nan():
@@ -132,3 +134,10 @@ def test_radial_profile_with_background():
         np.testing.assert_allclose(
             rad_prof.curve_of_growth.profile[-1], expected_integral, atol=50
         )
+
+        # Test that the radial profile is correct by comparing pixel values to a
+        # gaussian fit to the profile.
+        data_radii, data_counts = rad_prof.pixel_values_in_profile
+        expected_profile = rad_prof.radial_profile.gaussian_fit(data_radii)
+
+        np.testing.assert_allclose(data_counts, expected_profile, atol=20)
