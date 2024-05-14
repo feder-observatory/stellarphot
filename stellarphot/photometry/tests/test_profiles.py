@@ -72,6 +72,8 @@ def test_find_center_no_star():
 
 
 def test_radial_profile():
+    # Test that both curve of growth and radial profile are correct
+
     image = make_gaussian_sources_image(SHAPE, STARS)
     for row in STARS:
         cen = find_center(image, (row["x_mean"], row["y_mean"]), max_iters=10)
@@ -81,12 +83,20 @@ def test_radial_profile():
         # cutout size around 60.
         rad_prof = CenterAndProfile(image, cen, cutout_size=60, profile_radius=30)
 
+        # Test that the curve of growth is correct
+
         # Numerical value below is integral of input 2D gaussian, 2pi A sigma^2
         expected_integral = 2 * np.pi * row["amplitude"] * row["x_stddev"] ** 2
-
         np.testing.assert_allclose(
             rad_prof.curve_of_growth.profile[-1], expected_integral, atol=50
         )
+
+        # Test that the radial profile is correct by comparing pixel values to a
+        # gaussian fit to the profile.
+        data_radii, data_counts = rad_prof.pixel_values_in_profile
+        expected_profile = rad_prof.radial_profile.gaussian_fit(data_radii)
+
+        np.testing.assert_allclose(data_counts, expected_profile, atol=20)
 
 
 def test_radial_profile_exposure_is_nan():
@@ -102,3 +112,32 @@ def test_radial_profile_exposure_is_nan():
     assert np.isnan(rad_prof.noise(c, np.nan)[-1])
     assert all(np.isfinite(rad_prof.curve_of_growth.profile))
     assert all(np.isfinite(rad_prof.radial_profile.profile))
+
+
+def test_radial_profile_with_background():
+    # Regression test for #328 -- image with a background level
+    image = make_gaussian_sources_image(SHAPE, STARS)
+    image = image + make_noise_image(
+        image.shape, distribution="gaussian", mean=100, stddev=0.1
+    )
+    for row in STARS:
+        cen = find_center(image, (row["x_mean"], row["y_mean"]), max_iters=10)
+
+        # The "stars" have FWHM around 9.5, so make the cutouts used for finding the
+        # stars fairly big -- the bare minimum would be a radius of 3 FWHM, which is a
+        # cutout size around 60.
+        rad_prof = CenterAndProfile(image, cen, cutout_size=60, profile_radius=30)
+
+        # Numerical value below is integral of input 2D gaussian, 2pi A sigma^2
+        expected_integral = 2 * np.pi * row["amplitude"] * row["x_stddev"] ** 2
+
+        np.testing.assert_allclose(
+            rad_prof.curve_of_growth.profile[-1], expected_integral, atol=50
+        )
+
+        # Test that the radial profile is correct by comparing pixel values to a
+        # gaussian fit to the profile.
+        data_radii, data_counts = rad_prof.pixel_values_in_profile
+        expected_profile = rad_prof.radial_profile.gaussian_fit(data_radii)
+
+        np.testing.assert_allclose(data_counts, expected_profile, atol=20)
