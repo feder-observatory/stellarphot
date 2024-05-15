@@ -172,7 +172,7 @@ class CenterAndProfile:
     ):
         self._cen = find_center(data, center_approx, cutout_size=cutout_size)
         self._data = data
-        self._cutout = Cutout2D(data, self._cen, (cutout_size, cutout_size))
+        self._cutout = Cutout2D(data, self.center, (cutout_size, cutout_size))
         self._max_iters = max_iters
         if profile_radius is None:
             profile_radius = cutout_size // 2
@@ -180,14 +180,16 @@ class CenterAndProfile:
         radii = np.linspace(0, profile_radius, profile_radius + 1)
         # Get a rough profile with rough background subtraction -- note that
         # NO background subtraction does not work.
-        background = sigma_clipped_stats(self._cutout.data)[1]
-        self._radial_profile = RadialProfile(self._data - background, self._cen, radii)
+        background = sigma_clipped_stats(self.cutout.data)[1]
+        self._radial_profile = RadialProfile(
+            self.cutout.data - background, self.cutout_center, radii
+        )
 
         self._sky_area = None
 
         # Do proper background subtraction for the final radial profile
         self._radial_profile = RadialProfile(
-            data - self.sky_pixel_value, self._cen, radii
+            self.cutout.data - self.sky_pixel_value, self.cutout_center, radii
         )
 
     @property
@@ -219,6 +221,10 @@ class CenterAndProfile:
         return self._cutout
 
     @property
+    def cutout_center(self):
+        return self.cutout.to_cutout_position(self.center)
+
+    @property
     def radial_profile(self):
         """
         Radial profile of the star.
@@ -247,16 +253,19 @@ class CenterAndProfile:
         """
         radii = []
         pixel_values = []
+        idx = 1
+        cen_in_cutout = self.cutout.to_cutout_position(self.center)
         for ap in self.radial_profile.apertures:
+            idx += 1
             # Calculate the distance of each pixel from the center
-            grid_x, grid_y = np.mgrid[: self._data.shape[0], : self._data.shape[1]]
+            grid_x, grid_y = np.mgrid[: self.cutout.shape[0], : self.cutout.shape[1]]
             dist_from_cen = np.sqrt(
-                (grid_x - self._cen[1]) ** 2 + (grid_y - self._cen[0]) ** 2
+                (grid_x - cen_in_cutout[1]) ** 2 + (grid_y - cen_in_cutout[0]) ** 2
             )
 
             # Get only the data in this aperture
             ap_mask = ap.to_mask(method="center")
-            ap_data = ap_mask.multiply(self._data)
+            ap_data = ap_mask.multiply(self.cutout.data)
             dist_from_cen = ap_mask.multiply(dist_from_cen)
 
             # Drop any data where the aperture mask was zero and flatten
