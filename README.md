@@ -43,6 +43,22 @@ pip install stellarphot reducer astronbs
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
 <!-- prettier-ignore-start -->
 <!-- markdownlint-disable -->
+<table>
+  <tbody>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="http://mwcraig.github.io"><img src="https://avatars.githubusercontent.com/u/1147167?v=4?s=100" width="100px;" alt="Matt Craig"/><br /><sub><b>Matt Craig</b></sub></a><br /><a href="https://github.com/JuanCab/stellarphot/issues?q=author%3Amwcraig" title="Bug reports">🐛</a> <a href="https://github.com/JuanCab/stellarphot/commits?author=mwcraig" title="Code">💻</a> <a href="#design-mwcraig" title="Design">🎨</a> <a href="#ideas-mwcraig" title="Ideas, Planning, & Feedback">🤔</a> <a href="#maintenance-mwcraig" title="Maintenance">🚧</a> <a href="#mentoring-mwcraig" title="Mentoring">🧑‍🏫</a> <a href="#research-mwcraig" title="Research">🔬</a> <a href="https://github.com/JuanCab/stellarphot/pulls?q=is%3Apr+reviewed-by%3Amwcraig" title="Reviewed Pull Requests">👀</a> <a href="https://github.com/JuanCab/stellarphot/commits?author=mwcraig" title="Tests">⚠️</a> <a href="#tutorial-mwcraig" title="Tutorials">✅</a></td>
+    </tr>
+  </tbody>
+  <tfoot>
+    <tr>
+      <td align="center" size="13px" colspan="7">
+        <img src="https://raw.githubusercontent.com/all-contributors/all-contributors-cli/1b8533af435da9854653492b1327a23a4dbd0a10/assets/logo-small.svg">
+          <a href="https://all-contributors.js.org/docs/en/bot/usage">Add your contributions</a>
+        </img>
+      </td>
+    </tr>
+  </tfoot>
+</table>
 
 <!-- markdownlint-restore -->
 <!-- prettier-ignore-end -->
