@@ -21,7 +21,7 @@
   "linkToUsage": true,
   "skipCi": true,
   "contributors": [
-    {
+       {
       "login": "mwcraig",
       "name": "Matt Craig",
       "avatar_url": "https://avatars.githubusercontent.com/u/1147167?v=4",
@@ -37,6 +37,20 @@
         "review",
         "test",
         "tutorial"
+      ]
+    },
+    {
+      "login": "JuanCab",
+      "name": "Juan Cabanela",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1940512?v=4",
+      "profile": "https://web.mnstate.edu/cabanela/",
+      "contributions": [
+        "bug",
+        "code",
+        "design",
+        "ideas",
+        "maintenance",
+        "review"
       ]
     }
   ],
