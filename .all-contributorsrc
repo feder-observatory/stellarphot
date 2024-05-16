@@ -1,0 +1,165 @@
+{
+  "projectName": "stellarphot",
+  "projectOwner": "feder-observatory",
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "files": [
+    "README.md"
+  ],
+  "imageSize": 100,
+  "commit": false,
+  "contributorsPerLine": 7,
+  "contributorsSortAlphabetically": false,
+  "wrapperTemplate": "\n<table>\n  <tbody><%= bodyContent %>  </tbody>\n<%= tableFooterContent %></table>\n\n",
+  "types": {
+    "custom": {
+      "symbol": "🔭",
+      "description": "beta",
+      "link": "[<%= symbol %>](<%= url %> \"<%= description %>\"),"
+    }
+  },
+  "linkToUsage": true,
+  "skipCi": true,
+  "contributors": [
+    {
+      "login": "mwcraig",
+      "name": "Matt Craig",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1147167?v=4",
+      "profile": "http://mwcraig.github.io",
+      "contributions": [
+        "bug",
+        "code",
+        "design",
+        "ideas",
+        "maintenance",
+        "mentoring",
+        "research",
+        "review",
+        "test",
+        "tutorial"
+      ]
+    },
+    {
+      "login": "JuanCab",
+      "name": "Juan Cabanela",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1940512?v=4",
+      "profile": "https://web.mnstate.edu/cabanela/",
+      "contributions": [
+        "bug",
+        "code",
+        "design",
+        "ideas",
+        "maintenance",
+        "review",
+        "doc"
+      ]
+    },
+    {
+      "login": "madelyn914",
+      "name": "madelyn914",
+      "avatar_url": "https://avatars.githubusercontent.com/u/56169991?v=4",
+      "profile": "https://github.com/madelyn914",
+      "contributions": [
+        "ideas",
+        "userTesting"
+      ]
+    },
+    {
+      "login": "AbigaleMoen",
+      "name": "Abby",
+      "avatar_url": "https://avatars.githubusercontent.com/u/112969124?v=4",
+      "profile": "https://github.com/AbigaleMoen",
+      "contributions": [
+        "userTesting"
+      ]
+    },
+    {
+      "login": "MDeRung2021",
+      "name": "MDeRung2021",
+      "avatar_url": "https://avatars.githubusercontent.com/u/90003875?v=4",
+      "profile": "https://github.com/MDeRung2021",
+      "contributions": [
+        "bug",
+        "userTesting"
+      ]
+    },
+    {
+      "login": "Tanner728",
+      "name": "Tanner Weyer",
+      "avatar_url": "https://avatars.githubusercontent.com/u/90003838?v=4",
+      "profile": "https://github.com/Tanner728",
+      "contributions": [
+        "code",
+        "review",
+        "userTesting"
+      ]
+    },
+    {
+      "login": "WatsonEmily11",
+      "name": "Emily Watson",
+      "avatar_url": "https://avatars.githubusercontent.com/u/99451181?v=4",
+      "profile": "https://github.com/WatsonEmily11",
+      "contributions": [
+        "bug",
+        "userTesting"
+      ]
+    },
+    {
+      "login": "Mamizou",
+      "name": "Adam Kline",
+      "avatar_url": "https://avatars.githubusercontent.com/u/35544119?v=4",
+      "profile": "https://github.com/Mamizou",
+      "contributions": [
+        "code",
+        "userTesting"
+      ]
+    },
+    {
+      "login": "Sondanaa",
+      "name": "Elias Holte",
+      "avatar_url": "https://avatars.githubusercontent.com/u/9082828?v=4",
+      "profile": "https://github.com/Sondanaa",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "pllim",
+      "name": "P. L. Lim",
+      "avatar_url": "https://avatars.githubusercontent.com/u/2090236?v=4",
+      "profile": "https://www.linkedin.com/in/pllim/",
+      "contributions": [
+        "maintenance"
+      ]
+    },
+    {
+      "login": "clkotnik",
+      "name": "clkotnik",
+      "avatar_url": "https://avatars.githubusercontent.com/u/26798912?v=4",
+      "profile": "https://github.com/clkotnik",
+      "contributions": [
+        "ideas"
+      ]
+    },
+    {
+      "login": "meyerpa",
+      "name": "Paige Meyer",
+      "avatar_url": "https://avatars.githubusercontent.com/u/14203298?v=4",
+      "profile": "https://github.com/meyerpa",
+      "contributions": [
+        "doc"
+      ]
+    },
+    {
+      "login": "stottsco",
+      "name": "stottsco",
+      "avatar_url": "https://avatars.githubusercontent.com/u/14881940?v=4",
+      "profile": "https://github.com/stottsco",
+      "contributions": [
+        "code"
+      ]
+    }
+  ],
+  "commitType": "docs",
+  "commitConvention": "angular"
+}
