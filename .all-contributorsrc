@@ -71,6 +71,16 @@
       "contributions": [
         "userTesting"
       ]
+    },
+    {
+      "login": "MDeRung2021",
+      "name": "MDeRung2021",
+      "avatar_url": "https://avatars.githubusercontent.com/u/90003875?v=4",
+      "profile": "https://github.com/MDeRung2021",
+      "contributions": [
+        "bug",
+        "userTesting"
+      ]
     }
   ],
   "commitType": "docs",
