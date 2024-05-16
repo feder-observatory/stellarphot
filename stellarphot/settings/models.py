@@ -297,6 +297,8 @@ class Camera(BaseModelWithTableRep):
     def validate_gain(self):
         # Get read noise units
         rn_unit = Quantity(self.read_noise).unit
+        # Get dark current units
+        dark_unit = Quantity(self.dark_current).unit
 
         # Check that gain and read noise have compatible units, that is that
         # gain is read noise per data unit.
@@ -313,15 +315,13 @@ class Camera(BaseModelWithTableRep):
         # Check that dark current and read noise have compatible units, that is
         # that dark current is read noise per second.
         dark_current = self.dark_current
-        if (
-            len(dark_current.unit.bases) != 2
-            or dark_current.unit.bases[0] != rn_unit
-            or dark_current.unit.bases[1] != Unit("s")
-        ):
+        try:
+            dark_current.to(self.read_noise.unit / Unit("s"))
+        except UnitConversionError as e:
             raise ValueError(
-                f"Dark current units {dark_current.unit} are not "
+                f"Dark current units {dark_unit} are not "
                 f"compatible with read noise units {rn_unit}."
-            )
+            ) from e
 
         # Check that maximum data value is consistent with data units
         if self.max_data_value.unit != self.data_unit:
