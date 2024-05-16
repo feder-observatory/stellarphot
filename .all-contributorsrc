@@ -52,6 +52,16 @@
         "maintenance",
         "review"
       ]
+    },
+    {
+      "login": "madelyn914",
+      "name": "madelyn914",
+      "avatar_url": "https://avatars.githubusercontent.com/u/56169991?v=4",
+      "profile": "https://github.com/madelyn914",
+      "contributions": [
+        "ideas",
+        "userTesting"
+      ]
     }
   ],
   "commitType": "docs",
