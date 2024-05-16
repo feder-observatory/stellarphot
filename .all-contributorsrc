@@ -112,6 +112,15 @@
         "code",
         "userTesting"
       ]
+    },
+    {
+      "login": "Sondanaa",
+      "name": "Elias Holte",
+      "avatar_url": "https://avatars.githubusercontent.com/u/9082828?v=4",
+      "profile": "https://github.com/Sondanaa",
+      "contributions": [
+        "code"
+      ]
     }
   ],
   "commitType": "docs",
