@@ -62,6 +62,15 @@
         "ideas",
         "userTesting"
       ]
+    },
+    {
+      "login": "AbigaleMoen",
+      "name": "Abby",
+      "avatar_url": "https://avatars.githubusercontent.com/u/112969124?v=4",
+      "profile": "https://github.com/AbigaleMoen",
+      "contributions": [
+        "userTesting"
+      ]
     }
   ],
   "commitType": "docs",
