@@ -139,6 +139,15 @@
       "contributions": [
         "ideas"
       ]
+    },
+    {
+      "login": "meyerpa",
+      "name": "Paige Meyer",
+      "avatar_url": "https://avatars.githubusercontent.com/u/14203298?v=4",
+      "profile": "https://github.com/meyerpa",
+      "contributions": [
+        "doc"
+      ]
     }
   ],
   "commitType": "docs",
