@@ -148,6 +148,15 @@
       "contributions": [
         "doc"
       ]
+    },
+    {
+      "login": "stottsco",
+      "name": "stottsco",
+      "avatar_url": "https://avatars.githubusercontent.com/u/14881940?v=4",
+      "profile": "https://github.com/stottsco",
+      "contributions": [
+        "code"
+      ]
     }
   ],
   "commitType": "docs",
