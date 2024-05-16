@@ -38,6 +38,20 @@
         "test",
         "tutorial"
       ]
+    },
+    {
+      "login": "JuanCab",
+      "name": "Juan Cabanela",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1940512?v=4",
+      "profile": "https://web.mnstate.edu/cabanela/",
+      "contributions": [
+        "bug",
+        "code",
+        "design",
+        "ideas",
+        "maintenance",
+        "review"
+      ]
     }
   ],
   "commitType": "docs",
