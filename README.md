@@ -58,6 +58,7 @@ pip install stellarphot reducer astronbs
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/Mamizou"><img src="https://avatars.githubusercontent.com/u/35544119?v=4?s=100" width="100px;" alt="Adam Kline"/><br /><sub><b>Adam Kline</b></sub></a><br /><a href="https://github.com/feder-observatory/stellarphot/commits?author=Mamizou" title="Code">💻</a> <a href="#userTesting-Mamizou" title="User Testing">📓</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/Sondanaa"><img src="https://avatars.githubusercontent.com/u/9082828?v=4?s=100" width="100px;" alt="Elias Holte"/><br /><sub><b>Elias Holte</b></sub></a><br /><a href="https://github.com/feder-observatory/stellarphot/commits?author=Sondanaa" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://www.linkedin.com/in/pllim/"><img src="https://avatars.githubusercontent.com/u/2090236?v=4?s=100" width="100px;" alt="P. L. Lim"/><br /><sub><b>P. L. Lim</b></sub></a><br /><a href="#maintenance-pllim" title="Maintenance">🚧</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/clkotnik"><img src="https://avatars.githubusercontent.com/u/26798912?v=4?s=100" width="100px;" alt="clkotnik"/><br /><sub><b>clkotnik</b></sub></a><br /><a href="#ideas-clkotnik" title="Ideas, Planning, & Feedback">🤔</a></td>
     </tr>
   </tbody>
   <tfoot>
