@@ -60,6 +60,7 @@ pip install stellarphot reducer astronbs
       <td align="center" valign="top" width="14.28%"><a href="https://www.linkedin.com/in/pllim/"><img src="https://avatars.githubusercontent.com/u/2090236?v=4?s=100" width="100px;" alt="P. L. Lim"/><br /><sub><b>P. L. Lim</b></sub></a><br /><a href="#maintenance-pllim" title="Maintenance">🚧</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/clkotnik"><img src="https://avatars.githubusercontent.com/u/26798912?v=4?s=100" width="100px;" alt="clkotnik"/><br /><sub><b>clkotnik</b></sub></a><br /><a href="#ideas-clkotnik" title="Ideas, Planning, & Feedback">🤔</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/meyerpa"><img src="https://avatars.githubusercontent.com/u/14203298?v=4?s=100" width="100px;" alt="Paige Meyer"/><br /><sub><b>Paige Meyer</b></sub></a><br /><a href="https://github.com/feder-observatory/stellarphot/commits?author=meyerpa" title="Documentation">📖</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/stottsco"><img src="https://avatars.githubusercontent.com/u/14881940?v=4?s=100" width="100px;" alt="stottsco"/><br /><sub><b>stottsco</b></sub></a><br /><a href="https://github.com/feder-observatory/stellarphot/commits?author=stottsco" title="Code">💻</a></td>
     </tr>
   </tbody>
   <tfoot>
