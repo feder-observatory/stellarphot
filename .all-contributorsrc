@@ -92,6 +92,16 @@
         "review",
         "userTesting"
       ]
+    },
+    {
+      "login": "WatsonEmily11",
+      "name": "Emily Watson",
+      "avatar_url": "https://avatars.githubusercontent.com/u/99451181?v=4",
+      "profile": "https://github.com/WatsonEmily11",
+      "contributions": [
+        "bug",
+        "userTesting"
+      ]
     }
   ],
   "commitType": "docs",
