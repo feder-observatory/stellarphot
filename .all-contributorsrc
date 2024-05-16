@@ -21,6 +21,24 @@
   "linkToUsage": true,
   "skipCi": true,
   "contributors": [
+       {
+      "login": "mwcraig",
+      "name": "Matt Craig",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1147167?v=4",
+      "profile": "http://mwcraig.github.io",
+      "contributions": [
+        "bug",
+        "code",
+        "design",
+        "ideas",
+        "maintenance",
+        "mentoring",
+        "research",
+        "review",
+        "test",
+        "tutorial"
+      ]
+    },
     {
       "login": "JuanCab",
       "name": "Juan Cabanela",
