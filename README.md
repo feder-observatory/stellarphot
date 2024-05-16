@@ -38,8 +38,6 @@ pip install stellarphot reducer astronbs
 <img width="833" alt="stellarphot-screenshot" src="https://user-images.githubusercontent.com/1147167/200139186-100934ca-6d1e-46f9-ac89-a83d05528bb2.png">
 
 
-<<<<<<< HEAD
-=======
 ## Contributors
 
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
@@ -82,7 +80,6 @@ pip install stellarphot reducer astronbs
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
 
->>>>>>> feder/main
 ## License
 
 This project is Copyright (c) Matt Craig and licensed under
