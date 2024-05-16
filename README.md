@@ -54,6 +54,9 @@ pip install stellarphot reducer astronbs
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/Tanner728"><img src="https://avatars.githubusercontent.com/u/90003838?v=4?s=100" width="100px;" alt="Tanner Weyer"/><br /><sub><b>Tanner Weyer</b></sub></a><br /><a href="https://github.com/feder-observatory/stellarphot/commits?author=Tanner728" title="Code">💻</a> <a href="https://github.com/feder-observatory/stellarphot/pulls?q=is%3Apr+reviewed-by%3ATanner728" title="Reviewed Pull Requests">👀</a> <a href="#userTesting-Tanner728" title="User Testing">📓</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/WatsonEmily11"><img src="https://avatars.githubusercontent.com/u/99451181?v=4?s=100" width="100px;" alt="Emily Watson"/><br /><sub><b>Emily Watson</b></sub></a><br /><a href="https://github.com/feder-observatory/stellarphot/issues?q=author%3AWatsonEmily11" title="Bug reports">🐛</a> <a href="#userTesting-WatsonEmily11" title="User Testing">📓</a></td>
     </tr>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Mamizou"><img src="https://avatars.githubusercontent.com/u/35544119?v=4?s=100" width="100px;" alt="Adam Kline"/><br /><sub><b>Adam Kline</b></sub></a><br /><a href="https://github.com/feder-observatory/stellarphot/commits?author=Mamizou" title="Code">💻</a> <a href="#userTesting-Mamizou" title="User Testing">📓</a></td>
+    </tr>
   </tbody>
   <tfoot>
     <tr>
