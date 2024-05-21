@@ -29,7 +29,7 @@ pip install stellarphot reducer astronbs
 
 ## Running stellarphot
 
-1. Start jupyterlab from the command line: `jupyter lab`
+1. Start Jupyterlab from the command line: `jupyter lab`
 2. Open the Launcher (see below)
 3. Click on the notebook you want (see below)
 4. Output files will show up in the file browser
@@ -82,8 +82,7 @@ pip install stellarphot reducer astronbs
 
 ## License
 
-This project is Copyright (c) Matt Craig and licensed under
+This project is Copyright (c) 2019-2024 The Stellarphot Team and licensed under
 the terms of the BSD 3-Clause license. This package is based upon
-the [Astropy package template](https://github.com/astropy/package-template>)
-which is licensed under the BSD 3-clause licence. See the licenses folder for
-more information.
+the [Astropy package template](https://github.com/astropy/package-template)
+which is licensed under the BSD 3-clause license.
