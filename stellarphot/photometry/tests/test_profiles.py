@@ -1,8 +1,11 @@
 import numpy as np
 import pytest
+from astropy.coordinates import SkyCoord
 from astropy.modeling.fitting import LevMarLSQFitter
 from astropy.modeling.models import Gaussian1D
+from astropy.nddata import CCDData
 from astropy.table import Table
+from astropy.utils.data import get_pkg_data_filename
 from photutils.datasets import make_gaussian_sources_image, make_noise_image
 
 from stellarphot.photometry import CenterAndProfile, find_center
@@ -71,6 +74,40 @@ def test_find_center_no_star():
 
     with pytest.raises(RuntimeError, match="Centroid did not converge on a star"):
         find_center(image + noise, [50, 200], max_iters=10)
+
+
+def test_find_center_dim_star():
+    # Regression test for #352, in which a dim star is improperly centered.
+    # The cuout loaded below is from an image of the field of WASP-10, and the star
+    # in question has Gaia DR3 ID that is stored in the header. The gaia position
+    # is also stored in the header, and is what is taken to be the "correct" position
+    # of the star.
+    #
+    # There is only one star in this cutout.
+    #
+    # For the record, the Gaia DR3 ID is 1909763087978475392.
+
+    name = get_pkg_data_filename(data_name="data/center_cutout_1.fits")
+    ccd = CCDData.read(name)
+
+    true_coordinate = SkyCoord(ccd.header["gaia_coord"])
+    true_pixel_center = ccd.wcs.world_to_pixel(true_coordinate)
+
+    # At least with a faint star and large cutout, the
+    # centroid as determined by COM and the centroid determined by the Gaussian fit
+    # are about 20 pixels apart (pre-bug-fix).
+    with pytest.raises(RuntimeError, match="Centroid did not converge on a star"):
+        center = find_center(
+            ccd.data,
+            (40, 42),
+            cutout_size=80,
+            max_iters=10,
+        )
+
+    # Now try with a much smaller cutout size
+    center = find_center(ccd.data, (40, 42), cutout_size=20, max_iters=10)
+    # Check that we got a good center...
+    assert np.linalg.norm(center - true_pixel_center) < 2
 
 
 def test_radial_profile():

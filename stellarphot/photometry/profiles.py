@@ -134,7 +134,7 @@ def find_center(image, center_guess, cutout_size=30, max_iters=10, match_limit=3
     ceng = np.array(sub_data.to_original_position(ceng))
 
     # Confirm that we actually found a star by comparing two centroiding
-    # methods
+    # methods. If we found a star they should be very close to each other.
     if np.linalg.norm(cen - ceng) > match_limit:
         raise RuntimeError(
             "Centroid did not converge on a star. "
