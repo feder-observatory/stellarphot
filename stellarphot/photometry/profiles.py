@@ -165,6 +165,10 @@ class CenterAndProfile:
 
     max_iters : int, optional
         Maximum number of iterations to go through in finding the center.
+
+    match_limit : int, optional
+        Maximum number of pixels to allow the COM centroid and Gaussian center to
+        differ.
     """
 
     def __init__(
@@ -174,9 +178,16 @@ class CenterAndProfile:
         centering_cutout_size=30,
         profile_radius=None,
         max_iters=10,
+        match_limit=3,
     ):
         # For centering we need a fairly small cutout containing only one star.
-        self._cen = find_center(data, center_approx, cutout_size=centering_cutout_size)
+        self._cen = find_center(
+            data,
+            center_approx,
+            cutout_size=centering_cutout_size,
+            match_limit=match_limit,
+            max_iters=max_iters,
+        )
         self._data = data
 
         if profile_radius is None:
