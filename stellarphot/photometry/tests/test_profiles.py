@@ -224,3 +224,16 @@ def test_radial_profile_bigger_profile_than_cutout():
     )
 
     assert profile.profile_cutout.shape == (100, 100)
+
+
+def test_radial_profile_no_profile_size():
+    # Test that when we do not provide a profile size it is half the cutout size
+    image = make_gaussian_sources_image(SHAPE, STARS)
+    profile = CenterAndProfile(
+        image,
+        (STARS["x_mean"][-1], STARS["y_mean"][-1]),
+        centering_cutout_size=50,
+    )
+
+    # Last point should be the average fo the last two bin edges, which is 24.5
+    assert profile.radial_profile.radius[-1] == 24.5
