@@ -1,48 +1,54 @@
-# A package for transforming stellar photometry
+# A Python Package for Transforming Stellar Photometry
 
 [![Powered by Astropy Badge](http://img.shields.io/badge/powered%20by-AstroPy-orange.svg?style=flat)](http://www.astropy.org) [![GitHub Workflow badge](https://github.com/feder-observatory/stellarphot/workflows/Test/badge.svg?branch=main)](https://github.com/feder-observatory/stellarphot/actions?query=workflow%3ATest) [![codecov](https://codecov.io/gh/feder-observatory/stellarphot/graph/badge.svg?token=uVrdNencSQ)](https://codecov.io/gh/feder-observatory/stellarphot) [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10679636.svg)](https://doi.org/10.5281/zenodo.10679636)
 
+Stellarphot provides a Python package and accompanying Jupyter notebooks to allow you to turn reduced astronomical images of point sources (e.g. stars) into calibrated astronomical photometry, with a focus on variable star and exoplanet transit observations.  Specifically:
 
-+ If you already have aperture photometry for a field,
-    * calculate relative flux (like [AstroImageJ](https://www.astro.louisville.edu/software/astroimagej/)), and/or
-    * calculate calibrated magnitudes by transforming to a catalog (e.g. APASS DR9)
-+ If you have calibrated images but haven't done photometry yet, you can do aperture photometry on your images.
-+ If you have not calibrated your images, `stellarphot` can help -- choose the
-
++ If you have reduced astronomical images as FITS files but haven't obtained photometry yet, `stellarphot` can perform aperture photometry on your images.
++ If you already have aperture photometry for a field, `stellarphot` can 
+  * calculate relative flux (like [AstroImageJ](https://www.astro.louisville.edu/software/astroimagej/)), and/or
+  * calculate calibrated magnitudes by transforming to a catalog (e.g. APASS DR9)
++ If you are working with exoplanet transit observations, `stellarphot` can turns the photometry into exoplanet transit light curves (see installation notes below).
 
 ## Installation
 
-You can install `stellarphot` with either pip or conda. `conda` is recommended at the moment because of an issue with installing one of the dependencies of `stellarphot` in Python 3.9 or higher
+You can install `stellarphot` with either `pip` or `conda`.  If you are interested in `stellarphot` for exoplanet transit light curves, `conda` is recommended at the moment because of an issue with installing one of the dependencies.
 
-Install with `conda`:
++ Install with `conda`:
 
-```
-conda install -c conda-forge stellarphot reducer
-pip install astronbs
-```
+  	conda install -c conda-forge stellarphot reducer
+  	pip install astronbs
 
-or install with `pip`:
+  * If you are interested in exoplanet light curve fitting, also install `batman` via 
 
-```
-pip install stellarphot reducer astronbs
-```
+    	conda install -c conda-forge batman-package
 
-## Running stellarphot
++ Install with `pip`:
+
+  	pip install stellarphot reducer astronbs
+
+  * If you are interested in exoplanet light curve fitting, also  install `batman` via:
+
+    	pip install batman-package
+
+## Getting started with stellarphot
 
 1. Start Jupyterlab from the command line: `jupyter lab`
-2. Open the Launcher (see below)
-3. Click on the notebook you want (see below)
-4. Output files will show up in the file browser
-5. Questions? Feel free to contact @mwcraig
+2. Once JupyterLab opens in your web browser, open the Launcher (see Figure below)
+3. Click on the notebook you want  (see Figure below) and follow the instructions in the notebook.  Any output files will show up in the file browser
 
 <img width="833" alt="stellarphot-screenshot" src="https://user-images.githubusercontent.com/1147167/200139186-100934ca-6d1e-46f9-ac89-a83d05528bb2.png">
 
+## Questions? 
+
+Feel free to contact @mwcraig with your questions about using `stellarphot`.
 
 ## Contributors
 
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
 <!-- prettier-ignore-start -->
 <!-- markdownlint-disable -->
+
 <table>
   <tbody>
     <tr>
@@ -74,6 +80,7 @@ pip install stellarphot reducer astronbs
   </tfoot>
 </table>
 
+
 <!-- markdownlint-restore -->
 <!-- prettier-ignore-end -->
 
@@ -82,7 +89,4 @@ pip install stellarphot reducer astronbs
 
 ## License
 
-This project is Copyright (c) 2019-2024 The Stellarphot Team and licensed under
-the terms of the BSD 3-Clause license. This package is based upon
-the [Astropy package template](https://github.com/astropy/package-template)
-which is licensed under the BSD 3-clause license.
+This project is Copyright (c) 2019-2024 The Stellarphot Team and licensed under the terms of the BSD 3-Clause license. This package is based upon the [Astropy package template](https://github.com/astropy/package-template) which is licensed under the BSD 3-clause license.
