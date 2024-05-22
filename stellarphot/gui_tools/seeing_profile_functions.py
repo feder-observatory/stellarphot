@@ -188,6 +188,9 @@ class SeeingProfileWidget:
         if camera is not None:
             self.camera_chooser.value = camera
 
+        # Do not show the camera details by default
+        self.camera_chooser.display_details = False
+
         big_box = ipw.HBox()
         big_box = ipw.GridspecLayout(1, 2)
         layout = ipw.Layout(width="60ch")
@@ -403,8 +406,7 @@ class SeeingProfileWidget:
                         data,
                         (x, y),
                         profile_radius=profile_size,
-                        cutout_size=profile_size,
-                        match_limit=100,
+                        centering_cutout_size=centering_cutout_size,
                     )
                     print(f"Center: {rad_prof.center} FWHM: {rad_prof.FWHM}")
 
