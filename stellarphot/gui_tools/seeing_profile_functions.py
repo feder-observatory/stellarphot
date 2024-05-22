@@ -368,6 +368,7 @@ class SeeingProfileWidget:
             ginga callbacks require the function signature above.
             """
             profile_size = 60
+            centering_cutout_size = 20
             default_gap = 5  # pixels
             default_annulus_width = 15  # pixels
             if self.save_toggle:
@@ -384,7 +385,10 @@ class SeeingProfileWidget:
                 y = int(np.floor(event.data_y))
 
                 rad_prof = CenterAndProfile(
-                    data, (x, y), profile_radius=profile_size, cutout_size=profile_size
+                    data,
+                    (x, y),
+                    profile_radius=profile_size,
+                    centering_cutout_size=centering_cutout_size,
                 )
 
                 try:

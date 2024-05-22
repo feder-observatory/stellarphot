@@ -1,6 +1,11 @@
 import numpy as np
 import pytest
+from astropy.coordinates import SkyCoord
+from astropy.modeling.fitting import LevMarLSQFitter
+from astropy.modeling.models import Gaussian1D
+from astropy.nddata import CCDData
 from astropy.table import Table
+from astropy.utils.data import get_pkg_data_filename
 from photutils.datasets import make_gaussian_sources_image, make_noise_image
 
 from stellarphot.photometry import CenterAndProfile, find_center
@@ -71,6 +76,40 @@ def test_find_center_no_star():
         find_center(image + noise, [50, 200], max_iters=10)
 
 
+def test_find_center_dim_star():
+    # Regression test for #352, in which a dim star is improperly centered.
+    # The cutout loaded below is from an image of the field of WASP-10, and the star
+    # in question has Gaia DR3 ID that is stored in the header. The Gaia position
+    # is also stored in the header, and is what is taken to be the "correct" position
+    # of the star.
+    #
+    # There is only one star in this cutout.
+    #
+    # For the record, the Gaia DR3 ID is 1909763087978475392.
+
+    name = get_pkg_data_filename(data_name="data/center_cutout_1.fits")
+    ccd = CCDData.read(name)
+
+    true_coordinate = SkyCoord(ccd.header["gaia_coord"])
+    true_pixel_center = ccd.wcs.world_to_pixel(true_coordinate)
+
+    # At least with a faint star and large cutout, the
+    # centroid as determined by COM and the centroid determined by the Gaussian fit
+    # are about 20 pixels apart (pre-bug-fix).
+    with pytest.raises(RuntimeError, match="Centroid did not converge on a star"):
+        center = find_center(
+            ccd.data,
+            (40, 42),
+            cutout_size=80,
+            max_iters=10,
+        )
+
+    # Now try with a much smaller cutout size
+    center = find_center(ccd.data, (40, 42), cutout_size=20, max_iters=10)
+    # Check that we got a good center...
+    assert np.linalg.norm(center - true_pixel_center) < 2
+
+
 def test_radial_profile():
     # Test that both curve of growth and radial profile are correct
 
@@ -81,7 +120,9 @@ def test_radial_profile():
         # The "stars" have FWHM around 9.5, so make the cutouts used for finding the
         # stars fairly big -- the bare minimum would be a radius of 3 FWHM, which is a
         # cutout size around 60.
-        rad_prof = CenterAndProfile(image, cen, cutout_size=60, profile_radius=30)
+        rad_prof = CenterAndProfile(
+            image, cen, centering_cutout_size=60, profile_radius=30
+        )
 
         # Test that the curve of growth is correct
 
@@ -105,7 +146,7 @@ def test_radial_profile_exposure_is_nan():
 
     cen = find_center(image, (50, 50), max_iters=10)
 
-    rad_prof = CenterAndProfile(image, cen, cutout_size=60, profile_radius=30)
+    rad_prof = CenterAndProfile(image, cen, centering_cutout_size=60, profile_radius=30)
 
     c = Camera(**TEST_CAMERA_VALUES)
     assert np.isnan(rad_prof.snr(c, np.nan)[-1])
@@ -117,8 +158,9 @@ def test_radial_profile_exposure_is_nan():
 def test_radial_profile_with_background():
     # Regression test for #328 -- image with a background level
     image = make_gaussian_sources_image(SHAPE, STARS)
+    noise_stdev = 10
     image = image + make_noise_image(
-        image.shape, distribution="gaussian", mean=100, stddev=0.1
+        image.shape, distribution="gaussian", mean=100, stddev=noise_stdev, seed=43917
     )
     for row in STARS:
         cen = find_center(image, (row["x_mean"], row["y_mean"]), max_iters=10)
@@ -126,13 +168,28 @@ def test_radial_profile_with_background():
         # The "stars" have FWHM around 9.5, so make the cutouts used for finding the
         # stars fairly big -- the bare minimum would be a radius of 3 FWHM, which is a
         # cutout size around 60.
-        rad_prof = CenterAndProfile(image, cen, cutout_size=60, profile_radius=30)
+        rad_prof = CenterAndProfile(
+            image, cen, centering_cutout_size=60, profile_radius=30
+        )
 
         # Numerical value below is integral of input 2D gaussian, 2pi A sigma^2
         expected_integral = 2 * np.pi * row["amplitude"] * row["x_stddev"] ** 2
 
+        # The standard deviation in the sum of N gaussian random variables with
+        # standard deviation SD is
+        #    σ = sqrt(N × SD^2)
+        # The curve of growth includes the sum of a bunch of pixels which each have a
+        # standard deviation of 10, so the standard deviation of the sum of those pixels
+        # is given by the formula above, with N being the number of pixels in the curve.
+
+        expected_stddev = np.sqrt(rad_prof.curve_of_growth.area[-1] * noise_stdev**2)
+        print(expected_stddev, rad_prof.curve_of_growth.profile[-1] - expected_integral)
+
+        # With the seed above the difference is just under 1.5 standard deviations.
         np.testing.assert_allclose(
-            rad_prof.curve_of_growth.profile[-1], expected_integral, atol=50
+            rad_prof.curve_of_growth.profile[-1],
+            expected_integral,
+            atol=1.5 * expected_stddev,
         )
 
         # Test that the radial profile is correct by comparing pixel values to a
@@ -140,4 +197,48 @@ def test_radial_profile_with_background():
         data_radii, data_counts = rad_prof.pixel_values_in_profile
         expected_profile = rad_prof.radial_profile.gaussian_fit(data_radii)
 
-        np.testing.assert_allclose(data_counts, expected_profile, atol=20)
+        # The test here is that the difference between the actual profile and the
+        # expected is itself a Gaussian distribution with standard deviation very
+        # roughly equal to the standard deviation of the noise we put in.
+        differences = data_counts - expected_profile
+        counts, bin_edges = np.histogram(differences)
+        bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
+        g1d_init = Gaussian1D()
+        fitter = LevMarLSQFitter()
+        g1d = fitter(g1d_init, bin_centers, counts)
+
+        assert np.abs(g1d.stddev.value - noise_stdev) < 1.5
+        assert np.abs(g1d.mean.value) < 1
+
+
+def test_radial_profile_bigger_profile_than_cutout():
+    # Test that the cutout, used for finding the star, can be smaller than
+    # the profile radius.
+    image = make_gaussian_sources_image(SHAPE, STARS)
+
+    # Just look at one star in this test, the last one, which is far from the edges.
+    # Prior to a change in CenterAndProfile, this would have raised an error because the
+    # same cutout size was used for the profile and the centering. The result if the
+    # profile size was larger was that the profile eventually had only NaNs in the
+    # outermost annuli.
+    profile = CenterAndProfile(
+        image,
+        (STARS["x_mean"][-1], STARS["y_mean"][-1]),
+        centering_cutout_size=20,
+        profile_radius=50,
+    )
+
+    assert profile.profile_cutout.shape == (100, 100)
+
+
+def test_radial_profile_no_profile_size():
+    # Test that when we do not provide a profile size it is half the cutout size
+    image = make_gaussian_sources_image(SHAPE, STARS)
+    profile = CenterAndProfile(
+        image,
+        (STARS["x_mean"][-1], STARS["y_mean"][-1]),
+        centering_cutout_size=50,
+    )
+
+    # Last point should be the average fo the last two bin edges, which is 24.5
+    assert profile.radial_profile.radius[-1] == 24.5
