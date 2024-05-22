@@ -76,13 +76,29 @@ class ChooseOrMakeNew(ipw.VBox):
             value=(f"<h2>Choose a {self._display_name} " "or make a new one</h2>")
         )
 
+        self._choose_detail_container = ipw.HBox(layout={"width": DEFAULT_BUTTON_WIDTH})
+
         # Selector for existing items or to make a new one
         self._choose_existing = ipw.Dropdown(description="")
+        choose_width = 75  # percent, the details checkbox takes up the rest
+        self._choose_existing.layout.width = (
+            f"{choose_width}%" if details_hideable else "100%"
+        )
 
         # Option to show/hide details, only displayed if user wants it.
-        self._show_details_ui = ipw.Checkbox(description="Show details", value=True)
+        self._show_details_ui = ipw.Checkbox(description="Details", value=True)
         self._show_details_ui.layout.display = "flex" if details_hideable else "none"
+        # Removes unused whitespace before the checkbox
+        self._show_details_ui.style.description_width = "0px"
+
+        if details_hideable:
+            self._show_details_ui.layout.width = f"{100 - choose_width}%"
         self._show_details_cached_value = self._show_details_ui.value
+
+        self._choose_detail_container.children = [
+            self._choose_existing,
+            self._show_details_ui,
+        ]
 
         self._edit_delete_container = ipw.HBox(
             # width below was chosen to match the dropdown...would prefer to
@@ -117,8 +133,7 @@ class ChooseOrMakeNew(ipw.VBox):
         # Build the main widget
         self.children = [
             self._title,
-            self._choose_existing,
-            self._show_details_ui,
+            self._choose_detail_container,
             self._details_box,
         ]
 
