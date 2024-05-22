@@ -78,8 +78,8 @@ def test_find_center_no_star():
 
 def test_find_center_dim_star():
     # Regression test for #352, in which a dim star is improperly centered.
-    # The cuout loaded below is from an image of the field of WASP-10, and the star
-    # in question has Gaia DR3 ID that is stored in the header. The gaia position
+    # The cutout loaded below is from an image of the field of WASP-10, and the star
+    # in question has Gaia DR3 ID that is stored in the header. The Gaia position
     # is also stored in the header, and is what is taken to be the "correct" position
     # of the star.
     #
@@ -178,16 +178,18 @@ def test_radial_profile_with_background():
         # The standard deviation in the sum of N gaussian random variables with
         # standard deviation SD is
         #    σ = sqrt(N × SD^2)
-        # The curve of growth includes the sume of a bunch of pixels which each have a
+        # The curve of growth includes the sum of a bunch of pixels which each have a
         # standard deviation of 10, so the standard deviation of the sum of those pixels
+        # is given by the formula above, with N being the number of pixels in the curve.
 
         expected_stddev = np.sqrt(rad_prof.curve_of_growth.area[-1] * noise_stdev**2)
+        print(expected_stddev, rad_prof.curve_of_growth.profile[-1] - expected_integral)
 
-        # Allow for a 3-sigma tolerance
+        # With the seed above the difference is just under 1.5 standard deviations.
         np.testing.assert_allclose(
             rad_prof.curve_of_growth.profile[-1],
             expected_integral,
-            atol=3 * expected_stddev,
+            atol=1.5 * expected_stddev,
         )
 
         # Test that the radial profile is correct by comparing pixel values to a
@@ -197,7 +199,7 @@ def test_radial_profile_with_background():
 
         # The test here is that the difference between the actual profile and the
         # expected is itself a Gaussian distribution with standard deviation very
-        # roughly equal to the standardof the noise we put in.
+        # roughly equal to the standard deviation of the noise we put in.
         differences = data_counts - expected_profile
         counts, bin_edges = np.histogram(differences)
         bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
@@ -215,7 +217,10 @@ def test_radial_profile_bigger_profile_than_cutout():
     image = make_gaussian_sources_image(SHAPE, STARS)
 
     # Just look at one star in this test, the last one, which is far from the edges.
-
+    # Prior to a change in CenterAndProfile, this would have raised an error because the
+    # same cutout size was used for the profile and the centering. The result if the
+    # profile size was larger was that the profile eventually had only NaNs in the
+    # outermost annuli.
     profile = CenterAndProfile(
         image,
         (STARS["x_mean"][-1], STARS["y_mean"][-1]),
