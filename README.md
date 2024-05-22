@@ -29,10 +29,10 @@ You can install `stellarphot` with either `pip` or `conda`.  If you are interest
   ```
   pip install stellarphot reducer astronbs
   ```
-  or If you are interested in exoplanet light curve fitting instead use:
+  or if you are interested in exoplanet light curve fitting you should instead use:
   
   ```
-  pip install stellarphot[exo_fitting]
+  pip install stellarphot[exo_fitting] reducer astronbs
   ```
   
 ## Getting started with stellarphot
