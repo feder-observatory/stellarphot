@@ -4,33 +4,37 @@
 
 Stellarphot provides a Python package and accompanying Jupyter notebooks to allow you to turn reduced astronomical images of point sources (e.g. stars) into calibrated astronomical photometry, with a focus on variable star and exoplanet transit observations.  Specifically:
 
-+ If you have reduced astronomical images as FITS files but haven't obtained photometry yet, `stellarphot` can perform aperture photometry on your images.
-+ If you already have aperture photometry for a field, `stellarphot` can 
-  * calculate relative flux (like [AstroImageJ](https://www.astro.louisville.edu/software/astroimagej/)), and/or
-  * calculate calibrated magnitudes by transforming to a catalog (e.g. APASS DR9)
-+ If you are working with exoplanet transit observations, `stellarphot` can turns the photometry into exoplanet transit light curves (see installation notes below).
+- If you have reduced astronomical images as FITS files but haven't obtained photometry yet, `stellarphot` can perform aperture photometry on your images.
+- If you already have aperture photometry for a field, `stellarphot` can 
+  - calculate relative flux (like [AstroImageJ](https://www.astro.louisville.edu/software/astroimagej/)), and/or
+  - calculate calibrated magnitudes by transforming to a catalog (e.g. APASS DR9)
+- If you are working with exoplanet transit observations, `stellarphot` can turns the photometry into exoplanet transit light curves (see installation notes below).
 
 ## Installation
 
 You can install `stellarphot` with either `pip` or `conda`.  If you are interested in `stellarphot` for exoplanet transit light curves, `conda` is recommended at the moment because of an issue with installing one of the dependencies.
 
-+ Install with `conda`:
-
-  	conda install -c conda-forge stellarphot reducer
-  	pip install astronbs
-
-  * If you are interested in exoplanet light curve fitting, also install `batman` via 
-
-    	conda install -c conda-forge batman-package
-
-+ Install with `pip`:
-
-  	pip install stellarphot reducer astronbs
-
-  * If you are interested in exoplanet light curve fitting, also  install `batman` via:
-
-    	pip install batman-package
-
+- Install with `conda` using
+  ```
+  conda install -c conda-forge stellarphot reducer
+  pip install astronbs
+  ```
+  If you are interested in exoplanet light curve fitting, also install `batman` using 
+  
+  ```
+  conda install -c conda-forge batman-package
+  ```
+  
+- Install with `pip` using
+  ```
+  pip install stellarphot reducer astronbs
+  ```
+  or If you are interested in exoplanet light curve fitting instead use:
+  
+  ```
+  pip install stellarphot[exo_fitting]
+  ```
+  
 ## Getting started with stellarphot
 
 1. Start Jupyterlab from the command line: `jupyter lab`
