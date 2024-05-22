@@ -168,28 +168,41 @@ class CenterAndProfile:
     """
 
     def __init__(
-        self, data, center_approx, cutout_size=30, profile_radius=None, max_iters=10
+        self,
+        data,
+        center_approx,
+        centering_cutout_size=30,
+        profile_radius=None,
+        max_iters=10,
     ):
-        self._cen = find_center(data, center_approx, cutout_size=cutout_size)
+        # For centering we need a fairly small cutout containing only one star.
+        self._cen = find_center(data, center_approx, cutout_size=centering_cutout_size)
         self._data = data
-        self._cutout = Cutout2D(data, self.center, (cutout_size, cutout_size))
-        self._max_iters = max_iters
+
         if profile_radius is None:
-            profile_radius = cutout_size // 2
+            profile_radius = centering_cutout_size // 2
+
+        # The cutout for profiling needs to be at least twice the profile radius to
+        # ensure that the profile is not truncated.
+        self._profile_cutout = Cutout2D(
+            data, self.center, (2 * profile_radius, 2 * profile_radius)
+        )
+
+        self._max_iters = max_iters
 
         radii = np.linspace(0, profile_radius, profile_radius + 1)
         # Get a rough profile with rough background subtraction -- note that
         # NO background subtraction does not work.
-        background = sigma_clipped_stats(self.cutout.data)[1]
+        background = sigma_clipped_stats(self.profile_cutout.data)[1]
         self._radial_profile = RadialProfile(
-            self.cutout.data - background, self.cutout_center, radii
+            self.profile_cutout.data - background, self.cutout_center, radii
         )
 
         self._sky_area = None
 
         # Do proper background subtraction for the final radial profile
         self._radial_profile = RadialProfile(
-            self.cutout.data - self.sky_pixel_value, self.cutout_center, radii
+            self.profile_cutout.data - self.sky_pixel_value, self.cutout_center, radii
         )
 
     @property
@@ -214,15 +227,15 @@ class CenterAndProfile:
         return self.FWHM / 2
 
     @property
-    def cutout(self):
+    def profile_cutout(self):
         """
         Cutout image around the star.
         """
-        return self._cutout
+        return self._profile_cutout
 
     @property
     def cutout_center(self):
-        return self.cutout.to_cutout_position(self.center)
+        return self.profile_cutout.to_cutout_position(self.center)
 
     @property
     def radial_profile(self):
@@ -254,18 +267,20 @@ class CenterAndProfile:
         radii = []
         pixel_values = []
         idx = 1
-        cen_in_cutout = self.cutout.to_cutout_position(self.center)
+        cen_in_cutout = self.profile_cutout.to_cutout_position(self.center)
         for ap in self.radial_profile.apertures:
             idx += 1
             # Calculate the distance of each pixel from the center
-            grid_x, grid_y = np.mgrid[: self.cutout.shape[0], : self.cutout.shape[1]]
+            grid_x, grid_y = np.mgrid[
+                : self.profile_cutout.shape[0], : self.profile_cutout.shape[1]
+            ]
             dist_from_cen = np.sqrt(
                 (grid_x - cen_in_cutout[1]) ** 2 + (grid_y - cen_in_cutout[0]) ** 2
             )
 
             # Get only the data in this aperture
             ap_mask = ap.to_mask(method="center")
-            ap_data = ap_mask.multiply(self.cutout.data)
+            ap_data = ap_mask.multiply(self.profile_cutout.data)
             dist_from_cen = ap_mask.multiply(dist_from_cen)
 
             # Drop any data where the aperture mask was zero and flatten
@@ -300,12 +315,14 @@ class CenterAndProfile:
         """
         Pixel values for the sky, i.e. more than 3 FWHM from the star.
         """
-        grid_x, grid_y = np.mgrid[: self.cutout.shape[0], : self.cutout.shape[1]]
-        x_s, y_s = self.cutout.to_cutout_position(self.center)
+        grid_x, grid_y = np.mgrid[
+            : self.profile_cutout.shape[0], : self.profile_cutout.shape[1]
+        ]
+        x_s, y_s = self.profile_cutout.to_cutout_position(self.center)
         dist_from_star = np.sqrt((grid_x - x_s) ** 2 + (grid_y - y_s) ** 2)
         mask = dist_from_star > self.FWHM * 3
         self._sky_area = mask.sum()
-        _, median, _ = sigma_clipped_stats(self.cutout.data[mask])
+        _, median, _ = sigma_clipped_stats(self.profile_cutout.data[mask])
         return median
 
     @lazyproperty

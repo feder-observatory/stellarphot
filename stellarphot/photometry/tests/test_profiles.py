@@ -120,7 +120,9 @@ def test_radial_profile():
         # The "stars" have FWHM around 9.5, so make the cutouts used for finding the
         # stars fairly big -- the bare minimum would be a radius of 3 FWHM, which is a
         # cutout size around 60.
-        rad_prof = CenterAndProfile(image, cen, cutout_size=60, profile_radius=30)
+        rad_prof = CenterAndProfile(
+            image, cen, centering_cutout_size=60, profile_radius=30
+        )
 
         # Test that the curve of growth is correct
 
@@ -144,7 +146,7 @@ def test_radial_profile_exposure_is_nan():
 
     cen = find_center(image, (50, 50), max_iters=10)
 
-    rad_prof = CenterAndProfile(image, cen, cutout_size=60, profile_radius=30)
+    rad_prof = CenterAndProfile(image, cen, centering_cutout_size=60, profile_radius=30)
 
     c = Camera(**TEST_CAMERA_VALUES)
     assert np.isnan(rad_prof.snr(c, np.nan)[-1])
@@ -166,7 +168,9 @@ def test_radial_profile_with_background():
         # The "stars" have FWHM around 9.5, so make the cutouts used for finding the
         # stars fairly big -- the bare minimum would be a radius of 3 FWHM, which is a
         # cutout size around 60.
-        rad_prof = CenterAndProfile(image, cen, cutout_size=60, profile_radius=30)
+        rad_prof = CenterAndProfile(
+            image, cen, centering_cutout_size=60, profile_radius=30
+        )
 
         # Numerical value below is integral of input 2D gaussian, 2pi A sigma^2
         expected_integral = 2 * np.pi * row["amplitude"] * row["x_stddev"] ** 2
@@ -203,3 +207,20 @@ def test_radial_profile_with_background():
 
         assert np.abs(g1d.stddev.value - noise_stdev) < 1.5
         assert np.abs(g1d.mean.value) < 1
+
+
+def test_radial_profile_bigger_profile_than_cutout():
+    # Test that the cutout, used for finding the star, can be smaller than
+    # the profile radius.
+    image = make_gaussian_sources_image(SHAPE, STARS)
+
+    # Just look at one star in this test, the last one, which is far from the edges.
+
+    profile = CenterAndProfile(
+        image,
+        (STARS["x_mean"][-1], STARS["y_mean"][-1]),
+        centering_cutout_size=20,
+        profile_radius=50,
+    )
+
+    assert profile.profile_cutout.shape == (100, 100)
