@@ -397,18 +397,28 @@ class SeeingProfileWidget:
                 # User clicked on a star, so generate profile
                 i = self.iw._viewer.get_image()
                 data = i.get_data()
-                with self.error_console:
-                    # Rough location of click in original image
-                    x = int(np.floor(event.data_x))
-                    y = int(np.floor(event.data_y))
-                    print(f"Clicked at {x}, {y}")
+
+                # Rough location of click in original image
+                x = int(np.floor(event.data_x))
+                y = int(np.floor(event.data_y))
+
+                try:
                     rad_prof = CenterAndProfile(
                         data,
                         (x, y),
                         profile_radius=profile_size,
                         centering_cutout_size=centering_cutout_size,
                     )
-                    print(f"Center: {rad_prof.center} FWHM: {rad_prof.FWHM}")
+                except RuntimeError as e:
+                    if "Centroid did not converge on a star." in str(e):
+                        with self.error_console:
+                            print(
+                                "No star found at this location. Try clicking closer "
+                                "to a star or on a brighter star"
+                            )
+                else:
+                    # Success, clear any previous error messages
+                    self.error_console.clear_output()
 
                 try:
                     try:  # Remove previous marker
