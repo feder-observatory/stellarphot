@@ -561,7 +561,10 @@ class TestChooseOrMakeNew:
         )
 
         # New UI element should be in the big box
-        assert choose_or_make_new._show_details_ui in choose_or_make_new.children
+        assert (
+            choose_or_make_new._show_details_ui
+            in choose_or_make_new._choose_detail_container.children
+        )
 
         if hideable:
             # The "show/hide details" widget should be visible
