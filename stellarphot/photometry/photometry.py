@@ -210,28 +210,39 @@ def single_image_photometry(
             f"'{type(photometry_options)}'."
         )
 
+
     # Set up logging
     logfile = logging_options.logfile
     console_log = logging_options.console_log
-    logger = logging.getLogger("single_image_photometry")
-    console_format = logging.Formatter("%(message)s")
+
+    print(f"DEBUG logfile: {logfile}")
+    print(f"DEBUG console_log: {console_log}")
+
     # If we have no handlers, set up logging
+    logger = logging.getLogger("single_image_photometry")
+
+    # Use this to catch if logging was already set up by a call
+    # from multi_image_photometry.
+    fh_exists = False   # Default to filehandler not existing
     if logger.hasHandlers() is False:
         logger.setLevel(logging.INFO)
         # Set up logging to a file (in addition to any logging below)
         if logfile is not None:
+            print(f"DEBUG creating file handler pointing to logfile: {logfile}")
             # by default this appends to existing logfile
             fh = logging.FileHandler(logfile)
             log_format = logging.Formatter("%(levelname)s - %(message)s")
             fh.setFormatter(log_format)
             fh.setLevel(logging.INFO)
             logger.addHandler(fh)
+            fh_exists = True
 
         # Set up logging to console if requested
         if console_log:
             ch = logging.StreamHandler()
         else:  # otherwise effectively suppress output
             ch = logging.NullHandler()
+        console_format = logging.Formatter("%(message)s")
         ch.setFormatter(console_format)
         ch.setLevel(logging.INFO)
         logger.addHandler(ch)
@@ -581,10 +592,11 @@ def single_image_photometry(
     msg += "DONE."
     logger.info(msg)
 
-    # Close logfile if it was opened
-    if logfile is not None:
+    # Close logfile if it was created
+    if fh_exists:
         fh.flush()
         fh.close()
+
     # Remove logger handler
     logger.handlers.clear()
 
@@ -666,6 +678,8 @@ def multi_image_photometry(
     multilogger = logging.getLogger("multi_image_photometry")
     multilogger.setLevel(logging.INFO)
     console_format = logging.Formatter("%(message)s")
+    # Remove all other existing handlers from the logger
+    # (Kind of brute force, but works for our purposes
     for handler in multilogger.handlers[:]:
         multilogger.removeHandler(handler)
 
