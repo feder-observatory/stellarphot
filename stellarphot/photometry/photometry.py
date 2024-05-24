@@ -215,20 +215,18 @@ def single_image_photometry(
     logfile = logging_options.logfile
     console_log = logging_options.console_log
 
-    print(f"DEBUG logfile: {logfile}")
-    print(f"DEBUG console_log: {console_log}")
-
     # If we have no handlers, set up logging
     logger = logging.getLogger("single_image_photometry")
 
     # Use this to catch if logging was already set up by a call
-    # from multi_image_photometry.
+    # from multi_image_photometry before creating new log file handler
+    # (Warning: This actually just catches if the logger has any handlers.
+    # Probably not the best way to do this.)
     fh_exists = False   # Default to filehandler not existing
     if logger.hasHandlers() is False:
         logger.setLevel(logging.INFO)
         # Set up logging to a file (in addition to any logging below)
         if logfile is not None:
-            print(f"DEBUG creating file handler pointing to logfile: {logfile}")
             # by default this appends to existing logfile
             fh = logging.FileHandler(logfile)
             log_format = logging.Formatter("%(levelname)s - %(message)s")
@@ -686,6 +684,9 @@ def multi_image_photometry(
     logfile = photometry_settings.logging_settings.logfile
     console_log = photometry_settings.logging_settings.console_log
 
+    print("DEBUG (multi): logfile is", logfile)
+    print("DEBUG (multi): console_log is", console_log)
+    
     # Set up logging:
     # Check if logfile is not None, set up logging to be written to the logfile.
     # Next check if console_log is True, if it is, set up logging to be written
@@ -707,6 +708,7 @@ def multi_image_photometry(
         logfile_name = str(Path(logfile).name)
 
         # by default this appends to existing logfile
+        print("DEBUG (multi): logfile created at ", logfile)
         fh = logging.FileHandler(logfile)
         log_format = logging.Formatter("%(levelname)s - %(message)s")
         fh.setFormatter(log_format)
