@@ -134,7 +134,8 @@ def single_image_photometry(
         photometry. See `stellarphot.settings.PhotometrySettings` for more information.
 
     fname : str, optional (Default: None)
-        Name of the image file on which photometry is being performed.
+        Name of the image file on which photometry is being performed, used for
+        logging and tracking purposes, the file is not accessed or modified.
 
     logline : str, optional (Default: "single_image_photometry:")
         String to prepend to all log messages.
@@ -680,9 +681,17 @@ def multi_image_photometry(
 
     # Set up logging to a file (in addition to any logging below)
     if logfile is not None:
-        # Keep original name without path
-        orig_logfile = logfile
+        # Get the name of the logfile without the path
+        logfile = Path(logfile).name
+        # Redirect the logfile to the directory_with_images
         logfile = Path(directory_with_images) / logfile
+        # Change the settings so when they are passed to single_image_photometry
+        # the logging will be written to the same logfile
+        photometry_settings.logging_settings.logfile = str(logfile)
+
+        # Keep original name without path
+        logfile_name = str(Path(logfile).name)
+
         # by default this appends to existing logfile
         fh = logging.FileHandler(logfile)
         log_format = logging.Formatter("%(levelname)s - %(message)s")
@@ -716,7 +725,7 @@ def multi_image_photometry(
 
     msg = f"Starting photometry of files in {directory_with_images} ... "
     if logfile is not None:
-        msg += f"logging output to {orig_logfile}"
+        msg += f"logging output to {logfile_name}"
         # If not logging to console, print message here
         if not console_log:
             print(msg)
