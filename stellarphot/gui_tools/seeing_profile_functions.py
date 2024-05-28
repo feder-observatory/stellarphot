@@ -32,6 +32,9 @@ __all__ = [
 ]
 
 DESC_STYLE = {"description_width": "initial"}
+AP_SETTING_NEEDS_SAVE = "❗️"
+AP_SETTING_SAVED = "✅"
+DEFAULT_SAVE_TITLE = "Save aperture and camera"
 
 
 # TODO: maybe move this into SeeingProfileWidget unless we anticipate
@@ -173,6 +176,7 @@ class SeeingProfileWidget:
         self.iw = imagewidget
 
         self.observatory = observatory
+
         # Do some set up of the ImageWidget
         set_keybindings(self.iw, scroll_zoom=False)
         bind_map = self.iw._viewer.get_bindmap()
@@ -207,7 +211,7 @@ class SeeingProfileWidget:
         # Box for aperture settings and title
         ap_setting_box = ipw.VBox()
 
-        self.ap_title = ipw.HTML(value=self._format_title("Save aperture and camera"))
+        self.ap_title = ipw.HTML(value=self._format_title(DEFAULT_SAVE_TITLE))
         self.aperture_settings = ui_generator(PhotometryApertures)
         self.aperture_settings.show_savebuttonbar = True
         self.aperture_settings.savebuttonbar.fns_onsave_add_action(self.save)
@@ -286,12 +290,21 @@ class SeeingProfileWidget:
             self.exposure = np.nan
 
     def save(self):
+        """
+        Save all of the settings we have to a partial settings file.
+        """
         self.photometry_settings.save(
             PartialPhotometrySettings(
                 photometry_apertures=self.aperture_settings.value, camera=self.camera
             ),
             update=True,
         )
+
+        # For some reason the value of unsaved_changes is not updated until after this
+        # function executes, so we force its value here.
+        self.aperture_settings.savebuttonbar.unsaved_changes = False
+        # Update the save box title to reflect the save
+        self._set_save_box_title("")
 
     def _format_title(self, title):
         """
@@ -333,6 +346,12 @@ class SeeingProfileWidget:
         """
         self._seeing_plot_fig.savefig(self.seeing_file_name.value)
 
+    def _set_save_box_title(self, _):
+        if self.aperture_settings.savebuttonbar.unsaved_changes:
+            self.ap_title.value = self._format_title(DEFAULT_SAVE_TITLE + " ❗️")
+        else:
+            self.ap_title.value = self._format_title(DEFAULT_SAVE_TITLE + " ✅")
+
     def _set_observers(self):
         def aperture_obs(change):
             self._update_plots()
@@ -345,6 +364,9 @@ class SeeingProfileWidget:
         self.aperture_settings.observe(aperture_obs, names="_value")
 
         self.fits_file.file_chooser.observe(self._update_file, names="_value")
+
+        self.aperture_settings.observe(self._set_save_box_title, "_value")
+
         if self.save_toggle:
             self.save_toggle.observe(self._save_toggle_action, names="value")
             self.save_seeing.on_click(self._save_seeing_plot)
