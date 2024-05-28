@@ -30,7 +30,7 @@ __all__ = [
     "SeeingProfileWidget",
 ]
 
-desc_style = {"description_width": "initial"}
+DESC_STYLE = {"description_width": "initial"}
 
 
 # TODO: maybe move this into SeeingProfileWidget unless we anticipate
@@ -198,14 +198,13 @@ class SeeingProfileWidget:
         # Do not show the camera details by default
         self.camera_chooser.display_details = False
 
-        top_box = ipw.HBox()
-        top_box.children = [self.fits_file.file_chooser, self.camera_chooser]
+        image_camer_box = ipw.HBox()
+        image_camer_box.children = [self.fits_file.file_chooser, self.camera_chooser]
 
-        big_box = ipw.HBox()
-        big_box = ipw.GridspecLayout(1, 2)
+        im_view_plot_box = ipw.GridspecLayout(1, 2)
 
         # Box for aperture settings and title
-        vb = ipw.VBox()
+        ap_setting_box = ipw.VBox()
 
         self.ap_title = ipw.HTML(value=self._format_title("Save aperture and camera"))
         self.aperture_settings = ui_generator(PhotometryApertures)
@@ -213,40 +212,43 @@ class SeeingProfileWidget:
         self.aperture_settings.savebuttonbar.fns_onsave_add_action(self.save)
         # self.aperture_settings.path = Path(self.aperture_settings_file_name.value)
 
-        vb.children = [
+        ap_setting_box.children = [
             self.ap_title,
             self.aperture_settings,
         ]
 
-        lil_box = ipw.VBox()
-        lil_tabs = ipw.Tab()
-        lil_tabs.children = [
+        plot_box = ipw.VBox()
+        plt_tabs = ipw.Tab()
+        plt_tabs.children = [
             self.snr_plot,
             self.seeing_profile_plot,
             self.curve_growth_plot,
-            self.aperture_settings,
         ]
-        lil_tabs.titles = [
+        plt_tabs.titles = [
             "SNR",
             "Seeing profile",
             "Integrated counts",
-            "Aperture settings",
         ]
 
         self.tess_box = self._make_tess_box()
-        lil_box.children = [lil_tabs, self.tess_box]
+        plot_box.children = [plt_tabs, self.tess_box]
 
         imbox = ipw.VBox()
         imbox.children = [imagewidget]
-        big_box[0, 0] = imbox
-        big_box[0, 1] = lil_box
-        big_box.layout.width = "100%"
+        im_view_plot_box[0, 0] = imbox
+        im_view_plot_box[0, 1] = plot_box
+        im_view_plot_box.layout.width = "100%"
 
         # Line below puts space between the image and the plots so the plots
         # don't jump around as the image value changes.
-        big_box.layout.justify_content = "space-between"
-        self.big_box = big_box
-        self.container.children = [top_box, self.error_console, self.big_box, vb]
+        im_view_plot_box.layout.justify_content = "space-between"
+        self.big_box = im_view_plot_box
+        self.container.children = [
+            image_camer_box,
+            self.error_console,
+            self.big_box,
+            ap_setting_box,
+        ]
         self.box = self.container
         self._aperture_name = "aperture"
 
@@ -368,7 +370,7 @@ class SeeingProfileWidget:
         scope_name = ipw.Text(
             description="Telescope code",
             value=self.observatory.TESS_telescope_code,
-            style=desc_style,
+            style=DESC_STYLE,
         )
         planet_num = ipw.IntText(description="Planet", value=1)
         self.save_seeing = ipw.Button(description="Save")
