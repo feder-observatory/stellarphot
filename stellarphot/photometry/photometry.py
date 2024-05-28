@@ -683,7 +683,7 @@ def multi_image_photometry(
 
     logfile = photometry_settings.logging_settings.logfile
     console_log = photometry_settings.logging_settings.console_log
-    
+
     # Set up logging:
     # Check if logfile is not None, set up logging to be written to the logfile.
     # Next check if console_log is True, if it is, set up logging to be written
