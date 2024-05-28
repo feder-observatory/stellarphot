@@ -215,7 +215,6 @@ class SeeingProfileWidget:
         self.aperture_settings = ui_generator(PhotometryApertures)
         self.aperture_settings.show_savebuttonbar = True
         self.aperture_settings.savebuttonbar.fns_onsave_add_action(self.save)
-        # self.aperture_settings.path = Path(self.aperture_settings_file_name.value)
 
         ap_setting_box.children = [
             self.ap_title,
