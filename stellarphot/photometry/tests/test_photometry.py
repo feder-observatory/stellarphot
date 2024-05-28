@@ -703,7 +703,7 @@ class TestAperturePhotometry:
     # Checking logging for AperturePhotometry for multiple image photometry.
     @pytest.mark.parametrize("logfile", ["test.log", None])
     @pytest.mark.parametrize("console_log", [True, False])
-    def test_logging_multiple_image(self, capsys, logfile, console_log, tmp_path):
+    def test_logging_multiple_image(self, capsys, logfile, console_log):
         # Create list of fake CCDData objects
         num_files = 5
         fake_images = list_of_fakes(num_files)
@@ -721,9 +721,7 @@ class TestAperturePhotometry:
             # Write the CCDData objects to files
             for i, image in enumerate(fake_images):
                 image.write(temp_file_names[i])
-
             object_name = fake_images[0].header["OBJECT"]
-            sources = fake_images[0].sources
 
             # Generate the sourcelist
             found_sources = source_detection(
@@ -767,7 +765,7 @@ class TestAperturePhotometry:
                 )
 
                 ap_phot = AperturePhotometry(settings=photometry_settings)
-                phot_data = ap_phot(temp_dir, object_of_interest=object_name)
+                _ = ap_phot(temp_dir, object_of_interest=object_name)
 
                 #
                 # Test logging was consistent with settings
