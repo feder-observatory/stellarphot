@@ -4,6 +4,7 @@ import ipywidgets as ipw
 import numpy as np
 from astropy.io import fits
 from astropy.table import Table
+from IPython.display import display
 
 try:
     from astrowidgets import ImageWidget
@@ -428,9 +429,12 @@ class SeeingProfileWidget:
                 except RuntimeError as e:
                     if "Centroid did not converge on a star." in str(e):
                         with self.error_console:
-                            print(
-                                "No star found at this location. Try clicking closer "
-                                "to a star or on a brighter star"
+                            display(
+                                ipw.HTML(
+                                    "<strong>No star found at this location. "
+                                    "Try clicking closer "
+                                    "to a star or on a brighter star</strong>"
+                                )
                             )
                 else:
                     # Success, clear any previous error messages
