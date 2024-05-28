@@ -1,5 +1,4 @@
 import warnings
-from pathlib import Path
 
 import ipywidgets as ipw
 import numpy as np
@@ -18,7 +17,12 @@ from stellarphot.io import TessSubmission
 from stellarphot.photometry import CenterAndProfile
 from stellarphot.photometry.photometry import EXPOSURE_KEYWORDS
 from stellarphot.plotting import seeing_plot
-from stellarphot.settings import PhotometryApertures, ui_generator
+from stellarphot.settings import (
+    PartialPhotometrySettings,
+    PhotometryApertures,
+    PhotometryWorkingDirSettings,
+    ui_generator,
+)
 from stellarphot.settings.custom_widgets import ChooseOrMakeNew
 
 __all__ = [
@@ -164,6 +168,7 @@ class SeeingProfileWidget:
                 image_width=width, image_height=width, use_opencv=True
             )
 
+        self.photometry_settings = PhotometryWorkingDirSettings()
         self.iw = imagewidget
 
         self.observatory = observatory
@@ -179,11 +184,13 @@ class SeeingProfileWidget:
         self.seeing_profile_plot = ipw.Output()
         self.curve_growth_plot = ipw.Output()
         self.snr_plot = ipw.Output()
+
+        # Include an error console to display messages to the user
         self.error_console = ipw.Output()
 
         # Build the larger widget
         self.container = ipw.VBox()
-        self.fits_file = FitsOpener(title="Choose an image")
+        self.fits_file = FitsOpener(title=self._format_title("Choose an image"))
         self.camera_chooser = ChooseOrMakeNew("camera", details_hideable=True)
         if camera is not None:
             self.camera_chooser.value = camera
@@ -191,22 +198,23 @@ class SeeingProfileWidget:
         # Do not show the camera details by default
         self.camera_chooser.display_details = False
 
+        top_box = ipw.HBox()
+        top_box.children = [self.fits_file.file_chooser, self.camera_chooser]
+
         big_box = ipw.HBox()
         big_box = ipw.GridspecLayout(1, 2)
-        layout = ipw.Layout(width="60ch")
+
+        # Box for aperture settings and title
         vb = ipw.VBox()
-        self.aperture_settings_file_name = ipw.Text(
-            description="Aperture settings file name",
-            style={"description_width": "initial"},
-            value="aperture_settings.json",
-            layout=layout,
-        )
+
+        self.ap_title = ipw.HTML(value=self._format_title("Save aperture and camera"))
         self.aperture_settings = ui_generator(PhotometryApertures)
         self.aperture_settings.show_savebuttonbar = True
-        self.aperture_settings.path = Path(self.aperture_settings_file_name.value)
+        self.aperture_settings.savebuttonbar.fns_onsave_add_action(self.save)
+        # self.aperture_settings.path = Path(self.aperture_settings_file_name.value)
 
         vb.children = [
-            self.aperture_settings_file_name,
+            self.ap_title,
             self.aperture_settings,
         ]
 
@@ -216,15 +224,20 @@ class SeeingProfileWidget:
             self.snr_plot,
             self.seeing_profile_plot,
             self.curve_growth_plot,
+            self.aperture_settings,
         ]
-        lil_tabs.set_title(0, "SNR")
-        lil_tabs.set_title(1, "Seeing profile")
-        lil_tabs.set_title(2, "Integrated counts")
+        lil_tabs.titles = [
+            "SNR",
+            "Seeing profile",
+            "Integrated counts",
+            "Aperture settings",
+        ]
+
         self.tess_box = self._make_tess_box()
         lil_box.children = [lil_tabs, self.tess_box]
 
         imbox = ipw.VBox()
-        imbox.children = [imagewidget, vb]
+        imbox.children = [imagewidget]
         big_box[0, 0] = imbox
         big_box[0, 1] = lil_box
         big_box.layout.width = "100%"
@@ -233,12 +246,7 @@ class SeeingProfileWidget:
         # don't jump around as the image value changes.
         big_box.layout.justify_content = "space-between"
         self.big_box = big_box
-        self.container.children = [
-            self.fits_file.file_chooser,
-            self.camera_chooser,
-            self.error_console,
-            self.big_box,
-        ]
+        self.container.children = [top_box, self.error_console, self.big_box, vb]
         self.box = self.container
         self._aperture_name = "aperture"
 
@@ -274,6 +282,20 @@ class SeeingProfileWidget:
             )
             self.exposure = np.nan
 
+    def save(self):
+        self.photometry_settings.save(
+            PartialPhotometrySettings(
+                photometry_apertures=self.aperture_settings.value, camera=self.camera
+            ),
+            update=True,
+        )
+
+    def _format_title(self, title):
+        """
+        Format titles in a consistent way.
+        """
+        return f"<h2>{title}</h2>"
+
     def _update_file(self, change):  # noqa: ARG002
         # Widget callbacks need to accept a single argument, even if it is not used.
         self.load_fits()
@@ -308,12 +330,6 @@ class SeeingProfileWidget:
         """
         self._seeing_plot_fig.savefig(self.seeing_file_name.value)
 
-    def _change_aperture_save_location(self, change):
-        new_name = change["new"]
-        new_path = Path(new_name)
-        self.aperture_settings.path = new_path
-        self.aperture_settings.savebuttonbar.unsaved_changes = True
-
     def _set_observers(self):
         def aperture_obs(change):
             self._update_plots()
@@ -324,9 +340,7 @@ class SeeingProfileWidget:
             )
 
         self.aperture_settings.observe(aperture_obs, names="_value")
-        self.aperture_settings_file_name.observe(
-            self._change_aperture_save_location, names="value"
-        )
+
         self.fits_file.file_chooser.observe(self._update_file, names="_value")
         if self.save_toggle:
             self.save_toggle.observe(self._save_toggle_action, names="value")
@@ -458,7 +472,16 @@ class SeeingProfileWidget:
                 )  # Make an aperture settings object, but don't update it's widget yet.
 
             if update_aperture_settings:
-                self._update_ap_settings(ap_settings.dict())
+                # So it turns out that the validation stuff only updates when changes
+                # are made in the UI rather than programmatically. Since we know we've
+                # set a valid value, and that we've made changes we just manually set
+                # the relevant values.
+                self.aperture_settings.savebuttonbar.unsaved_changes = True
+                self.aperture_settings.is_valid.value = True
+
+                # Update the value last so that the unsaved state is properly set when
+                # the value is updated.
+                self._update_ap_settings(ap_settings.model_dump())
 
             self._update_plots()
 
