@@ -683,9 +683,6 @@ def multi_image_photometry(
 
     logfile = photometry_settings.logging_settings.logfile
     console_log = photometry_settings.logging_settings.console_log
-
-    print("DEBUG (multi): logfile is", logfile)
-    print("DEBUG (multi): console_log is", console_log)
     
     # Set up logging:
     # Check if logfile is not None, set up logging to be written to the logfile.
@@ -708,7 +705,6 @@ def multi_image_photometry(
         logfile_name = str(Path(logfile).name)
 
         # by default this appends to existing logfile
-        print("DEBUG (multi): logfile created at ", logfile)
         fh = logging.FileHandler(logfile)
         log_format = logging.Formatter("%(levelname)s - %(message)s")
         fh.setFormatter(log_format)

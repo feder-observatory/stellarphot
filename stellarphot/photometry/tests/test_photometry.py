@@ -659,9 +659,11 @@ class TestAperturePhotometry:
         # Define the logging settings
         logging_settings=DEFAULT_LOGGING_SETTINGS.model_copy()
         if logfile:
+            # Define the log file and console log settings
+            # and make sure to set full path of log file.
             logging_settings.logfile = str(tmp_path / logfile)
             logging_settings.console_log = console_log
-            fulllogfile = logging_settings.logfile
+            full_logfile = logging_settings.logfile
 
         photometry_settings = PhotometrySettings(
             camera=FAKE_CAMERA,
@@ -683,15 +685,19 @@ class TestAperturePhotometry:
         # Check and see if the output log file was created and contains the
         # expected messages.
         if logfile:
-            assert Path(fulllogfile).exists()
-            with open(fulllogfile, "r") as f:
+            assert Path(full_logfile).exists()
+            with open(full_logfile) as f:
                 log_content = f.read()
+                # Confirm last log message written by single_image_photometry
+                # present.
                 assert "Calculating noise for all sources" in log_content
 
         # If console logging is enabled then the stderr should contain the
         # expected messages.
         if console_log:
             captured_stdout = capsys.readouterr()
+            # Confirm last log message written by single_image_photometry
+            # present.
             assert "Calculating noise for all sources" in captured_stdout.err
 
     # Checking logging for AperturePhotometry for multiple image photometry.
@@ -728,7 +734,7 @@ class TestAperturePhotometry:
             source_list_file = Path(temp_dir) / "source_list.ecsv"
             found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
 
-            # Make a copy of photometry options based on those used in 
+            # Make a copy of photometry options based on those used in
             # successful test_photometry_on_directory
             phot_options = PhotometryOptionalSettings(**PHOTOMETRY_OPTIONS.model_dump())
             phot_options.include_dig_noise = True
@@ -746,9 +752,11 @@ class TestAperturePhotometry:
             # Define the logging settings
             logging_settings=DEFAULT_LOGGING_SETTINGS.model_copy()
             if logfile:
-                logging_settings.logfile = str(tmp_path / logfile)
+                logging_settings.logfile = logfile
                 logging_settings.console_log = console_log
-                full_logfile = logging_settings.logfile
+                # log file should be written to image directory (tmp_dir)
+                # automtically, this ensures we know the path to the log file.
+                full_logfile = str(Path(temp_dir)  / logfile)
                 photometry_settings.logging_settings = logging_settings
 
             with warnings.catch_warnings():
@@ -757,7 +765,6 @@ class TestAperturePhotometry:
                     message="Cannot merge meta key",
                     category=MergeConflictWarning,
                 )
-                print("DEBUG (test): logging_settings", logging_settings)
 
                 ap_phot = AperturePhotometry(settings=photometry_settings)
                 phot_data = ap_phot(temp_dir, object_of_interest=object_name)
@@ -769,22 +776,22 @@ class TestAperturePhotometry:
                 # expected messages.
                 if logfile:
                     assert Path(full_logfile).exists()
-                    with open(full_logfile, "r") as f:
+                    with open(full_logfile) as f:
                         log_content = f.read()
-                        # Check for messages for multi_image_photometry
+                        # Check for log messages output by multi_image_photometry
                         assert "Starting photometry of files in" in log_content
                         assert "DONE processing all matching images" in log_content
-                        # Check for messages for single_image_photometry
+                        # Check for last log message from single_image_photometry
                         assert "Calculating noise for all sources" in log_content
 
                 # If console logging is enabled then the stderr should contain the
                 # expected messages.
                 if console_log:
                     captured_stdout = capsys.readouterr()
-                    # Check for messages for multi_image_photometry
+                    # Check for log messages output by multi_image_photometry
                     assert "Starting photometry of files in" in captured_stdout.err
                     assert "DONE processing all matching images" in captured_stdout.err
-                    # Check for messages for single_image_photometry
+                    # Check for last log message from single_image_photometry
                     assert "Calculating noise for all sources" in captured_stdout.err
 
 
