@@ -1,3 +1,4 @@
+import logging
 import tempfile
 import warnings
 from copy import deepcopy
@@ -623,6 +624,173 @@ class TestAperturePhotometry:
         ap = AperturePhotometry(settings=DEFAULT_PHOTOMETRY_SETTINGS)
         with pytest.raises(ValueError, match="is not a valid file or directory"):
             ap("invalid_path")
+
+    # Checking logging for AperturePhotometry for single image photometry.
+    @pytest.mark.parametrize("logfile", ["test.log", None])
+    @pytest.mark.parametrize("console_log", [True, False])
+    def test_logging_single_image(self, capsys, logfile, console_log, tmp_path):
+        # Disable any root logger handlers that are active before using
+        # logging since that is expectation of single_image_photometry.
+        if logging.root.hasHandlers():
+            logging.root.handlers.clear()
+
+        # Create fake image
+        fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
+        image_file = tmp_path / "fake_image.fits"
+        fake_CCDimage.write(image_file, overwrite=True)
+        # Create source list from fake image
+        found_sources = source_detection(
+            fake_CCDimage, fwhm=fake_CCDimage.sources["x_stddev"].mean(), threshold=10
+        )
+        source_list_file = tmp_path / "source_list.ecsv"
+        found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
+
+        # Make a copy of photometry options and modify them to match the
+        # test_aperture_photometry_no_outlier_rejection settings
+        phot_options = PhotometryOptionalSettings(**PHOTOMETRY_OPTIONS.model_dump())
+        phot_options.reject_background_outliers = False
+        phot_options.reject_too_close = False
+        phot_options.include_dig_noise = True
+
+        # Define the source locations settings
+        source_locations = DEFAULT_SOURCE_LOCATIONS.model_copy()
+        source_locations.source_list_file = str(source_list_file)
+
+        # Define the logging settings
+        logging_settings=DEFAULT_LOGGING_SETTINGS.model_copy()
+        if logfile:
+            # Define the log file and console log settings
+            # and make sure to set full path of log file.
+            logging_settings.logfile = str(tmp_path / logfile)
+            logging_settings.console_log = console_log
+            full_logfile = logging_settings.logfile
+
+        photometry_settings = PhotometrySettings(
+            camera=FAKE_CAMERA,
+            observatory=FAKE_OBS,
+            photometry_apertures=DEFAULT_PHOTOMETRY_APERTURES,
+            source_locations=source_locations,
+            photometry_optional_settings=phot_options,
+            passband_map=PASSBAND_MAP,
+            logging_settings=logging_settings,
+        )
+
+        # Call the AperturePhotometry class with a single image
+        ap_phot = AperturePhotometry(settings=photometry_settings)
+        phot, missing_sources = ap_phot(image_file)
+
+        #
+        # Test logging was consistent with settings
+        #
+        # Check and see if the output log file was created and contains the
+        # expected messages.
+        if logfile:
+            assert Path(full_logfile).exists()
+            with open(full_logfile) as f:
+                log_content = f.read()
+                # Confirm last log message written by single_image_photometry
+                # present.
+                assert "Calculating noise for all sources" in log_content
+
+        # If console logging is enabled then the stderr should contain the
+        # expected messages.
+        if console_log:
+            captured_stdout = capsys.readouterr()
+            # Confirm last log message written by single_image_photometry
+            # present.
+            assert "Calculating noise for all sources" in captured_stdout.err
+
+    # Checking logging for AperturePhotometry for multiple image photometry.
+    @pytest.mark.parametrize("logfile", ["test.log", None])
+    @pytest.mark.parametrize("console_log", [True, False])
+    def test_logging_multiple_image(self, capsys, logfile, console_log):
+        # Create list of fake CCDData objects
+        num_files = 5
+        fake_images = list_of_fakes(num_files)
+
+        # Write fake images to temporary directory and test
+        # multi_image_photometry on them.0
+        # NOTE: ignore_cleanup_errors=True is needed to avoid an error
+        #       when the temporary directory is deleted on Windows.
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp_dir:
+            # Come up with Filenames
+            temp_file_names = [
+                Path(temp_dir) / f"tempfile_{i:02d}.fit"
+                for i in range(1, num_files + 1)
+            ]
+            # Write the CCDData objects to files
+            for i, image in enumerate(fake_images):
+                image.write(temp_file_names[i])
+            object_name = fake_images[0].header["OBJECT"]
+
+            # Generate the sourcelist
+            found_sources = source_detection(
+                fake_images[0],
+                fwhm=fake_images[0].sources["x_stddev"].mean(),
+                threshold=10,
+            )
+            source_list_file = Path(temp_dir) / "source_list.ecsv"
+            found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
+
+            # Make a copy of photometry options based on those used in
+            # successful test_photometry_on_directory
+            phot_options = PhotometryOptionalSettings(**PHOTOMETRY_OPTIONS.model_dump())
+            phot_options.include_dig_noise = True
+            phot_options.reject_too_close = True
+            phot_options.reject_background_outliers = True
+            phot_options.fwhm_by_fit = True
+
+            photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
+            photometry_settings.photometry_optional_settings = phot_options
+            photometry_settings.source_locations.use_coordinates = "sky"
+            photometry_settings.source_locations.source_list_file = str(
+                source_list_file
+            )
+
+            # Define the logging settings
+            logging_settings=DEFAULT_LOGGING_SETTINGS.model_copy()
+            if logfile:
+                logging_settings.logfile = logfile
+                logging_settings.console_log = console_log
+                # log file should be written to image directory (tmp_dir)
+                # automtically, this ensures we know the path to the log file.
+                full_logfile = str(Path(temp_dir)  / logfile)
+                photometry_settings.logging_settings = logging_settings
+
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore",
+                    message="Cannot merge meta key",
+                    category=MergeConflictWarning,
+                )
+
+                ap_phot = AperturePhotometry(settings=photometry_settings)
+                _ = ap_phot(temp_dir, object_of_interest=object_name)
+
+                #
+                # Test logging was consistent with settings
+                #
+                # Check and see if the output log file was created and contains the
+                # expected messages.
+                if logfile:
+                    assert Path(full_logfile).exists()
+                    with open(full_logfile) as f:
+                        log_content = f.read()
+                        # Check for log messages output by multi_image_photometry
+                        assert "Starting photometry of files in" in log_content
+                        assert "DONE processing all matching images" in log_content
+                        # Check for last log message from single_image_photometry
+                        assert "Calculating noise for all sources" in log_content
+
+                # If console logging is enabled then the stderr should contain the
+                # expected messages.
+                if console_log:
+                    captured_stdout = capsys.readouterr()
+                    # Check for log messages output by multi_image_photometry
+                    assert "Starting photometry of files in" in captured_stdout.err
+                    assert "DONE processing all matching images" in captured_stdout.err
+                    # Check for last log message from single_image_photometry
+                    assert "Calculating noise for all sources" in captured_stdout.err
 
 
 def test_calc_noise_defaults():

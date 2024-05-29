@@ -882,12 +882,11 @@ class LoggingSettings(BaseModelWithTableRep):
     logfile : str, optional (Default: None)
         Name of the file to which log messages should be written.  It will
         be created in the `directory_with_images` directory.  If None,
-        all messages are logged to stdout.
+        no log file will be created.
 
     console_log: bool, optional (Default: True)
-        If ``True`` and `logfile` is set, log messages will also be written to
-        stdout.  If ``False``, log messages will not be written to stdout
-        if `logfile` is set.
+        If ``True``, log messages will be written to stdout.  If ``False``, log
+        messages will not be written to stdout.
 
     Examples
     --------
