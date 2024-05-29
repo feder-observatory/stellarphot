@@ -54,7 +54,9 @@ def test_seeing_profile_object_creation():
 
 def test_seeing_profile_properties(tmp_path):
     # Here we make a seeing profile then load an image.
-    profile_widget = spf.SeeingProfileWidget(camera=Camera(**TEST_CAMERA_VALUES))
+    profile_widget = spf.SeeingProfileWidget(
+        camera=Camera(**TEST_CAMERA_VALUES), _testing_path=tmp_path
+    )
 
     # Make a fits file
     image = make_gaussian_sources_image(SHAPE, STARS) + make_noise_image(

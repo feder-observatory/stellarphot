@@ -22,6 +22,7 @@ from stellarphot.settings import (
     PartialPhotometrySettings,
     PhotometryApertures,
     PhotometryWorkingDirSettings,
+    SavedSettings,
     ui_generator,
 )
 from stellarphot.settings.custom_widgets import ChooseOrMakeNew
@@ -166,7 +167,14 @@ class SeeingProfileWidget:
 
     """
 
-    def __init__(self, imagewidget=None, width=500, camera=None, observatory=None):
+    def __init__(
+        self,
+        imagewidget=None,
+        width=500,
+        camera=None,
+        observatory=None,
+        _testing_path=None,
+    ):
         if not imagewidget:
             imagewidget = ImageWidget(
                 image_width=width, image_height=width, use_opencv=True
@@ -176,6 +184,13 @@ class SeeingProfileWidget:
         self.iw = imagewidget
 
         self.observatory = observatory
+
+        # If a camera is provided make sure it has already been saved.
+        # If it has not been saved, raise an error.
+        if camera is not None:
+            saved = SavedSettings(_testing_path=_testing_path)
+            if camera not in saved.cameras.as_dict.values():
+                saved.add_item(camera)
 
         # Do some set up of the ImageWidget
         set_keybindings(self.iw, scroll_zoom=False)
@@ -196,9 +211,12 @@ class SeeingProfileWidget:
         # Build the larger widget
         self.container = ipw.VBox()
         self.fits_file = FitsOpener(title=self._format_title("Choose an image"))
-        self.camera_chooser = ChooseOrMakeNew("camera", details_hideable=True)
+        self.camera_chooser = ChooseOrMakeNew(
+            "camera", details_hideable=True, _testing_path=_testing_path
+        )
+
         if camera is not None:
-            self.camera_chooser.value = camera
+            self.camera_chooser._choose_existing.value = camera
 
         # Do not show the camera details by default
         self.camera_chooser.display_details = False
