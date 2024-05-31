@@ -1,3 +1,4 @@
+import os
 import warnings
 from collections import namedtuple
 
@@ -10,7 +11,12 @@ from photutils.datasets import make_gaussian_sources_image, make_noise_image
 
 from stellarphot.gui_tools import seeing_profile_functions as spf
 from stellarphot.photometry.tests.test_profiles import RANDOM_SEED, SHAPE, STARS
-from stellarphot.settings import Camera, Observatory, PhotometryApertures
+from stellarphot.settings import (
+    Camera,
+    Observatory,
+    PhotometryApertures,
+    PhotometryWorkingDirSettings,
+)
 from stellarphot.settings.tests.test_models import (
     TEST_CAMERA_VALUES,
 )
@@ -110,6 +116,28 @@ def test_seeing_profile_properties(tmp_path):
         # Make sure the settings are updated
         phot_aps["radius"] = new_radius
         assert profile_widget.aperture_settings.value == phot_aps
+
+
+def test_seeing_profile_save_apertures(tmp_path):
+    # Make sure that saving partial photometery settings works
+    os.chdir(tmp_path)
+
+    phot_settings = PhotometryWorkingDirSettings()
+
+    # There should be no saved settings...
+    with pytest.raises(ValueError, match="does not exist"):
+        phot_settings.load()
+
+    profile_widget = spf.SeeingProfileWidget(
+        camera=Camera(**TEST_CAMERA_VALUES), _testing_path=tmp_path
+    )
+
+    profile_widget.save()
+    settings = phot_settings.load()
+    assert settings.camera == Camera(**TEST_CAMERA_VALUES)
+    assert settings.photometry_apertures == PhotometryApertures(
+        radius=1, annulus_width=1, gap=1
+    )
 
 
 def test_seeing_profile_no_observatory():
