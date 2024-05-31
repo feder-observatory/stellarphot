@@ -276,6 +276,8 @@ class SeeingProfileWidget:
 
         self._tess_sub = None
 
+        # This is eventually used to store the radial profile
+        self.rad_prof = None
         # Fill these in later with name of object from FITS file
         self.object_name = ""
         self.exposure = 0
@@ -363,8 +365,22 @@ class SeeingProfileWidget:
         """
         self._seeing_plot_fig.savefig(self.seeing_file_name.value)
 
-    def _set_save_box_title(self, _):
-        if self.aperture_settings.savebuttonbar.unsaved_changes:
+    def _set_save_box_title(self, change):
+        # If we got here via a traitlets event then change is a dict, check that
+        # case first.
+        dirty = False
+
+        try:
+            if change["new"] != change["old"]:
+                dirty = True
+        except (KeyError, TypeError):
+            dirty = False
+
+        # The unsaved_changes attribute is not a traitlet, and it isn't clear when
+        # in the event handling it gets set. When not called from an event, though,
+        # this function can only used unsaved_changes to decide what the title
+        # should be.
+        if self.aperture_settings.savebuttonbar.unsaved_changes or dirty:
             self.ap_title.value = self._format_title(DEFAULT_SAVE_TITLE + " ❗️")
         else:
             self.ap_title.value = self._format_title(DEFAULT_SAVE_TITLE + " ✅")
@@ -535,6 +551,11 @@ class SeeingProfileWidget:
     def _update_plots(self):
         # DISPLAY THE SCALED PROFILE
         fig_size = (10, 5)
+
+        # Stop if the update is happening before a radial profile has been generated
+        # (e.g. the user changes the aperture settings before loading an image).
+        if self.rad_prof is None:
+            return
 
         rad_prof = self.rad_prof
         self.seeing_profile_plot.clear_output(wait=True)

@@ -133,11 +133,32 @@ def test_seeing_profile_save_apertures(tmp_path):
     )
 
     profile_widget.save()
+    assert not profile_widget.aperture_settings.savebuttonbar.unsaved_changes
+
     settings = phot_settings.load()
     assert settings.camera == Camera(**TEST_CAMERA_VALUES)
     assert settings.photometry_apertures == PhotometryApertures(
         radius=1, annulus_width=1, gap=1
     )
+
+
+def test_seeing_profile_save_box_title(tmp_path):
+    # Save box title ends with different characters depending on whether values
+    # need to be saved.
+
+    # Change working directory since settings file is saved there.
+    os.chdir(tmp_path)
+
+    profile_widget = spf.SeeingProfileWidget(
+        camera=Camera(**TEST_CAMERA_VALUES), _testing_path=tmp_path
+    )
+    profile_widget.aperture_settings.di_widgets["radius"].value = 3
+
+    assert profile_widget.aperture_settings.savebuttonbar.unsaved_changes
+    assert "❗️" in profile_widget.ap_title.value
+
+    profile_widget.save()
+    assert "✅" in profile_widget.ap_title.value
 
 
 def test_seeing_profile_no_observatory():
