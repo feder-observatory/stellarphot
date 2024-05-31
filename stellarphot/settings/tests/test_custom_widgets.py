@@ -705,6 +705,7 @@ class TestChooseOrMakeNew:
 
         # Check that the details start out displayed
         assert choose_or_make_new._details_box.layout.display != "none"
+        assert choose_or_make_new.display_details
 
         # Hide the details
         choose_or_make_new.display_details = False
