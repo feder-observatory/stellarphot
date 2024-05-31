@@ -503,7 +503,7 @@ class SeeingProfileWidget:
                     else:
                         # RadialProfile did not generate this error, pass it
                         # on to the user
-                        raise e
+                        raise e  # pragma: no cover
                 else:
                     # Success, clear any previous error messages
                     self.error_console.clear_output()
