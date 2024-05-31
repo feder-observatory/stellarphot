@@ -380,9 +380,13 @@ class SeeingProfileWidget:
         # this function can only used unsaved_changes to decide what the title
         # should be.
         if self.aperture_settings.savebuttonbar.unsaved_changes or dirty:
-            self.ap_title.value = self._format_title(DEFAULT_SAVE_TITLE + " ❗️")
+            self.ap_title.value = self._format_title(
+                f"{DEFAULT_SAVE_TITLE} {AP_SETTING_NEEDS_SAVE}"
+            )
         else:
-            self.ap_title.value = self._format_title(DEFAULT_SAVE_TITLE + " ✅")
+            self.ap_title.value = self._format_title(
+                f"{DEFAULT_SAVE_TITLE} {AP_SETTING_SAVED}"
+            )
 
     def _set_observers(self):
         def aperture_obs(change):

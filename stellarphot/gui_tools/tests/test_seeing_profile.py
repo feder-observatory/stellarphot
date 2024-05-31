@@ -9,7 +9,13 @@ from astropy.nddata import CCDData
 from astrowidgets import ImageWidget
 from photutils.datasets import make_gaussian_sources_image, make_noise_image
 
-from stellarphot.gui_tools import seeing_profile_functions as spf
+from stellarphot.gui_tools import (
+    seeing_profile_functions as spf,
+)
+from stellarphot.gui_tools.seeing_profile_functions import (
+    AP_SETTING_NEEDS_SAVE,
+    AP_SETTING_SAVED,
+)
 from stellarphot.photometry.tests.test_profiles import RANDOM_SEED, SHAPE, STARS
 from stellarphot.settings import (
     Camera,
@@ -155,10 +161,10 @@ def test_seeing_profile_save_box_title(tmp_path):
     profile_widget.aperture_settings.di_widgets["radius"].value = 3
 
     assert profile_widget.aperture_settings.savebuttonbar.unsaved_changes
-    assert "❗️" in profile_widget.ap_title.value
+    assert AP_SETTING_NEEDS_SAVE in profile_widget.ap_title.value
 
     profile_widget.save()
-    assert "✅" in profile_widget.ap_title.value
+    assert AP_SETTING_SAVED in profile_widget.ap_title.value
 
 
 def test_seeing_profile_error_messages_no_star(tmp_path):
