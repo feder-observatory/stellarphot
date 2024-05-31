@@ -161,6 +161,54 @@ def test_seeing_profile_save_box_title(tmp_path):
     assert "✅" in profile_widget.ap_title.value
 
 
+def test_seeing_profile_error_messages_no_star(tmp_path):
+    # Make sure the appropriate error message is displayed when a click happens on
+    # a region with no star, and that the message only appears once.
+    profile_widget = spf.SeeingProfileWidget(
+        camera=Camera(**TEST_CAMERA_VALUES), _testing_path=tmp_path
+    )
+    # Make a fits file with no stars
+    image = make_noise_image(SHAPE, mean=10, stddev=1, seed=RANDOM_SEED)
+
+    ccd = CCDData(image, unit="adu")
+    ccd.header["exposure"] = 30.0
+    ccd.header["object"] = "test"
+    file_name = tmp_path / "test.fits"
+    ccd.write(file_name)
+
+    # Load the file
+    profile_widget.fits_file.set_file("test.fits", tmp_path)
+    profile_widget.load_fits()
+
+    # Get the event handler that updates plots
+    handler = profile_widget._make_show_event()
+
+    # Make a mock event object
+    Event = namedtuple("Event", ["data_x", "data_y"])
+    star_loc_x, star_loc_y = SHAPE[0] // 2, SHAPE[1] // 2
+    # Sending a mock event will generate plots that we don't want to see
+    # so set the matplotlib backend to a non-interactive one
+    matplotlib.use("agg")
+    # matplotlib generates a warning that we are using a non-interactive backend
+    # so filter that warning out for the remainder of the test. There are at least
+    # a couple of times we generate this warning as values are changed.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert len(profile_widget.error_console.outputs) == 0
+
+        # Clicking once should generate an error...
+        handler(profile_widget.iw, Event(star_loc_x, star_loc_y))
+        assert len(profile_widget.error_console.outputs) == 1
+        assert (
+            "No star found at this location"
+            in profile_widget.error_console.outputs[0]["data"]["text/plain"]
+        )
+
+        # Clicking a second time should also just have one error
+        handler(profile_widget.iw, Event(star_loc_x, star_loc_y))
+        assert len(profile_widget.error_console.outputs) == 1
+
+
 def test_seeing_profile_no_observatory():
     # This test checks that with no observatory set, there is no TESS
     # related box displayed.
