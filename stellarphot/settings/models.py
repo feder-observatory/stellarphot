@@ -379,7 +379,7 @@ class PhotometryApertures(BaseModelWithTableRep):
         PositiveInt,
         Field(
             default=1,
-            description="radius of circular annulus, in pixels",
+            description="radius of circular aperture, in pixels",
             json_schema_extra=dict(autoui="ipywidgets.BoundedIntText"),
         ),
     ]
