@@ -17,6 +17,7 @@ from stellarphot import SourceListData
 from stellarphot.gui_tools.fits_opener import FitsOpener
 from stellarphot.gui_tools.seeing_profile_functions import set_keybindings
 from stellarphot.io import TOI, TessSubmission, TessTargetFile
+from stellarphot.settings import SourceLocationSettings, ui_generator
 from stellarphot.utils.comparison_utils import (
     crossmatch_APASS2VSX,
     in_field,
@@ -567,6 +568,7 @@ class ComparisonViewer:
         """
         )
 
+        self.source_locations = ui_generator(SourceLocationSettings)
         iw = ImageWidget()
         out = ipw.Output()
         set_keybindings(iw)
@@ -581,7 +583,9 @@ class ComparisonViewer:
         self._make_tess_save_box()
         box = ipw.VBox()
         inner_box = ipw.HBox()
-        inner_box.children = [iw, legend]
+        source_legend_box = ipw.VBox()
+        source_legend_box.children = [self.source_locations, legend]
+        inner_box.children = [iw, source_legend_box]  # legend]
         box.children = [
             self._file_chooser.file_chooser,
             self.object_name,
