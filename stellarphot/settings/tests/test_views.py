@@ -96,7 +96,7 @@ class TestUiGenerator:
     def test_field_width(self):
         # We want to set the width of all except FileChooser fields to a fixed value
 
-        # Nothing special about the value below except that it is unliekly to be
+        # Nothing special about the value below except that it is unlikely to be
         # a default...
         width = "142px"
         # Use SourceLocationSettings because it has a FileChooser field.
@@ -110,10 +110,10 @@ class TestUiGenerator:
                 assert widget.layout.max_width == width
 
     def test_file_chooser_width(self):
-        # We want to set the width of FileChooser fields, but no toher fields,
+        # We want to set the width of FileChooser fields, but no other fields,
         # to a fixed value.
 
-        # Nothing special about the value below except that it is unliekly to be
+        # Nothing special about the value below except that it is unlikely to be
         # a default...
         width = "142px"
         # Use SourceLocationSettings because it has a FileChooser field.
