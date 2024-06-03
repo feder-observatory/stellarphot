@@ -1,4 +1,4 @@
-from stellarphot.settings import Camera, ui_generator
+from stellarphot.settings import Camera, SourceLocationSettings, ui_generator
 from stellarphot.settings.tests.test_models import TEST_CAMERA_VALUES
 
 
@@ -92,3 +92,35 @@ class TestUiGenerator:
 
         # Unsaved changes should be False
         assert not ui.savebuttonbar.unsaved_changes
+
+    def test_field_width(self):
+        # We want to set the width of all except FileChooser fields to a fixed value
+
+        # Nothing special about the value below except that it is unlikely to be
+        # a default...
+        width = "142px"
+        # Use SourceLocationSettings because it has a FileChooser field.
+        ui = ui_generator(SourceLocationSettings, max_field_width=width)
+
+        for widget in ui.di_widgets.values():
+            if widget.__class__.__name__ == "FileChooser":
+                # FileChooser widgets have a different layout object
+                assert widget.layout.max_width != width
+            else:
+                assert widget.layout.max_width == width
+
+    def test_file_chooser_width(self):
+        # We want to set the width of FileChooser fields, but no other fields,
+        # to a fixed value.
+
+        # Nothing special about the value below except that it is unlikely to be
+        # a default...
+        width = "142px"
+        # Use SourceLocationSettings because it has a FileChooser field.
+        ui = ui_generator(SourceLocationSettings, file_chooser_max_width=width)
+
+        for widget in ui.di_widgets.values():
+            if widget.__class__.__name__ == "FileChooser":
+                assert widget.layout.max_width == width
+            else:
+                assert widget.layout.max_width != width
