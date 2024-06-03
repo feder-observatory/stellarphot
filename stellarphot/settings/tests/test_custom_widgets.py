@@ -695,6 +695,46 @@ class TestChooseOrMakeNew:
         choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
         assert choose_or_make_new.value == Camera(**TEST_CAMERA_VALUES)
 
+    def test_details_can_be_hidden(self, tmp_path):
+        # Make sure that item details can be hidden programmatically.
+        self.make_test_camera(tmp_path)
+
+        choose_or_make_new = ChooseOrMakeNew(
+            "camera", details_hideable=True, _testing_path=tmp_path
+        )
+
+        # Check that the details start out displayed
+        assert choose_or_make_new._details_box.layout.display != "none"
+        assert choose_or_make_new.display_details
+
+        # Hide the details
+        choose_or_make_new.display_details = False
+
+        # Check that the details are hidden
+        assert choose_or_make_new._details_box.layout.display == "none"
+
+    def test_details_visibilty_cannot_be_changed_when_not_hideable(self, tmp_path):
+        # Make sure that item details cannot be hidden programmatically when hideable
+        # is False.
+        self.make_test_camera(tmp_path)
+
+        choose_or_make_new = ChooseOrMakeNew(
+            "camera", details_hideable=False, _testing_path=tmp_path
+        )
+
+        # Check that the details start out displayed
+        assert choose_or_make_new._details_box.layout.display != "none"
+        # Value should be None in this case
+        assert choose_or_make_new.display_details is None
+
+        # Hide the details
+        choose_or_make_new.display_details = False
+        # Value should still be None in this case
+        assert choose_or_make_new.display_details is None
+
+        # Check that the details are still displayed
+        assert choose_or_make_new._details_box.layout.display != "none"
+
 
 class TestConfirm:
     def test_initial_value(self):

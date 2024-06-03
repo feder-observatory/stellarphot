@@ -1,5 +1,4 @@
 import warnings
-from pathlib import Path
 
 import ipywidgets as ipw
 import numpy as np
@@ -18,14 +17,24 @@ from stellarphot.io import TessSubmission
 from stellarphot.photometry import CenterAndProfile
 from stellarphot.photometry.photometry import EXPOSURE_KEYWORDS
 from stellarphot.plotting import seeing_plot
-from stellarphot.settings import PhotometryApertures, ui_generator
+from stellarphot.settings import (
+    PartialPhotometrySettings,
+    PhotometryApertures,
+    PhotometryWorkingDirSettings,
+    SavedSettings,
+    ui_generator,
+)
+from stellarphot.settings.custom_widgets import ChooseOrMakeNew
 
 __all__ = [
     "set_keybindings",
     "SeeingProfileWidget",
 ]
 
-desc_style = {"description_width": "initial"}
+DESC_STYLE = {"description_width": "initial"}
+AP_SETTING_NEEDS_SAVE = "❗️"
+AP_SETTING_SAVED = "✅"
+DEFAULT_SAVE_TITLE = "Save aperture and camera"
 
 
 # TODO: maybe move this into SeeingProfileWidget unless we anticipate
@@ -157,16 +166,31 @@ class SeeingProfileWidget:
 
     """
 
-    def __init__(self, imagewidget=None, width=500, camera=None, observatory=None):
+    def __init__(
+        self,
+        imagewidget=None,
+        width=500,
+        camera=None,
+        observatory=None,
+        _testing_path=None,
+    ):
         if not imagewidget:
             imagewidget = ImageWidget(
                 image_width=width, image_height=width, use_opencv=True
             )
 
+        self.photometry_settings = PhotometryWorkingDirSettings()
         self.iw = imagewidget
 
-        self.camera = camera
         self.observatory = observatory
+
+        # If a camera is provided make sure it has already been saved.
+        # If it has not been saved, raise an error.
+        if camera is not None:
+            saved = SavedSettings(_testing_path=_testing_path)
+            if camera not in saved.cameras.as_dict.values():
+                saved.add_item(camera)
+
         # Do some set up of the ImageWidget
         set_keybindings(self.iw, scroll_zoom=False)
         bind_map = self.iw._viewer.get_bindmap()
@@ -179,62 +203,89 @@ class SeeingProfileWidget:
         self.seeing_profile_plot = ipw.Output()
         self.curve_growth_plot = ipw.Output()
         self.snr_plot = ipw.Output()
+
+        # Include an error console to display messages to the user
+        self.error_console = ipw.Output()
+
         # Build the larger widget
         self.container = ipw.VBox()
-        self.fits_file = FitsOpener(title="Choose an image")
-        big_box = ipw.HBox()
-        big_box = ipw.GridspecLayout(1, 2)
-        layout = ipw.Layout(width="60ch")
-        vb = ipw.VBox()
-        self.aperture_settings_file_name = ipw.Text(
-            description="Aperture settings file name",
-            style={"description_width": "initial"},
-            value="aperture_settings.json",
-            layout=layout,
+        self.fits_file = FitsOpener(title=self._format_title("Choose an image"))
+        self.camera_chooser = ChooseOrMakeNew(
+            "camera", details_hideable=True, _testing_path=_testing_path
         )
+
+        if camera is not None:
+            self.camera_chooser._choose_existing.value = camera
+
+        # Do not show the camera details by default
+        self.camera_chooser.display_details = False
+
+        image_camer_box = ipw.HBox()
+        image_camer_box.children = [self.fits_file.file_chooser, self.camera_chooser]
+
+        im_view_plot_box = ipw.GridspecLayout(1, 2)
+
+        # Box for aperture settings and title
+        ap_setting_box = ipw.VBox()
+
+        self.ap_title = ipw.HTML(value=self._format_title(DEFAULT_SAVE_TITLE))
         self.aperture_settings = ui_generator(PhotometryApertures)
         self.aperture_settings.show_savebuttonbar = True
-        self.aperture_settings.path = Path(self.aperture_settings_file_name.value)
+        self.aperture_settings.savebuttonbar.fns_onsave_add_action(self.save)
 
-        vb.children = [
-            self.aperture_settings_file_name,
+        ap_setting_box.children = [
+            self.ap_title,
             self.aperture_settings,
         ]
 
-        lil_box = ipw.VBox()
-        lil_tabs = ipw.Tab()
-        lil_tabs.children = [
+        plot_box = ipw.VBox()
+        plt_tabs = ipw.Tab()
+        plt_tabs.children = [
             self.snr_plot,
             self.seeing_profile_plot,
             self.curve_growth_plot,
         ]
-        lil_tabs.set_title(0, "SNR")
-        lil_tabs.set_title(1, "Seeing profile")
-        lil_tabs.set_title(2, "Integrated counts")
+        plt_tabs.titles = [
+            "SNR",
+            "Seeing profile",
+            "Integrated counts",
+        ]
+
         self.tess_box = self._make_tess_box()
-        lil_box.children = [lil_tabs, self.tess_box]
+        plot_box.children = [plt_tabs, self.tess_box]
 
         imbox = ipw.VBox()
-        imbox.children = [imagewidget, vb]
-        big_box[0, 0] = imbox
-        big_box[0, 1] = lil_box
-        big_box.layout.width = "100%"
+        imbox.children = [imagewidget]
+        im_view_plot_box[0, 0] = imbox
+        im_view_plot_box[0, 1] = plot_box
+        im_view_plot_box.layout.width = "100%"
 
         # Line below puts space between the image and the plots so the plots
         # don't jump around as the image value changes.
-        big_box.layout.justify_content = "space-between"
-        self.big_box = big_box
-        self.container.children = [self.fits_file.file_chooser, self.big_box]
+        im_view_plot_box.layout.justify_content = "space-between"
+        self.big_box = im_view_plot_box
+        self.container.children = [
+            image_camer_box,
+            self.error_console,
+            self.big_box,
+            ap_setting_box,
+        ]
         self.box = self.container
         self._aperture_name = "aperture"
 
         self._tess_sub = None
 
+        # This is eventually used to store the radial profile
+        self.rad_prof = None
         # Fill these in later with name of object from FITS file
         self.object_name = ""
         self.exposure = 0
         self._set_observers()
         self.aperture_settings.description = ""
+
+    @property
+    def camera(self):
+        return self.camera_chooser.value
 
     def load_fits(self):
         """
@@ -255,6 +306,29 @@ class SeeingProfileWidget:
                 stacklevel=2,
             )
             self.exposure = np.nan
+
+    def save(self):
+        """
+        Save all of the settings we have to a partial settings file.
+        """
+        self.photometry_settings.save(
+            PartialPhotometrySettings(
+                photometry_apertures=self.aperture_settings.value, camera=self.camera
+            ),
+            update=True,
+        )
+
+        # For some reason the value of unsaved_changes is not updated until after this
+        # function executes, so we force its value here.
+        self.aperture_settings.savebuttonbar.unsaved_changes = False
+        # Update the save box title to reflect the save
+        self._set_save_box_title("")
+
+    def _format_title(self, title):
+        """
+        Format titles in a consistent way.
+        """
+        return f"<h2>{title}</h2>"
 
     def _update_file(self, change):  # noqa: ARG002
         # Widget callbacks need to accept a single argument, even if it is not used.
@@ -290,11 +364,29 @@ class SeeingProfileWidget:
         """
         self._seeing_plot_fig.savefig(self.seeing_file_name.value)
 
-    def _change_aperture_save_location(self, change):
-        new_name = change["new"]
-        new_path = Path(new_name)
-        self.aperture_settings.path = new_path
-        self.aperture_settings.savebuttonbar.unsaved_changes = True
+    def _set_save_box_title(self, change):
+        # If we got here via a traitlets event then change is a dict, check that
+        # case first.
+        dirty = False
+
+        try:
+            if change["new"] != change["old"]:
+                dirty = True
+        except (KeyError, TypeError):
+            dirty = False
+
+        # The unsaved_changes attribute is not a traitlet, and it isn't clear when
+        # in the event handling it gets set. When not called from an event, though,
+        # this function can only used unsaved_changes to decide what the title
+        # should be.
+        if self.aperture_settings.savebuttonbar.unsaved_changes or dirty:
+            self.ap_title.value = self._format_title(
+                f"{DEFAULT_SAVE_TITLE} {AP_SETTING_NEEDS_SAVE}"
+            )
+        else:
+            self.ap_title.value = self._format_title(
+                f"{DEFAULT_SAVE_TITLE} {AP_SETTING_SAVED}"
+            )
 
     def _set_observers(self):
         def aperture_obs(change):
@@ -306,10 +398,11 @@ class SeeingProfileWidget:
             )
 
         self.aperture_settings.observe(aperture_obs, names="_value")
-        self.aperture_settings_file_name.observe(
-            self._change_aperture_save_location, names="value"
-        )
+
         self.fits_file.file_chooser.observe(self._update_file, names="_value")
+
+        self.aperture_settings.observe(self._set_save_box_title, "_value")
+
         if self.save_toggle:
             self.save_toggle.observe(self._save_toggle_action, names="value")
             self.save_seeing.on_click(self._save_seeing_plot)
@@ -336,7 +429,7 @@ class SeeingProfileWidget:
         scope_name = ipw.Text(
             description="Telescope code",
             value=self.observatory.TESS_telescope_code,
-            style=desc_style,
+            style=DESC_STYLE,
         )
         planet_num = ipw.IntText(description="Planet", value=1)
         self.save_seeing = ipw.Button(description="Save")
@@ -384,12 +477,40 @@ class SeeingProfileWidget:
                 x = int(np.floor(event.data_x))
                 y = int(np.floor(event.data_y))
 
-                rad_prof = CenterAndProfile(
-                    data,
-                    (x, y),
-                    profile_radius=profile_size,
-                    centering_cutout_size=centering_cutout_size,
-                )
+                try:
+                    rad_prof = CenterAndProfile(
+                        data,
+                        (x, y),
+                        profile_radius=profile_size,
+                        centering_cutout_size=centering_cutout_size,
+                    )
+                except RuntimeError as e:
+                    # Check whether this error is one generated by RadialProfile
+                    if "Centroid did not converge on a star." in str(e):
+                        # Clear any previous messages...no idea why the clear_output
+                        # method doesn't work here, but it doesn't/
+                        self.error_console.outputs = ()
+
+                        # Use the append_display_data method instead of the
+                        # error_console context manager because there seems to be
+                        # a timing issue with the context manager when running
+                        # tests.
+                        self.error_console.append_display_data(
+                            ipw.HTML(
+                                "<strong>No star found at this location. "
+                                "Try clicking closer "
+                                "to a star or on a brighter star</strong>"
+                            )
+                        )
+                        print(f"{self.error_console.outputs=}")
+                        return
+                    else:
+                        # RadialProfile did not generate this error, pass it
+                        # on to the user
+                        raise e  # pragma: no cover
+                else:
+                    # Success, clear any previous error messages
+                    self.error_console.clear_output()
 
                 try:
                     try:  # Remove previous marker
@@ -429,7 +550,16 @@ class SeeingProfileWidget:
                 )  # Make an aperture settings object, but don't update it's widget yet.
 
             if update_aperture_settings:
-                self._update_ap_settings(ap_settings.dict())
+                # So it turns out that the validation stuff only updates when changes
+                # are made in the UI rather than programmatically. Since we know we've
+                # set a valid value, and that we've made changes we just manually set
+                # the relevant values.
+                self.aperture_settings.savebuttonbar.unsaved_changes = True
+                self.aperture_settings.is_valid.value = True
+
+                # Update the value last so that the unsaved state is properly set when
+                # the value is updated.
+                self._update_ap_settings(ap_settings.model_dump())
 
             self._update_plots()
 
@@ -438,6 +568,11 @@ class SeeingProfileWidget:
     def _update_plots(self):
         # DISPLAY THE SCALED PROFILE
         fig_size = (10, 5)
+
+        # Stop if the update is happening before a radial profile has been generated
+        # (e.g. the user changes the aperture settings before loading an image).
+        if self.rad_prof is None:
+            return
 
         rad_prof = self.rad_prof
         self.seeing_profile_plot.clear_output(wait=True)

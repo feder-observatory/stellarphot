@@ -188,6 +188,25 @@ class ChooseOrMakeNew(ipw.VBox):
         """
         return self._item_widget.model(**self._item_widget.value)
 
+    @property
+    def display_details(self):
+        """
+        Whether the details box is displayed. Returns the value of the details checkbox
+        if the details are hideable, otherwise returns None.
+        """
+        if self._show_details_shown:
+            return self._show_details_ui.value
+        else:
+            return None
+
+    @display_details.setter
+    def display_details(self, value):
+        """
+        Set the value of the details checkbox if the details are hideable.
+        """
+        if self._show_details_shown:
+            self._show_details_ui.value = value
+
     def _save_confirmation(self):
         """
         Function to attach to the save button to show the confirmation widget if

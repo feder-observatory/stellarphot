@@ -4,4 +4,12 @@
   icon: ../stellarphot/photometry/glowing-waffle-3-smaller.svg
   cwd: not_used
   type: notebook
-  catalog: Stellarphot
+  catalog: Stellarphot settings
+
+- title: Seeing profile
+  description: Choose aperture settings
+  source: ../stellarphot/photometry/01-viewer-seeing-template.ipynb
+  icon: ../stellarphot/photometry/glowing-waffle-3-smaller.svg
+  cwd: not_used
+  type: notebook
+  catalog: Stellarphot photometry

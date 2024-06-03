@@ -1,3 +1,4 @@
+import os
 import warnings
 from collections import namedtuple
 
@@ -8,9 +9,20 @@ from astropy.nddata import CCDData
 from astrowidgets import ImageWidget
 from photutils.datasets import make_gaussian_sources_image, make_noise_image
 
-from stellarphot.gui_tools import seeing_profile_functions as spf
+from stellarphot.gui_tools import (
+    seeing_profile_functions as spf,
+)
+from stellarphot.gui_tools.seeing_profile_functions import (
+    AP_SETTING_NEEDS_SAVE,
+    AP_SETTING_SAVED,
+)
 from stellarphot.photometry.tests.test_profiles import RANDOM_SEED, SHAPE, STARS
-from stellarphot.settings import Camera, Observatory, PhotometryApertures
+from stellarphot.settings import (
+    Camera,
+    Observatory,
+    PhotometryApertures,
+    PhotometryWorkingDirSettings,
+)
 from stellarphot.settings.tests.test_models import (
     TEST_CAMERA_VALUES,
 )
@@ -54,7 +66,9 @@ def test_seeing_profile_object_creation():
 
 def test_seeing_profile_properties(tmp_path):
     # Here we make a seeing profile then load an image.
-    profile_widget = spf.SeeingProfileWidget(camera=Camera(**TEST_CAMERA_VALUES))
+    profile_widget = spf.SeeingProfileWidget(
+        camera=Camera(**TEST_CAMERA_VALUES), _testing_path=tmp_path
+    )
 
     # Make a fits file
     image = make_gaussian_sources_image(SHAPE, STARS) + make_noise_image(
@@ -108,6 +122,97 @@ def test_seeing_profile_properties(tmp_path):
         # Make sure the settings are updated
         phot_aps["radius"] = new_radius
         assert profile_widget.aperture_settings.value == phot_aps
+
+
+def test_seeing_profile_save_apertures(tmp_path):
+    # Make sure that saving partial photometery settings works
+    os.chdir(tmp_path)
+
+    phot_settings = PhotometryWorkingDirSettings()
+
+    # There should be no saved settings...
+    with pytest.raises(ValueError, match="does not exist"):
+        phot_settings.load()
+
+    profile_widget = spf.SeeingProfileWidget(
+        camera=Camera(**TEST_CAMERA_VALUES), _testing_path=tmp_path
+    )
+
+    profile_widget.save()
+    assert not profile_widget.aperture_settings.savebuttonbar.unsaved_changes
+
+    settings = phot_settings.load()
+    assert settings.camera == Camera(**TEST_CAMERA_VALUES)
+    assert settings.photometry_apertures == PhotometryApertures(
+        radius=1, annulus_width=1, gap=1
+    )
+
+
+def test_seeing_profile_save_box_title(tmp_path):
+    # Save box title ends with different characters depending on whether values
+    # need to be saved.
+
+    # Change working directory since settings file is saved there.
+    os.chdir(tmp_path)
+
+    profile_widget = spf.SeeingProfileWidget(
+        camera=Camera(**TEST_CAMERA_VALUES), _testing_path=tmp_path
+    )
+    profile_widget.aperture_settings.di_widgets["radius"].value = 3
+
+    assert profile_widget.aperture_settings.savebuttonbar.unsaved_changes
+    assert AP_SETTING_NEEDS_SAVE in profile_widget.ap_title.value
+
+    profile_widget.save()
+    assert AP_SETTING_SAVED in profile_widget.ap_title.value
+
+
+def test_seeing_profile_error_messages_no_star(tmp_path):
+    # Make sure the appropriate error message is displayed when a click happens on
+    # a region with no star, and that the message only appears once.
+    profile_widget = spf.SeeingProfileWidget(
+        camera=Camera(**TEST_CAMERA_VALUES), _testing_path=tmp_path
+    )
+    # Make a fits file with no stars
+    image = make_noise_image(SHAPE, mean=10, stddev=1, seed=RANDOM_SEED)
+
+    ccd = CCDData(image, unit="adu")
+    ccd.header["exposure"] = 30.0
+    ccd.header["object"] = "test"
+    file_name = tmp_path / "test.fits"
+    ccd.write(file_name)
+
+    # Load the file
+    profile_widget.fits_file.set_file("test.fits", tmp_path)
+    profile_widget.load_fits()
+
+    # Get the event handler that updates plots
+    handler = profile_widget._make_show_event()
+
+    # Make a mock event object
+    Event = namedtuple("Event", ["data_x", "data_y"])
+    star_loc_x, star_loc_y = SHAPE[0] // 2, SHAPE[1] // 2
+    # Sending a mock event will generate plots that we don't want to see
+    # so set the matplotlib backend to a non-interactive one
+    matplotlib.use("agg")
+    # matplotlib generates a warning that we are using a non-interactive backend
+    # so filter that warning out for the remainder of the test. There are at least
+    # a couple of times we generate this warning as values are changed.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert len(profile_widget.error_console.outputs) == 0
+
+        # Clicking once should generate an error...
+        handler(profile_widget.iw, Event(star_loc_x, star_loc_y))
+        assert len(profile_widget.error_console.outputs) == 1
+        assert (
+            "No star found at this location"
+            in profile_widget.error_console.outputs[0]["data"]["text/plain"]
+        )
+
+        # Clicking a second time should also just have one error
+        handler(profile_widget.iw, Event(star_loc_x, star_loc_y))
+        assert len(profile_widget.error_console.outputs) == 1
 
 
 def test_seeing_profile_no_observatory():
