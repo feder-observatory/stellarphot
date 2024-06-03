@@ -1,11 +1,12 @@
 from ipyautoui import AutoUi
+from ipywidgets import Layout
 
 from .models import _extract_short_description
 
 __all__ = ["ui_generator"]
 
 
-def ui_generator(model):
+def ui_generator(model, max_field_width=None, file_chooser_max_width=None):
     """
     Generate a user interface with ipyautoui with a few default settings.
 
@@ -13,6 +14,19 @@ def ui_generator(model):
     ----------
     model : `pydantic.BaseModel` subclass
         The model to generate the user interface for.
+
+    max_field_width : str, optional
+        The width of the fields in the user interface. Default is `None`, which
+        will use the default width of the fields. The value is passed on to the
+        `layout.width` attribute of the fields, which can be any valid CSS width.
+        These typically include units, e.g. "100px" or "10em".
+
+    file_chooser_max_width : str, optional
+        The width of the file chooser fields in the user interface. Default is `None`,
+        which will use the default width of the fields. This is separate from
+        `max_field_width` because the FileChooser widget uses a different layout that
+        is less cluttered than the fields.
+
     """
     ui = AutoUi(model)
 
@@ -45,6 +59,27 @@ def ui_generator(model):
     for widget in ui.di_widgets.values():
         if hasattr(widget, "continuous_update"):
             widget.continuous_update = False
+
+    # In some cases, the entry fields are too wide to fit in the space available, which
+    # makes the widget look bad. We can set the width of the fields to a fixed value
+    # to make them fit better.
+    for widget in ui.di_widgets.values():
+        if widget.__class__.__name__ == "FileChooser":
+            if file_chooser_max_width is not None:
+                # In a surprising twist, all FileChooser widgets seem to use the same
+                # Layout object under the hood. So, if we change the width of one, we
+                # change the width of all of them. This is not what we want, so for
+                # those we create a fresh Layout object. The default min_width and width
+                # are copied over so that they remain consistent with the other fields.
+                widget.layout = Layout(
+                    max_width=file_chooser_max_width,
+                    min_width=widget.layout.min_width,
+                    width=widget.layout.width,
+                )
+            continue
+
+        if max_field_width is not None:
+            widget.layout.max_width = max_field_width
 
     # The save and revert buttons should be enabled only when the user has made a
     # change AND the value in the widget is a valid pydantic model.
