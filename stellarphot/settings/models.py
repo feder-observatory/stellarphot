@@ -618,7 +618,7 @@ class SourceLocationSettings(BaseModelWithTableRep):
                 filter_pattern=["*.ecsv", "*.csv"],
             )
         ),
-    ]
+    ] = "source_locations.ecsv"
     use_coordinates: Annotated[
         Literal["sky", "pixel"],
         Field(description="coordinates to use for locating sources in image"),
