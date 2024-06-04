@@ -17,7 +17,11 @@ from stellarphot import SourceListData
 from stellarphot.gui_tools.fits_opener import FitsOpener
 from stellarphot.gui_tools.seeing_profile_functions import set_keybindings
 from stellarphot.io import TOI, TessSubmission, TessTargetFile
-from stellarphot.settings import SourceLocationSettings, ui_generator
+from stellarphot.settings import (
+    PartialPhotometrySettings,
+    SourceLocationSettings,
+    ui_generator,
+)
 from stellarphot.utils.comparison_utils import (
     crossmatch_APASS2VSX,
     in_field,
@@ -541,6 +545,23 @@ class ComparisonViewer:
             [scope_name, planet_num] + dumb2 + [self.save_files]
         )
 
+    def save(self):
+        """
+        Save all of the settings we have to a partial settings file.
+        """
+        self.photometry_settings.save(
+            PartialPhotometrySettings(
+                photometry_apertures=self.aperture_settings.value, camera=self.camera
+            ),
+            update=True,
+        )
+
+        # For some reason the value of unsaved_changes is not updated until after this
+        # function executes, so we force its value here.
+        self.aperture_settings.savebuttonbar.unsaved_changes = False
+        # Update the save box title to reflect the save
+        self._set_save_box_title("")
+
     def _update_tess_save_names(self):
         if self.tess_submission is not None:
             self._field_name.value = self.tess_submission.field_image
@@ -568,7 +589,6 @@ class ComparisonViewer:
         """
         )
 
-        self.source_locations = ui_generator(SourceLocationSettings)
         iw = ImageWidget()
         out = ipw.Output()
         set_keybindings(iw)
@@ -581,6 +601,9 @@ class ComparisonViewer:
         controls = self._make_control_bar()
         self._make_tess_object_info()
         self._make_tess_save_box()
+        self.source_locations = ui_generator(
+            SourceLocationSettings, max_field_width="150px"
+        )
         box = ipw.VBox()
         inner_box = ipw.HBox()
         source_legend_box = ipw.VBox()
