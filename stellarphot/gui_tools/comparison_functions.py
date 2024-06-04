@@ -22,6 +22,7 @@ from stellarphot.settings import (
     SourceLocationSettings,
     ui_generator,
 )
+from stellarphot.settings.custom_widgets import SettingWithTitle
 from stellarphot.utils.comparison_utils import (
     crossmatch_APASS2VSX,
     in_field,
@@ -272,7 +273,10 @@ class ComparisonViewer:
 
         self.box, self.iw = self._viewer()
 
-        self.photom_apertures_file = photom_apertures_file
+        if photom_apertures_file is not None:
+            # Set the source location file name to the name passed in
+            self._set_source_location_file_to_value(photom_apertures_file)
+
         self.overwrite_outputs = overwrite_outputs
 
         if file:
@@ -315,6 +319,14 @@ class ComparisonViewer:
             apass_comps,
             name_or_coord=self.target_coord,
         )
+
+        # Save the initial source list.
+        if self.source_locations.value["source_list_file"] is not None:
+            self._save_aperture_to_file(None)
+
+    @property
+    def photom_apertures_file(self):
+        return self.source_locations.value["source_list_file"]
 
     @property
     def variables(self):
@@ -571,6 +583,30 @@ class ComparisonViewer:
             self._field_name.value = ""
             self._zoom_name.value = ""
 
+    def _set_source_location_file_to_value(self, name=None):
+        # Right now the source location file name will not be set to the default name
+        # properly because of a bug in ipyautoui, so we set it manually here.
+        # Easier once/if https://github.com/maxfordham/ipyautoui/pull/323 is merged
+        # and released. Then we can just set the value of the widget directly like this:
+        #
+        # self.source_locations.value = {'source_list_file': name, ...rest of settings}
+        file_chooser = self.source_locations.di_widgets["source_list_file"]
+        if name is None:
+            # Use the default name
+            name = self.source_locations.model.model_fields["source_list_file"].default
+        # Make sure ipyautoui knows the value has changed
+        file_chooser.value = name
+
+        # Set the value to what we actually want
+        file_chooser.reset(".", name)
+        file_chooser._apply_selection()
+
+        # Because we have updated the value outside of ipyautoui, also force an update
+        # of the widget value.
+        current_value = self.source_locations.value.copy()
+        current_value["source_list_file"] = file_chooser.value
+        self.source_locations.value = current_value
+
     def _viewer(self):
         header = ipw.HTML(
             value="""
@@ -602,12 +638,17 @@ class ComparisonViewer:
         self._make_tess_object_info()
         self._make_tess_save_box()
         self.source_locations = ui_generator(
-            SourceLocationSettings, max_field_width="150px"
+            SourceLocationSettings, max_field_width="50px"
+        )
+
+        self._set_source_location_file_to_value()
+        self.source_and_title = SettingWithTitle(
+            "Source location settings", self.source_locations
         )
         box = ipw.VBox()
         inner_box = ipw.HBox()
         source_legend_box = ipw.VBox()
-        source_legend_box.children = [self.source_locations, legend]
+        source_legend_box.children = [self.source_and_title, legend]
         inner_box.children = [iw, source_legend_box]  # legend]
         box.children = [
             self._file_chooser.file_chooser,
