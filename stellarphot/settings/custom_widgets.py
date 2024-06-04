@@ -628,3 +628,76 @@ class Confirm(ipw.HBox):
         if self._other_widget is not None:
             self._other_widget.layout.display = "flex"
         self.value = False
+
+
+class SettingWithTitle(ipw.VBox):
+    """
+    Class that adds a title to a setting widget made by ipyautoui and
+    styles the title nbased on whether the settings need to be saved.
+
+    Parameters
+    ----------
+
+    plain_title : str
+        Title of the setting widget without any decoration.
+
+    widget : ipyautoui.AutoUi
+        The setting widget to be displayed.
+    """
+
+    SETTING_NOT_SAVED = "❗️"
+    SETTING_IS_SAVED = "✅"
+
+    def __init__(self, plain_title, widget, header_level=2, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._header_level = header_level
+        self._plain_title = plain_title
+        self._widget = widget
+        self.title = ipw.HTML(value=self._format_title(plain_title))
+        self.children = [self.title, self._widget]
+        # Set up an observer to update title decoration when the settings
+        # change.
+        self._widget.observe(self.decorate_title, names="_value")
+        # Also update after the save button is clicked
+        self._widget.savebuttonbar.fns_onsave_add_action(self.decorate_title)
+
+    def _format_title(self, decorated_title):
+        return f"<h{self._header_level}>{decorated_title}</h{self._header_level}>"
+
+    def decorate_title(self, change=None):
+        """
+        Decorate the title based on whether the settings need to be saved.
+
+        Parameters
+        ----------
+
+        change : dict, optional
+            Change dictionary from a traitlets event. It is optional so that this
+            method can be called without a change dictionary.
+        """
+        # Keep track of settings state -- if dirty is true, the settings
+        # need to be saved.
+        dirty = False
+
+        # If we got here via a traitlets event then change is a dict with keys
+        # "new" and "old", check that case first. By checkiung explicitly for
+        # this case, we guarantee that we catch changes in value even if
+        # the button bar's unsaved_changes is still False.
+        try:
+            if change["new"] != change["old"]:
+                dirty = True
+        except (KeyError, TypeError):
+            dirty = False
+
+        # The unsaved_changes attribute is not a traitlet, and it isn't clear when
+        # in the event handling it gets set. When not called from an event, though,
+        # this function can only used unsaved_changes to decide what the title
+        # should be.
+        if self._widget.savebuttonbar.unsaved_changes or dirty:
+            self.title.value = self._format_title(
+                f"{self._plain_title} {self.SETTING_NOT_SAVED}"
+            )
+        else:
+            self.title.value = self._format_title(
+                f"{self._plain_title} {self.SETTING_IS_SAVED}"
+            )
