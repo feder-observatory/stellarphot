@@ -19,6 +19,7 @@ from stellarphot.gui_tools.seeing_profile_functions import set_keybindings
 from stellarphot.io import TOI, TessSubmission, TessTargetFile
 from stellarphot.settings import (
     PartialPhotometrySettings,
+    PhotometryWorkingDirSettings,
     SourceLocationSettings,
     ui_generator,
 )
@@ -272,6 +273,8 @@ class ComparisonViewer:
         self.observatory = observatory
 
         self.box, self.iw = self._viewer()
+
+        self.photometry_settings = PhotometryWorkingDirSettings()
 
         if photom_apertures_file is not None:
             # Set the source location file name to the name passed in
@@ -563,16 +566,16 @@ class ComparisonViewer:
         """
         self.photometry_settings.save(
             PartialPhotometrySettings(
-                photometry_apertures=self.aperture_settings.value, camera=self.camera
+                source_locations=self.source_locations.value,
             ),
             update=True,
         )
 
         # For some reason the value of unsaved_changes is not updated until after this
         # function executes, so we force its value here.
-        self.aperture_settings.savebuttonbar.unsaved_changes = False
+        self.source_locations.savebuttonbar.unsaved_changes = False
         # Update the save box title to reflect the save
-        self._set_save_box_title("")
+        self.source_and_title.decorate_title()
 
     def _update_tess_save_names(self):
         if self.tess_submission is not None:
@@ -645,6 +648,9 @@ class ComparisonViewer:
         self.source_and_title = SettingWithTitle(
             "Source location settings", self.source_locations
         )
+
+        self.source_locations.savebuttonbar.fns_onsave_add_action(self.save)
+
         box = ipw.VBox()
         inner_box = ipw.HBox()
         source_legend_box = ipw.VBox()
