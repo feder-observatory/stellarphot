@@ -48,7 +48,7 @@ join_char = "😬"
 class MyValid(ipw.Button):
     """
     A class containing a more compact indicator of valid entries based on ipywidgets
-    buton value.
+    button value.
 
     Parameters
     ----------
@@ -61,7 +61,7 @@ class MyValid(ipw.Button):
     ----------
 
     value : bool
-        Current value of the indicator. Initizlized to False.
+        Current value of the indicator. Initialized to False.
 
     """
 
