@@ -63,7 +63,7 @@ def test_comparison_properties(tmp_path):
     # the astrowidgets marker table.
     comparison_widget.show_labels()
 
-    # Supress a warning about the default marker set containing no stars
+    # Suppress a warning about the default marker set containing no stars
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore",
