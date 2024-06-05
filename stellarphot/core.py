@@ -81,7 +81,7 @@ class BaseEnhancedTable(QTable):
                     f"table_description is type {type(table_description)})."
                 ) from err
 
-            # Check data before copying to avoid recusive loop and non-QTable
+            # Check data before copying to avoid recursive loop and non-QTable
             # data input.
             if not isinstance(input_data, Table) or isinstance(
                 input_data, BaseEnhancedTable
@@ -499,7 +499,7 @@ class PhotometryData(BaseEnhancedTable):
                             "retain_user_computed=True."
                         )
                 else:
-                    # Compute the columns that need to be computed (match requries
+                    # Compute the columns that need to be computed (match requires
                     # python>=3.10)
                     match this_col:
                         case "bjd":
@@ -580,10 +580,10 @@ class PhotometryData(BaseEnhancedTable):
 class CatalogData(BaseEnhancedTable):
     """
     A class to hold astronomical catalog data while performing validation
-    to confirm the minumum required columns ('id', 'ra', 'dec', 'mag', and
+    to confirm the minimum required columns ('id', 'ra', 'dec', 'mag', and
     'passband') are present and have the correct units.
 
-    As a convience function, when the user passes in an astropy table to validate,
+    As a convenience function, when the user passes in an astropy table to validate,
     the user can also pass in a col_rename dict which can be used to rename columns
     in the data table BEFORE the check that the required columns are present.
 
@@ -1153,7 +1153,7 @@ class SourceListData(BaseEnhancedTable):
         if input_data is None:
             super().__init__(*args, **kwargs)
         else:
-            # Check data before copying to avoid recusive loop and non-QTable
+            # Check data before copying to avoid recursive loop and non-QTable
             # data input.
             if not isinstance(input_data, Table) or isinstance(
                 input_data, BaseEnhancedTable
