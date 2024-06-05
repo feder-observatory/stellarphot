@@ -657,7 +657,7 @@ class TestAperturePhotometry:
         source_locations.source_list_file = str(source_list_file)
 
         # Define the logging settings
-        logging_settings=DEFAULT_LOGGING_SETTINGS.model_copy()
+        logging_settings = DEFAULT_LOGGING_SETTINGS.model_copy()
         if logfile:
             # Define the log file and console log settings
             # and make sure to set full path of log file.
@@ -748,13 +748,13 @@ class TestAperturePhotometry:
             )
 
             # Define the logging settings
-            logging_settings=DEFAULT_LOGGING_SETTINGS.model_copy()
+            logging_settings = DEFAULT_LOGGING_SETTINGS.model_copy()
             if logfile:
                 logging_settings.logfile = logfile
                 logging_settings.console_log = console_log
                 # log file should be written to image directory (tmp_dir)
                 # automtically, this ensures we know the path to the log file.
-                full_logfile = str(Path(temp_dir)  / logfile)
+                full_logfile = str(Path(temp_dir) / logfile)
                 photometry_settings.logging_settings = logging_settings
 
             with warnings.catch_warnings():
