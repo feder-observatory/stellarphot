@@ -236,7 +236,7 @@ data:
       a lot of information as concisely as possible is to use subfields after
       any freeform comment you wish to make.
       The subfield format is |A=B; the '|' character is the separator, A is a
-      keyword name and B is its value. To make it possible to programatically
+      keyword name and B is its value. To make it possible to programmatically
       access this information, use keywords taken from this list:
           VMAGINS, CMAGINS, KMAGINS are the instrumental magnitudes of target, single comp, and check star
           CREFMAG and KREFMAG are the reference magnitudes of comp and check
