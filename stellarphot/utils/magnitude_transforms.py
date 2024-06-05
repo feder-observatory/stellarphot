@@ -493,14 +493,14 @@ def transform_to_catalog(
     verbose=True,
 ):
     """
-    Transform a set of intrumental magnitudes to a standard system using either
+    Transform a set of instrumental magnitudes to a standard system using either
     instrumental colors or catalog colors.
 
     Parameters
     ----------
 
     observed_magnitudes_grouped : `astropy.table.Table`
-        An astropy table, grouped by whatever you want that sepearates the data into
+        An astropy table, grouped by whatever you want that separates the data into
         data from just one image. BJD of the center of the observatory is one reasonable
         choice
 
@@ -521,8 +521,8 @@ def transform_to_catalog(
         instrumental magnitudes.
 
     cat_color : tuple of two strings
-        Names of the two columns in the caatalog that should be used to calculate color.
-        The magnitude difference will be calculated in the ortder the fitlers are given.
+        Names of the two columns in the catalog that should be used to calculate color.
+        The magnitude difference will be calculated in the order the filters are given.
         For example, if the value is ``('r_mag', 'i_mag')`` then the calculated color
         will be the ``r_mag`` column minus the ``i_mag`` column.
 
@@ -538,7 +538,7 @@ def transform_to_catalog(
         observed magnitudes.
 
     in_place : bool, optional
-        If ``True``, add the calibrated magnitude to the input table, othewise return
+        If ``True``, add the calibrated magnitude to the input table, otherwise return
         a copy.
 
     fit_diff : bool, optional
