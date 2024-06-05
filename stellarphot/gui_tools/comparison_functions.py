@@ -350,14 +350,19 @@ class ComparisonViewer:
         Try to automatically set object name immediately after file is chosen.
         """
         try:
-            self.object_name.value = self._file_chooser.header["object"]
+            self.object_name.value = (
+                f"<h2> Object: {self._file_chooser.header['object']}</h2>"
+            )
+            self._object = self._file_chooser.header["object"]
         except KeyError:
-            # No object, will show empty box for name
+            # No object, will show placeholder
+            self.object_name.value = "<h2>Object unknown</h2>"
             self.object_name.disabled = False
+            self._object = ""
 
         # We have a name, try to get coordinates from it
         try:
-            self.target_coord = SkyCoord.from_name(self.object_name.value)
+            self.target_coord = SkyCoord.from_name(self._object)
         except NameResolveError:
             pass
 
@@ -621,10 +626,12 @@ class ComparisonViewer:
 
         legend = ipw.HTML(
             value="""
-        <h3>Green circles -- Gaia stars within 2.5 arcmin of target</h3>
-        <h3>Red circles -- APASS stars within 1 mag of target</h3>
-        <h3>Blue circles -- VSX variables</h3>
-        <h3>Red × -- Exclude as target or comp</h3>
+        <ul>
+        <li>Green circles -- Gaia stars within 2.5 arcmin of target</li>
+        <li>Red circles -- APASS stars within 1 mag of target</li>
+        <li>Blue circles -- VSX variables</li>
+        <li>Red × -- Exclude as target or comp</li>
+        </ul>
         """
         )
 
@@ -636,12 +643,13 @@ class ComparisonViewer:
         bind_map.map_event(None, ("shift",), "ms_left", "cursor")
         gvc.add_callback("cursor-down", wrap(iw, out))
 
-        self.object_name = ipw.Text(description="Object", disabled=True)
+        self.object_name = ipw.HTML(value="<h2>Object: </h2>")
+        self._object = None
         controls = self._make_control_bar()
         self._make_tess_object_info()
         self._make_tess_save_box()
         self.source_locations = ui_generator(
-            SourceLocationSettings, max_field_width="50px"
+            SourceLocationSettings, max_field_width="75px"
         )
 
         self._set_source_location_file_to_value()
@@ -650,17 +658,21 @@ class ComparisonViewer:
         )
 
         self.source_locations.savebuttonbar.fns_onsave_add_action(self.save)
-
+        self.help_stuff = ipw.Accordion(children=[header, legend])
+        self.help_stuff.titles = ["Help", "Legend"]
         box = ipw.VBox()
         inner_box = ipw.HBox()
         source_legend_box = ipw.VBox()
-        source_legend_box.children = [self.source_and_title, legend]
+        source_legend_box.children = [
+            self.object_name,
+            self.source_and_title,
+            self.help_stuff,
+        ]
         inner_box.children = [iw, source_legend_box]  # legend]
+
         box.children = [
             self._file_chooser.file_chooser,
-            self.object_name,
             self._tess_object_info,
-            header,
             inner_box,
             controls,
             self.tess_save_toggle,
