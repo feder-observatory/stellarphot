@@ -35,7 +35,7 @@ test_descript = {
     "width": u.pix,
 }
 
-# Define a realistic table of astronomical data contianing one row
+# Define a realistic table of astronomical data containing one row
 data = np.array(
     [
         [
@@ -835,7 +835,7 @@ def test_catalog_from_vizier_search_apass():
 @pytest.mark.remote_data
 @pytest.mark.parametrize("location_method", ["coord", "header", "wcs"])
 def test_catalog_from_vizier_search_vsx(location_method):
-    # Do a cone search with a small enough radius to return exaclty one star,
+    # Do a cone search with a small enough radius to return exactly one star,
     # DQ Psc, which happens to already be in the test data.
     coordinate = SkyCoord(ra=359.94371 * u.deg, dec=-0.2801 * u.deg)
 
