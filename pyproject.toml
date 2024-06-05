@@ -127,7 +127,7 @@ select = [
 
 [tool.codespell]
 skip = '*.svg'
-ignore-words = ignore-words.txt
+ignore-words = "ignore-words.txt"
 
 [tool.pytest.ini_options]
 minversion = 7.0
