@@ -126,6 +126,10 @@ select = [
 # Ignore F405 (variable may be from star imports) in docs/conf.py
 "docs/conf.py" = ["F405"]
 
+[tool.codespell]
+skip = '*.svg'
+ignore-words = "ignore-words.txt"
+
 [tool.pytest.ini_options]
 minversion = 7.0
 testpaths = [

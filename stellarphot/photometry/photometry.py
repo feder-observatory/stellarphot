@@ -210,7 +210,6 @@ def single_image_photometry(
             f"'{type(photometry_options)}'."
         )
 
-
     # Set up logging
     logfile = logging_options.logfile
     console_log = logging_options.console_log
@@ -222,7 +221,7 @@ def single_image_photometry(
     # from multi_image_photometry before creating new log file handler
     # (Warning: This actually just catches if the logger has any handlers.
     # Probably not the best way to do this.)
-    fh_exists = False   # Default to filehandler not existing
+    fh_exists = False  # Default to filehandler not existing
     if logger.hasHandlers() is False:
         logger.setLevel(logging.INFO)
         # Set up logging to a file (in addition to any logging below)
@@ -244,7 +243,6 @@ def single_image_photometry(
         ch.setFormatter(console_format)
         ch.setLevel(logging.INFO)
         logger.addHandler(ch)
-
 
     #
     # Check CCDData headers before proceeding

@@ -1,11 +1,15 @@
 # A Python Package for Transforming Stellar Photometry
 
-[![Powered by Astropy Badge](http://img.shields.io/badge/powered%20by-AstroPy-orange.svg?style=flat)](http://www.astropy.org) [![GitHub Workflow badge](https://github.com/feder-observatory/stellarphot/workflows/Test/badge.svg?branch=main)](https://github.com/feder-observatory/stellarphot/actions?query=workflow%3ATest) [![codecov](https://codecov.io/gh/feder-observatory/stellarphot/graph/badge.svg?token=uVrdNencSQ)](https://codecov.io/gh/feder-observatory/stellarphot) [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10679636.svg)](https://doi.org/10.5281/zenodo.10679636)
+[![Powered by Astropy Badge](http://img.shields.io/badge/powered%20by-AstroPy-orange.svg?style=flat)](http://www.astropy.org)
+[![GitHub Workflow badge](https://github.com/feder-observatory/stellarphot/workflows/Test/badge.svg?branch=main)](https://github.com/feder-observatory/stellarphot/actions?query=workflow%3ATest)
+[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/feder-observatory/stellarphot/main.svg)](https://results.pre-commit.ci/latest/github/feder-observatory/stellarphot/main)
+[![codecov](https://codecov.io/gh/feder-observatory/stellarphot/graph/badge.svg?token=uVrdNencSQ)](https://codecov.io/gh/feder-observatory/stellarphot)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10679636.svg)](https://doi.org/10.5281/zenodo.10679636)
 
 Stellarphot provides a Python package and accompanying Jupyter notebooks to allow you to turn reduced astronomical images of point sources (e.g. stars) into calibrated astronomical photometry, with a focus on variable star and exoplanet transit observations.  Specifically:
 
 - If you have reduced astronomical images as FITS files but haven't obtained photometry yet, `stellarphot` can perform aperture photometry on your images.
-- If you already have aperture photometry for a field, `stellarphot` can 
+- If you already have aperture photometry for a field, `stellarphot` can
   - calculate relative flux (like [AstroImageJ](https://www.astro.louisville.edu/software/astroimagej/)), and/or
   - calculate calibrated magnitudes by transforming to a catalog (e.g. APASS DR9)
 - If you are working with exoplanet transit observations, `stellarphot` can turns the photometry into exoplanet transit light curves (see installation notes below).
@@ -19,22 +23,22 @@ You can install `stellarphot` with either `pip` or `conda`.  If you are interest
   conda install -c conda-forge stellarphot reducer
   pip install astronbs
   ```
-  If you are interested in exoplanet light curve fitting, also install `batman` using 
-  
+  If you are interested in exoplanet light curve fitting, also install `batman` using
+
   ```
   conda install -c conda-forge batman-package
   ```
-  
+
 - Install with `pip` using
   ```
   pip install stellarphot reducer astronbs
   ```
   or if you are interested in exoplanet light curve fitting you should instead use:
-  
+
   ```
   pip install stellarphot[exo_fitting] reducer astronbs
   ```
-  
+
 ## Getting started with stellarphot
 
 1. Start Jupyterlab from the command line: `jupyter lab`
@@ -43,7 +47,7 @@ You can install `stellarphot` with either `pip` or `conda`.  If you are interest
 
 <img width="833" alt="stellarphot-screenshot" src="https://user-images.githubusercontent.com/1147167/200139186-100934ca-6d1e-46f9-ac89-a83d05528bb2.png">
 
-## Questions? 
+## Questions?
 
 Feel free to contact @mwcraig with your questions about using `stellarphot`.
 
