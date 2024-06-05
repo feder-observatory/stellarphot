@@ -436,7 +436,7 @@ class TransitModelFit:
         """
         self._setup_transit_model()
 
-        # rp is related to depth in a straighforward way
+        # rp is related to depth in a straightforward way
         self._model.rp.value = self._batman_params.rp = np.sqrt(depth / 1000)
 
         # The estimate below assumes a circular orbit and inclination of

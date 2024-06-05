@@ -60,7 +60,7 @@ Saved settings
 --------------
 
 In addition to the settings file that is created in the working directory, you can save some settings
-on your system to make it easier to re-use the settings in the future. The settings that can be saved
+on your system to make it easier to reuse the settings in the future. The settings that can be saved
 this way are the ones most likely to be reused: `~stellarphot.settings.Camera`, `~stellarphot.settings.Observatory`,
 and `~stellarphot.settings.PassbandMap`. The ``name`` property of each of these objects is used to
 identify the settings.

@@ -318,7 +318,7 @@ class ChooseOrMakeNew(ipw.VBox):
         # is to be able to replace the values for a particular name
         self._item_widget.di_widgets["name"].disabled = True
 
-        # Thie really only applies to PassbandMap, which has nested models,
+        # This really only applies to PassbandMap, which has nested models,
         # but does no harm in the other cases (true of both lines below)
         # (and yes, both lines below are needed...this is a bug in ipyautoui,
         #  I think, because open_nested=True isn't respected when we _init_ui.
@@ -610,7 +610,7 @@ class Confirm(ipw.HBox):
 
     def show(self):
         """
-        Display the confrimation widget and, if desired, hide the widget it replaces.
+        Display the confirmation widget and, if desired, hide the widget it replaces.
         """
         self.layout.display = "flex"
         if self._other_widget is not None:

@@ -115,7 +115,7 @@ class FakeCCDImage(CCDData):
             self.header.update(w.to_header())
 
     def drop_wcs(self):
-        # Convienence function to remove WCS information from the CCDData object
+        # Convenience function to remove WCS information from the CCDData object
         # for testing purposes.
         self.wcs = None
         wcs_keywords = [

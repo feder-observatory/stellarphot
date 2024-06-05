@@ -418,7 +418,7 @@ def single_image_photometry(
     # Define apertures and annuli for the aperture photometry
     aper_locs = np.array([xs, ys]).T
     apers = CircularAperture(aper_locs, r=photometry_apertures.radius)
-    anuls = CircularAnnulus(
+    annuli = CircularAnnulus(
         aper_locs,
         r_in=photometry_apertures.inner_annulus,
         r_out=photometry_apertures.outer_annulus,
@@ -427,7 +427,7 @@ def single_image_photometry(
     # Perform the aperture photometry
     photom = aperture_photometry(
         ccd_image.data,
-        (apers, anuls),
+        (apers, annuli),
         mask=ccd_image.mask,
         method=photometry_options.method,
     )
@@ -469,11 +469,11 @@ def single_image_photometry(
     photom["aperture_sum"].unit = ccd_image.unit
     photom["annulus_sum"].unit = ccd_image.unit
     photom["aperture"] = apers.r * u.pixel
-    photom["annulus_inner"] = anuls.r_in * u.pixel
-    photom["annulus_outer"] = anuls.r_out * u.pixel
+    photom["annulus_inner"] = annuli.r_in * u.pixel
+    photom["annulus_outer"] = annuli.r_out * u.pixel
     # By convention, area is in units of pixels (not pixels squared) in a digital image
     photom["aperture_area"] = apers.area * u.pixel
-    photom["annulus_area"] = anuls.area * u.pixel
+    photom["annulus_area"] = annuli.area * u.pixel
 
     if photometry_options.reject_background_outliers:
         msg = f"{logline} Computing clipped sky stats ... "
@@ -482,7 +482,7 @@ def single_image_photometry(
                 avg_sky_per_pix,
                 med_sky_per_pix,
                 std_sky_per_pix,
-            ) = clipped_sky_per_pix_stats(ccd_image, anuls)
+            ) = clipped_sky_per_pix_stats(ccd_image, annuli)
         except AttributeError:
             msg += "BAD ANNULUS ('sky_per_pix' stats set to np.nan) ... "
             avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = np.nan, np.nan, np.nan
@@ -500,7 +500,7 @@ def single_image_photometry(
         )
         med_pp = []
         std_pp = []
-        for mask in anuls.to_mask():
+        for mask in annuli.to_mask():
             annulus_data = mask.cutout(ccd_image)
             med_pp.append(np.median(annulus_data))
             std_pp.append(np.std(annulus_data))
@@ -514,7 +514,7 @@ def single_image_photometry(
     )
     photom["aperture_net_cnts"].unit = ccd_image.unit
 
-    # Fit the FWHM of the sources (can result in many warrnings due to
+    # Fit the FWHM of the sources (can result in many warnings due to
     # failed FWHM fitting, capture those warnings and print a summary)
     msg = f"{logline} Fitting FWHM of all sources (may take a few minutes) ... "
     with warnings.catch_warnings(record=True) as warned:

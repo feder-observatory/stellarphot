@@ -63,7 +63,7 @@ FAKE_CAMERA = Camera(
     max_data_value=40000 * u.adu,
 )
 
-# Camera with no read noise or dark currnet
+# Camera with no read noise or dark current
 ZERO_CAMERA = Camera(
     data_unit=u.adu,
     gain=1.0 * u.electron / u.adu,
@@ -753,7 +753,7 @@ class TestAperturePhotometry:
                 logging_settings.logfile = logfile
                 logging_settings.console_log = console_log
                 # log file should be written to image directory (tmp_dir)
-                # automtically, this ensures we know the path to the log file.
+                # automatically, this ensures we know the path to the log file.
                 full_logfile = str(Path(temp_dir) / logfile)
                 photometry_settings.logging_settings = logging_settings
 

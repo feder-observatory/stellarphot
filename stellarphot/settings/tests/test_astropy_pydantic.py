@@ -41,7 +41,7 @@ class _QuantityModel(BaseModel):
 )
 def test_unit_initialization(init):
     # Make sure we can initialize from each of the ways a Unit can
-    # be initiailized
+    # be initialized
     expected = Unit(init)
     unit = _UnitModel(unit=init)
     assert expected == unit.unit
@@ -61,7 +61,7 @@ def test_unit_initialization(init):
 )
 def test_quantity_intialization(init):
     # Make sure we can initialize from each of the ways a Quantity can
-    # be initiailized
+    # be initialized
     expected = Quantity(init)
     quantity = _QuantityModel(quantity=init)
     assert expected == quantity.quantity
@@ -225,7 +225,7 @@ def test_time_quant_pydantic(klass, input):
     val = klass(input)
     model = Model(value=val)
 
-    # Value should be corret
+    # Value should be correct
     assert model.value == val
 
     # model dump should fully serialize to standard python types
