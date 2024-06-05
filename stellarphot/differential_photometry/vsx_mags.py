@@ -27,7 +27,7 @@ def calc_multi_vmag(var_stars, star_data, comp_stars, **kwd):
     Returns
     -------
     vmag_table : '~astropy.table.Table'
-        Table including the name, avgerage magnitude, and standard deviation of
+        Table including the name, average magnitude, and standard deviation of
         multiple variable stars in a field.
     """
     name = []
