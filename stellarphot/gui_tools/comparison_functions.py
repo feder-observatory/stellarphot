@@ -310,10 +310,6 @@ class ComparisonViewer:
             name_or_coord=self.target_coord,
         )
 
-        # Save the initial source list.
-        if self.source_locations.value["source_list_file"] is not None:
-            self._save_aperture_to_file(None)
-
     @property
     def photom_apertures_file(self):
         return self.source_locations.value["source_list_file"]
@@ -347,18 +343,31 @@ class ComparisonViewer:
             self.object_name.disabled = False
             self._object = ""
 
+        print(f"Object: {self._object}")
         # We have a name, try to get coordinates from it
         try:
             self.target_coord = SkyCoord.from_name(self._object)
         except NameResolveError:
-            pass
+            # If there are no coordinations so far then use the center of the frame. The
+            # generation of  the source list table depends on the target coordinates.
+            self.target_coord = self.ccd.wcs.pixel_to_world(
+                self.ccd.shape[0] / 2, self.ccd.shape[1] / 2
+            )
 
     def _set_file(self, change):  # noqa: ARG002
         """
         Widget callbacks need to accept a change argument, even if not used.
         """
-        self._set_object()
         self._init()
+        self._set_object()
+        # Save the initial source list if there is a file name for it and if the target
+        # coordinates are known. The target coordinates are needed to generate the
+        # source list table.
+        if (
+            self.source_locations.value["source_list_file"] is not None
+            and self.target_coord is not None
+        ):
+            self._save_aperture_to_file(None)
 
     def _make_observers(self):
         self._show_labels_button.observe(self._show_label_button_handler, names="value")

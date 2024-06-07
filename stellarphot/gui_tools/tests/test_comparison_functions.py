@@ -21,8 +21,9 @@ def test_comparison_object_creation():
     assert isinstance(comparison_widget.box, ipw.Box)
 
 
+@pytest.mark.parametrize("has_object", [True, False])
 @pytest.mark.remote_data
-def test_comparison_properties(tmp_path):
+def test_comparison_properties(tmp_path, has_object):
     # Test that we can load a file...
     wcs_file = get_pkg_data_filename("../../tests/data/sample_wcs_ey_uma.fits")
     with fits.open(wcs_file) as hdulist:
@@ -37,8 +38,10 @@ def test_comparison_properties(tmp_path):
             wcs = WCS(hdulist[0].header)
     wcs.pixel_shape = list(reversed(CCD_SHAPE))
     ccd = CCDData(data=np.zeros(CCD_SHAPE), wcs=wcs, unit="adu")
-    # Set the object name to the star in this field, EY UMa
-    ccd.header["object"] = "EY UMa"
+    if has_object:
+        # Set the object name to the star in this field, EY UMa
+        ccd.header["object"] = "EY UMa"
+
     file_name = "test.fits"
     ccd.write(tmp_path / file_name, overwrite=True)
     with warnings.catch_warnings():
@@ -59,7 +62,7 @@ def test_comparison_properties(tmp_path):
     table = comparison_widget.generate_table()
     assert "APASS comparison" in table["marker name"]
 
-    # Check that is we show labels then the label names we expect show up in
+    # Check that if we show labels then the label names we expect show up in
     # the astrowidgets marker table.
     comparison_widget.show_labels()
 
