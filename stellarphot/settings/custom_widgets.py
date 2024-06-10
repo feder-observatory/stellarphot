@@ -633,7 +633,7 @@ class Confirm(ipw.HBox):
 class SettingWithTitle(ipw.VBox):
     """
     Class that adds a title to a setting widget made by ipyautoui and
-    styles the title nbased on whether the settings need to be saved.
+    styles the title based on whether the settings need to be saved.
 
     Parameters
     ----------
@@ -680,7 +680,7 @@ class SettingWithTitle(ipw.VBox):
         dirty = False
 
         # If we got here via a traitlets event then change is a dict with keys
-        # "new" and "old", check that case first. By checkiung explicitly for
+        # "new" and "old", check that case first. By checking explicitly for
         # this case, we guarantee that we catch changes in value even if
         # the button bar's unsaved_changes is still False.
         try:
