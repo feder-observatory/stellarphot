@@ -340,7 +340,6 @@ class ComparisonViewer:
         except KeyError:
             # No object, will show placeholder
             self.object_name.value = "<h2>Object unknown</h2>"
-            self.object_name.disabled = False
             self._object = ""
 
         print(f"Object: {self._object}")

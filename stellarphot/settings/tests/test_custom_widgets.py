@@ -836,7 +836,7 @@ class TestSettingWithTitle:
         assert camera_title.SETTING_IS_SAVED not in camera_title.title.value
         assert camera_title.SETTING_NOT_SAVED not in camera_title.title.value
 
-        # There should also be no unsvaed changes at the moment
+        # There should also be no unsaved changes at the moment
         assert not camera.savebuttonbar.unsaved_changes
 
         # Manually set unsaved_changes then call the change handler, which should
