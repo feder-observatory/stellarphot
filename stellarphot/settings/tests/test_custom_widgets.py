@@ -2,8 +2,18 @@ import ipywidgets as ipw
 import pytest
 from ipyautoui.custom.iterable import ItemBox, ItemControl
 
-from stellarphot.settings import Camera, Observatory, PassbandMap, SavedSettings
-from stellarphot.settings.custom_widgets import ChooseOrMakeNew, Confirm
+from stellarphot.settings import (
+    Camera,
+    Observatory,
+    PassbandMap,
+    SavedSettings,
+    ui_generator,
+)
+from stellarphot.settings.custom_widgets import (
+    ChooseOrMakeNew,
+    Confirm,
+    SettingWithTitle,
+)
 from stellarphot.settings.tests.test_models import (
     DEFAULT_OBSERVATORY_SETTINGS,
     DEFAULT_PASSBAND_MAP,
@@ -790,3 +800,65 @@ class TestConfirm:
         assert confirm.layout.display == "none"
         if other_widget:
             assert other_widget.layout.display != "none"
+
+
+class TestSettingWithTitle:
+    def test_title_format(self):
+        # Check that the title is formatted with the requested heading
+        # level and that there is, initially, no decoration.
+        # Make a Camera with default testing settings
+        camera = ui_generator(Camera)
+
+        # Choosing something other than the default
+        header_level = 5
+
+        # Make a SettingWithTitle with the camera
+        plain_title = "I am a camera"
+        camera_title = SettingWithTitle(plain_title, camera, header_level=header_level)
+
+        assert (
+            camera_title.title.value
+            == f"<h{header_level}>{plain_title}</h{header_level}>"
+        )
+
+    def test_title_decoration(self):
+        # Check that the title has the correct decoration given the
+        # state of the settings widget.
+
+        # Make a camera ui
+        camera = ui_generator(Camera)
+
+        # Make a SettingWithTitle with the camera
+        plain_title = "I am a camera"
+        camera_title = SettingWithTitle(plain_title, camera)
+
+        # At the moment the title should not be decorated
+        assert camera_title.SETTING_IS_SAVED not in camera_title.title.value
+        assert camera_title.SETTING_NOT_SAVED not in camera_title.title.value
+
+        # There should also be no unsaved changes at the moment
+        assert not camera.savebuttonbar.unsaved_changes
+
+        # Manually set unsaved_changes then call the change handler, which should
+        # add an indication that there are unsaved changes.
+        camera.savebuttonbar.unsaved_changes = True
+        camera_title.decorate_title()
+        assert camera_title.SETTING_NOT_SAVED in camera_title.title.value
+
+        # Go back to unsaved_changes being False
+        camera.savebuttonbar.unsaved_changes = False
+
+        # Manually call the change handler, which should add an indication that
+        # saves have been done.
+        camera_title.decorate_title()
+        assert camera_title.SETTING_IS_SAVED in camera_title.title.value
+
+        # Now change the camera value, which should trigger the change handler
+        camera.value = TEST_CAMERA_VALUES
+
+        assert camera_title.SETTING_NOT_SAVED in camera_title.title.value
+
+        # Finally, click the save button and the title should be decorated with
+        # the saved indication.
+        camera.savebuttonbar.bn_save.click()
+        assert camera_title.SETTING_IS_SAVED in camera_title.title.value

@@ -13,3 +13,11 @@
   cwd: not_used
   type: notebook
   catalog: Stellarphot photometry
+
+- title: Comparison stars
+  description: Choose comparison stars
+  source: ../stellarphot/photometry/02-viewer-comparison-stars-template.ipynb
+  icon: ../stellarphot/stellarphot-logo.svg
+  cwd: not_used
+  type: notebook
+  catalog: Stellarphot photometry

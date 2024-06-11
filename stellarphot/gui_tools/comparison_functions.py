@@ -1,5 +1,4 @@
 import functools
-from pathlib import Path
 
 import ipywidgets as ipw
 import numpy as np
@@ -16,7 +15,13 @@ except ImportError:
 from stellarphot import SourceListData
 from stellarphot.gui_tools.fits_opener import FitsOpener
 from stellarphot.gui_tools.seeing_profile_functions import set_keybindings
-from stellarphot.io import TOI, TessSubmission, TessTargetFile
+from stellarphot.settings import (
+    PartialPhotometrySettings,
+    PhotometryWorkingDirSettings,
+    SourceLocationSettings,
+    ui_generator,
+)
+from stellarphot.settings.custom_widgets import SettingWithTitle
 from stellarphot.utils.comparison_utils import (
     crossmatch_APASS2VSX,
     in_field,
@@ -196,11 +201,7 @@ class ComparisonViewer:
         Whether to overwrite existing output files. Defaults to True.
 
     observatory : `stellarphot.settings.Observatory`, optional
-        Observatory information. If this is set and the observatory has
-        a `stellarphot.settings.Observatory.TESS_telescope_code` attribute,
-        then the TESS submission information will be extracted from the header
-        and a button will appear to save images of the field for a TESS
-        submission.
+        Observatory information.
 
     Attributes
     ----------
@@ -232,9 +233,6 @@ class ComparisonViewer:
     target_mag : float
         Magnitude of the target.
 
-    tess_submission : `~stellarphot.io.TessSubmission`
-        Instance of the TESS submission class.
-
     variables : `astropy.table.Table`
     """
 
@@ -260,14 +258,17 @@ class ComparisonViewer:
         self.bright_mag_limit = bright_mag_limit
         self.dim_mag_limit = dim_mag_limit
         self.targets_from_file = targets_from_file
-        self.tess_submission = None
-        self._tess_object_info = None
         self.target_coord = object_coordinate
         self.observatory = observatory
 
         self.box, self.iw = self._viewer()
 
-        self.photom_apertures_file = photom_apertures_file
+        self.photometry_settings = PhotometryWorkingDirSettings()
+
+        if photom_apertures_file is not None:
+            # Set the source location file name to the name passed in
+            self._set_source_location_file_to_value(photom_apertures_file)
+
         self.overwrite_outputs = overwrite_outputs
 
         if file:
@@ -281,8 +282,6 @@ class ComparisonViewer:
         Handles aspects of initialization that need to be deferred until
         a file is chosen.
         """
-        if self.tess_submission is not None:
-            self._tess_object_info.layout.visibility = "visible"
         self.ccd, self.vsx = set_up(
             self._file_chooser.path.name,
             directory_with_images=self._file_chooser.path.parent,
@@ -312,6 +311,10 @@ class ComparisonViewer:
         )
 
     @property
+    def photom_apertures_file(self):
+        return self.source_locations.value["source_list_file"]
+
+    @property
     def variables(self):
         """
         An `astropy.table.Table` of the variables in the class.
@@ -330,82 +333,45 @@ class ComparisonViewer:
         Try to automatically set object name immediately after file is chosen.
         """
         try:
-            self.object_name.value = self._file_chooser.header["object"]
+            self.object_name.value = (
+                f"<h2> Object: {self._file_chooser.header['object']}</h2>"
+            )
+            self._object = self._file_chooser.header["object"]
         except KeyError:
-            # No object, will show empty box for name
-            self.object_name.disabled = False
+            # No object, will show placeholder
+            self.object_name.value = "<h2>Object unknown</h2>"
+            self._object = ""
 
+        print(f"Object: {self._object}")
         # We have a name, try to get coordinates from it
         try:
-            self.target_coord = SkyCoord.from_name(self.object_name.value)
+            self.target_coord = SkyCoord.from_name(self._object)
         except NameResolveError:
-            pass
-
-        def _settings_for_no_tess():
-            # Guess not, time to turn on the coordinates box
-            # self._turn_on_coordinates()
-            self.tess_submission = None
-            self.toi_info = None
-            self.targets_from_file = None
-            self._tess_object_info.layout.visibility = "hidden"
-            self.tess_save_toggle.value = False
-            self.tess_save_toggle.disabled = True
-            self.tess_save_toggle.layout.visibility = "hidden"
-
-        # Maybe this is a tess object?
-
-        if self.observatory is None or self.observatory.TESS_telescope_code is None:
-            _settings_for_no_tess()
-            return
-
-        try:
-            self.tess_submission = TessSubmission.from_header(
-                self._file_chooser.header,
-                telescope_code=self.observatory.TESS_telescope_code,
-                planet=1,
+            # If there are no coordinations so far then use the center of the frame. The
+            # generation of  the source list table depends on the target coordinates.
+            self.target_coord = self.ccd.wcs.pixel_to_world(
+                self.ccd.shape[0] / 2, self.ccd.shape[1] / 2
             )
-        except ValueError:
-            # Not a TESS object, so turn off the TESS interface
-            _settings_for_no_tess()
-        else:
-            # This is a TESS object, so set up the TESS interface
-            self.tess_save_toggle.disabled = False
-            self.tess_save_toggle.layout.visibility = "visible"
-            self.toi_info = TOI(self.tess_submission.tic_id)
-
-            self._target_file_info = TessTargetFile(
-                self.toi_info.coord, self.toi_info.tess_mag, self.toi_info.depth
-            )
-
-            self.target_coord = self.tess_submission.tic_coord
-            self._tess_object_info.mag.value = self.toi_info.tess_mag
-            self._tess_object_info.depth.value = self.toi_info.depth
-            self._tess_object_info.layout.visibility = "visible"
-            self.targets_from_file = self._target_file_info.table
 
     def _set_file(self, change):  # noqa: ARG002
         """
         Widget callbacks need to accept a change argument, even if not used.
         """
-        self._set_object()
         self._init()
-        self._update_tess_save_names()
-
-    def _save_toggle_action(self, change):
-        activated = change["new"]
-
-        if activated:
-            self._tess_save_box.layout.visibility = "visible"
-        else:
-            self._tess_save_box.layout.visibility = "hidden"
+        self._set_object()
+        # Save the initial source list if there is a file name for it and if the target
+        # coordinates are known. The target coordinates are needed to generate the
+        # source list table.
+        if (
+            self.source_locations.value["source_list_file"] is not None
+            and self.target_coord is not None
+        ):
+            self._save_aperture_to_file(None)
 
     def _make_observers(self):
         self._show_labels_button.observe(self._show_label_button_handler, names="value")
         self._save_var_info.on_click(self._save_variables_to_file)
-        self._save_aperture_file.on_click(self._save_aperture_to_file)
         self._file_chooser.file_chooser.observe(self._set_file, names="_value")
-        self.tess_save_toggle.observe(self._save_toggle_action, "value")
-        self.save_files.on_click(self.save_tess_files)
 
     def _save_variables_to_file(self, button=None, filename=""):  # noqa: ARG002
         """
@@ -477,77 +443,55 @@ class ComparisonViewer:
 
         self._save_var_info = ipw.Button(description="Save variable info")
 
-        self._save_aperture_file = ipw.Button(description="Save aperture file")
-
         controls = ipw.HBox(
             children=[
                 self._show_labels_button,
                 self._save_var_info,
-                self._save_aperture_file,
             ]
         )
 
         return controls
 
-    def _make_tess_object_info(self):
+    def save(self):
         """
-        Make the controls for the TESS mag and depth used to look up GAIA target list.
+        Save all of the settings we have to a partial settings file.
         """
-        tess_object_info = ipw.HBox()
-        tess_mag = ipw.FloatText(description="TESS mag")
-        tess_depth = ipw.FloatText(description="Depth (ppt)")
-        tess_object_info.children = [tess_mag, tess_depth]
-        self._tess_object_info = tess_object_info
-        self._tess_object_info.mag = tess_mag
-        self._tess_object_info.depth = tess_depth
-        if self.tess_submission is None:
-            self._tess_object_info.layout.visibility = "hidden"
-
-    def _make_tess_save_box(self):
-        self.tess_save_toggle = ipw.ToggleButton(
-            description="TESS files...", disabled=True
-        )
-        self.tess_save_toggle.layout.visibility = "hidden"
-        self._tess_save_box = ipw.VBox()
-        self._tess_save_box.layout.visibility = "hidden"
-
-        tess_scope = self.observatory.TESS_telescope_code if self.observatory else None
-        tess_scope = "" if tess_scope is None else tess_scope
-        scope_name = ipw.Text(
-            description="Telescope code", value=tess_scope, style=DESC_STYLE
+        self.photometry_settings.save(
+            PartialPhotometrySettings(
+                source_locations=self.source_locations.value,
+            ),
+            update=True,
         )
 
-        planet_num = ipw.IntText(description="Planet", value=1)
+        # For some reason the value of unsaved_changes is not updated until after this
+        # function executes, so we force its value here.
+        self.source_locations.savebuttonbar.unsaved_changes = False
+        # Update the save box title to reflect the save
+        self.source_and_title.decorate_title()
 
-        dumb = []
-        dumb2 = []
+    def _set_source_location_file_to_value(self, name=None):
+        # Right now the source location file name will not be set to the default name
+        # properly because of a bug in ipyautoui, so we set it manually here.
+        # Easier once/if https://github.com/maxfordham/ipyautoui/pull/323 is merged
+        # and released. Then we can just set the value of the widget directly like this:
+        #
+        # self.source_locations.value = {'source_list_file': name, ...rest of settings}
+        file_chooser = self.source_locations.di_widgets["source_list_file"]
+        if name is None:
+            # Use the default name
+            name = self.source_locations.model.model_fields["source_list_file"].default
+        # Make sure ipyautoui knows the value has changed
+        file_chooser.value = name
 
-        for save in [
-            "Full field of view",
-            "Zoomed filed of view",
-        ]:  # , "Aperture file"]:
-            box = ipw.HBox()
-            title = ipw.HTML(value=f"<b>{save} file name</b>")
-            label = ipw.Label(value="")
-            box.children = (title, label)
-            dumb.append(label)
-            dumb2.append(box)
+        # Set the value to what we actually want
+        file_chooser.reset(".", name)
+        file_chooser._apply_selection()
 
-        # self._field_name, self._zoom_name, self._aper_name = dumb
-        self._field_name, self._zoom_name = dumb
-        self.save_files = ipw.Button(description="Save")
-        self._tess_save_box.children = (
-            [scope_name, planet_num] + dumb2 + [self.save_files]
-        )
-
-    def _update_tess_save_names(self):
-        if self.tess_submission is not None:
-            self._field_name.value = self.tess_submission.field_image
-            self._zoom_name.value = self.tess_submission.field_image_zoom
-            # self._aper_name.value = self.tess_submission.apertures
-        else:
-            self._field_name.value = ""
-            self._zoom_name.value = ""
+        # Because we have updated the value outside of ipyautoui, also force an update
+        # of the widget value.
+        current_value = self.source_locations.value.copy()
+        current_value["source_list_file"] = file_chooser.value
+        self.source_locations.value = current_value
 
     def _viewer(self):
         header = ipw.HTML(
@@ -560,10 +504,12 @@ class ComparisonViewer:
 
         legend = ipw.HTML(
             value="""
-        <h3>Green circles -- Gaia stars within 2.5 arcmin of target</h3>
-        <h3>Red circles -- APASS stars within 1 mag of target</h3>
-        <h3>Blue circles -- VSX variables</h3>
-        <h3>Red × -- Exclude as target or comp</h3>
+        <ul>
+        <li>Green circles -- Gaia stars within 2.5 arcmin of target</li>
+        <li>Red circles -- APASS stars within 1 mag of target</li>
+        <li>Blue circles -- VSX variables</li>
+        <li>Red × -- Exclude as target or comp</li>
+        </ul>
         """
         )
 
@@ -575,67 +521,39 @@ class ComparisonViewer:
         bind_map.map_event(None, ("shift",), "ms_left", "cursor")
         gvc.add_callback("cursor-down", wrap(iw, out))
 
-        self.object_name = ipw.Text(description="Object", disabled=True)
+        self.object_name = ipw.HTML(value="<h2>Object: </h2>")
+        self._object = None
         controls = self._make_control_bar()
-        self._make_tess_object_info()
-        self._make_tess_save_box()
+
+        self.source_locations = ui_generator(
+            SourceLocationSettings, max_field_width="75px"
+        )
+
+        self._set_source_location_file_to_value()
+        self.source_and_title = SettingWithTitle(
+            "Source location settings", self.source_locations
+        )
+
+        self.source_locations.savebuttonbar.fns_onsave_add_action(self.save)
+        self.help_stuff = ipw.Accordion(children=[header, legend])
+        self.help_stuff.titles = ["Help", "Legend"]
         box = ipw.VBox()
         inner_box = ipw.HBox()
-        inner_box.children = [iw, legend]
+        source_legend_box = ipw.VBox()
+        source_legend_box.children = [
+            self.object_name,
+            self.source_and_title,
+            self.help_stuff,
+        ]
+        inner_box.children = [iw, source_legend_box]  # legend]
+
         box.children = [
             self._file_chooser.file_chooser,
-            self.object_name,
-            self._tess_object_info,
-            header,
             inner_box,
             controls,
-            self.tess_save_toggle,
-            self._tess_save_box,
         ]
 
         return box, iw
-
-    def save_tess_files(self, button=None):  # noqa: ARG002
-        """
-        Save the TESS files.
-
-        Parameters
-        ----------
-
-        button : `ipywidgets.Button`, optional
-            The button that was clicked.
-
-        Returns
-        -------
-
-        None
-            Button to save TESS file set to true (triggering action).
-        """
-        if self._field_name.value:
-            self.tess_field_view()
-            # Remove output file if it exists
-            if Path(self._field_name.value).exists() and self.overwrite_outputs:
-                Path(self._field_name.value).unlink()
-            try:
-                self.iw.save(self._field_name.value)
-            except OSError as err:
-                raise OSError(
-                    f"Existing file ({self._field_name.value}) can not be overwritten. "
-                    "Set overwrite_outputs=True to address this."
-                ) from err
-
-        if self._zoom_name.value:
-            self.tess_field_zoom_view()
-            # Remove output file if it exists
-            if Path(self._zoom_name.value).exists() and self.overwrite_outputs:
-                Path(self._zoom_name.value).unlink()
-            try:
-                self.iw.save(self._zoom_name.value)
-            except OSError as err:
-                raise OSError(
-                    f"Existing file ({self._zoom_name.value}) can not be overwritten. "
-                    "Set overwrite_outputs=True to address this."
-                ) from err
 
     def generate_table(self):
         """

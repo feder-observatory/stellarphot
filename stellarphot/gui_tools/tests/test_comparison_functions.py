@@ -1,3 +1,4 @@
+import os
 import warnings
 
 import ipywidgets as ipw
@@ -11,6 +12,7 @@ from astropy.wcs import WCS
 from astropy.wcs.wcs import FITSFixedWarning
 
 from stellarphot.gui_tools import comparison_functions as cf
+from stellarphot.settings import PhotometryWorkingDirSettings
 
 CCD_SHAPE = [2048, 3073]
 
@@ -21,8 +23,10 @@ def test_comparison_object_creation():
     assert isinstance(comparison_widget.box, ipw.Box)
 
 
+@pytest.mark.parametrize("source_file_name", [None, "sources.ecsv"])
+@pytest.mark.parametrize("has_object", [True, False])
 @pytest.mark.remote_data
-def test_comparison_properties(tmp_path):
+def test_comparison_properties(tmp_path, has_object, source_file_name):
     # Test that we can load a file...
     wcs_file = get_pkg_data_filename("../../tests/data/sample_wcs_ey_uma.fits")
     with fits.open(wcs_file) as hdulist:
@@ -37,10 +41,16 @@ def test_comparison_properties(tmp_path):
             wcs = WCS(hdulist[0].header)
     wcs.pixel_shape = list(reversed(CCD_SHAPE))
     ccd = CCDData(data=np.zeros(CCD_SHAPE), wcs=wcs, unit="adu")
-    # Set the object name to the star in this field, EY UMa
-    ccd.header["object"] = "EY UMa"
+    if has_object:
+        # Set the object name to the star in this field, EY UMa
+        ccd.header["object"] = "EY UMa"
+
     file_name = "test.fits"
     ccd.write(tmp_path / file_name, overwrite=True)
+    # Change working directory for remainder of test so that the save does not pollute
+    # the testing directory.
+    os.chdir(tmp_path)
+
     with warnings.catch_warnings():
         # Ignore the warning about the WCS having non-standard keywords (the SIP
         # distortion parameters).
@@ -49,7 +59,11 @@ def test_comparison_properties(tmp_path):
             message="Some non-standard WCS keywords were excluded",
             category=AstropyWarning,
         )
-        comparison_widget = cf.ComparisonViewer(directory=tmp_path, file=str(file_name))
+        comparison_widget = cf.ComparisonViewer(
+            directory=tmp_path,
+            file=str(file_name),
+            photom_apertures_file=source_file_name,
+        )
 
     # Check that we have some variables in this field of view, which contains the
     # variable star EY UMa
@@ -59,7 +73,7 @@ def test_comparison_properties(tmp_path):
     table = comparison_widget.generate_table()
     assert "APASS comparison" in table["marker name"]
 
-    # Check that is we show labels then the label names we expect show up in
+    # Check that if we show labels then the label names we expect show up in
     # the astrowidgets marker table.
     comparison_widget.show_labels()
 
@@ -82,9 +96,23 @@ def test_comparison_properties(tmp_path):
 
     assert len(label_markers) == len(table)
 
+    # Make sure the aperture file has been written
+    assert os.path.exists(comparison_widget.source_locations.value["source_list_file"])
+    # Make sure the aperture file name matches the one we supplied, if
+    # we supplied one.
+    if source_file_name is not None:
+        assert (
+            comparison_widget.source_locations.value["source_list_file"]
+            == source_file_name
+        )
 
-def test_no_tess_buttons_at_init():
-    # Make sure TESS controls are not displayed initially
-    comparison_widget = cf.ComparisonViewer()
-    assert comparison_widget.tess_save_toggle.layout.visibility == "hidden"
-    assert comparison_widget._tess_object_info.layout.visibility == "hidden"
+    # Save the source list settings
+    comparison_widget.source_locations.savebuttonbar.bn_save.click()
+
+    # Check that a partial photometry settings file exists and that source locations
+    # settings have saved correctly.
+    partial_settings = PhotometryWorkingDirSettings().load()
+    assert (
+        partial_settings.source_locations.model_dump()
+        == comparison_widget.source_locations.value
+    )
