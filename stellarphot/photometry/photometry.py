@@ -170,7 +170,7 @@ def single_image_photometry(
     """
 
     sourcelist = SourceListData.read(
-        photometry_settings.source_locations.source_list_file
+        photometry_settings.source_location_settings.source_list_file
     )
     camera = photometry_settings.camera
     observatory = photometry_settings.observatory
@@ -178,7 +178,7 @@ def single_image_photometry(
     photometry_options = photometry_settings.photometry_optional_settings
     logging_options = photometry_settings.logging_settings
     passband_map = photometry_settings.passband_map
-    use_coordinates = photometry_settings.source_locations.use_coordinates
+    use_coordinates = photometry_settings.source_location_settings.use_coordinates
 
     # Check that the input parameters are valid
     if not isinstance(ccd_image, CCDData):
@@ -396,7 +396,8 @@ def single_image_photometry(
             # The center really shouldn't move more than about the fwhm, could
             # rework this in the future to use that instead.
             too_much_shift = (
-                center_diff > photometry_settings.source_locations.shift_tolerance
+                center_diff
+                > photometry_settings.source_location_settings.shift_tolerance
             )
 
             # If the shift is too large, use the WCS-derived positions instead
@@ -656,7 +657,7 @@ def multi_image_photometry(
 
     """
     sourcelist = SourceListData.read(
-        photometry_settings.source_locations.source_list_file
+        photometry_settings.source_location_settings.source_list_file
     )
 
     # Initialize lists to track all PhotometryData objects and all dropped sources

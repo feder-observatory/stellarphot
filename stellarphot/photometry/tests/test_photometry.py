@@ -105,7 +105,7 @@ DEFAULT_PHOTOMETRY_SETTINGS = PhotometrySettings(
     camera=FAKE_CAMERA,
     observatory=FAKE_OBS,
     photometry_apertures=DEFAULT_PHOTOMETRY_APERTURES,
-    source_locations=DEFAULT_SOURCE_LOCATIONS,
+    source_location_settings=DEFAULT_SOURCE_LOCATIONS,
     photometry_optional_settings=PHOTOMETRY_OPTIONS,
     passband_map=PASSBAND_MAP,
     logging_settings=DEFAULT_LOGGING_SETTINGS,
@@ -161,7 +161,9 @@ class TestAperturePhotometry:
         source_list.write(source_list_file, overwrite=True)
 
         photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
-        photometry_settings.source_locations.source_list_file = str(source_list_file)
+        photometry_settings.source_location_settings.source_list_file = str(
+            source_list_file
+        )
 
         # Create an AperturePhotometry object
         ap_phot = AperturePhotometry(settings=photometry_settings)
@@ -213,7 +215,7 @@ class TestAperturePhotometry:
             camera=FAKE_CAMERA,
             observatory=FAKE_OBS,
             photometry_apertures=DEFAULT_PHOTOMETRY_APERTURES,
-            source_locations=source_locations,
+            source_location_settings=source_locations,
             photometry_optional_settings=phot_options,
             passband_map=PASSBAND_MAP,
             logging_settings=DEFAULT_LOGGING_SETTINGS,
@@ -298,7 +300,9 @@ class TestAperturePhotometry:
         phot_options.include_dig_noise = True
 
         photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
-        photometry_settings.source_locations.source_list_file = str(source_list_file)
+        photometry_settings.source_location_settings.source_list_file = str(
+            source_list_file
+        )
         photometry_settings.photometry_optional_settings = phot_options
 
         image_file = tmp_path / "fake_image.fits"
@@ -367,7 +371,9 @@ class TestAperturePhotometry:
         phot_options.method = "center"
 
         photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
-        photometry_settings.source_locations.source_list_file = str(source_list_file)
+        photometry_settings.source_location_settings.source_list_file = str(
+            source_list_file
+        )
         photometry_settings.photometry_optional_settings = phot_options
 
         ap_phot = AperturePhotometry(settings=photometry_settings)
@@ -428,8 +434,8 @@ class TestAperturePhotometry:
 
             photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
             photometry_settings.photometry_optional_settings = phot_options
-            photometry_settings.source_locations.use_coordinates = coords
-            photometry_settings.source_locations.source_list_file = str(
+            photometry_settings.source_location_settings.use_coordinates = coords
+            photometry_settings.source_location_settings.source_list_file = str(
                 source_list_file
             )
             with warnings.catch_warnings():
@@ -550,11 +556,11 @@ class TestAperturePhotometry:
 
             photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
             photometry_settings.photometry_optional_settings = phot_options
-            photometry_settings.source_locations.source_list_file = str(
+            photometry_settings.source_location_settings.source_list_file = str(
                 source_list_file
             )
             # The setting below was implicit in the old default
-            photometry_settings.source_locations.use_coordinates = "sky"
+            photometry_settings.source_location_settings.use_coordinates = "sky"
 
             ap_phot = AperturePhotometry(settings=photometry_settings)
             with pytest.raises(ValueError):
@@ -606,11 +612,11 @@ class TestAperturePhotometry:
 
             photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
             photometry_settings.photometry_optional_settings = phot_options
-            photometry_settings.source_locations.source_list_file = str(
+            photometry_settings.source_location_settings.source_list_file = str(
                 source_list_file
             )
             # The settings below was implicit in the old default
-            photometry_settings.source_locations.use_coordinates = "sky"
+            photometry_settings.source_location_settings.use_coordinates = "sky"
 
             ap_phot = AperturePhotometry(settings=photometry_settings)
             # Since none of the images will be valid, it should raise a RuntimeError
@@ -669,7 +675,7 @@ class TestAperturePhotometry:
             camera=FAKE_CAMERA,
             observatory=FAKE_OBS,
             photometry_apertures=DEFAULT_PHOTOMETRY_APERTURES,
-            source_locations=source_locations,
+            source_location_settings=source_locations,
             photometry_optional_settings=phot_options,
             passband_map=PASSBAND_MAP,
             logging_settings=logging_settings,
@@ -742,8 +748,8 @@ class TestAperturePhotometry:
 
             photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
             photometry_settings.photometry_optional_settings = phot_options
-            photometry_settings.source_locations.use_coordinates = "sky"
-            photometry_settings.source_locations.source_list_file = str(
+            photometry_settings.source_location_settings.use_coordinates = "sky"
+            photometry_settings.source_location_settings.source_list_file = str(
                 source_list_file
             )
 
@@ -1019,7 +1025,7 @@ def test_aperture_photometry_no_outlier_rejection(int_data, tmp_path):
         camera=FAKE_CAMERA,
         observatory=FAKE_OBS,
         photometry_apertures=DEFAULT_PHOTOMETRY_APERTURES,
-        source_locations=source_locations,
+        source_location_settings=source_locations,
         photometry_optional_settings=phot_options,
         passband_map=PASSBAND_MAP,
         logging_settings=DEFAULT_LOGGING_SETTINGS,
@@ -1106,7 +1112,9 @@ def test_aperture_photometry_with_outlier_rejection(reject, tmp_path):
     phot_options.include_dig_noise = True
 
     photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
-    photometry_settings.source_locations.source_list_file = str(source_list_file)
+    photometry_settings.source_location_settings.source_list_file = str(
+        source_list_file
+    )
     photometry_settings.photometry_optional_settings = phot_options
 
     phot, missing_sources = single_image_photometry(
@@ -1216,8 +1224,10 @@ def test_photometry_on_directory(coords):
 
         photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
         photometry_settings.photometry_optional_settings = phot_options
-        photometry_settings.source_locations.use_coordinates = coords
-        photometry_settings.source_locations.source_list_file = str(source_list_file)
+        photometry_settings.source_location_settings.use_coordinates = coords
+        photometry_settings.source_location_settings.source_list_file = str(
+            source_list_file
+        )
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 "ignore", message="Cannot merge meta key", category=MergeConflictWarning
@@ -1332,9 +1342,11 @@ def test_photometry_on_directory_with_no_ra_dec():
 
         photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
         photometry_settings.photometry_optional_settings = phot_options
-        photometry_settings.source_locations.source_list_file = str(source_list_file)
+        photometry_settings.source_location_settings.source_list_file = str(
+            source_list_file
+        )
         # The setting below was implicit in the old default
-        photometry_settings.source_locations.use_coordinates = "sky"
+        photometry_settings.source_location_settings.use_coordinates = "sky"
 
         with pytest.raises(ValueError):
             multi_image_photometry(
@@ -1386,9 +1398,11 @@ def test_photometry_on_directory_with_bad_fits():
 
         photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
         photometry_settings.photometry_optional_settings = phot_options
-        photometry_settings.source_locations.source_list_file = str(source_list_file)
+        photometry_settings.source_location_settings.source_list_file = str(
+            source_list_file
+        )
         # The settings below was implicit in the old default
-        photometry_settings.source_locations.use_coordinates = "sky"
+        photometry_settings.source_location_settings.use_coordinates = "sky"
 
         # Since none of the images will be valid, it should raise a RuntimeError
         with pytest.raises(RuntimeError):

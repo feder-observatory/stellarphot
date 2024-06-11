@@ -458,7 +458,7 @@ class ComparisonViewer:
         """
         self.photometry_settings.save(
             PartialPhotometrySettings(
-                source_locations=self.source_locations.value,
+                source_location_settings=self.source_locations.value,
             ),
             update=True,
         )

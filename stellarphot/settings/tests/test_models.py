@@ -99,7 +99,7 @@ DEFAULT_PHOTOMETRY_SETTINGS = dict(
     camera=Camera(**TEST_CAMERA_VALUES),
     observatory=Observatory(**DEFAULT_OBSERVATORY_SETTINGS),
     photometry_apertures=PhotometryApertures(**DEFAULT_APERTURE_SETTINGS),
-    source_locations=SourceLocationSettings(**DEFAULT_SOURCE_LOCATION_SETTINGS),
+    source_location_settings=SourceLocationSettings(**DEFAULT_SOURCE_LOCATION_SETTINGS),
     photometry_optional_settings=PhotometryOptionalSettings(
         **DEFAULT_PHOTOMETRY_OPTIONS
     ),

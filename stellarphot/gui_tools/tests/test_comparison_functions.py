@@ -113,6 +113,6 @@ def test_comparison_properties(tmp_path, has_object, source_file_name):
     # settings have saved correctly.
     partial_settings = PhotometryWorkingDirSettings().load()
     assert (
-        partial_settings.source_locations.model_dump()
+        partial_settings.source_location_settings.model_dump()
         == comparison_widget.source_locations.value
     )
