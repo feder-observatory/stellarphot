@@ -974,7 +974,7 @@ class PhotometrySettings(BaseModelWithTableRep):
             json_schema_extra=SCHEMA_EXTRAS,
         ),
     ]
-    source_locations: Annotated[
+    source_location_settings: Annotated[
         SourceLocationSettings,
         Field(
             description=_extract_short_description(SourceLocationSettings.__doc__),
