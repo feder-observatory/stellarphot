@@ -67,15 +67,36 @@ def test_settings_path_contains_package_and_version():
 
 
 class TestSavedSettings:
+    # This pytest fixture is used to create a fake settings directory for the tests.
+
+    # Being a fixture means it can be passed into tests or other functions, just like
+    # the fixture tmp_path.
+    # The autouse=True parameter means that this fixture will be provided to every test
+    # in this class without needing to be explicitly passed in.
     @pytest.fixture(autouse=True)
     def fake_settings_dir(self, mocker, tmp_path):
+        # mocker is a pytest fixture provided by the pytest-mock package. It is used to
+        # mock objects and functions.
+        # Mocking means providing a fake version of an object, function, attribute, or
+        # method that can be used in place of the real thing.
+
+        # One of the confusing things is figuring out what to mock. In this case, we are
+        # mocking the user_data_dir attribute of the PlatformDirs class in the
+        # settings_files module. This attribute is used to determine the path to the
+        # settings directory. By mocking it, we can control where the settings directory
+        # is created and use a temporary directory for the tests.
+
+        # stellarphot is added to the name of the directory to make sure we start
+        # without a stellarphot directory for each test.
         mocker.patch.object(
             settings_files.PlatformDirs, "user_data_dir", tmp_path / "stellarphot"
         )
 
     def test_settings_path_is_created_if_not_exists(self):
-        # p = Path(tmp_path / "stellarphot")
-        # mocker.patch.object(PlatformDirs, 'user_data_dir' / 'stellarphot')
+        # Check that the settings path is created if it doesn't exist.
+        # It is important to use settings_files.PlatformDirs instead
+        # of, say, importing PlatformDirs directly because we want to use the mocked
+        # version of the attribute.
         assert not Path(settings_files.PlatformDirs.user_data_dir).exists()
         saved_settings = SavedSettings()
         assert saved_settings.settings_path.exists()

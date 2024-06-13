@@ -27,6 +27,9 @@ class TestChooseOrMakeNew:
     Class for testing the ChooseOrMakeNew widget.
     """
 
+    # See test_settings_file.TestSavedSettings for a detailed description of what the
+    # following fixture does. In brief, it patches the settings_files.PlatformDirs class
+    # so that the user_data_dir method returns the temporary directory.
     @pytest.fixture(autouse=True)
     def fake_settings_dir(self, mocker, tmp_path):
         mocker.patch.object(
