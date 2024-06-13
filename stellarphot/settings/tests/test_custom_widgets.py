@@ -13,6 +13,7 @@ from stellarphot.settings import (
 from stellarphot.settings.custom_widgets import (
     ChooseOrMakeNew,
     Confirm,
+    SaveStatus,
     SettingWithTitle,
 )
 from stellarphot.settings.tests.test_models import (
@@ -827,8 +828,8 @@ class TestSettingWithTitle:
         camera_title = SettingWithTitle(plain_title, camera)
 
         # At the moment the title should not be decorated
-        assert camera_title.SETTING_IS_SAVED not in camera_title.title.value
-        assert camera_title.SETTING_NOT_SAVED not in camera_title.title.value
+        assert SaveStatus.SETTING_IS_SAVED not in camera_title.title.value
+        assert SaveStatus.SETTING_NOT_SAVED not in camera_title.title.value
 
         # There should also be no unsaved changes at the moment
         assert not camera.savebuttonbar.unsaved_changes
@@ -836,23 +837,23 @@ class TestSettingWithTitle:
         # Manually set unsaved_changes then call the change handler, which should
         # add an indication that there are unsaved changes.
         camera.savebuttonbar.unsaved_changes = True
-        camera_title.decorate_title()
-        assert camera_title.SETTING_NOT_SAVED in camera_title.title.value
+        camera_title._title_observer()
+        assert SaveStatus.SETTING_NOT_SAVED in camera_title.title.value
 
         # Go back to unsaved_changes being False
         camera.savebuttonbar.unsaved_changes = False
 
         # Manually call the change handler, which should add an indication that
         # saves have been done.
-        camera_title.decorate_title()
-        assert camera_title.SETTING_IS_SAVED in camera_title.title.value
+        camera_title._title_observer()
+        assert SaveStatus.SETTING_IS_SAVED in camera_title.title.value
 
         # Now change the camera value, which should trigger the change handler
         camera.value = TEST_CAMERA_VALUES
 
-        assert camera_title.SETTING_NOT_SAVED in camera_title.title.value
+        assert SaveStatus.SETTING_NOT_SAVED in camera_title.title.value
 
         # Finally, click the save button and the title should be decorated with
         # the saved indication.
         camera.savebuttonbar.bn_save.click()
-        assert camera_title.SETTING_IS_SAVED in camera_title.title.value
+        assert SaveStatus.SETTING_IS_SAVED in camera_title.title.value
