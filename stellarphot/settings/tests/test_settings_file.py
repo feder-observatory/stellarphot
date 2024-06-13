@@ -13,7 +13,7 @@ from stellarphot.settings import (
     PhotometrySettings,
     PhotometryWorkingDirSettings,
     SavedSettings,
-    settings_files,
+    settings_files,  # This import is needed for mocking -- see TestSavedSettings
 )
 from stellarphot.settings.tests.test_models import DEFAULT_PHOTOMETRY_SETTINGS
 
@@ -82,7 +82,15 @@ class TestSavedSettings:
 
         # One of the confusing things is figuring out what to mock. In this case, we are
         # mocking the user_data_dir attribute of the PlatformDirs class in the
-        # settings_files module. This attribute is used to determine the path to the
+        # settings_files module. To make sure that is the PlatformDirs class we are
+        # mocking, we need to specifically mock settings_files.PlatformDirs. A few
+        # things that wouldn't work, for example, are importing PlatformsDirs directly
+        # from platformdirs in this module and then trying to mock that, or importing
+        # PlatformDirs from settings_files and then trying to mock that. Actually,
+        # that last thing might work, but there is some values in being explicit here.
+        # doing it that way does mean importing the settings_files module.
+        #
+        # This attribute is used to determine the path to the
         # settings directory. By mocking it, we can control where the settings directory
         # is created and use a temporary directory for the tests.
 
