@@ -1,24 +1,33 @@
+import os
+
 import ipywidgets as ipw
 import pytest
+from camel_converter import to_snake
 from ipyautoui.custom.iterable import ItemBox, ItemControl
 
 from stellarphot.settings import (
     Camera,
     Observatory,
     PassbandMap,
+    PhotometryApertures,
+    PhotometryOptionalSettings,
+    PhotometryWorkingDirSettings,
     SavedSettings,
+    SourceLocationSettings,
     settings_files,
     ui_generator,
 )
 from stellarphot.settings.custom_widgets import (
     ChooseOrMakeNew,
     Confirm,
+    ReviewSettings,
     SaveStatus,
     SettingWithTitle,
 )
 from stellarphot.settings.tests.test_models import (
     DEFAULT_OBSERVATORY_SETTINGS,
     DEFAULT_PASSBAND_MAP,
+    DEFAULT_PHOTOMETRY_SETTINGS,
     TEST_CAMERA_VALUES,
 )
 
@@ -857,3 +866,80 @@ class TestSettingWithTitle:
         # the saved indication.
         camera.savebuttonbar.bn_save.click()
         assert SaveStatus.SETTING_IS_SAVED in camera_title.title.value
+
+
+SETTING_CLASSES = [
+    Camera,
+    Observatory,
+    PassbandMap,
+    PhotometryApertures,
+    PhotometryOptionalSettings,
+    SourceLocationSettings,
+]
+
+
+def _to_space(name: str) -> str:
+    return name.replace("_", " ")
+
+
+class TestReviewSettings:
+    """
+    Test of the magical ReviewSettings widget.
+    """
+
+    # See test_settings_file.TestSavedSettings for a detailed description of what the
+    # following fixture does. In brief, it patches the settings_files.PlatformDirs class
+    # so that the user_data_dir method returns the temporary directory.
+    @pytest.fixture(autouse=True)
+    def fake_settings_dir(self, mocker, tmp_path):
+        mocker.patch.object(
+            settings_files.PlatformDirs, "user_data_dir", tmp_path / "stellarphot"
+        )
+
+    # This auto-used fixture changes the working directory to the temporary directory
+    # and then changes back to the original directory after the test is done.
+    @pytest.fixture(autouse=True)
+    def change_to_tmp_dir(self, tmp_path):
+        original_dir = os.getcwd()
+        os.chdir(tmp_path)
+        # Yielding here is important. It means that when the test is done, the remainder
+        # of the function will be executed. This is important because the test is run in
+        # a temporary directory and we want to change back to the original directory
+        # when the test is done.
+        yield
+        os.chdir(original_dir)
+
+    @pytest.mark.parametrize("container_type", ["tabs", "accordion"])
+    def test_creation_no_saved_settings(self, container_type):
+        # Check creation and names of tab when there are no saved settings
+        # and just one type of setting.
+        for setting_class in SETTING_CLASSES:
+            review_settings = ReviewSettings([setting_class], style=container_type)
+            assert review_settings._container.titles[0] == _to_space(
+                to_snake(setting_class.__name__)
+            )
+            if container_type == "tabs":
+                assert isinstance(review_settings._container, ipw.Tab)
+            else:
+                assert isinstance(review_settings._container, ipw.Accordion)
+
+            wd_settings = PhotometryWorkingDirSettings()
+            with pytest.raises(
+                ValueError,
+                match="Settings file photometry_settings.json does not exist",
+            ):
+                wd_settings.load()
+
+    def test_creation_with_saved_settings(self):
+        # Check creation and names of tab when there are saved settings
+        # and just one type of setting.
+
+        saveable_types = ChooseOrMakeNew._known_types
+        for setting_class in SETTING_CLASSES:
+            if setting_class.__name__ not in saveable_types:
+                continue
+            saved = SavedSettings()
+            item = DEFAULT_PHOTOMETRY_SETTINGS[to_snake(setting_class.__name__)]
+            saved.add_item(item)
+            review_settings = ReviewSettings([setting_class])
+            assert review_settings._container.children[0].value == item
