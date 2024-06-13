@@ -15,13 +15,16 @@ except ImportError:
 
 import ipywidgets as ipw
 import traitlets as tr
+from camel_converter import to_snake
 from ipyautoui.autoobject import AutoObject
 from ipyautoui.custom.iterable import ItemBox
 
 from stellarphot.settings import (
     Camera,
     Observatory,
+    PartialPhotometrySettings,
     PassbandMap,
+    PhotometryWorkingDirSettings,
     SavedSettings,
     ui_generator,
 )
@@ -723,3 +726,93 @@ def title_decorator(plain_title, autoui_widget, change=None):
         return f"{plain_title} {SaveStatus.SETTING_NOT_SAVED}"
     else:
         return f"{plain_title} {SaveStatus.SETTING_IS_SAVED}"
+
+
+class ReviewSettings(ipw.VBox):
+    """
+    Widget to preview the saved settings in the working directory. It displays one
+    tab or accordion for each type of setting being reviewed.
+
+    This widget does a bunch of automatic saving and loading behind the scenes:
+
+    1. When the widget is created, it loads the settings from the working directory, if
+       there are any. Settings loaded this way are marked as "need review" to remind the
+       user they might want to take a look.
+    2. When the widget is created, any of the saveable settings are set to the default
+       for that setting and then saved to the working directory, with the tab markked as
+       "needs review".
+    2. When the user clicks the save button for a setting that displays one,
+       the settings are saved to the working directory settings.
+    3. When the user selects a setting from the settings that have a dropdown, the
+       selected setting is saved. Currently those settings are Camera, Observatory, and
+       PassbandMap, but the definitive list is given in
+       `stellarphot.settings.ChooseOrMakeNew._known_types`.
+    4. Creating a new one of those saveable settings also saves it to the working
+       directory settings.
+
+    """
+
+    def __init__(self, settings: list[str], style="tabs", *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        # Get a copy of whatever settings may have already been saved.
+        try:
+            self._current_settings = PhotometryWorkingDirSettings().load()
+        except ValueError:
+            self._current_settings = PartialPhotometrySettings()
+
+        self._setting_widgets = []
+        names = []
+        for setting in settings:
+            if setting.__name__ in ChooseOrMakeNew._known_types:
+                widget = ChooseOrMakeNew(setting.__name__)
+                val_to_set = widget._choose_existing
+            else:
+                widget = ui_generator(setting)
+                val_to_set = widget
+
+            _add_saving_to_widget(widget)
+            self._setting_widgets.append(widget)
+            name = to_snake(setting.__name__)
+            names.append(" ".join(name.split("_")))
+
+            # This will be either a valid object or None
+            saved_value = getattr(self._current_settings, name)
+            if saved_value is not None:
+                val_to_set.value = saved_value
+
+        if style == "tabs":
+            self._container = ipw.Tab()
+        else:
+            self._container = ipw.Accordion()
+        self._container.children = self._setting_widgets
+        self._container.titles = names
+
+        self.children = [self._container]
+
+
+def _add_saving_to_widget(setting_widget):
+    """
+    Add an observer to a widget that autosaves the settings for that widget to
+    the working directory.
+
+    Parameters
+    ----------
+    setting_widget : ChooseOrMakeNew
+        The widget to add the observer to.
+    """
+    wd_settings = PhotometryWorkingDirSettings()
+    # self._item_widget.savebuttonbar.fns_onsave_add_action(self.save_wd)
+    name = ""
+
+    def save_wd(_=None):
+        pps = PartialPhotometrySettings(**{name: setting_widget.value})
+        wd_settings.save(pps, update=True)
+
+    if hasattr(setting_widget, "_choose_existing"):
+        setting_widget._choose_existing.observe(save_wd, "value")
+        name = to_snake(setting_widget._item_type_name)
+    elif hasattr(setting_widget, "savebuttonbar"):
+        setting_widget.savebuttonbar.fns_onsave_add_action(save_wd)
+        name = to_snake(setting_widget.model.__name__)
+    else:
+        raise ValueError("WTF am i supposed to do?")

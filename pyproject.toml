@@ -17,6 +17,7 @@ dependencies = [
     "astroquery",
     "astrowidgets",
     "bottleneck",
+    "camel-converter",
     "ccdproc",
     "ginga",
     "ipyautoui >=0.7.15",
