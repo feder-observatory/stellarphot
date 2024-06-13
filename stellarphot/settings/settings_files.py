@@ -129,12 +129,9 @@ class SavedSettings:
             not exist. If False, the directory is not created, which is useful for
             testing.
         """
-        if _testing_path is not None:
-            data_dir = _testing_path
-        else:
-            data_dir = PlatformDirs(
-                "stellarphot", version=SETTINGS_FILE_VERSION
-            ).user_data_dir
+        data_dir = PlatformDirs(
+            "stellarphot", version=SETTINGS_FILE_VERSION
+        ).user_data_dir
         self._settings_path = Path(data_dir)
         if _create_path:
             if not self.settings_path.exists():
@@ -441,6 +438,11 @@ class PhotometryWorkingDirSettings:
     def load(self):
         """
         Load full or partial settings.
+
+        Returns
+        -------
+        PhotometrySettings | PartialPhotometrySettings | None
+            The settings loaded from disk, or None if there are no settings files.
         """
         # Assume we have nothing to begin....
         self._partial_settings = None

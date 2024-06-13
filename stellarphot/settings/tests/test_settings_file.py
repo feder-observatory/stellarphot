@@ -13,6 +13,7 @@ from stellarphot.settings import (
     PhotometrySettings,
     PhotometryWorkingDirSettings,
     SavedSettings,
+    settings_files,
 )
 from stellarphot.settings.tests.test_models import DEFAULT_PHOTOMETRY_SETTINGS
 
@@ -56,25 +57,36 @@ PASSBAND_MAP = """
 """
 
 
-class TestSavedSettings:
-    def test_settings_path_contains_package_and_version(self):
-        saved_settings = SavedSettings(_create_path=False)
-        assert "stellarphot" in str(saved_settings.settings_path)
-        assert SETTINGS_FILE_VERSION in str(saved_settings.settings_path)
+# Keep this test out of the class so that it uses the real settings path.
+def test_settings_path_contains_package_and_version():
+    # Make sure that the path to the settings file contains the package name and
+    # version.
+    saved_settings = SavedSettings(_create_path=False)
+    assert "stellarphot" in str(saved_settings.settings_path)
+    assert SETTINGS_FILE_VERSION in str(saved_settings.settings_path)
 
-    def test_settings_path_is_created_if_not_exists(self, tmp_path):
-        p = Path(tmp_path / "not a path that exists yet")
-        assert not p.exists()
-        saved_settings = SavedSettings(_testing_path=p)
+
+class TestSavedSettings:
+    @pytest.fixture(autouse=True)
+    def fake_settings_dir(self, mocker, tmp_path):
+        mocker.patch.object(
+            settings_files.PlatformDirs, "user_data_dir", tmp_path / "stellarphot"
+        )
+
+    def test_settings_path_is_created_if_not_exists(self):
+        # p = Path(tmp_path / "stellarphot")
+        # mocker.patch.object(PlatformDirs, 'user_data_dir' / 'stellarphot')
+        assert not Path(settings_files.PlatformDirs.user_data_dir).exists()
+        saved_settings = SavedSettings()
         assert saved_settings.settings_path.exists()
 
     @pytest.mark.parametrize(
         "klass,item_json",
         [(Camera, CAMERA), (Observatory, OBSERVATORY), (PassbandMap, PASSBAND_MAP)],
     )
-    def test_add_saved_item(self, klass, item_json, tmp_path):
+    def test_add_saved_item(self, klass, item_json):
         # Test that items are properly saved and loaded.
-        saved_settings = SavedSettings(_testing_path=tmp_path)
+        saved_settings = SavedSettings()
         assert saved_settings.settings_path.exists()
         # Add a camera.
         item = klass.model_validate_json(item_json)
@@ -88,9 +100,9 @@ class TestSavedSettings:
         "klass,item_json",
         [(Camera, CAMERA), (Observatory, OBSERVATORY), (PassbandMap, PASSBAND_MAP)],
     )
-    def test_adding_multiple_items_of_same_type(self, klass, item_json, tmp_path):
+    def test_adding_multiple_items_of_same_type(self, klass, item_json):
         # Test that items are properly saved and loaded.
-        saved_settings = SavedSettings(_testing_path=tmp_path)
+        saved_settings = SavedSettings()
         assert saved_settings.settings_path.exists()
         # Add an item
         item1 = klass.model_validate_json(item_json)
@@ -106,10 +118,10 @@ class TestSavedSettings:
         assert saved_items.as_dict[item2.name] == item2
         assert saved_items.as_dict[item1.name] == item1
 
-    def test_add_existing_saved_item_raises_error(self, tmp_path):
+    def test_add_existing_saved_item_raises_error(self):
         # Test that adding an existing camera raises an error. Other items follow the
         # same pattern, so only cameras are tested.
-        saved_settings = SavedSettings(_testing_path=tmp_path)
+        saved_settings = SavedSettings()
         # Add a camera.
         item = Camera.model_validate_json(CAMERA)
         saved_settings.add_item(item)
@@ -119,9 +131,9 @@ class TestSavedSettings:
         ):
             saved_settings.add_item(item)
 
-    def test_adding_multiple_types_of_items(self, tmp_path):
+    def test_adding_multiple_types_of_items(self):
         # Test that adding multiple types of items works.
-        saved_settings = SavedSettings(_testing_path=tmp_path)
+        saved_settings = SavedSettings()
         # Add a camera.
         camera = Camera.model_validate_json(CAMERA)
         saved_settings.add_item(camera)
@@ -142,15 +154,15 @@ class TestSavedSettings:
         assert len(passband_maps.as_dict) == 1
         assert passband_maps.as_dict[passband_map.name] == passband_map
 
-    def test_delete_without_confirm_raises_error(self, tmp_path):
+    def test_delete_without_confirm_raises_error(self):
         # Trying to delete settings without confirming should raise an error.
-        saved_settings = SavedSettings(_testing_path=tmp_path)
+        saved_settings = SavedSettings()
         with pytest.raises(ValueError, match="You must confirm deletion by passing"):
             saved_settings.cameras.delete()
 
-    def test_delete_with_confirm_deletes_file(self, tmp_path):
+    def test_delete_with_confirm_deletes_file(self):
         # Test that deleting a settings file works.
-        saved_settings = SavedSettings(_testing_path=tmp_path)
+        saved_settings = SavedSettings()
         # Add a camera.
         camera = Camera.model_validate_json(CAMERA)
         saved_settings.add_item(camera)
@@ -166,9 +178,9 @@ class TestSavedSettings:
         with pytest.raises(ValueError, match="You must confirm deletion by passing"):
             saved_settings.delete()
 
-    def test_delete_all_settings_with_confirm_deletes_files(self, tmp_path):
+    def test_delete_all_settings_with_confirm_deletes_files(self):
         # Test that deleting all settings files works.
-        saved_settings = SavedSettings(_testing_path=tmp_path)
+        saved_settings = SavedSettings()
         # Add a camera.
         camera = Camera.model_validate_json(CAMERA)
         saved_settings.add_item(camera)
@@ -192,9 +204,9 @@ class TestSavedSettings:
         ).exists()
         assert not saved_settings.settings_path.exists()
 
-    def test_delete_all_with_no_settings_works(self, tmp_path):
+    def test_delete_all_with_no_settings_works(self):
         # Test that deleting all settings files works when no settings are present.
-        saved_settings = SavedSettings(_testing_path=tmp_path)
+        saved_settings = SavedSettings()
         # Delete all settings but not the settings folder
         saved_settings.delete(confirm=True)
         assert len(list(saved_settings.settings_path.glob("*"))) == 0
@@ -203,9 +215,9 @@ class TestSavedSettings:
         saved_settings.delete(confirm=True, delete_settings_folder=True)
         assert not saved_settings.settings_path.exists()
 
-    def test_delete_item_from_collection_works(self, tmp_path):
+    def test_delete_item_from_collection_works(self):
         # Test that deleting an item from a collection works.
-        saved_settings = SavedSettings(_testing_path=tmp_path)
+        saved_settings = SavedSettings()
         # Add a camera.
         camera = Camera.model_validate_json(CAMERA)
         saved_settings.add_item(camera)
@@ -218,17 +230,17 @@ class TestSavedSettings:
         saved_settings.cameras.delete(name=camera2.name, confirm=True)
         assert len(saved_settings.cameras.as_dict) == 1
 
-    def test_delete_item_from_collection_with_unknown_item_fails(self, tmp_path):
+    def test_delete_item_from_collection_with_unknown_item_fails(self):
         # Test that trying to delete an unknown item from a collection fails.
-        saved_settings = SavedSettings(_testing_path=tmp_path)
+        saved_settings = SavedSettings()
         camera = Camera.model_validate_json(CAMERA)
         saved_settings.add_item(camera)
         with pytest.raises(ValueError, match="not found in"):
             saved_settings.cameras.delete(name=camera.name + "foo", confirm=True)
 
-    def test_revtrieving_item_by_name_works(self, tmp_path):
+    def test_revtrieving_item_by_name_works(self):
         # Test that retrieving an item by name works.
-        saved_settings = SavedSettings(_testing_path=tmp_path)
+        saved_settings = SavedSettings()
         # Add a camera.
         camera = Camera.model_validate_json(CAMERA)
         saved_settings.add_item(camera)
@@ -236,15 +248,15 @@ class TestSavedSettings:
         retrieved_camera = saved_settings.cameras.get(camera.name)
         assert retrieved_camera == camera
 
-    def test_get_item_with_unknown_item_fails(self, tmp_path):
+    def test_get_item_with_unknown_item_fails(self):
         # Test that trying to get an unknown item fails.
-        saved_settings = SavedSettings(_testing_path=tmp_path)
+        saved_settings = SavedSettings()
         with pytest.raises(ValueError, match="Unknown item foo of type"):
             saved_settings.get_items("foo")
 
-    def test_add_item_with_unknown_item_fails(self, tmp_path):
+    def test_add_item_with_unknown_item_fails(self):
         # Test that trying to add an unknown item fails.
-        saved_settings = SavedSettings(_testing_path=tmp_path)
+        saved_settings = SavedSettings()
         with pytest.raises(ValueError, match="Unknown item foo of type"):
             saved_settings.add_item("foo")
 
@@ -252,9 +264,9 @@ class TestSavedSettings:
         "klass,item_json",
         [(Camera, CAMERA), (Observatory, OBSERVATORY), (PassbandMap, PASSBAND_MAP)],
     )
-    def test_saved_settings_delete_item(self, klass, item_json, tmp_path):
+    def test_saved_settings_delete_item(self, klass, item_json):
         # Test that items can be deleted.
-        saved_settings = SavedSettings(_testing_path=tmp_path)
+        saved_settings = SavedSettings()
         # Add item.
         item = klass.model_validate_json(item_json)
         saved_settings.add_item(item)
@@ -265,34 +277,32 @@ class TestSavedSettings:
         # Verify that the item was deleted.
         assert len(saved_settings.get_items(klass.__name__).as_dict) == 0
 
-    def test_saved_settings_delete_item_with_unknown_item_fails(self, tmp_path):
+    def test_saved_settings_delete_item_with_unknown_item_fails(self):
         # Test that trying to delete an unknown item fails.
-        saved_settings = SavedSettings(_testing_path=tmp_path)
+        saved_settings = SavedSettings()
         with pytest.raises(ValueError, match="Unknown item foo of type"):
             saved_settings.delete_item("foo", confirm=True)
 
-    def test_saved_settings_delete_item_with_confirm_false_fails(self, tmp_path):
+    def test_saved_settings_delete_item_with_confirm_false_fails(self):
         # Test that trying to delete an item without confirming fails.
-        saved_settings = SavedSettings(_testing_path=tmp_path)
+        saved_settings = SavedSettings()
         # Make a camera and save it
         camera = Camera.model_validate_json(CAMERA)
         saved_settings.add_item(camera)
         with pytest.raises(ValueError, match="You must confirm deletion by passing"):
             saved_settings.delete_item(camera, confirm=False)
 
-    def test_saved_settings_delete_item_valid_item_not_in_collection_fails(
-        self, tmp_path
-    ):
+    def test_saved_settings_delete_item_valid_item_not_in_collection_fails(self):
         # Test that trying to delete an item that is not in the collection fails.
-        saved_settings = SavedSettings(_testing_path=tmp_path)
+        saved_settings = SavedSettings()
         # Make a camera but don't save it
         camera = Camera.model_validate_json(CAMERA)
         with pytest.raises(ValueError, match="not found in"):
             saved_settings.delete_item(camera, confirm=True)
 
-    def test_saved_settings_round_trip_with_unicode_name(self, tmp_path):
+    def test_saved_settings_round_trip_with_unicode_name(self):
         # Test that items with unicode names can be saved and loaded.
-        saved_settings = SavedSettings(_testing_path=tmp_path)
+        saved_settings = SavedSettings()
         # Add a camera. This particular name causes a failure on Windows because the
         # default encoding doesn't include Korean characters.
         camera_name = "크레이그"
