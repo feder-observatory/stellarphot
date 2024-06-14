@@ -7,6 +7,7 @@ from stellarphot.settings import (
     Observatory,
     PassbandMap,
     SavedSettings,
+    settings_files,
     ui_generator,
 )
 from stellarphot.settings.custom_widgets import (
@@ -26,12 +27,21 @@ class TestChooseOrMakeNew:
     Class for testing the ChooseOrMakeNew widget.
     """
 
-    def make_test_camera(self, path):
+    # See test_settings_file.TestSavedSettings for a detailed description of what the
+    # following fixture does. In brief, it patches the settings_files.PlatformDirs class
+    # so that the user_data_dir method returns the temporary directory.
+    @pytest.fixture(autouse=True)
+    def fake_settings_dir(self, mocker, tmp_path):
+        mocker.patch.object(
+            settings_files.PlatformDirs, "user_data_dir", tmp_path / "stellarphot"
+        )
+
+    def make_test_camera(self):
         """
         Make a camera with the default testing values and save it. This came
         up often enough to warrant its own method.
         """
-        saved = SavedSettings(_testing_path=path)
+        saved = SavedSettings()
         camera = Camera(**TEST_CAMERA_VALUES)
         saved.add_item(camera)
 
@@ -61,21 +71,21 @@ class TestChooseOrMakeNew:
         choose_or_make_new = ChooseOrMakeNew(item_type)
         assert choose_or_make_new._item_type_name == item_type
 
-    def test_initial_configuration_with_no_items(self, tmp_path):
+    def test_initial_configuration_with_no_items(self):
         # Should have a dropdown with one item, "Make new passband map"
         # using passband_map here to also test that underscores get converted to spaces
-        choose_or_make_new = ChooseOrMakeNew("passband_map", _testing_path=tmp_path)
+        choose_or_make_new = ChooseOrMakeNew("passband_map")
         assert len(choose_or_make_new._choose_existing.options) == 1
         assert choose_or_make_new._choose_existing.options[0] == (
             "Make new passband map",
             "none",
         )
 
-    def test_make_new_makes_a_new_item(self, tmp_path):
+    def test_make_new_makes_a_new_item(self):
         # We will test this with Camera, should work for the others too since the code
         # path is the same.
 
-        choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
+        choose_or_make_new = ChooseOrMakeNew("camera")
         # Set the values for the new item
         choose_or_make_new._item_widget.value = TEST_CAMERA_VALUES
 
@@ -88,7 +98,7 @@ class TestChooseOrMakeNew:
         assert choose_or_make_new._making_new is False
 
         # Check what we created using SavedSettings...
-        saved = SavedSettings(_testing_path=tmp_path)
+        saved = SavedSettings()
         cameras = saved.get_items("camera")
         assert len(cameras.as_dict) == 1
         assert list(cameras.as_dict.values())[0].model_dump() == TEST_CAMERA_VALUES
@@ -101,30 +111,28 @@ class TestChooseOrMakeNew:
             ("passband_map", DEFAULT_PASSBAND_MAP),
         ],
     )
-    def test_make_new_with_existing_item_resets_value(
-        self, tmp_path, item_type, setting
-    ):
+    def test_make_new_with_existing_item_resets_value(self, item_type, setting):
         # When "make a new" item is selected the value of the widget should be
         # the same as when a widget of that type is created.
 
         # Make a camera widget just to get the value for a new item.
-        choose_or_make_new = ChooseOrMakeNew(item_type, _testing_path=tmp_path)
+        choose_or_make_new = ChooseOrMakeNew(item_type)
         value_when_new = choose_or_make_new._item_widget.value.copy()
 
         # Make a camera
-        saved = SavedSettings(_testing_path=tmp_path)
+        saved = SavedSettings()
         item = choose_or_make_new._item_widget.model(**setting)
         saved.add_item(item)
 
         # Make a camera widget and select "Make new"
-        choose_or_make_new = ChooseOrMakeNew(item_type, _testing_path=tmp_path)
+        choose_or_make_new = ChooseOrMakeNew(item_type)
         choose_or_make_new._choose_existing.value = "none"
         assert choose_or_make_new._item_widget.value == value_when_new
 
-    def test_edit_requires_confirmation(self, tmp_path):
+    def test_edit_requires_confirmation(self):
         # Should require confirmation if the item already exists
-        self.make_test_camera(tmp_path)
-        choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
+        self.make_test_camera()
+        choose_or_make_new = ChooseOrMakeNew("camera")
         # the edit button should be displayed and the confirm widget should be hidden
         # note: display typically start as None or an empty string, so we just check
         # that it is not "none", which is what it will be set to when it is hidden.
@@ -148,11 +156,11 @@ class TestChooseOrMakeNew:
         # The confirmation dialog should contain the word "replace"
         assert "replace" in choose_or_make_new._confirm_edit_delete.message.lower()
 
-    def test_edit_item_saved_after_confirm(self, tmp_path):
+    def test_edit_item_saved_after_confirm(self):
         # Should save the item after confirmation
-        self.make_test_camera(tmp_path)
+        self.make_test_camera()
 
-        choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
+        choose_or_make_new = ChooseOrMakeNew("camera")
         # Simulate a click on the edit button...
         choose_or_make_new._edit_button.click()
 
@@ -164,15 +172,15 @@ class TestChooseOrMakeNew:
         # Simulate a click on the confirm button...
         choose_or_make_new._confirm_edit_delete._yes.click()
 
-        saved = SavedSettings(_testing_path=tmp_path)
+        saved = SavedSettings()
         cameras = saved.get_items("camera")
         assert cameras.as_dict[TEST_CAMERA_VALUES["name"]].gain == new_gain
 
-    def test_edit_item_not_saved_after_cancel(self, tmp_path):
+    def test_edit_item_not_saved_after_cancel(self):
         # Should not save the item after clicking the No button
-        self.make_test_camera(tmp_path)
+        self.make_test_camera()
 
-        choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
+        choose_or_make_new = ChooseOrMakeNew("camera")
         # Simulate a click on the edit button...
         choose_or_make_new._edit_button.click()
 
@@ -184,20 +192,20 @@ class TestChooseOrMakeNew:
         # Simulate a click on the cancel button...
         choose_or_make_new._confirm_edit_delete._no.click()
 
-        saved = SavedSettings(_testing_path=tmp_path)
+        saved = SavedSettings()
         cameras = saved.get_items("camera")
         assert (
             cameras.as_dict[TEST_CAMERA_VALUES["name"]].gain
             == TEST_CAMERA_VALUES["gain"]
         )
 
-    def test_selecting_make_new_as_selection_works(self, tmp_path):
+    def test_selecting_make_new_as_selection_works(self):
         # Should allow the user to select "Make new" as a selection
 
         # Make a camera so that we can test that selecting "Make new" works
-        self.make_test_camera(tmp_path)
+        self.make_test_camera()
 
-        choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
+        choose_or_make_new = ChooseOrMakeNew("camera")
         # This is the value for the "Make new...." option
         choose_or_make_new._choose_existing.value = "none"
 
@@ -210,9 +218,9 @@ class TestChooseOrMakeNew:
         # save button bar should be displayed
         assert choose_or_make_new._item_widget.savebuttonbar.layout.display != "none"
 
-    def test_choosing_different_item_updates_display(self, tmp_path):
+    def test_choosing_different_item_updates_display(self):
         # Should update the display when a different item is chosen
-        saved = SavedSettings(_testing_path=tmp_path)
+        saved = SavedSettings()
         observatory = Observatory(**DEFAULT_OBSERVATORY_SETTINGS)
         saved.add_item(observatory)
 
@@ -223,7 +231,7 @@ class TestChooseOrMakeNew:
 
         saved.add_item(observatory2)
 
-        choose_or_make_new = ChooseOrMakeNew("observatory", _testing_path=tmp_path)
+        choose_or_make_new = ChooseOrMakeNew("observatory")
 
         # There should be three choices in the dropdown
         assert len(choose_or_make_new._choose_existing.options) == 3
@@ -238,14 +246,14 @@ class TestChooseOrMakeNew:
         # The item widget should now have the values of the second observatory
         assert Observatory(**choose_or_make_new._item_widget.value) == observatory2
 
-    def test_passband_map_buttons_are_disabled_or_enabled(self, tmp_path):
+    def test_passband_map_buttons_are_disabled_or_enabled(self):
         # When an existing PassbandMap is selected the add/remove buttons
         # for individual rows should not be displayed.
-        saved = SavedSettings(_testing_path=tmp_path)
+        saved = SavedSettings()
         passband_map = PassbandMap(**DEFAULT_PASSBAND_MAP)
         saved.add_item(passband_map)
 
-        choose_or_make_new = ChooseOrMakeNew("passband_map", _testing_path=tmp_path)
+        choose_or_make_new = ChooseOrMakeNew("passband_map")
 
         # There is no great way to get to the ItemBox widget that contains and controls
         # the add/remove buttons, so we keep going down through widget children until we
@@ -268,31 +276,31 @@ class TestChooseOrMakeNew:
         item_box = find_item_box(choose_or_make_new)
         assert item_box.add_remove_controls == ItemControl.add_remove
 
-    def test_make_passband_map(self, tmp_path):
+    def test_make_passband_map(self):
         # Make a passband map and save it, then check that it is in the dropdown
-        saved = SavedSettings(_testing_path=tmp_path)
+        saved = SavedSettings()
         passband_map = PassbandMap(**DEFAULT_PASSBAND_MAP)
         saved.add_item(passband_map)
 
         # Should create a new passband map
-        choose_or_make_new = ChooseOrMakeNew("passband_map", _testing_path=tmp_path)
+        choose_or_make_new = ChooseOrMakeNew("passband_map")
         assert len(choose_or_make_new._choose_existing.options) == 2
         assert choose_or_make_new._choose_existing.options[0][0] == passband_map.name
 
-    def test_no_edit_button_when_there_are_no_items(self, tmp_path):
+    def test_no_edit_button_when_there_are_no_items(self):
         # Should not have an edit button when there are no items
-        saved = SavedSettings(_testing_path=tmp_path)
+        saved = SavedSettings()
         # Make sure there are no cameras
         assert len(saved.get_items("camera").as_dict) == 0
 
-        choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
+        choose_or_make_new = ChooseOrMakeNew("camera")
         assert choose_or_make_new._edit_delete_container.layout.display == "none"
 
-    def test_edit_button_returns_after_making_new_item(self, tmp_path):
+    def test_edit_button_returns_after_making_new_item(self):
         # After making a new item the edit button should be displayed
 
         # There are no cameras so this puts us into the form to make a new one
-        choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
+        choose_or_make_new = ChooseOrMakeNew("camera")
 
         # Make sure the edit button is hidden
         assert choose_or_make_new._edit_delete_container.layout.display == "none"
@@ -317,15 +325,15 @@ class TestChooseOrMakeNew:
         # The edit button should now be displayed
         assert choose_or_make_new._edit_delete_container.layout.display != "none"
 
-    def test_save_button_disabled_when_no_changes(self, tmp_path):
+    def test_save_button_disabled_when_no_changes(self):
         # Immediately after the edit button has been clicked, the save button should be
         # disabled because no changes have been made yet.
         #
         # That should remain true even after the user makes a change, then saves it
         # and then edits again but has not yet made any changes.
-        self.make_test_camera(tmp_path)
+        self.make_test_camera()
 
-        choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
+        choose_or_make_new = ChooseOrMakeNew("camera")
         # Simulate a click on the edit button...
         choose_or_make_new._edit_button.click()
 
@@ -351,23 +359,23 @@ class TestChooseOrMakeNew:
         # The save button should be disabled
         assert choose_or_make_new._item_widget.savebuttonbar.bn_save.disabled
 
-    def test_revert_button_is_enabled_after_clicking_edit(self, tmp_path):
+    def test_revert_button_is_enabled_after_clicking_edit(self):
         # The revert button should be enabled after clicking the edit button so
         # the user can cancel the edit.
-        self.make_test_camera(tmp_path)
+        self.make_test_camera()
 
-        choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
+        choose_or_make_new = ChooseOrMakeNew("camera")
         # Simulate a click on the edit button...
         choose_or_make_new._edit_button.click()
 
         # The revert button should be enabled
         assert not choose_or_make_new._item_widget.savebuttonbar.bn_revert.disabled
 
-    def test_clicking_revert_button_cancels_edit(self, tmp_path):
+    def test_clicking_revert_button_cancels_edit(self):
         # Clicking the revert button should cancel the edit
-        self.make_test_camera(tmp_path)
+        self.make_test_camera()
 
-        choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
+        choose_or_make_new = ChooseOrMakeNew("camera")
         # Simulate a click on the edit button...
         choose_or_make_new._edit_button.click()
 
@@ -384,13 +392,13 @@ class TestChooseOrMakeNew:
         assert not choose_or_make_new._editing
 
     def test_revert_button_remains_enabled_with_invalid_value_and_actually_reverts(
-        self, tmp_path
+        self,
     ):
         # The revert button should remain enabled if the value is invalid and reverting
         # should actually revert the value.
-        self.make_test_camera(tmp_path)
+        self.make_test_camera()
 
-        choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
+        choose_or_make_new = ChooseOrMakeNew("camera")
         # Simulate a click on the edit button...
         choose_or_make_new._edit_button.click()
 
@@ -415,13 +423,13 @@ class TestChooseOrMakeNew:
         # The camera should not have been changed
         assert choose_or_make_new._item_widget.value == TEST_CAMERA_VALUES
 
-    def test_delete_button_click_displays_confirm_dialog(self, tmp_path):
+    def test_delete_button_click_displays_confirm_dialog(self):
         # Clicking "Delete" should display a confirmation dialog
 
         # Make an item to ensure an existing item is displayed when the widget is made
-        self.make_test_camera(tmp_path)
+        self.make_test_camera()
 
-        choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
+        choose_or_make_new = ChooseOrMakeNew("camera")
         choose_or_make_new._delete_button.click()
 
         # Confirm dialog should be displayed
@@ -432,11 +440,11 @@ class TestChooseOrMakeNew:
         assert "delete" in choose_or_make_new._confirm_edit_delete.message.lower()
 
     @pytest.mark.parametrize("click_yes", [True, False])
-    def test_delete_actions_after_confirmation(self, tmp_path, click_yes):
+    def test_delete_actions_after_confirmation(self, click_yes):
         # Clicking "Yes" in the confirmation dialog should delete the item
-        self.make_test_camera(tmp_path)
+        self.make_test_camera()
 
-        choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
+        choose_or_make_new = ChooseOrMakeNew("camera")
         choose_or_make_new._delete_button.click()
 
         if click_yes:
@@ -444,7 +452,7 @@ class TestChooseOrMakeNew:
             choose_or_make_new._confirm_edit_delete._yes.click()
 
             # The camera should be gone
-            saved = SavedSettings(_testing_path=tmp_path)
+            saved = SavedSettings()
             cameras = saved.get_items("camera")
             assert len(cameras.as_dict) == 0
         else:
@@ -452,7 +460,7 @@ class TestChooseOrMakeNew:
             choose_or_make_new._confirm_edit_delete._no.click()
 
             # The camera should still be there
-            saved = SavedSettings(_testing_path=tmp_path)
+            saved = SavedSettings()
             cameras = saved.get_items("camera")
             assert len(cameras.as_dict) == 1
             assert list(cameras.as_dict.values())[0].model_dump() == TEST_CAMERA_VALUES
@@ -472,17 +480,17 @@ class TestChooseOrMakeNew:
         else:
             assert choose_or_make_new._edit_delete_container.layout.display == "none"
 
-    def test_correct_item_selected_after_delete_and_yes(self, tmp_path):
+    def test_correct_item_selected_after_delete_and_yes(self):
         # The correct item should be selected after an item is deleted and the user
         # clicks "Yes" in the confirmation dialog.
         # Make two cameras
-        self.make_test_camera(tmp_path)
-        saved = SavedSettings(_testing_path=tmp_path)
+        self.make_test_camera()
+        saved = SavedSettings()
         camera2 = Camera(**TEST_CAMERA_VALUES)
         camera2.name = "zzzz" + camera2.name
         saved.add_item(camera2)
 
-        choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
+        choose_or_make_new = ChooseOrMakeNew("camera")
         # Select the first camera...
         choose_or_make_new._choose_existing.value = saved.cameras.as_dict[
             TEST_CAMERA_VALUES["name"]
@@ -496,12 +504,12 @@ class TestChooseOrMakeNew:
         assert choose_or_make_new._choose_existing.value == camera2
 
     @pytest.mark.parametrize("click_yes", [True, False])
-    def test_making_new_with_same_name_as_existing(self, tmp_path, click_yes):
+    def test_making_new_with_same_name_as_existing(self, click_yes):
         # Making a new item with the same name as an existing item should require
         # confirmation
-        self.make_test_camera(tmp_path)
+        self.make_test_camera()
 
-        choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
+        choose_or_make_new = ChooseOrMakeNew("camera")
 
         # Click the "Make new" button
         choose_or_make_new._choose_existing.value = "none"
@@ -534,13 +542,13 @@ class TestChooseOrMakeNew:
 
         assert chosen_cam == expected_camera
 
-    def test_weird_sequence_of_no_clicks(self, tmp_path):
+    def test_weird_sequence_of_no_clicks(self):
         # This is a regression test for #320
         # Make a camera
-        self.make_test_camera(tmp_path)
+        self.make_test_camera()
 
         # Make a new camera...
-        choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
+        choose_or_make_new = ChooseOrMakeNew("camera")
         choose_or_make_new._choose_existing.value = "none"
         choose_or_make_new._item_widget.value = TEST_CAMERA_VALUES
 
@@ -561,14 +569,12 @@ class TestChooseOrMakeNew:
         assert choose_or_make_new._edit_delete_container.layout.display != "none"
 
     @pytest.mark.parametrize("hideable", [True, False])
-    def test_details_hideable_or_not(self, tmp_path, hideable):
+    def test_details_hideable_or_not(self, hideable):
         # The details should be hideable if requested
 
         # Make a camera so that the details can be hidden
-        self.make_test_camera(tmp_path)
-        choose_or_make_new = ChooseOrMakeNew(
-            "camera", details_hideable=hideable, _testing_path=tmp_path
-        )
+        self.make_test_camera()
+        choose_or_make_new = ChooseOrMakeNew("camera", details_hideable=hideable)
 
         # New UI element should be in the big box
         assert (
@@ -597,15 +603,13 @@ class TestChooseOrMakeNew:
         choose_or_make_new._show_details_ui.value = True
         assert choose_or_make_new._details_box.layout.display != "none"
 
-    def test_details_hideable_plays_nicely_with_new_item(self, tmp_path):
+    def test_details_hideable_plays_nicely_with_new_item(self):
         # The details should be hideable and should play nicely with making a new item
         # Make an item so that selecting "Make new" will count as a value
         # change later.
-        self.make_test_camera(tmp_path)
+        self.make_test_camera()
 
-        choose_or_make_new = ChooseOrMakeNew(
-            "camera", details_hideable=True, _testing_path=tmp_path
-        )
+        choose_or_make_new = ChooseOrMakeNew("camera", details_hideable=True)
 
         assert choose_or_make_new._details_box.layout.display != "none"
 
@@ -638,14 +642,12 @@ class TestChooseOrMakeNew:
         assert choose_or_make_new._details_box.layout.display == "none"
         assert not choose_or_make_new._show_details_ui.value
 
-    def test_details_hideable_not_set_preserves_old_behavior(self, tmp_path):
+    def test_details_hideable_not_set_preserves_old_behavior(self):
         # The details should not be hidden if hideable is false
         # Make a camera
-        self.make_test_camera(tmp_path)
+        self.make_test_camera()
 
-        choose_or_make_new = ChooseOrMakeNew(
-            "camera", details_hideable=False, _testing_path=tmp_path
-        )
+        choose_or_make_new = ChooseOrMakeNew("camera", details_hideable=False)
 
         # New UI element should not be in the big box
         assert choose_or_make_new._show_details_ui.layout.display == "none"
@@ -660,17 +662,13 @@ class TestChooseOrMakeNew:
         assert choose_or_make_new._details_box.layout.display != "none"
 
     @pytest.mark.parametrize("show_detail_state", [True, False])
-    def test_details_hideable_cancel_making_new_restores_state(
-        self, tmp_path, show_detail_state
-    ):
+    def test_details_hideable_cancel_making_new_restores_state(self, show_detail_state):
         # The details should be hideable and should play nicely with making a new item
         # Make an item so that selecting "Make new" will count as a value
         # change later.
-        self.make_test_camera(tmp_path)
+        self.make_test_camera()
 
-        choose_or_make_new = ChooseOrMakeNew(
-            "camera", details_hideable=True, _testing_path=tmp_path
-        )
+        choose_or_make_new = ChooseOrMakeNew("camera", details_hideable=True)
 
         assert choose_or_make_new._details_box.layout.display != "none"
 
@@ -698,20 +696,18 @@ class TestChooseOrMakeNew:
         # Details should match prior state
         assert choose_or_make_new._show_details_ui.value == show_state
 
-    def test_chooser_has_value(self, tmp_path):
+    def test_chooser_has_value(self):
         # The chooser should have a value
-        self.make_test_camera(tmp_path)
+        self.make_test_camera()
 
-        choose_or_make_new = ChooseOrMakeNew("camera", _testing_path=tmp_path)
+        choose_or_make_new = ChooseOrMakeNew("camera")
         assert choose_or_make_new.value == Camera(**TEST_CAMERA_VALUES)
 
-    def test_details_can_be_hidden(self, tmp_path):
+    def test_details_can_be_hidden(self):
         # Make sure that item details can be hidden programmatically.
-        self.make_test_camera(tmp_path)
+        self.make_test_camera()
 
-        choose_or_make_new = ChooseOrMakeNew(
-            "camera", details_hideable=True, _testing_path=tmp_path
-        )
+        choose_or_make_new = ChooseOrMakeNew("camera", details_hideable=True)
 
         # Check that the details start out displayed
         assert choose_or_make_new._details_box.layout.display != "none"
@@ -723,14 +719,12 @@ class TestChooseOrMakeNew:
         # Check that the details are hidden
         assert choose_or_make_new._details_box.layout.display == "none"
 
-    def test_details_visibilty_cannot_be_changed_when_not_hideable(self, tmp_path):
+    def test_details_visibilty_cannot_be_changed_when_not_hideable(self):
         # Make sure that item details cannot be hidden programmatically when hideable
         # is False.
-        self.make_test_camera(tmp_path)
+        self.make_test_camera()
 
-        choose_or_make_new = ChooseOrMakeNew(
-            "camera", details_hideable=False, _testing_path=tmp_path
-        )
+        choose_or_make_new = ChooseOrMakeNew("camera", details_hideable=False)
 
         # Check that the details start out displayed
         assert choose_or_make_new._details_box.layout.display != "none"

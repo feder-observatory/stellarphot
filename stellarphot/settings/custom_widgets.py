@@ -41,9 +41,7 @@ class ChooseOrMakeNew(ipw.VBox):
         PassbandMap.__name__,
     ]
 
-    def __init__(
-        self, item_type_name, *arg, details_hideable=False, _testing_path=None, **kwargs
-    ):
+    def __init__(self, item_type_name, *arg, details_hideable=False, **kwargs):
         if item_type_name not in self._known_types:
             raise ValueError(
                 f"Unknown item type {item_type_name}. Must "
@@ -52,7 +50,7 @@ class ChooseOrMakeNew(ipw.VBox):
         # Get the widgety goodness from the parent class
         super().__init__(*arg, **kwargs)
 
-        self._saved_settings = SavedSettings(_testing_path=_testing_path)
+        self._saved_settings = SavedSettings()
         self._item_type_name = item_type_name
 
         # keep track of whether we are editing an existing item
