@@ -1,6 +1,18 @@
 # Some settings require custom widgets to be displayed in the GUI. These are defined in
 # this module.
 
+# This workaround is for Python < 3.11. It is not needed in Python 3.11 and later.
+try:
+    from enum import StrEnum
+except ImportError:
+    from enum import Enum
+
+    class StrEnum(str, Enum):
+        """
+        A class that allows for string values in an Enum pre-Python 3.11.
+        """
+
+
 import ipywidgets as ipw
 import traitlets as tr
 from ipyautoui.autoobject import AutoObject
@@ -14,7 +26,7 @@ from stellarphot.settings import (
     ui_generator,
 )
 
-__all__ = ["ChooseOrMakeNew", "Confirm"]
+__all__ = ["ChooseOrMakeNew", "Confirm", "SettingWithTitle"]
 
 DEFAULT_BUTTON_WIDTH = "300px"
 
@@ -643,9 +655,6 @@ class SettingWithTitle(ipw.VBox):
         The setting widget to be displayed.
     """
 
-    SETTING_NOT_SAVED = "❗️"
-    SETTING_IS_SAVED = "✅"
-
     def __init__(self, plain_title, widget, header_level=2, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._header_level = header_level
@@ -655,47 +664,62 @@ class SettingWithTitle(ipw.VBox):
         self.children = [self.title, self._widget]
         # Set up an observer to update title decoration when the settings
         # change.
-        self._widget.observe(self.decorate_title, names="_value")
+        self._widget.observe(self._title_observer, names="_value")
         # Also update after the save button is clicked
-        self._widget.savebuttonbar.fns_onsave_add_action(self.decorate_title)
+        self._widget.savebuttonbar.fns_onsave_add_action(self._title_observer)
+
+    def _title_observer(self, change=None):
+        """
+        Observer for the title of the widget.
+        """
+        self.title.value = self._format_title(
+            title_decorator(self._plain_title, self._widget, change)
+        )
 
     def _format_title(self, decorated_title):
         return f"<h{self._header_level}>{decorated_title}</h{self._header_level}>"
 
-    def decorate_title(self, change=None):
-        """
-        Decorate the title based on whether the settings need to be saved.
 
-        Parameters
-        ----------
+class SaveStatus(StrEnum):
+    """
+    Class to define the symbols used to represent a save status.
+    """
 
-        change : dict, optional
-            Change dictionary from a traitlets event. It is optional so that this
-            method can be called without a change dictionary.
-        """
-        # Keep track of settings state -- if dirty is true, the settings
-        # need to be saved.
+    SETTING_NOT_SAVED = "❗️"
+    SETTING_IS_SAVED = "✅"
+    SETTING_SHOULD_BE_REVIEWED = "🔆"
+
+
+def title_decorator(plain_title, autoui_widget, change=None):
+    """
+    Decorate the title based on whether the settings need to be saved.
+
+    Parameters
+    ----------
+
+    change : dict, optional
+        Change dictionary from a traitlets event. It is optional so that this
+        method can be called without a change dictionary.
+    """
+    # Keep track of settings state -- if dirty is true, the settings
+    # need to be saved.
+    dirty = False
+
+    # If we got here via a traitlets event then change is a dict with keys
+    # "new" and "old", check that case first. By checking explicitly for
+    # this case, we guarantee that we catch changes in value even if
+    # the button bar's unsaved_changes is still False.
+    try:
+        if change["new"] != change["old"]:
+            dirty = True
+    except (KeyError, TypeError):
         dirty = False
 
-        # If we got here via a traitlets event then change is a dict with keys
-        # "new" and "old", check that case first. By checking explicitly for
-        # this case, we guarantee that we catch changes in value even if
-        # the button bar's unsaved_changes is still False.
-        try:
-            if change["new"] != change["old"]:
-                dirty = True
-        except (KeyError, TypeError):
-            dirty = False
-
-        # The unsaved_changes attribute is not a traitlet, and it isn't clear when
-        # in the event handling it gets set. When not called from an event, though,
-        # this function can only used unsaved_changes to decide what the title
-        # should be.
-        if self._widget.savebuttonbar.unsaved_changes or dirty:
-            self.title.value = self._format_title(
-                f"{self._plain_title} {self.SETTING_NOT_SAVED}"
-            )
-        else:
-            self.title.value = self._format_title(
-                f"{self._plain_title} {self.SETTING_IS_SAVED}"
-            )
+    # The unsaved_changes attribute is not a traitlet, and it isn't clear when
+    # in the event handling it gets set. When not called from an event, though,
+    # this function can only used unsaved_changes to decide what the title
+    # should be.
+    if autoui_widget.savebuttonbar.unsaved_changes or dirty:
+        return f"{plain_title} {SaveStatus.SETTING_NOT_SAVED}"
+    else:
+        return f"{plain_title} {SaveStatus.SETTING_IS_SAVED}"
