@@ -708,7 +708,7 @@ def test_catalog_colname_map():
     )
 
     assert catalog_dat["id"][0] == "ASASSN-V J000052.03+002216.6"
-    assert np.abs(catalog_dat["mag"][0].value - 12.660)
+    assert np.abs(catalog_dat["mag"][0].value - 12.660) < 2e-7
     assert catalog_dat["passband"][0] == "g"
     assert catalog_dat.catalog_name == "VSX"
     assert catalog_dat.catalog_source == "Vizier"
