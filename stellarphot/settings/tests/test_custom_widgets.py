@@ -32,19 +32,20 @@ from stellarphot.settings.tests.test_models import (
 )
 
 
+# See test_settings_file.TestSavedSettings for a detailed description of what the
+# following fixture does. In brief, it patches the settings_files.PlatformDirs class
+# so that the user_data_dir method returns the temporary directory.
+@pytest.fixture(autouse=True)
+def fake_settings_dir(mocker, tmp_path):
+    mocker.patch.object(
+        settings_files.PlatformDirs, "user_data_dir", tmp_path / "stellarphot"
+    )
+
+
 class TestChooseOrMakeNew:
     """
     Class for testing the ChooseOrMakeNew widget.
     """
-
-    # See test_settings_file.TestSavedSettings for a detailed description of what the
-    # following fixture does. In brief, it patches the settings_files.PlatformDirs class
-    # so that the user_data_dir method returns the temporary directory.
-    @pytest.fixture(autouse=True)
-    def fake_settings_dir(self, mocker, tmp_path):
-        mocker.patch.object(
-            settings_files.PlatformDirs, "user_data_dir", tmp_path / "stellarphot"
-        )
 
     def make_test_camera(self):
         """
@@ -825,15 +826,15 @@ class TestSettingWithTitle:
             == f"<h{header_level}>{plain_title}</h{header_level}>"
         )
 
-    def test_title_decoration(self):
+    def test_title_decoration_plain_autoui(self):
         # Check that the title has the correct decoration given the
         # state of the settings widget.
 
         # Make a camera ui
         camera = ui_generator(Camera)
+        plain_title = "I am a camera"
 
         # Make a SettingWithTitle with the camera
-        plain_title = "I am a camera"
         camera_title = SettingWithTitle(plain_title, camera)
 
         # At the moment the title should not be decorated
@@ -841,30 +842,79 @@ class TestSettingWithTitle:
         assert SaveStatus.SETTING_NOT_SAVED not in camera_title.title.value
 
         # There should also be no unsaved changes at the moment
-        assert not camera.savebuttonbar.unsaved_changes
+        assert not camera_title._autoui_widget.savebuttonbar.unsaved_changes
 
         # Manually set unsaved_changes then call the change handler, which should
         # add an indication that there are unsaved changes.
-        camera.savebuttonbar.unsaved_changes = True
-        camera_title._title_observer()
+        camera_title._autoui_widget.di_widgets["gain"].value = str(
+            2 * TEST_CAMERA_VALUES["gain"]
+        )
+        # camera_title._autoui_widget.savebuttonbar.unsaved_changes = True
+        # camera_title._title_observer()
         assert SaveStatus.SETTING_NOT_SAVED in camera_title.title.value
+        # # Go back to unsaved_changes being False
+        # camera_title._autoui_widget.savebuttonbar.unsaved_changes = False
 
-        # Go back to unsaved_changes being False
-        camera.savebuttonbar.unsaved_changes = False
-
-        # Manually call the change handler, which should add an indication that
-        # saves have been done.
-        camera_title._title_observer()
-        assert SaveStatus.SETTING_IS_SAVED in camera_title.title.value
-
+        # # Manually call the change handler, which should add an indication that
+        # # saves have been done.
+        # camera_title._title_observer()
+        # Click save
+        # assert SaveStatus.SETTING_IS_SAVED in camera_title.title.value
         # Now change the camera value, which should trigger the change handler
-        camera.value = TEST_CAMERA_VALUES
+        camera_title._autoui_widget.value = TEST_CAMERA_VALUES
 
+        assert camera_title._autoui_widget.savebuttonbar.unsaved_changes
         assert SaveStatus.SETTING_NOT_SAVED in camera_title.title.value
 
         # Finally, click the save button and the title should be decorated with
         # the saved indication.
-        camera.savebuttonbar.bn_save.click()
+        camera_title._autoui_widget.savebuttonbar.bn_save.click()
+        assert SaveStatus.SETTING_IS_SAVED in camera_title.title.value
+
+    @pytest.mark.parametrize("accept_edits", [True, False])
+    def test_title_decoration_choose_or_make_new_editing(self, accept_edits):
+        # Check that the title has the correct decoration given the
+        # state of the settings widget.
+
+        # Make an item so there is something to select
+        saved_setting = SavedSettings()
+        saved_setting.add_item(Camera(**TEST_CAMERA_VALUES))
+
+        camera = ChooseOrMakeNew(Camera.__name__)
+        plain_title = camera._title.value
+
+        # Make a SettingWithTitle with the camera
+        camera_title = SettingWithTitle(plain_title, camera)
+
+        # At the moment the title should not be decorated
+        assert SaveStatus.SETTING_IS_SAVED not in camera_title.title.value
+        assert SaveStatus.SETTING_NOT_SAVED not in camera_title.title.value
+
+        # There should also be no unsaved changes at the moment
+        assert not camera_title._autoui_widget.savebuttonbar.unsaved_changes
+
+        # Click the edit button
+        camera_title._widget._edit_button.click()
+
+        # Edit a value in the camera so the save button is enabled
+        new_gain = 2 * TEST_CAMERA_VALUES["gain"]
+        camera_title._widget._item_widget.di_widgets["gain"].value = str(new_gain)
+
+        assert SaveStatus.SETTING_NOT_SAVED in camera_title.title.value
+
+        # Click the save button....
+        camera_title._widget._item_widget.savebuttonbar.bn_save.click()
+
+        # ...should still be unsaved pending confirmation...
+        assert SaveStatus.SETTING_NOT_SAVED in camera_title.title.value
+
+        # ...now confirm or deny the save...
+        if accept_edits:
+            camera_title._widget._confirm_edit_delete._yes.click()
+        else:
+            camera_title._widget._confirm_edit_delete._no.click()
+
+        # ...and the title should be decorated with the saved indication.
         assert SaveStatus.SETTING_IS_SAVED in camera_title.title.value
 
 
@@ -887,15 +937,6 @@ class TestReviewSettings:
     Test of the magical ReviewSettings widget.
     """
 
-    # See test_settings_file.TestSavedSettings for a detailed description of what the
-    # following fixture does. In brief, it patches the settings_files.PlatformDirs class
-    # so that the user_data_dir method returns the temporary directory.
-    @pytest.fixture(autouse=True)
-    def fake_settings_dir(self, mocker, tmp_path):
-        mocker.patch.object(
-            settings_files.PlatformDirs, "user_data_dir", tmp_path / "stellarphot"
-        )
-
     # This auto-used fixture changes the working directory to the temporary directory
     # and then changes back to the original directory after the test is done.
     @pytest.fixture(autouse=True)
@@ -915,8 +956,8 @@ class TestReviewSettings:
         # and just one type of setting.
         for setting_class in SETTING_CLASSES:
             review_settings = ReviewSettings([setting_class], style=container_type)
-            assert review_settings._container.titles[0] == _to_space(
-                to_snake(setting_class.__name__)
+            assert review_settings._container.titles[0].startswith(
+                _to_space(to_snake(setting_class.__name__))
             )
             if container_type == "tabs":
                 assert isinstance(review_settings._container, ipw.Tab)
@@ -937,9 +978,49 @@ class TestReviewSettings:
         saveable_types = ChooseOrMakeNew._known_types
         for setting_class in SETTING_CLASSES:
             if setting_class.__name__ not in saveable_types:
+                # The rest of this only makes sense if the setting class is saveable
                 continue
+
+            # Make a setting
             saved = SavedSettings()
-            item = DEFAULT_PHOTOMETRY_SETTINGS[to_snake(setting_class.__name__)]
+            # Make an instance of the class
+            snake_name = to_snake(setting_class.__name__)
+            item = DEFAULT_PHOTOMETRY_SETTINGS[snake_name]
+            # Save the instance to saved settings file
             saved.add_item(item)
+
+            # Make the review widget. It should auto-populate with the item with just
+            # created because that is the only item of that type.
             review_settings = ReviewSettings([setting_class])
             assert review_settings._container.children[0].value == item
+
+            # This setting was made automatically by the widget, so the title of the
+            # container should end with SaveStatus.SETTING_SHOULD_BE_REVIEWED
+            assert review_settings._container.titles[0].endswith(
+                SaveStatus.SETTING_SHOULD_BE_REVIEWED
+            )
+
+            # The item setting should also have been saved to the working directory
+            wd_settings = PhotometryWorkingDirSettings()
+            loaded_settings = wd_settings.load()
+            assert getattr(loaded_settings, snake_name) == item
+
+    def test_selecting_tab_updates_title(self):
+        # Check that selecting a tab updates the title of the widget to end with the
+        # appropriate indicator.
+        # Save a camera and an observatory
+        saved = SavedSettings()
+        camera = Camera(**TEST_CAMERA_VALUES)
+        saved.add_item(camera)
+        observatory = Observatory(**DEFAULT_OBSERVATORY_SETTINGS)
+        saved.add_item(observatory)
+
+        # Create the review widget
+        review_settings = ReviewSettings([Camera, Observatory])
+
+        # Select the Observatory tab
+        review_settings._container.selected_index = 1
+
+        assert review_settings._container.titles[1].endswith(
+            SaveStatus.SETTING_IS_SAVED
+        )

@@ -18,6 +18,7 @@ import traitlets as tr
 from camel_converter import to_snake
 from ipyautoui.autoobject import AutoObject
 from ipyautoui.custom.iterable import ItemBox
+from pydantic import ValidationError
 
 from stellarphot.settings import (
     Camera,
@@ -86,7 +87,7 @@ class ChooseOrMakeNew(ipw.VBox):
 
         # Descriptive title
         self._title = ipw.HTML(
-            value=(f"<h2>Choose a {self._display_name} " "or make a new one</h2>")
+            value=(f"Choose a {self._display_name} " "or make a new one")
         )
 
         self._choose_detail_container = ipw.HBox(layout={"width": DEFAULT_BUTTON_WIDTH})
@@ -155,6 +156,7 @@ class ChooseOrMakeNew(ipw.VBox):
         # Set the selection to the first choice if there is one
         self._choose_existing.value = self._choose_existing.options[0][1]
 
+        # An observer has not been set up yet, so manually call the handler
         if len(self._choose_existing.options) == 1:
             # There are no items, so we are making a new one
             self._handle_selection({"new": "none"})
@@ -244,10 +246,13 @@ class ChooseOrMakeNew(ipw.VBox):
         existing_choices = [(k, v) for k, v in saved_items.as_dict.items()]
         existing_choices = sorted(existing_choices, key=lambda x: x[0].lower())
         choices = existing_choices + [(f"Make new {self._display_name}", "none")]
+        # self._choose_existing.value = None
         # This sets the options but doesn't select any of them
         self._choose_existing.options = choices
 
     def _handle_selection(self, change):
+        if change["new"] is None:
+            return
         if change["new"] == "none":
 
             # We are making a new item...
@@ -513,6 +518,10 @@ class ChooseOrMakeNew(ipw.VBox):
             if change["new"] is not None:
                 item = self._item_widget.model(**self._item_widget.value)
                 if self._editing or self._making_new:
+                    # We are done editing/making new regardless of
+                    # the confirmation outcome
+                    self._making_new = False
+                    self._editing = False
                     if change["new"]:
                         # User has said yes to updating the item, which we do by
                         # deleting the old one and adding the new one.
@@ -521,28 +530,28 @@ class ChooseOrMakeNew(ipw.VBox):
                         # Rebuild the dropdown list
                         self._construct_choices()
                         # Select the edited item
+                        # To make 100% sure the observer is triggered, we set the value
+                        # to None first.
+                        self._choose_existing.value = None
                         self._choose_existing.value = item
                     else:
                         # User has said no to updating the item, so we just
                         # act as though the user has selected this item.
                         if self._editing:
+                            # _handle_selection always gets the value from disk, not
+                            # from the ui, so this resets to the correct value.
+                            # To make 100% sure the observer is triggered, we set the
+                            # value to None first.
+                            self._choose_existing.value = None
                             self._handle_selection({"new": item})
                         else:
                             # Set the selection to the first choice if there is one
+                            # To make 100% sure the observer is triggered, we set the
+                            # value to None first.
+                            self._choose_existing.value = None
                             self._choose_existing.value = self._choose_existing.options[
                                 0
                             ][1]
-                    if self._making_new:
-                        if self._show_details_shown:
-                            self._show_details_ui.layout.display = "flex"
-                            self._show_details_ui.value = (
-                                self._show_details_cached_value
-                            )
-
-                    # We are done editing/making new regardless of
-                    # the confirmation outcome
-                    self._editing = False
-                    self._making_new = False
 
                 elif self._deleting:
                     if change["new"]:
@@ -643,6 +652,16 @@ class Confirm(ipw.HBox):
         self.value = False
 
 
+class SaveStatus(StrEnum):
+    """
+    Class to define the symbols used to represent a save status.
+    """
+
+    SETTING_NOT_SAVED = "❗️"
+    SETTING_IS_SAVED = "✅"
+    SETTING_SHOULD_BE_REVIEWED = "🔆"
+
+
 class SettingWithTitle(ipw.VBox):
     """
     Class that adds a title to a setting widget made by ipyautoui and
@@ -658,74 +677,68 @@ class SettingWithTitle(ipw.VBox):
         The setting widget to be displayed.
     """
 
+    badge = tr.UseEnum(SaveStatus, default=None, allow_none=True)
+
     def __init__(self, plain_title, widget, header_level=2, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._header_level = header_level
         self._plain_title = plain_title
         self._widget = widget
-        self.title = ipw.HTML(value=self._format_title(plain_title))
-        self.children = [self.title, self._widget]
-        # Set up an observer to update title decoration when the settings
-        # change.
-        self._widget.observe(self._title_observer, names="_value")
-        # Also update after the save button is clicked
-        self._widget.savebuttonbar.fns_onsave_add_action(self._title_observer)
 
-    def _title_observer(self, change=None):
+        if isinstance(widget, ChooseOrMakeNew):
+            self.title = self._widget._title
+            self.children = [self._widget]
+            observer = self._choose_existing_observer
+            self._widget._choose_existing.observe(observer, names="value")
+            self._autoui_widget = self._widget._item_widget
+            # In case a value gets set programmatically....
+            # self._autoui_widget.observe(self._title_observer, names="_value")
+        else:
+            self.title = ipw.HTML()
+            self._format_title(None)
+            self.children = [self.title, self._widget]
+            # Set up an observer to update title decoration when the settings
+            # change.
+            observer = self._title_observer
+            # Also update after the save button is clicked
+            # self._widget.savebuttonbar.fns_onsave_add_action(self._title_observer)
+            self._autoui_widget = self._widget
+        self._autoui_widget.savebuttonbar.observe(observer, names="unsaved_changes")
+
+    def _choose_existing_observer(self, _=None):
+        """
+        Observer for the ChooseOrMakeNew widget.
+        """
+        # Unless we are making a new item or editing an item then what is displayed
+        # is saved.
+        if not self._widget._making_new and not self._widget._editing:
+            self.badge = SaveStatus.SETTING_IS_SAVED
+        else:
+            self.badge = SaveStatus.SETTING_NOT_SAVED
+
+    @tr.observe("badge")
+    def _format_title(self, _=None):
+        badge = self.badge or ""
+        badge = badge + " " if badge else ""
+        self.title.value = (
+            f"<h{self._header_level}>{badge}{self._plain_title}</h{self._header_level}>"
+        )
+
+    def decorate_title(self):
+        """
+        Public interface for forcing a title update.
+        """
+        self._format_title()
+
+    def _title_observer(self, change):
         """
         Observer for the title of the widget.
         """
-        self.title.value = self._format_title(
-            title_decorator(self._plain_title, self._widget, change)
-        )
-
-    def _format_title(self, decorated_title):
-        return f"<h{self._header_level}>{decorated_title}</h{self._header_level}>"
-
-
-class SaveStatus(StrEnum):
-    """
-    Class to define the symbols used to represent a save status.
-    """
-
-    SETTING_NOT_SAVED = "❗️"
-    SETTING_IS_SAVED = "✅"
-    SETTING_SHOULD_BE_REVIEWED = "🔆"
-
-
-def title_decorator(plain_title, autoui_widget, change=None):
-    """
-    Decorate the title based on whether the settings need to be saved.
-
-    Parameters
-    ----------
-
-    change : dict, optional
-        Change dictionary from a traitlets event. It is optional so that this
-        method can be called without a change dictionary.
-    """
-    # Keep track of settings state -- if dirty is true, the settings
-    # need to be saved.
-    dirty = False
-
-    # If we got here via a traitlets event then change is a dict with keys
-    # "new" and "old", check that case first. By checking explicitly for
-    # this case, we guarantee that we catch changes in value even if
-    # the button bar's unsaved_changes is still False.
-    try:
-        if change["new"] != change["old"]:
-            dirty = True
-    except (KeyError, TypeError):
-        dirty = False
-
-    # The unsaved_changes attribute is not a traitlet, and it isn't clear when
-    # in the event handling it gets set. When not called from an event, though,
-    # this function can only used unsaved_changes to decide what the title
-    # should be.
-    if autoui_widget.savebuttonbar.unsaved_changes or dirty:
-        return f"{plain_title} {SaveStatus.SETTING_NOT_SAVED}"
-    else:
-        return f"{plain_title} {SaveStatus.SETTING_IS_SAVED}"
+        if change["new"]:
+            # i.e. unsaved_changes is True
+            self.badge = SaveStatus.SETTING_NOT_SAVED
+        else:
+            self.badge = SaveStatus.SETTING_IS_SAVED
 
 
 class ReviewSettings(ipw.VBox):
@@ -752,7 +765,7 @@ class ReviewSettings(ipw.VBox):
 
     """
 
-    def __init__(self, settings: list[str], style="tabs", *args, **kwargs) -> None:
+    def __init__(self, settings, style="tabs", *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         # Get a copy of whatever settings may have already been saved.
         try:
@@ -761,33 +774,151 @@ class ReviewSettings(ipw.VBox):
             self._current_settings = PartialPhotometrySettings()
 
         self._setting_widgets = []
-        names = []
+        self._plain_names = []
+        self.badges = []
+
+        self._settings = settings
+
         for setting in settings:
+            # Track whether we are using the ChooseOrMakeNew or not
+            is_choose_or_make_new = False
             if setting.__name__ in ChooseOrMakeNew._known_types:
                 widget = ChooseOrMakeNew(setting.__name__)
                 val_to_set = widget._choose_existing
+                is_choose_or_make_new = True
             else:
                 widget = ui_generator(setting)
                 val_to_set = widget
 
             _add_saving_to_widget(widget)
-            self._setting_widgets.append(widget)
             name = to_snake(setting.__name__)
-            names.append(" ".join(name.split("_")))
+            plain_name = " ".join(name.split("_"))
+            self._plain_names.append(plain_name)
+            self._setting_widgets.append(SettingWithTitle(plain_name, widget))
 
-            # This will be either a valid object or None
+            # This should be either a valid object or None
             saved_value = getattr(self._current_settings, name)
             if saved_value is not None:
-                val_to_set.value = saved_value
+                try:
+                    val_to_set.value = saved_value
+                except tr.TraitError as e:
+                    # It can happen, while testing, that a setting gets saved to a local
+                    # directory but is no longer in the saved settings for Camera, etc.
+                    # We cannot fix that here, so raise a clearer error.
+                    raise ValueError(
+                        f"The {name} setting saved in the working directory is not "
+                        f"consistent with the list of {name} items that are saved "
+                        "in your permanent settings. Please fix this manually."
+                    ) from e
+                # Add symbol to title to indicate that the setting needs review
+                self.badges.append(SaveStatus.SETTING_SHOULD_BE_REVIEWED)
+
+            elif is_choose_or_make_new:
+                if len(widget._choose_existing.options) > 1:
+                    # There is also one already-saved choice, so we load it.
+                    # If we are using the ChooseOrMakeNew widget, we need to set the
+                    # value of the widget to the default item to trigger the save.
+                    # To do that, first set the value to None and then set the value
+                    # back to the default item.
+                    default_item = val_to_set.value
+                    val_to_set.value = None
+                    val_to_set.value = default_item
+                    self.badges.append(SaveStatus.SETTING_SHOULD_BE_REVIEWED)
+                else:
+                    # This setting needs to be made, not reviewed
+                    self.badges.append(SaveStatus.SETTING_NOT_SAVED)
+            else:
+                # We got here because there was not a setting saved in the working
+                # directory, and this is not a ChooseOrMakeNew, which might have
+                # settings saved at the user level.
+
+                # Two possibilities:
+                # 1. The setting can be made from default values but needs to be
+                #    reviewed. Status should be "needs review".
+                # 2. The setting cannot be made from default values. Status should be
+                #    "not saved".
+                try:
+                    val_to_set.model()
+                except ValidationError:
+                    self.badges.append(SaveStatus.SETTING_NOT_SAVED)
+                else:
+                    self.badges.append(SaveStatus.SETTING_SHOULD_BE_REVIEWED)
+
+        # Check that everything is consistent....
+        assert len(self.badges) == len(self._plain_names)
 
         if style == "tabs":
             self._container = ipw.Tab()
         else:
             self._container = ipw.Accordion()
+
         self._container.children = self._setting_widgets
-        self._container.titles = names
+        self._container.titles = self._make_titles()
 
         self.children = [self._container]
+
+        # Set up an observer to run when a tab is selected
+        self._container.observe(self._observe_tab_selection, names="selected_index")
+
+        # Set up observer for each of the widget badges
+        for idx, widget in enumerate(self._setting_widgets):
+            widget.observe(self._observe_badge_change(idx), names="badge")
+
+    def _make_titles(self):
+        """
+        Make titles from badges and plain titles.
+        """
+        return [
+            f"{badge} {plain}"
+            for badge, plain in zip(self.badges, self._plain_names, strict=True)
+        ]
+
+    def _get_autoui_widget(self, widget):
+        """
+        Get the autoui widget for a given control.
+
+        Parameters
+        ----------
+
+        widget: AutoUi widget or ChooseOrMakeNew
+            The widget to get the autoui widget from.
+        """
+        return widget._autoui_widget
+
+    def _observe_tab_selection(self, change):
+        """
+        Observer for the tab or accordion selection.
+        """
+        # Once the user has clicked on the tab, the status badge for the
+        # tab should just be the badge for the widget it holds.
+
+        # Manually call the title decorator for this tab
+        new_selected = change["new"]
+
+        setting_badge = self._setting_widgets[new_selected].badge
+        self.badges[new_selected] = setting_badge if setting_badge is not None else ""
+
+        self._container.titles = self._make_titles()
+
+    def _observe_badge_change(self, index):
+        """
+        Observer for the badge of a setting widget.
+        """
+
+        def observer(change):
+            self.badges[index] = change["new"]
+
+            # This should only be called when a badge changes, so we can just
+            # update the titles.
+            self._container.titles = self._make_titles()
+
+        return observer
+
+    def _index_of_setting(self, setting):
+        """
+        Get the index of a setting in the list of settings.
+        """
+        return self._settings.index(setting)
 
 
 def _add_saving_to_widget(setting_widget):
@@ -801,11 +932,19 @@ def _add_saving_to_widget(setting_widget):
         The widget to add the observer to.
     """
     wd_settings = PhotometryWorkingDirSettings()
-    # self._item_widget.savebuttonbar.fns_onsave_add_action(self.save_wd)
+
+    # Define name here so that it is available in the save_wd function. Its
+    # value will be set in the if/elif block below.
     name = ""
 
     def save_wd(_=None):
-        pps = PartialPhotometrySettings(**{name: setting_widget.value})
+        try:
+            pps = PartialPhotometrySettings(**{name: setting_widget.value})
+        except ValidationError:
+            # This can happen while making a new item, or while in the process of
+            # editing one
+            return
+        # We have a validated setting so save it.
         wd_settings.save(pps, update=True)
 
     if hasattr(setting_widget, "_choose_existing"):
