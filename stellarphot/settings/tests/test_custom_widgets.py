@@ -956,8 +956,9 @@ class TestReviewSettings:
         # and just one type of setting.
         for setting_class in SETTING_CLASSES:
             review_settings = ReviewSettings([setting_class], style=container_type)
-            assert review_settings._container.titles[0].startswith(
+            assert (
                 _to_space(to_snake(setting_class.__name__))
+                in review_settings._container.titles[0]
             )
             if container_type == "tabs":
                 assert isinstance(review_settings._container, ipw.Tab)
@@ -992,12 +993,14 @@ class TestReviewSettings:
             # Make the review widget. It should auto-populate with the item with just
             # created because that is the only item of that type.
             review_settings = ReviewSettings([setting_class])
-            assert review_settings._container.children[0].value == item
+            model_dict = review_settings._container.children[0]._autoui_widget.value
+            assert setting_class(**model_dict) == item
 
             # This setting was made automatically by the widget, so the title of the
             # container should end with SaveStatus.SETTING_SHOULD_BE_REVIEWED
-            assert review_settings._container.titles[0].endswith(
+            assert (
                 SaveStatus.SETTING_SHOULD_BE_REVIEWED
+                in review_settings._container.titles[0]
             )
 
             # The item setting should also have been saved to the working directory
@@ -1021,6 +1024,4 @@ class TestReviewSettings:
         # Select the Observatory tab
         review_settings._container.selected_index = 1
 
-        assert review_settings._container.titles[1].endswith(
-            SaveStatus.SETTING_IS_SAVED
-        )
+        assert SaveStatus.SETTING_IS_SAVED in review_settings._container.titles[1]
