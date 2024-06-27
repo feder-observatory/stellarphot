@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 import ipywidgets as ipw
 import pytest
@@ -8,6 +9,7 @@ from ipyautoui.custom.iterable import ItemBox, ItemControl
 from stellarphot.settings import (
     Camera,
     Observatory,
+    PartialPhotometrySettings,
     PassbandMap,
     PhotometryApertures,
     PhotometryOptionalSettings,
@@ -23,6 +25,7 @@ from stellarphot.settings.custom_widgets import (
     ReviewSettings,
     SaveStatus,
     SettingWithTitle,
+    _add_saving_to_widget,
 )
 from stellarphot.settings.tests.test_models import (
     DEFAULT_OBSERVATORY_SETTINGS,
@@ -1008,6 +1011,26 @@ class TestReviewSettings:
             loaded_settings = wd_settings.load()
             assert getattr(loaded_settings, snake_name) == item
 
+    def test_creation_with_saved_working_dir_settings(self):
+        # Check that when there is a saved item in the working directory
+        # the badge attached to the name is "needs review"
+        photometry_apertures = DEFAULT_PHOTOMETRY_SETTINGS["photometry_apertures"]
+        wk_dir = PhotometryWorkingDirSettings()
+        partial_settings = PartialPhotometrySettings(
+            photometry_apertures=photometry_apertures
+        )
+        wk_dir.save(partial_settings)
+
+        # Create the review widget
+        review_settings = ReviewSettings(
+            [PhotometryOptionalSettings, PhotometryApertures]
+        )
+
+        assert (
+            SaveStatus.SETTING_SHOULD_BE_REVIEWED
+            in review_settings._container.titles[1]
+        )
+
     def test_selecting_tab_updates_title(self):
         # Check that selecting a tab updates the title of the widget to end with the
         # appropriate indicator.
@@ -1025,3 +1048,64 @@ class TestReviewSettings:
         review_settings._container.selected_index = 1
 
         assert SaveStatus.SETTING_IS_SAVED in review_settings._container.titles[1]
+
+    def test_conflict_between_saved_and_working_dir(self):
+        # Check that the expected error is raised if the value of a saved setting
+        # like a camera conflicts with the value of the same setting in the working
+        # directory.
+
+        # Make a camera for the saved settings (i.e. those in user's settings directory)
+        saved = SavedSettings()
+        camera = Camera(**TEST_CAMERA_VALUES)
+        saved.add_item(camera)
+
+        # Make a camera for the working directory with different gain than the first
+        # camera
+        wd_settings = PhotometryWorkingDirSettings()
+        wd_camera = Camera(**TEST_CAMERA_VALUES)
+        wd_camera.gain = 2 * wd_camera.gain
+        wd_settings.save(PartialPhotometrySettings(camera=wd_camera))
+
+        # Create the review widget and check that the error is raised
+        with pytest.raises(
+            ValueError, match="The camera setting saved in the working directory is not"
+        ):
+            ReviewSettings([Camera])
+
+    def test_error_when_setting_has_no_saved_or_default_setting(self):
+        # Make a review widget with a setting that has no saved or default setting
+        # like Camera and check that an error is raised.
+
+        review_settings = ReviewSettings([Camera])
+
+        assert SaveStatus.SETTING_NOT_SAVED in review_settings._container.titles[0]
+
+    def test_setting_selected_item_to_none_does_not_save(self):
+        # The intent of this is to test an edge case where the user selects an item
+        # from the dropdown and then selects "None" from the dropdown. The selected
+        # item should be saved, but there should not be another save when None is
+        # selected.
+        saved = SavedSettings()
+        camera = Camera(**TEST_CAMERA_VALUES)
+        saved.add_item(camera)
+        wd_settings = PhotometryWorkingDirSettings()
+        wd_set_path = Path(wd_settings.partial_settings_file)
+        review_settings = ReviewSettings([Camera])
+
+        # Get the modification time of the working directory settings file
+        mtime = wd_set_path.stat().st_mtime
+
+        assert (
+            review_settings._setting_widgets[0]._widget._choose_existing.value == camera
+        )
+        review_settings._setting_widgets[0]._widget._choose_existing.value = "none"
+
+        # Check that the working directory settings file has not been modified
+        assert wd_set_path.stat().st_mtime == mtime
+
+
+def test_add_saving_with_unrecognized_widget():
+    # Check that an error is raised if a widget is added to the saving list
+    # that is not recognized.
+    with pytest.raises(ValueError, match="is not a recognized type of widget"):
+        _add_saving_to_widget(ipw.Dropdown())

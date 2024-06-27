@@ -798,6 +798,7 @@ class ReviewSettings(ipw.VBox):
 
             # This should be either a valid object or None
             saved_value = getattr(self._current_settings, name)
+
             if saved_value is not None:
                 try:
                     val_to_set.value = saved_value
@@ -839,7 +840,9 @@ class ReviewSettings(ipw.VBox):
                 #    "not saved".
                 try:
                     val_to_set.model()
-                except ValidationError:
+                except ValidationError:  # pragma: no cover
+                    # This should never happen with the code base as of 2024-06-27 but
+                    # might in the future.
                     self.badges.append(SaveStatus.SETTING_NOT_SAVED)
                 else:
                     self.badges.append(SaveStatus.SETTING_SHOULD_BE_REVIEWED)
@@ -873,18 +876,6 @@ class ReviewSettings(ipw.VBox):
             for badge, plain in zip(self.badges, self._plain_names, strict=True)
         ]
 
-    def _get_autoui_widget(self, widget):
-        """
-        Get the autoui widget for a given control.
-
-        Parameters
-        ----------
-
-        widget: AutoUi widget or ChooseOrMakeNew
-            The widget to get the autoui widget from.
-        """
-        return widget._autoui_widget
-
     def _observe_tab_selection(self, change):
         """
         Observer for the tab or accordion selection.
@@ -913,12 +904,6 @@ class ReviewSettings(ipw.VBox):
             self._container.titles = self._make_titles()
 
         return observer
-
-    def _index_of_setting(self, setting):
-        """
-        Get the index of a setting in the list of settings.
-        """
-        return self._settings.index(setting)
 
 
 def _add_saving_to_widget(setting_widget):
@@ -954,4 +939,6 @@ def _add_saving_to_widget(setting_widget):
         setting_widget.savebuttonbar.fns_onsave_add_action(save_wd)
         name = to_snake(setting_widget.model.__name__)
     else:
-        raise ValueError("WTF am i supposed to do?")
+        raise ValueError(
+            f"The widget {setting_widget} is not a recognized type of widget."
+        )
