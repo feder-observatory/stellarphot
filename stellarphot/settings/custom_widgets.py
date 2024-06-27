@@ -254,7 +254,6 @@ class ChooseOrMakeNew(ipw.VBox):
         if change["new"] is None:
             return
         if change["new"] == "none":
-
             # We are making a new item...
 
             # Hide the edit button
@@ -514,6 +513,7 @@ class ChooseOrMakeNew(ipw.VBox):
             The second case is the reason most of the handler is wrapped in an
             if statement.
             """
+            was_editing = self._editing
             # value of None means the widget has been reset to not answered
             if change["new"] is not None:
                 item = self._item_widget.model(**self._item_widget.value)
@@ -537,13 +537,15 @@ class ChooseOrMakeNew(ipw.VBox):
                     else:
                         # User has said no to updating the item, so we just
                         # act as though the user has selected this item.
-                        if self._editing:
-                            # _handle_selection always gets the value from disk, not
-                            # from the ui, so this resets to the correct value.
+                        if was_editing:
+                            # The user has presumably changed the value in the UI, so
+                            # get the correct value from disk.
+                            item = self._get_item(item.name)
+
                             # To make 100% sure the observer is triggered, we set the
                             # value to None first.
                             self._choose_existing.value = None
-                            self._handle_selection({"new": item})
+                            self._choose_existing.value = item
                         else:
                             # Set the selection to the first choice if there is one
                             # To make 100% sure the observer is triggered, we set the

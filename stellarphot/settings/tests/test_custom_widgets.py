@@ -58,6 +58,8 @@ class TestChooseOrMakeNew:
         saved = SavedSettings()
         camera = Camera(**TEST_CAMERA_VALUES)
         saved.add_item(camera)
+        # Return the camera that was saved in case the test wants to use it
+        return camera
 
     def test_creation_without_type_raises_error(self):
         # Should raise an error if no type is provided
@@ -192,9 +194,21 @@ class TestChooseOrMakeNew:
 
     def test_edit_item_not_saved_after_cancel(self):
         # Should not save the item after clicking the No button
-        self.make_test_camera()
+        camera = self.make_test_camera()
+
+        # Make an additional test camera so that we the result is the *second* camera
+        # in the list, not the first. If it is the first the outcome is the same
+        # whether the user was editing or making a new camera.
+        saved = SavedSettings()
+        camera.name = "zzzz" + camera.name
+        saved.add_item(camera)
 
         choose_or_make_new = ChooseOrMakeNew("camera")
+        assert len(choose_or_make_new._choose_existing.options) == 3
+        choose_or_make_new._choose_existing.value = camera
+
+        assert camera == choose_or_make_new.value
+
         # Simulate a click on the edit button...
         choose_or_make_new._edit_button.click()
 
@@ -205,13 +219,7 @@ class TestChooseOrMakeNew:
         choose_or_make_new._item_widget.savebuttonbar.bn_save.click()
         # Simulate a click on the cancel button...
         choose_or_make_new._confirm_edit_delete._no.click()
-
-        saved = SavedSettings()
-        cameras = saved.get_items("camera")
-        assert (
-            cameras.as_dict[TEST_CAMERA_VALUES["name"]].gain
-            == TEST_CAMERA_VALUES["gain"]
-        )
+        assert camera == choose_or_make_new.value
 
     def test_selecting_make_new_as_selection_works(self):
         # Should allow the user to select "Make new" as a selection
