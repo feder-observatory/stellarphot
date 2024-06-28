@@ -1111,6 +1111,40 @@ class TestReviewSettings:
         # Check that the working directory settings file has not been modified
         assert wd_set_path.stat().st_mtime == mtime
 
+    def test_clicking_tab_with_already_saved_settings_updates_badge(self):
+        # Check that if there are already settings saved to the working directory
+        # and the user clicks on the tab, the badge is updated to reflect that the
+        # setting has been saved.
+
+        # To set this up we need to save settings to the working directory AND to the
+        # saved user settings.
+        wd_settings = PhotometryWorkingDirSettings()
+        camera = Camera(**TEST_CAMERA_VALUES)
+        observatory = Observatory(**DEFAULT_OBSERVATORY_SETTINGS)
+        passbands = PassbandMap(**DEFAULT_PASSBAND_MAP)
+        wd_settings.save(
+            PartialPhotometrySettings(
+                camera=camera, observatory=observatory, passband_map=passbands
+            )
+        )
+        saved = SavedSettings()
+        saved.add_item(camera)
+        saved.add_item(observatory)
+        saved.add_item(passbands)
+
+        # Make the review widget
+        review_settings = ReviewSettings([Camera, Observatory, PassbandMap])
+        for title in review_settings._container.titles:
+            assert SaveStatus.SETTING_SHOULD_BE_REVIEWED in title
+
+        # Click on each tab, starting with the last one, to make sure a change in
+        # the selected value happens to trigger the observers.
+        for i in range(2, -1, -1):
+            review_settings._container.selected_index = i
+
+        for title in review_settings._container.titles:
+            assert SaveStatus.SETTING_IS_SAVED in title
+
 
 def test_add_saving_with_unrecognized_widget():
     # Check that an error is raised if a widget is added to the saving list

@@ -803,6 +803,10 @@ class ReviewSettings(ipw.VBox):
 
             if saved_value is not None:
                 try:
+                    if is_choose_or_make_new:
+                        # Set to None first to ensure there is a change in the value
+                        # when we set it to saved_value.
+                        val_to_set.value = None
                     val_to_set.value = saved_value
                 except tr.TraitError as e:
                     # It can happen, while testing, that a setting gets saved to a local
