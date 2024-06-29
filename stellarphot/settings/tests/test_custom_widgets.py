@@ -5,9 +5,11 @@ import ipywidgets as ipw
 import pytest
 from camel_converter import to_snake
 from ipyautoui.custom.iterable import ItemBox, ItemControl
+from pydantic import ValidationError
 
 from stellarphot.settings import (
     Camera,
+    LoggingSettings,
     Observatory,
     PartialPhotometrySettings,
     PassbandMap,
@@ -936,6 +938,7 @@ SETTING_CLASSES = [
     PhotometryApertures,
     PhotometryOptionalSettings,
     SourceLocationSettings,
+    LoggingSettings,
 ]
 
 
@@ -966,7 +969,9 @@ class TestReviewSettings:
         # Check creation and names of tab when there are no saved settings
         # and just one type of setting.
         for setting_class in SETTING_CLASSES:
+
             review_settings = ReviewSettings([setting_class], style=container_type)
+
             assert (
                 _to_space(to_snake(setting_class.__name__))
                 in review_settings._container.titles[0]
@@ -977,11 +982,28 @@ class TestReviewSettings:
                 assert isinstance(review_settings._container, ipw.Accordion)
 
             wd_settings = PhotometryWorkingDirSettings()
-            with pytest.raises(
-                ValueError,
-                match="Settings file photometry_settings.json does not exist",
-            ):
+
+            # What happens next depends on whether the setting can be created from
+            # default values or not.
+            try:
+                setting_class()
+            except ValidationError:
+                created_from_defaults = False
+            else:
+                created_from_defaults = True
+
+            if created_from_defaults:
                 wd_settings.load()
+                snake_name = to_snake(setting_class.__name__)
+                assert (
+                    getattr(wd_settings.partial_settings, snake_name) == setting_class()
+                )
+            else:
+                with pytest.raises(
+                    ValueError,
+                    match="Settings file photometry_settings.json does not exist",
+                ):
+                    wd_settings.load()
 
     def test_creation_with_saved_settings(self):
         # Check creation and names of tab when there are saved settings
@@ -1140,6 +1162,52 @@ class TestReviewSettings:
         # Click on each tab, starting with the last one, to make sure a change in
         # the selected value happens to trigger the observers.
         for i in range(2, -1, -1):
+            review_settings._container.selected_index = i
+
+        for title in review_settings._container.titles:
+            assert SaveStatus.SETTING_IS_SAVED in title
+
+    def test_clicking_tab_marks_green_when_all_saved(self):
+        # Check that if there are already settings saved to the working directory
+        # and the user clicks on the tab, the badge is updated to reflect that the
+        # setting has been saved.
+
+        # To set this up we need to save settings to the working directory AND to the
+        # saved user settings.
+        wd_settings = PhotometryWorkingDirSettings()
+        camera = Camera(**TEST_CAMERA_VALUES)
+        observatory = Observatory(**DEFAULT_OBSERVATORY_SETTINGS)
+        passbands = PassbandMap(**DEFAULT_PASSBAND_MAP)
+        wd_settings.save(
+            PartialPhotometrySettings(
+                camera=camera, observatory=observatory, passband_map=passbands
+            )
+        )
+        saved = SavedSettings()
+        saved.add_item(camera)
+        saved.add_item(observatory)
+        saved.add_item(passbands)
+
+        review_settings = ReviewSettings(
+            [
+                Camera,
+                Observatory,
+                PassbandMap,
+                PhotometryApertures,
+                SourceLocationSettings,
+                PhotometryOptionalSettings,
+                LoggingSettings,
+            ]
+        )
+
+        num_tabs = len(review_settings._container.children)
+
+        for title in review_settings._container.titles:
+            assert SaveStatus.SETTING_SHOULD_BE_REVIEWED in title
+
+        # Click on each tab, starting with the last one, to make sure a change in
+        # the selected value happens to trigger the observers.
+        for i in range(num_tabs - 1, -1, -1):
             review_settings._container.selected_index = i
 
         for title in review_settings._container.titles:

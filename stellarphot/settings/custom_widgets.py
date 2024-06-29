@@ -734,7 +734,8 @@ class SettingWithTitle(ipw.VBox):
 
     def _title_observer(self, change):
         """
-        Observer for the title of the widget.
+        Observer for the title of the widget, triggered when unsaved_changes
+        changes.
         """
         if change["new"]:
             # i.e. unsaved_changes is True
@@ -851,6 +852,9 @@ class ReviewSettings(ipw.VBox):
                     # might in the future.
                     self.badges.append(SaveStatus.SETTING_NOT_SAVED)
                 else:
+                    # This setting can be made from default values, so we save it to the
+                    # working directory.
+                    val_to_set.savebuttonbar.bn_save.click()
                     self.badges.append(SaveStatus.SETTING_SHOULD_BE_REVIEWED)
 
         # Check that everything is consistent....
@@ -882,18 +886,58 @@ class ReviewSettings(ipw.VBox):
             for badge, plain in zip(self.badges, self._plain_names, strict=True)
         ]
 
+    @property
+    def current_settings(self):
+        """
+        The current settings in the widget.
+        """
+        try:
+            self._current_settings = PhotometryWorkingDirSettings().load()
+        except ValueError:
+            self._current_settings = PartialPhotometrySettings()
+
+        return self._current_settings
+
     def _observe_tab_selection(self, change):
         """
         Observer for the tab or accordion selection.
         """
         # Once the user has clicked on the tab, the status badge for the
-        # tab should just be the badge for the widget it holds.
+        # tab should just be the badge for the widget it holds, if the
+        # widget has a badge. OTherwise, compare the widget value to the
+        # saved value to determine the badge.
 
-        # Manually call the title decorator for this tab
+        # Get the index
         new_selected = change["new"]
 
         setting_badge = self._setting_widgets[new_selected].badge
-        self.badges[new_selected] = setting_badge if setting_badge is not None else ""
+        if setting_badge is not None:
+            self.badges[new_selected] = setting_badge
+        else:
+            # Check whether the setting is saved or not
+            setting_widget = self._setting_widgets[new_selected]
+
+            try:
+                snake_name = to_snake(setting_widget._autoui_widget.model.__name__)
+                print(snake_name)
+                disk_value = getattr(self.current_settings, snake_name)
+            except KeyError:
+                print("KEY KEY KEY KEY ERROR")
+                # The setting is not saved
+                setting_widget = SaveStatus.SETTING_NOT_SAVED
+            else:
+                print("ELSE ELSE ELSE ELSE ELSE")
+                print(f"{disk_value=}")
+                print(f"{setting_widget._widget.value=}")
+                print(f"{setting_widget._autoui_widget.value=}")
+                value_from_widget = setting_widget._autoui_widget.model.model_validate(
+                    setting_widget._autoui_widget.value
+                )
+                print(f"{value_from_widget=}")
+                if disk_value == value_from_widget:
+                    setting_widget.badge = SaveStatus.SETTING_IS_SAVED
+                else:
+                    setting_widget.badge = SaveStatus.SETTING_SHOULD_BE_REVIEWED
 
         self._container.titles = self._make_titles()
 
