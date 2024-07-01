@@ -1,7 +1,9 @@
+from pathlib import Path
+
 from ipyautoui import AutoUi
 from ipywidgets import Layout
 
-from .models import _extract_short_description
+from .models import SourceLocationSettings, _extract_short_description
 
 __all__ = ["ui_generator"]
 
@@ -29,6 +31,19 @@ def ui_generator(model, max_field_width=None, file_chooser_max_width=None):
 
     """
     ui = AutoUi(model)
+
+    # Oof, there is a bug in the file choose from ipyautoui. We patch up the
+    # SourceLocationSettings widget here.
+    if model == SourceLocationSettings:
+
+        # Set up the observer for future changes in the value of the widget
+        _file_chooser_value_fixer(ui)
+
+        # Force a call to the handler to make sure the initial value is correct
+        name = model.model_fields["source_list_file"].default
+        value = ui.value.copy()
+        value["source_list_file"] = name
+        ui.value = value
 
     # validation is really messy looking right now, so suppress display of
     # the validation errors. A green check or red x will still be displayed.
@@ -139,3 +154,32 @@ def _handle_save_revert_button_state(widget, button, must_be_valid=True):
         button.disabled = not needs_to_save
 
     return handler
+
+
+def _file_chooser_value_fixer(source_locations_ui):
+    """
+    Add an observer to the source_locations_ui widget to set the source_list_file
+    correctly in FileChooser UI.
+
+    Parameters
+    ----------
+    source_locations_ui : `ipyautoui.AutoUi`
+        The user interface widget for the source locations.
+    """
+    file_chooser = source_locations_ui.di_widgets["source_list_file"]
+
+    def handler(_):
+        """
+        A handler must take an argument but we don't use it here.
+        """
+
+        if (Path(file_chooser.selected_path) / file_chooser.selected_filename) != Path(
+            file_chooser.value
+        ):
+            print("😱" * 10)
+            file_chooser.reset(
+                file_chooser.selected_path, Path(file_chooser.value).name
+            )
+            file_chooser._apply_selection()
+
+    source_locations_ui.observe(handler, "_value")

@@ -969,7 +969,13 @@ class TestReviewSettings:
         # Check creation and names of tab when there are no saved settings
         # and just one type of setting.
         for setting_class in SETTING_CLASSES:
+            wd_settings = PhotometryWorkingDirSettings()
 
+            # Remove any existing settings files that may have been saved in earlier
+            # iterations of the loop.
+            p = Path(".")
+            (p / wd_settings.partial_settings_file).unlink(missing_ok=True)
+            (p / wd_settings.settings_file).unlink(missing_ok=True)
             review_settings = ReviewSettings([setting_class], style=container_type)
 
             assert (
@@ -980,8 +986,6 @@ class TestReviewSettings:
                 assert isinstance(review_settings._container, ipw.Tab)
             else:
                 assert isinstance(review_settings._container, ipw.Accordion)
-
-            wd_settings = PhotometryWorkingDirSettings()
 
             # What happens next depends on whether the setting can be created from
             # default values or not.
@@ -1212,6 +1216,39 @@ class TestReviewSettings:
 
         for title in review_settings._container.titles:
             assert SaveStatus.SETTING_IS_SAVED in title
+
+    def test_loading_saved_source_locations_to_ui(self):
+        # Check that saved source locations are loaded into the UI
+        wd_set = PhotometryWorkingDirSettings()
+        source_locations = SourceLocationSettings()
+        wd_set.save(
+            PartialPhotometrySettings(source_location_settings=source_locations)
+        )
+
+        review_settings = ReviewSettings([SourceLocationSettings])
+
+        # Check that the saved source locations are in the UI
+        assert (
+            review_settings._setting_widgets[0]._autoui_widget.value
+            == source_locations.model_dump()
+        )
+        assert (
+            review_settings._setting_widgets[0]
+            ._autoui_widget.di_widgets["source_list_file"]
+            .selected_filename
+            == source_locations.source_list_file
+        )
+
+    def test_getting_settings_with_nothing_saved(self):
+        # Check that when we create the object with no saved settings we get an empty
+        # partial settings object.
+        review_settings = ReviewSettings([Camera])
+        assert review_settings.current_settings == PartialPhotometrySettings()
+
+    def test_selecting_table_without_saved_setting_sets_proper_badge(self):
+        review_settings = ReviewSettings([PhotometryApertures, Camera])
+        review_settings._container.selected_index = 1
+        assert SaveStatus.SETTING_NOT_SAVED in review_settings._container.titles[1]
 
 
 def test_add_saving_with_unrecognized_widget():
