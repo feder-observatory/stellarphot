@@ -22,6 +22,7 @@ from stellarphot.settings import (
     Observatory,
     PhotometryApertures,
     PhotometryWorkingDirSettings,
+    settings_files,  # This import is needed for mocking
 )
 from stellarphot.settings.tests.test_models import (
     TEST_CAMERA_VALUES,
@@ -62,6 +63,18 @@ def test_seeing_profile_object_creation():
     # This test simply makes sure we can create the object
     profile_widget = spf.SeeingProfileWidget()
     assert isinstance(profile_widget.box, ipw.Box)
+
+
+@pytest.fixture(autouse=True)
+def fake_settings_dir(mocker, tmp_path):
+    # See test_settings_files.py for more information on this fixture.
+    # It makes a fake settings directory for each test to use.
+
+    # stellarphot is added to the name of the directory to make sure we start
+    # without a stellarphot directory for each test.
+    mocker.patch.object(
+        settings_files.PlatformDirs, "user_data_dir", tmp_path / "stellarphot"
+    )
 
 
 def test_seeing_profile_properties(tmp_path):
