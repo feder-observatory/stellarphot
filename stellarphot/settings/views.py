@@ -176,7 +176,6 @@ def _file_chooser_value_fixer(source_locations_ui):
         if (Path(file_chooser.selected_path) / file_chooser.selected_filename) != Path(
             file_chooser.value
         ):
-            print("😱" * 10)
             file_chooser.reset(
                 file_chooser.selected_path, Path(file_chooser.value).name
             )

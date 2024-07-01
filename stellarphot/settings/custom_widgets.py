@@ -917,27 +917,20 @@ class ReviewSettings(ipw.VBox):
             # Check whether the setting is saved or not
             setting_widget = self._setting_widgets[new_selected]
 
-            try:
-                snake_name = to_snake(setting_widget._autoui_widget.model.__name__)
-                print(snake_name)
-                disk_value = getattr(self.current_settings, snake_name)
-            except KeyError:
-                print("KEY KEY KEY KEY ERROR")
+            snake_name = to_snake(setting_widget._autoui_widget.model.__name__)
+
+            disk_value = getattr(self.current_settings, snake_name)
+            if disk_value is None:
                 # The setting is not saved
                 setting_widget = SaveStatus.SETTING_NOT_SAVED
             else:
-                print("ELSE ELSE ELSE ELSE ELSE")
-                print(f"{disk_value=}")
-                print(f"{setting_widget._widget.value=}")
-                print(f"{setting_widget._autoui_widget.value=}")
+                # Set the badge to saved if it has been saved.
                 value_from_widget = setting_widget._autoui_widget.model.model_validate(
                     setting_widget._autoui_widget.value
                 )
-                print(f"{value_from_widget=}")
+
                 if disk_value == value_from_widget:
                     setting_widget.badge = SaveStatus.SETTING_IS_SAVED
-                else:
-                    setting_widget.badge = SaveStatus.SETTING_SHOULD_BE_REVIEWED
 
         self._container.titles = self._make_titles()
 
