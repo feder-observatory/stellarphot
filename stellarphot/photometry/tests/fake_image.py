@@ -29,7 +29,7 @@ class FakeImage:
         self._sources = Table.read(data_file)
         self.mean_noise = self.sources["amplitude"].max() / 100
         self.noise_dev = noise_dev
-        self._stars = make_gaussian_sources_image(self.image_shape, self.sources)
+        self._stars = make_gaussian_sources_image(tuple(self.image_shape), self.sources)
         self._noise = make_noise_image(
             self._stars.shape, mean=self.mean_noise, stddev=noise_dev, seed=seed
         )
@@ -194,7 +194,7 @@ def shift_FakeCCDImage(ccd_data, x_shift, y_shift):
 
     # Make image
     srcs = make_gaussian_sources_image(
-        shifted_ccd_data.image_shape, shifted_ccd_data.sources
+        tuple(shifted_ccd_data.image_shape), shifted_ccd_data.sources
     )
     background = make_noise_image(
         srcs.shape, mean=shifted_ccd_data.mean_noise, stddev=shifted_ccd_data.noise_dev

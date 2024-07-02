@@ -431,7 +431,8 @@ class TestPhotometryWorkingDirSettings:
         assert settings_file.settings == full_settings
         assert settings_file.partial_settings is None
 
-    def test_save_full_then_partial_settings(self):
+    @pytest.mark.parametrize("update", [True, False])
+    def test_save_full_then_partial_settings(self, update):
         # Test that saving full settings and then partial settings generates
         # the expected error.
         settings_file = PhotometryWorkingDirSettings()
@@ -441,15 +442,28 @@ class TestPhotometryWorkingDirSettings:
         assert not settings_file.partial_settings_file.exists()
         assert settings_file.settings == full_settings
 
-        partial_settings = PartialPhotometrySettings()
-        error_message = "Cannot save partial settings when full settings already exist"
-        with pytest.raises(ValueError, match=error_message):
-            settings_file.save(partial_settings)
+        camera = Camera.model_validate_json(CAMERA)
+        # Change the camera name we we can detect whether the setting saved
+        # to the working directory has been updated.
+        camera.name = "new camera"
+        partial_settings = PartialPhotometrySettings(camera=camera)
+
+        if update:
+            settings_file.save(partial_settings, update=update)
+        else:
+            error_message = (
+                "Cannot save partial settings when full settings already exist"
+            )
+            with pytest.raises(ValueError, match=error_message):
+                settings_file.save(partial_settings, update=update)
 
         assert not settings_file.partial_settings_file.exists()
         assert settings_file.settings_file.exists()
         assert settings_file.partial_settings is None
-        assert settings_file.settings == full_settings
+        if update:
+            assert settings_file.settings.camera.name == camera.name
+        else:
+            assert settings_file.settings.camera.name == full_settings.camera.name
 
     def test_load_conflicting_partial_and_full_settings(self):
         # Make a valid partial settings file and a valid full settings file

@@ -17,6 +17,7 @@ dependencies = [
     "astroquery",
     "astrowidgets",
     "bottleneck",
+    "camel-converter",
     "ccdproc",
     "ginga",
     "ipyautoui >=0.7.15",
@@ -125,6 +126,8 @@ select = [
 "__init__.py" = ["E402", "F403"]
 # Ignore F405 (variable may be from star imports) in docs/conf.py
 "docs/conf.py" = ["F405"]
+# Ignore F811 (redefinition of unused) in core for the moment
+"core.py" = ["F811"]
 
 [tool.codespell]
 skip = '*.svg'
@@ -173,4 +176,6 @@ filterwarnings = [
     'ignore:Deprecated in traitlets 4.1, use the instance:DeprecationWarning',
     # Some WCS headers are issuing warnings
     'ignore:RADECSYS=:',
+    # photutils changed the name of a function again
+    'ignore:The make_gaussian_sources_image function is deprecated',
 ]

@@ -340,6 +340,40 @@ class PhotometryWorkingDirSettings:
         else:
             return True
 
+    def _update_settings_from_partial(self, disk_settings, partial_settings):
+        """
+        Update the settings on disk, which may be full or partial, with the partial
+        settings.
+
+        Parameters
+        ----------
+        disk_settings : PhotometrySettings or PartialPhotometrySettings
+            The settings on disk.
+
+        partial_settings : PartialPhotometrySettings
+            The partial settings to update with.
+
+        Returns
+        -------
+        PhotometrySettings pr PartialPhotometrySettings
+            The updated settings. The return type is the same as the type
+            of disk_settings.
+        """
+        # Grab a dict of the settings, only keeping values that are not
+        # None. Making it dict so that the update method can be used to
+        # merge the two sets of settings.
+
+        passed_partial_settings = {
+            k: v for k, v in partial_settings.model_dump().items() if v is not None
+        }
+
+        # The order matters here. Keys in the argument passed_partial_settings
+        # will overwrite the keys in disk)settings.
+        # Note that update works in-place.
+        disk_settings.update(passed_partial_settings)
+
+        return disk_settings
+
     def save(self, settings, update=False):
         """
         Save the partial or full settings to the working directory. Note well that
@@ -362,9 +396,13 @@ class PhotometryWorkingDirSettings:
         disk, then the settings from disk that are not in the new settings are added to
         the new settings.
 
-        This means that in the event that the settings in the argument have, say,
+        This also means that in the event that the settings in the argument have, say,
         a `~stellarphot.settings.Camera`, and the file on disk also has one, the one
         in the argument is the one that will be kept.
+
+        Finally, if we are passed a partial setting and there is a full setting on disk,
+        then the partial settings are merged with the full settings, and the full
+        settings are saved.
         """
         full_settings = False
 
@@ -381,26 +419,38 @@ class PhotometryWorkingDirSettings:
                 # subclass of PhotometrySettings.
 
                 # Are there already full settings?
-                # If so, we can't save partial settings.
                 if self._settings_file.exists():
-                    raise ValueError(
-                        "Cannot save partial settings when full settings already exist."
-                    )
+                    if not update:
+                        # If so, we can't save partial settings if the update flag
+                        # is False.
+                        raise ValueError(
+                            "Cannot save partial settings when full "
+                            "settings already exist."
+                        )
+                    else:
+                        # Load the full settings and update them with the
+                        # partial settings
+                        disk_settings = self._settings.model_dump()
+
+                        disk_settings = self._update_settings_from_partial(
+                            disk_settings, settings
+                        )
+
+                        disk_settings = PhotometrySettings.model_validate(disk_settings)
+
+                        settings = disk_settings
+
                 # Are we updating or replacing partial settings?
                 if update and self._partial_settings is not None:
-                    # Grab a dict of the settings, only keeping values that are not
-                    # None. Making it dict so that the update method can be used to
-                    # merge the two sets of settings.
-                    passed_partial_settings = {
-                        k: v for k, v in settings.model_dump().items() if v is not None
-                    }
+                    # Get the partial settings that were loaded from disk
                     existing_partial_settings = self._partial_settings.model_dump()
 
-                    # The order matters here. Keys in the argument version of the
-                    # settings will overwrite the keys in the file version of the
-                    # settings. Note that update works in-place.
-                    existing_partial_settings.update(passed_partial_settings)
+                    # Update the partial settings with the new settings
+                    existing_partial_settings = self._update_settings_from_partial(
+                        existing_partial_settings, settings
+                    )
 
+                    # Validate the updated partial settings
                     settings = PartialPhotometrySettings.model_validate(
                         existing_partial_settings
                     )
