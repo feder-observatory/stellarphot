@@ -16,7 +16,7 @@
 
 - title: 3 - Comparison stars
   description: Choose comparison stars
-  source: ../stellarphot/photometry/02-viewer-comparison-stars-template.ipynb
+  source: ../stellarphot/photometry/02-comp-star-plotter-template.ipynb
   icon: ../stellarphot/stellarphot-logo.svg
   cwd: not_used
   type: notebook
@@ -24,7 +24,7 @@
 
 - title: 4 - Review settings
   description: Choose comparison stars
-  source: ../stellarphot/photometry/4-final-review-of-settings.ipynb
+  source: ../stellarphot/4-final-review-of-settings.ipynb
   icon: ../stellarphot/stellarphot-logo.svg
   cwd: not_used
   type: notebook
