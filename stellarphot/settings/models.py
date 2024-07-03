@@ -41,6 +41,7 @@ __all__ = [
     "PassbandMap",
     "PhotometryApertures",
     "PhotometryFileSettings",
+    "PhotometryRunSettings",
     "PhotometrySettings",
     "PhotometryOptionalSettings",
     "Exoplanet",
@@ -1076,3 +1077,25 @@ class Exoplanet(BaseModelWithTableRep):
     coordinate: Annotated[SkyCoord, AstropyValidator]
     depth: float | None = None
     duration: Annotated[QuantityType, WithPhysicalType("time")] | None = None
+
+
+class PhotometryRunSettings(BaseModel):
+    """
+    Settings for a photometry run.
+
+    Parameters
+    ----------
+    photometry_settings : `stellarphot.settings.PhotometrySettings`
+        Settings for performing aperture photometry.
+
+    exoplanet : `stellarphot.settings.Exoplanet`, optional
+        Information about an exoplanet transit.
+
+    """
+
+    directory_with_images: Path = "."
+    photometry_settings_file: Path = "photometry_settings.json"
+    reject_unmatched: Annotated[
+        bool, Field(description="Blah blah", tooltip="WOMA")
+    ] = True
+    object_of_interest: str | None = None
