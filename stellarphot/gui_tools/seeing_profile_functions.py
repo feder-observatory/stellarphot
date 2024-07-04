@@ -12,7 +12,6 @@ except ImportError:
 
 import matplotlib.pyplot as plt
 
-from stellarphot.gui_tools.fits_opener import FitsOpener
 from stellarphot.io import TessSubmission
 from stellarphot.photometry import CenterAndProfile
 from stellarphot.photometry.photometry import EXPOSURE_KEYWORDS
@@ -25,6 +24,7 @@ from stellarphot.settings import (
     ui_generator,
 )
 from stellarphot.settings.custom_widgets import ChooseOrMakeNew
+from stellarphot.settings.fits_opener import FitsOpener
 
 __all__ = [
     "set_keybindings",

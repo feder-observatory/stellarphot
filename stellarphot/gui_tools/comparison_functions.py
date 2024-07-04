@@ -13,7 +13,6 @@ except ImportError:
     from astrowidgets.ginga import ImageWidget
 
 from stellarphot import SourceListData
-from stellarphot.gui_tools.fits_opener import FitsOpener
 from stellarphot.gui_tools.seeing_profile_functions import set_keybindings
 from stellarphot.settings import (
     PartialPhotometrySettings,
@@ -22,6 +21,7 @@ from stellarphot.settings import (
     ui_generator,
 )
 from stellarphot.settings.custom_widgets import SettingWithTitle
+from stellarphot.settings.fits_opener import FitsOpener
 from stellarphot.utils.comparison_utils import (
     crossmatch_APASS2VSX,
     in_field,

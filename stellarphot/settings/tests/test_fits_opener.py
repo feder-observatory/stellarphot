@@ -1,6 +1,6 @@
 from astropy.utils.data import get_pkg_data_filename
 
-from stellarphot.gui_tools import FitsOpener
+from stellarphot.settings.fits_opener import FitsOpener
 
 
 def test_fits_opener_title():
