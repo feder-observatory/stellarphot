@@ -113,9 +113,6 @@ def test_comparison_properties(tmp_path, has_object, source_file_name):
             == source_file_name
         )
 
-    # Save the source list settings
-    comparison_widget.source_locations.savebuttonbar.bn_save.click()
-
     # Check that a partial photometry settings file exists and that source locations
     # settings have saved correctly.
     partial_settings = PhotometryWorkingDirSettings().load()

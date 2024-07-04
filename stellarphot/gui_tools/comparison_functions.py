@@ -278,6 +278,9 @@ class ComparisonViewer:
             self._file_chooser.set_file(file, directory=directory)
             self._set_file(None)
 
+        # Save the source location settings
+        self.source_locations.savebuttonbar.bn_save.click()
+
         self._make_observers()
 
     def _init(self):
