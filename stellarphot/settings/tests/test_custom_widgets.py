@@ -199,14 +199,21 @@ class TestChooseOrMakeNew:
         camera = self.make_test_camera()
 
         # Make an additional test camera so that the result is the *second* camera
-        # in the list, not the first. If it is the first the outcome is the same
-        # whether the user was editing or making a new camera.
+        # in the list, not the first. The workflow being test is that there are
+        # already two cameras, then the second one is selected (so that something is)
+        # selected) and then that second one is edited, but "no" is clicked on the
+        # confirmation dialog.
         saved = SavedSettings()
         camera.name = "zzzz" + camera.name
         saved.add_item(camera)
 
         choose_or_make_new = ChooseOrMakeNew("camera")
+
+        # There should be three choices in the dropdown -- the two cameras and
+        # "Make new"
         assert len(choose_or_make_new._choose_existing.options) == 3
+
+        # Choose the second camera
         choose_or_make_new._choose_existing.value = camera
 
         assert camera == choose_or_make_new.value
@@ -990,6 +997,8 @@ class TestReviewSettings:
                 created_from_defaults = True
 
             if created_from_defaults:
+                # Test whether the setting, which was able to be created from default
+                # values of the fields, is in the partial_settings.
                 wd_settings.load()
                 snake_name = to_snake(setting_class.__name__)
                 assert (
@@ -1239,6 +1248,7 @@ class TestReviewSettings:
         assert review_settings.current_settings == PartialPhotometrySettings()
 
     def test_selecting_table_without_saved_setting_sets_proper_badge(self):
+        # Test that selecting a tab with a saved setting sets a proper "NOT SAVED" badge
         review_settings = ReviewSettings([PhotometryApertures, Camera])
         review_settings._container.selected_index = 1
         assert SaveStatus.SETTING_NOT_SAVED in review_settings._container.titles[1]

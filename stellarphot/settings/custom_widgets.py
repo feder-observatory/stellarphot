@@ -816,7 +816,9 @@ class ReviewSettings(ipw.VBox):
                     raise ValueError(
                         f"The {name} setting saved in the working directory is not "
                         f"consistent with the list of {name} items that are saved "
-                        "in your permanent settings. Please fix this manually."
+                        "in your permanent settings. Please fix this manually "
+                        f"by editing your saved {name} settings or by deleting the "
+                        "working directory settings."
                     ) from e
                 # Add symbol to title to indicate that the setting needs review
                 self.badges.append(SaveStatus.SETTING_SHOULD_BE_REVIEWED)

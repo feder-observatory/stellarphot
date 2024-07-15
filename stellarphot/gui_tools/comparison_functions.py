@@ -261,6 +261,8 @@ class ComparisonViewer:
         self.target_coord = object_coordinate
         self.observatory = observatory
 
+        # This function defines several attributes in addition to returning the box and
+        # image viewer. You should take a look at it to see what it does.
         self.box, self.iw = self._viewer()
 
         self.photometry_settings = PhotometryWorkingDirSettings()
