@@ -857,27 +857,20 @@ class TestSettingWithTitle:
         # There should also be no unsaved changes at the moment
         assert not camera_title._autoui_widget.savebuttonbar.unsaved_changes
 
-        # Manually set unsaved_changes then call the change handler, which should
-        # add an indication that there are unsaved changes.
+        # Manually set the value of the gain, which should make the trait
+        # unsaved_changes True...
         camera_title._autoui_widget.di_widgets["gain"].value = str(
             2 * TEST_CAMERA_VALUES["gain"]
         )
-        # camera_title._autoui_widget.savebuttonbar.unsaved_changes = True
-        # camera_title._title_observer()
-        assert SaveStatus.SETTING_NOT_SAVED in camera_title.title.value
-        # # Go back to unsaved_changes being False
-        # camera_title._autoui_widget.savebuttonbar.unsaved_changes = False
 
-        # # Manually call the change handler, which should add an indication that
-        # # saves have been done.
-        # camera_title._title_observer()
-        # Click save
-        # assert SaveStatus.SETTING_IS_SAVED in camera_title.title.value
-        # Now change the camera value, which should trigger the change handler
-        camera_title._autoui_widget.value = TEST_CAMERA_VALUES
-
-        assert camera_title._autoui_widget.savebuttonbar.unsaved_changes
+        # ...and if unsaved_changes is True the "not saved" indicator should be present
         assert SaveStatus.SETTING_NOT_SAVED in camera_title.title.value
+
+        # Click save...
+        camera_title._autoui_widget.savebuttonbar.bn_save.click()
+
+        # ... cand check that the title is decorated with the "saved" indicator
+        assert SaveStatus.SETTING_IS_SAVED in camera_title.title.value
 
         # Finally, click the save button and the title should be decorated with
         # the saved indication.
