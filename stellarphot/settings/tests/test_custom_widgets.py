@@ -198,7 +198,7 @@ class TestChooseOrMakeNew:
         # Should not save the item after clicking the No button
         camera = self.make_test_camera()
 
-        # Make an additional test camera so that we the result is the *second* camera
+        # Make an additional test camera so that the result is the *second* camera
         # in the list, not the first. If it is the first the outcome is the same
         # whether the user was editing or making a new camera.
         saved = SavedSettings()

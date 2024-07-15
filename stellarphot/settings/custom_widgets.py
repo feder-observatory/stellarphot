@@ -904,7 +904,7 @@ class ReviewSettings(ipw.VBox):
         """
         # Once the user has clicked on the tab, the status badge for the
         # tab should just be the badge for the widget it holds, if the
-        # widget has a badge. OTherwise, compare the widget value to the
+        # widget has a badge. Otherwise, compare the widget value to the
         # saved value to determine the badge.
 
         # Get the index

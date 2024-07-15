@@ -368,7 +368,7 @@ class PhotometryWorkingDirSettings:
         }
 
         # The order matters here. Keys in the argument passed_partial_settings
-        # will overwrite the keys in disk)settings.
+        # will overwrite the keys in disk settings.
         # Note that update works in-place.
         disk_settings.update(passed_partial_settings)
 
