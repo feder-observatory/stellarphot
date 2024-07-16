@@ -1031,7 +1031,7 @@ class PhotometryRunner(ipw.VBox):
     @property
     def info_message(self):
         return (
-            f"Photometry will be done on all images of the object "
+            f"Photometry will be performed on all images of the object "
             f"'<code>{self.run_settings.object_of_interest}</code>' in the "
             f"folder '<code>{self.run_settings.directory_with_images}</code>'"
         )
