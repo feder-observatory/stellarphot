@@ -200,7 +200,7 @@ class TestChooseOrMakeNew:
 
         # Make an additional test camera so that the result is the *second* camera
         # in the list, not the first. The workflow being test is that there are
-        # already two cameras, then the second one is selected (so that something is)
+        # already two cameras, then the second one is selected (so that something is
         # selected) and then that second one is edited, but "no" is clicked on the
         # confirmation dialog.
         saved = SavedSettings()
@@ -876,7 +876,7 @@ class TestSettingWithTitle:
         # Click save...
         camera_title._autoui_widget.savebuttonbar.bn_save.click()
 
-        # ... cand check that the title is decorated with the "saved" indicator
+        # ... and check that the title is decorated with the "saved" indicator
         assert SaveStatus.SETTING_IS_SAVED in camera_title.title.value
 
         # Finally, click the save button and the title should be decorated with
