@@ -1,12 +1,12 @@
-- title: Saveable settings for testing
+- title: 1 - Saveable settings
   description: Settings for camera, observatory and passbands
-  source: ../stellarphot/saveable-settings.ipynb
+  source: ../stellarphot/1-initial-settings.ipynb
   icon: ../stellarphot/stellarphot-logo.svg
   cwd: not_used
   type: notebook
-  catalog: Stellarphot settings
+  catalog: Stellarphot photometry
 
-- title: Seeing profile
+- title: 2 - Seeing profile
   description: Choose aperture settings
   source: ../stellarphot/photometry/01-viewer-seeing-template.ipynb
   icon: ../stellarphot/stellarphot-logo.svg
@@ -14,9 +14,17 @@
   type: notebook
   catalog: Stellarphot photometry
 
-- title: Comparison stars
+- title: 3 - Comparison stars
   description: Choose comparison stars
-  source: ../stellarphot/photometry/02-viewer-comparison-stars-template.ipynb
+  source: ../stellarphot/photometry/02-comp-star-plotter-template.ipynb
+  icon: ../stellarphot/stellarphot-logo.svg
+  cwd: not_used
+  type: notebook
+  catalog: Stellarphot photometry
+
+- title: 4 - Review settings
+  description: Choose comparison stars
+  source: ../stellarphot/4-final-review-of-settings.ipynb
   icon: ../stellarphot/stellarphot-logo.svg
   cwd: not_used
   type: notebook

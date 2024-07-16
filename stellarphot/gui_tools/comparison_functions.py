@@ -261,13 +261,16 @@ class ComparisonViewer:
         self.target_coord = object_coordinate
         self.observatory = observatory
 
+        # This function defines several attributes in addition to returning the box and
+        # image viewer. You should take a look at it to see what it does.
         self.box, self.iw = self._viewer()
 
         self.photometry_settings = PhotometryWorkingDirSettings()
 
         if photom_apertures_file is not None:
-            # Set the source location file name to the name passed in
-            self._set_source_location_file_to_value(photom_apertures_file)
+            original_settings = self.source_locations.value.copy()
+            original_settings["source_list_file"] = photom_apertures_file
+            self.source_locations.value = original_settings
 
         self.overwrite_outputs = overwrite_outputs
 
@@ -469,30 +472,6 @@ class ComparisonViewer:
         # Update the save box title to reflect the save
         self.source_and_title.decorate_title()
 
-    def _set_source_location_file_to_value(self, name=None):
-        # Right now the source location file name will not be set to the default name
-        # properly because of a bug in ipyautoui, so we set it manually here.
-        # Easier once/if https://github.com/maxfordham/ipyautoui/pull/323 is merged
-        # and released. Then we can just set the value of the widget directly like this:
-        #
-        # self.source_locations.value = {'source_list_file': name, ...rest of settings}
-        file_chooser = self.source_locations.di_widgets["source_list_file"]
-        if name is None:
-            # Use the default name
-            name = self.source_locations.model.model_fields["source_list_file"].default
-        # Make sure ipyautoui knows the value has changed
-        file_chooser.value = name
-
-        # Set the value to what we actually want
-        file_chooser.reset(".", name)
-        file_chooser._apply_selection()
-
-        # Because we have updated the value outside of ipyautoui, also force an update
-        # of the widget value.
-        current_value = self.source_locations.value.copy()
-        current_value["source_list_file"] = file_chooser.value
-        self.source_locations.value = current_value
-
     def _viewer(self):
         header = ipw.HTML(
             value="""
@@ -529,7 +508,6 @@ class ComparisonViewer:
             SourceLocationSettings, max_field_width="75px"
         )
 
-        self._set_source_location_file_to_value()
         self.source_and_title = SettingWithTitle(
             "Source location settings", self.source_locations
         )
