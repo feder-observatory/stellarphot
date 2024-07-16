@@ -14,7 +14,9 @@ except ImportError:
 
 
 import ipywidgets as ipw
+import papermill as pm
 import traitlets as tr
+from astropy.utils.data import get_pkg_data_filename
 from camel_converter import to_snake
 from ipyautoui.autoobject import AutoObject
 from ipyautoui.custom.iterable import ItemBox
@@ -25,10 +27,12 @@ from stellarphot.settings import (
     Observatory,
     PartialPhotometrySettings,
     PassbandMap,
+    PhotometryRunSettings,
     PhotometryWorkingDirSettings,
     SavedSettings,
     ui_generator,
 )
+from stellarphot.settings.fits_opener import FitsOpener
 
 __all__ = ["ChooseOrMakeNew", "Confirm", "SettingWithTitle"]
 
@@ -987,3 +991,71 @@ def _add_saving_to_widget(setting_widget):
         raise ValueError(
             f"The widget {setting_widget} is not a recognized type of widget."
         )
+
+
+class PhotometryRunner(ipw.VBox):
+    def __init__(
+        self, photometry_notebook_name="photometry_run.ipynb", *args, **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+        self.photometry_notebook_name = photometry_notebook_name
+        self.fo = FitsOpener(
+            title=(
+                "Choose any image in the folder of images to do photometry on that "
+                "contains the object of interest"
+            )
+        )
+        self.info_box = ipw.HTML()
+        self.run_output = ipw.Output()
+        self.confirm = Confirm(message="Is this correct?")
+        self.children = (
+            self.fo.file_chooser,
+            self.info_box,
+            self.confirm,
+            self.run_output,
+        )
+        self.fo.file_chooser.observe(self._file_chosen, "_value")
+        self.confirm.observe(self._confirmation, "value")
+        self.run_settings = None
+
+    def _file_chosen(self, _):
+        self.run_settings = PhotometryRunSettings(
+            directory_with_images=self.fo.path.parent,
+            object_of_interest=self.fo.header["object"],
+        )
+        self.info_box.value = (
+            "<h2>" + self.info_message + "</br>Is this correct?" + "</h2>"
+        )
+        self.confirm.show()
+
+    @property
+    def info_message(self):
+        return (
+            f"Photometry will be done on all images of the object "
+            f"'<code>{self.run_settings.object_of_interest}</code>' in the "
+            f"folder '<code>{self.run_settings.directory_with_images}</code>'"
+        )
+
+    def _confirmation(self, change=None):
+        if change["new"]:
+            # User said yes
+
+            # Update informational message
+            self.info_box.value = (
+                "<h2>" + self.info_message + "</br>Photometry is running..." + "</h2>"
+            )
+            template_nb = get_pkg_data_filename(
+                "photometry_runner.ipynb", package="stellarphot.notebooks"
+            )
+            print(template_nb)
+            with self.run_output:
+                pm.execute_notebook(
+                    template_nb,
+                    self.photometry_notebook_name,
+                    parameters=self.run_settings.model_dump(mode="json"),
+                )
+        else:
+            # User said no, so reset to initial state.
+            self.fo.file_chooser.reset()
+            self.info_box.value = ""
+            self.run_settings = None
