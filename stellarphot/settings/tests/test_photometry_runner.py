@@ -70,9 +70,9 @@ class TestPhotometryRunner:
 
         photometry_runner = PhotometryRunner()
         # Select a fits file
-        photometry_runner.fo.file_chooser.reset(".", fake_fits.name)
-        photometry_runner.fo.file_chooser._apply_selection()
-        photometry_runner.fo.file_chooser.value = fake_fits
+        photometry_runner.fitsopen.file_chooser.reset(".", fake_fits.name)
+        photometry_runner.fitsopen.file_chooser._apply_selection()
+        photometry_runner.fitsopen.file_chooser.value = fake_fits
 
         # Check that the message in the information box is as expected
         assert "Photometry will be done" in photometry_runner.info_box.value

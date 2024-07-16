@@ -999,7 +999,7 @@ class PhotometryRunner(ipw.VBox):
     ):
         super().__init__(*args, **kwargs)
         self.photometry_notebook_name = photometry_notebook_name
-        self.fo = FitsOpener(
+        self.fitsopen = FitsOpener(
             title=(
                 "Choose any image in the folder of images to do photometry on that "
                 "contains the object of interest"
@@ -1009,19 +1009,19 @@ class PhotometryRunner(ipw.VBox):
         self.run_output = ipw.Output()
         self.confirm = Confirm(message="Is this correct?")
         self.children = (
-            self.fo.file_chooser,
+            self.fitsopen.file_chooser,
             self.info_box,
             self.confirm,
             self.run_output,
         )
-        self.fo.file_chooser.observe(self._file_chosen, "_value")
+        self.fitsopen.file_chooser.observe(self._file_chosen, "_value")
         self.confirm.observe(self._confirmation, "value")
         self.run_settings = None
 
     def _file_chosen(self, _):
         self.run_settings = PhotometryRunSettings(
-            directory_with_images=self.fo.path.parent,
-            object_of_interest=self.fo.header["object"],
+            directory_with_images=self.fitsopen.path.parent,
+            object_of_interest=self.fitsopen.header["object"],
         )
         self.info_box.value = (
             "<h2>" + self.info_message + "</br>Is this correct?" + "</h2>"
@@ -1056,6 +1056,6 @@ class PhotometryRunner(ipw.VBox):
                 )
         else:
             # User said no, so reset to initial state.
-            self.fo.file_chooser.reset()
+            self.fitsopen.file_chooser.reset()
             self.info_box.value = ""
             self.run_settings = None
