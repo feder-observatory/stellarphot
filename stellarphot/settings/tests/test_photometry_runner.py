@@ -25,7 +25,6 @@ def fake_settings_dir(mocker, tmp_path):
 
 
 class TestPhotometryRunner:
-
     # This auto-used fixture changes the working directory to the temporary directory
     # and then changes back to the original directory after the test is done.
     @pytest.fixture(autouse=True)
