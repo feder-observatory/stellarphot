@@ -75,7 +75,7 @@ class TestPhotometryRunner:
         photometry_runner.fitsopen.file_chooser.value = fake_fits
 
         # Check that the message in the information box is as expected
-        assert "Photometry will be done" in photometry_runner.info_box.value
+        assert "Photometry will be performed" in photometry_runner.info_box.value
         assert object_name in photometry_runner.info_box.value
 
         if do_photometry:
