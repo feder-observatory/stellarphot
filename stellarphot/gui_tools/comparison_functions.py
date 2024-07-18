@@ -304,6 +304,10 @@ class ComparisonViewer:
         )
 
         apass_comps = in_field(apass_good_coord, self.ccd, apass, good_stars)
+
+        # Set the object here so that the viewer is properly centered
+        self._set_object()
+
         make_markers(
             self.iw,
             self.ccd,
@@ -361,7 +365,6 @@ class ComparisonViewer:
         Widget callbacks need to accept a change argument, even if not used.
         """
         self._init()
-        self._set_object()
         # Save the initial source list if there is a file name for it and if the target
         # coordinates are known. The target coordinates are needed to generate the
         # source list table.
