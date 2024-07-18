@@ -994,6 +994,21 @@ def _add_saving_to_widget(setting_widget):
 
 
 class PhotometryRunner(ipw.VBox):
+    """
+    Class to run the photometry notebook on a folder of images.
+
+    Parameters
+    ----------
+    photometry_notebook_name : str, optional
+        Name of the photometry notebook to run. Default is "photometry_run.ipynb".
+
+    Notes
+    -----
+
+    When this widget is run, it will created a new notebook in the current directory
+    called ``photometry_notebook_name``, which will perform the photometry.
+    """
+
     def __init__(
         self, photometry_notebook_name="photometry_run.ipynb", *args, **kwargs
     ):
@@ -1047,7 +1062,7 @@ class PhotometryRunner(ipw.VBox):
             template_nb = get_pkg_data_filename(
                 "photometry_runner.ipynb", package="stellarphot.notebooks"
             )
-            print(template_nb)
+
             with self.run_output:
                 pm.execute_notebook(
                     template_nb,
