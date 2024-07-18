@@ -79,7 +79,7 @@ class FitsOpener:
         """
         The path to the selected FITS file.
         """
-        return Path(self._fc.selected)
+        return Path(self._fc._value)
 
     def _set_header(self, _=None):
         if not self._header or self._fc.selected != self._selected_cache:
