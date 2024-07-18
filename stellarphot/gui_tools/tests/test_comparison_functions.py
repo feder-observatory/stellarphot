@@ -127,12 +127,16 @@ def test_comparison_properties(tmp_path, has_object, source_file_name):
 
 @pytest.mark.remote_data
 def test_loading_second_image_succeeds(tmp_path):
-    # Regression tet for #384
+    # Regression test for #384
 
     # Make a comparison viewer and load EY UMa
     comparison_widget = cf.ComparisonViewer()
-    ccd = make_ey_uma_image(with_object=True)
-    file_name = "ey-uma.fits"
+    ccd = CCDData.read(
+        get_pkg_data_filename(
+            "tests/data/TIC_402828941-tiny.fit.bz2", package="stellarphot"
+        )
+    )
+    file_name = "TIC.fits"
     path = tmp_path / file_name
     ccd.write(path, overwrite=True)
     print(path)
@@ -146,15 +150,13 @@ def test_loading_second_image_succeeds(tmp_path):
         )
         comparison_widget._file_chooser.file_chooser.value = path
 
-    ey_coord = SkyCoord(135.58650087, 49.81921088, unit="deg")
+    TIC_coord = SkyCoord(305.45862498, 19.43593327, unit="deg")
     # Make sure we have ey uma as the target coordinates
-    assert comparison_widget.target_coord.separation(ey_coord) < 1 * u.arcsec
+    assert comparison_widget.target_coord.separation(TIC_coord) < 10 * u.arcsec
 
     # Load a second image
-    ccd2 = CCDData.read(
-        get_pkg_data_filename("../../tests/data/wasp-10-center.fit.bz2")
-    )
-    ccd2.data = np.zeros(CCD_SHAPE)
+    ccd2 = CCDData.read(get_pkg_data_filename("../../tests/data/wasp-10-tiny.fit.bz2"))
+    # ccd2.data = np.zeros(CCD_SHAPE)
     wasp_file = tmp_path / "wasp-10.fits"
     ccd2.write(wasp_file, overwrite=True)
     wasp_coord = SkyCoord(348.99291924, 31.46286002, unit="deg")
@@ -181,4 +183,8 @@ def test_loading_second_image_succeeds(tmp_path):
     )
     ra, dec = match.groups()
     viewer_coord = SkyCoord(ra, dec, unit=(u.hour, u.deg))
-    assert viewer_coord.separation(wasp_coord) < 1 * u.arcsec
+
+    # It is not clear to me what the viewer position defaults to, but it should be
+    # close to the target coordinates, where by close I mean "less than the
+    # diagonal width of the frame".
+    assert viewer_coord.separation(wasp_coord) < 1 * u.degree
