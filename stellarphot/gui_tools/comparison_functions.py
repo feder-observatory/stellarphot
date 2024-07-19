@@ -353,7 +353,6 @@ class ComparisonViewer:
             self.object_name.value = "<h2>Object unknown</h2>"
             self._object = ""
 
-        print(f"Object: {self._object}")
         # We have a name, try to get coordinates from it
         try:
             self.target_coord = SkyCoord.from_name(self._object)
