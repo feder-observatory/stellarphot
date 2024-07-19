@@ -321,6 +321,10 @@ class ComparisonViewer:
         )
 
     @property
+    def fits_file(self):
+        return self._file_chooser
+
+    @property
     def photom_apertures_file(self):
         return self.source_locations.value["source_list_file"]
 
