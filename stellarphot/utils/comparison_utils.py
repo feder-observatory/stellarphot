@@ -1,9 +1,6 @@
-from pathlib import Path
-
 import pandas as pd
 from astropy import units as u
 from astropy.coordinates import SkyCoord
-from astropy.nddata import CCDData
 from astropy.table import Table
 
 from stellarphot import apass_dr9, vsx_vizier
@@ -38,36 +35,24 @@ def read_file(radec_file):
     return target_table
 
 
-def set_up(sample_image_for_finding_stars, directory_with_images="."):
+def set_up(ccd):
     """
     Read in sample image and find known variables in the field of view.
 
     Parameters
     ----------
 
-    sample_image_for_finding_stars : str
-        Name or URL of a FITS image of the field of view.
-
-    directory_with_images : str, optional
-        Folder in which the image is located. Ignored if the sample image
-        is a URL.
+    ccd: `astropy.nddata.CCDData`
+        Sample image.
 
     Returns
     -------
-
-    ccd: `astropy.nddata.CCDData`
-        Sample image.
 
     vsx: `astropy.table.Table`
         Table with known variables in the field of view.
 
     """
-    if sample_image_for_finding_stars.startswith("http"):
-        path = sample_image_for_finding_stars
-    else:
-        path = Path(directory_with_images) / sample_image_for_finding_stars
 
-    ccd = CCDData.read(path)
     try:
         vsx = vsx_vizier(ccd.wcs, radius=0.5 * u.degree)
     except RuntimeError:
@@ -77,7 +62,7 @@ def set_up(sample_image_for_finding_stars, directory_with_images="."):
         dec = vsx["dec"]
         vsx["coords"] = SkyCoord(ra=ra, dec=dec, unit=u.degree)
 
-    return ccd, vsx
+    return vsx
 
 
 def crossmatch_APASS2VSX(CCD, RD, vsx):

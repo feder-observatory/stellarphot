@@ -34,7 +34,7 @@ __all__ = ["make_markers", "wrap", "ComparisonViewer"]
 DESC_STYLE = {"description_width": "initial"}
 
 
-def make_markers(iw, ccd, RD, vsx, ent, name_or_coord=None):
+def make_markers(iw, RD, vsx, ent, name_or_coord=None):
     """
     Add markers for APASS, TESS targets, VSX.  Also center on object/coordinate.
 
@@ -43,9 +43,6 @@ def make_markers(iw, ccd, RD, vsx, ent, name_or_coord=None):
 
     iw : `astrowidgets.ImageWidget`
         Ginga widget.
-
-    ccd : `astropy.nddata.CCDData`
-        Sample image.
 
     RD : `astropy.table.Table`
         Table with target information, including a
@@ -66,7 +63,6 @@ def make_markers(iw, ccd, RD, vsx, ent, name_or_coord=None):
     None
         Markers are added to the image in Ginga widget.
     """
-    iw.load_nddata(ccd)
     iw.zoom_level = "fit"
 
     try:
@@ -288,10 +284,12 @@ class ComparisonViewer:
         Handles aspects of initialization that need to be deferred until
         a file is chosen.
         """
-        self.ccd, self.vsx = set_up(
-            self._file_chooser.path.name,
-            directory_with_images=self._file_chooser.path.parent,
-        )
+        # Read in the ccd data here and load the image into viewer instead of doing
+        # it behind the scenes in set_up and make_markers
+        self.ccd = self.fits_file.ccd
+        self.fits_file.load_in_image_widget(self.iw)
+
+        self.vsx = set_up(self.ccd)
 
         apass, vsx_apass_angle, targets_apass_angle = crossmatch_APASS2VSX(
             self.ccd, self.targets_from_file, self.vsx
@@ -313,7 +311,6 @@ class ComparisonViewer:
 
         make_markers(
             self.iw,
-            self.ccd,
             self.targets_from_file,
             self.vsx,
             apass_comps,
