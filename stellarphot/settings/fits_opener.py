@@ -73,7 +73,12 @@ class FitsOpener:
         """
         Return image stored in FITS file as CCDData object
         """
-        return CCDData.read(self.path)
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=FITSFixedWarning)
+            warnings.filterwarnings("ignore", category=fits.verify.VerifyWarning)
+            ccd = CCDData.read(self.path)
+        return ccd
 
     @property
     def path(self):
@@ -107,9 +112,8 @@ class FitsOpener:
             The widget into which to load the image.
         """
         with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore", category=[FITSFixedWarning, fits.verify.VerifyWarning]
-            )
+            warnings.filterwarnings("ignore", category=FITSFixedWarning)
+            warnings.filterwarnings("ignore", category=fits.verify.VerifyWarning)
             image_widget.load_fits(str(self.path))
 
     def set_file(self, file, directory=None):
