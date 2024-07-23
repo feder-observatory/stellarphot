@@ -3,6 +3,8 @@ import ipywidgets as ipw
 from stellarphot.gui_tools.comparison_functions import ComparisonViewer
 from stellarphot.gui_tools.seeing_profile_functions import SeeingProfileWidget
 
+__all__ = ["ComparisonAndSeeing"]
+
 
 class ComparisonAndSeeing(ipw.VBox):
     """
