@@ -19,21 +19,19 @@ Testing
 If you are testing a pre-release version of stellarphot we recommend setting up
 a virtual environment and installing stellarphot in this environment.
 
-Creating an environment with `conda` or `mamba`:
+Creating an environment with `conda` or `mamba`::
 
-```bash
-mamba create -n stellarphot-test python=3.11
-mamba activate stellarphot-test
-pip install --pre --upgrade stellarphot
-```
+    mamba create -n stellarphot-test python=3.11
+    mamba activate stellarphot-test
+    pip install --pre --upgrade stellarphot
 
-Creating an environment with `virtualenv`:
+Creating an environment with `virtualenv`::
 
-```bash
-python3 -m venv stellarphot-test
-source stellarphot-test/bin/activate
-pip install --pre --upgrade stellarphot
-```
+
+    python3 -m venv stellarphot-test
+    source stellarphot-test/bin/activate
+    pip install --pre --upgrade stellarphot
+
 
 Overview
 --------
