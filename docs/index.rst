@@ -47,11 +47,10 @@ To generate settings using a graphical interface, start JupyterLab. In the launc
 Command line interface for generating settings
 ----------------------------------------------
 
-To generate settings using the command line, run the following command:
+To generate settings using the command line, run the following command::
 
-```bash
-stellarphot-settings
-```
+    stellarphot-settings
+
 
 This will generate a settings file in the directory in which you run the command
 called `stellarphot_settings.json`. Edit that file in the editor of your choice.
@@ -66,24 +65,18 @@ Performing photometry
 ---------------------
 
 Once you have made your settings doing photometry is a two line process. First, you
-create a photometry object:
+create a photometry object::
 
-```python
-from stellarphot.photometry import AperurePhotometry
-phot = AperurePhotometry(photometry_settings)
-```
+    from stellarphot.photometry import AperurePhotometry
+    phot = AperurePhotometry(photometry_settings)
 
-Then you can perform photometry on a single image:
+Then you can perform photometry on a single image::
 
-```python
-phot(image)
-```
+    phot(image)
 
-If you have a directory of images you can perform photometry on all of them at once like this:
+If you have a directory of images you can perform photometry on all of them at once like this::
 
-```python
-phot(directory, object_of_interest="M13")
-```
+    phot(directory, object_of_interest="M13")
 
 
 .. toctree::
