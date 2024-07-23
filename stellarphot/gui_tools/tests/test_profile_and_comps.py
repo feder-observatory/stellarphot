@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 from astropy.utils.data import get_pkg_data_filename
 
 from stellarphot.gui_tools import ComparisonAndSeeing
@@ -20,6 +21,7 @@ class TestComparisonAndSeeing:
         # Just make sure we can create the object
         ComparisonAndSeeing()
 
+    @pytest.mark.remote_data
     def test_setting_fits_file_in_comp_affects_seeing(self, tmp_path):
         # The only tricky-ish thing this class does is make sure that the
         # fits_file in the seeing widget and the fits_file in the comparison
@@ -34,6 +36,7 @@ class TestComparisonAndSeeing:
         assert comp.seeing.fits_file.file_chooser._value == str(file)
         assert comp.comparison.fits_file.file_chooser.selected == str(file)
 
+    @pytest.mark.remote_data
     def test_setting_fits_file_in_seeing_affects_comp(self, tmp_path):
         # This is the same as the previous test, but in the other direction.
         comp = ComparisonAndSeeing()
