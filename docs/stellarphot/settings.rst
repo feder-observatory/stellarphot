@@ -19,7 +19,7 @@ The settings are grouped into these categories:
 - `~stellarphot.settings.PassbandMap`
 - `~stellarphot.settings.PhotometryApertures`
 - `~stellarphot.settings.SourceLocationSettings`
-- `~stellarphot.settings.OptionalSettings`
+- `~stellarphot.settings.PhotometryOptionalSettings`
 - `~stellarphot.settings.LoggingSettings`
 
 
