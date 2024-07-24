@@ -45,6 +45,15 @@ def test_comparison_object_creation():
     assert isinstance(comparison_widget.box, ipw.Box)
 
 
+def test_fits_file_property():
+    # Make sure that the fits file property has the value we expect and that the
+    # property is read-only.
+    comparison_widget = cf.ComparisonViewer()
+    assert comparison_widget.fits_file == comparison_widget._file_chooser
+    with pytest.raises(AttributeError):
+        comparison_widget.fits_file = None
+
+
 @pytest.mark.parametrize("source_file_name", [None, "sources.ecsv"])
 @pytest.mark.parametrize("has_object", [True, False])
 @pytest.mark.remote_data
@@ -112,9 +121,6 @@ def test_comparison_properties(tmp_path, has_object, source_file_name):
             comparison_widget.source_locations.value["source_list_file"]
             == source_file_name
         )
-
-    # Save the source list settings
-    comparison_widget.source_locations.savebuttonbar.bn_save.click()
 
     # Check that a partial photometry settings file exists and that source locations
     # settings have saved correctly.

@@ -25,6 +25,7 @@ dependencies = [
     "ipywidgets",
     "jupyter-app-launcher",
     "matplotlib",
+    "papermill",
     "pandas",
     "photutils >=1.9",
     "pydantic >=2",
@@ -178,4 +179,6 @@ filterwarnings = [
     'ignore:RADECSYS=:',
     # photutils changed the name of a function again
     'ignore:The make_gaussian_sources_image function is deprecated',
+    # papermill is using deprecated jupyter paths
+    'ignore:Jupyter is migrating its paths to use standard platformdirs:DeprecationWarning',
 ]

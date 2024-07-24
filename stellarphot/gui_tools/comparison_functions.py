@@ -13,7 +13,6 @@ except ImportError:
     from astrowidgets.ginga import ImageWidget
 
 from stellarphot import SourceListData
-from stellarphot.gui_tools.fits_opener import FitsOpener
 from stellarphot.gui_tools.seeing_profile_functions import set_keybindings
 from stellarphot.settings import (
     PartialPhotometrySettings,
@@ -22,6 +21,7 @@ from stellarphot.settings import (
     ui_generator,
 )
 from stellarphot.settings.custom_widgets import SettingWithTitle
+from stellarphot.settings.fits_opener import FitsOpener
 from stellarphot.utils.comparison_utils import (
     crossmatch_APASS2VSX,
     in_field,
@@ -34,7 +34,7 @@ __all__ = ["make_markers", "wrap", "ComparisonViewer"]
 DESC_STYLE = {"description_width": "initial"}
 
 
-def make_markers(iw, ccd, RD, vsx, ent, name_or_coord=None):
+def make_markers(iw, RD, vsx, ent, name_or_coord=None):
     """
     Add markers for APASS, TESS targets, VSX.  Also center on object/coordinate.
 
@@ -43,9 +43,6 @@ def make_markers(iw, ccd, RD, vsx, ent, name_or_coord=None):
 
     iw : `astrowidgets.ImageWidget`
         Ginga widget.
-
-    ccd : `astropy.nddata.CCDData`
-        Sample image.
 
     RD : `astropy.table.Table`
         Table with target information, including a
@@ -66,7 +63,6 @@ def make_markers(iw, ccd, RD, vsx, ent, name_or_coord=None):
     None
         Markers are added to the image in Ginga widget.
     """
-    iw.load_nddata(ccd)
     iw.zoom_level = "fit"
 
     try:
@@ -278,6 +274,9 @@ class ComparisonViewer:
             self._file_chooser.set_file(file, directory=directory)
             self._set_file(None)
 
+        # Save the source location settings
+        self.source_locations.savebuttonbar.bn_save.click()
+
         self._make_observers()
 
     def _init(self):
@@ -285,10 +284,12 @@ class ComparisonViewer:
         Handles aspects of initialization that need to be deferred until
         a file is chosen.
         """
-        self.ccd, self.vsx = set_up(
-            self._file_chooser.path.name,
-            directory_with_images=self._file_chooser.path.parent,
-        )
+        # Read in the ccd data here and load the image into viewer instead of doing
+        # it behind the scenes in set_up and make_markers
+        self.ccd = self.fits_file.ccd
+        self.fits_file.load_in_image_widget(self.iw)
+
+        self.vsx = set_up(self.ccd)
 
         apass, vsx_apass_angle, targets_apass_angle = crossmatch_APASS2VSX(
             self.ccd, self.targets_from_file, self.vsx
@@ -310,12 +311,15 @@ class ComparisonViewer:
 
         make_markers(
             self.iw,
-            self.ccd,
             self.targets_from_file,
             self.vsx,
             apass_comps,
             name_or_coord=self.target_coord,
         )
+
+    @property
+    def fits_file(self):
+        return self._file_chooser
 
     @property
     def photom_apertures_file(self):
@@ -349,7 +353,6 @@ class ComparisonViewer:
             self.object_name.value = "<h2>Object unknown</h2>"
             self._object = ""
 
-        print(f"Object: {self._object}")
         # We have a name, try to get coordinates from it
         try:
             self.target_coord = SkyCoord.from_name(self._object)
