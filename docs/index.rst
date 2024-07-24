@@ -40,15 +40,15 @@ Overview
 
 You will go through this process to do photometry.
 
-1. You need to make some settings, like camera properties, observatory information, and passband maps. You may only need
+#. You need to make some settings, like camera properties, observatory information, and passband maps. You may only need
    to do this step once if you use the same equipment for all of your observations.
-2. Settings specific to an object need to be made:
+#. Settings specific to an object need to be made:
 
-    a. night of data, like the photometry aperture radius, need to be made.
-    b. a list of the sources for which you want to perform photometry. These lists can be re-used.
+   #. night of data, like the photometry aperture radius, need to be made.
+   #. a list of the sources for which you want to perform photometry. These lists can be re-used.
 
-3. Review all of the settings that the photometry routines will use.
-3. Once those settings have been done, you can perform photometry on your images.
+#. Review all of the settings that the photometry routines will use.
+#. Once those settings have been done, you can perform photometry on your images.
 
 
 Graphical interface for making settings
