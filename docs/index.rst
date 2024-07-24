@@ -6,24 +6,23 @@ provides a simple interface for performing aperture photometry of either a singl
 image or a directory with multiple images. It is designed to be easy to use for both
 non-programmers and programmers.
 
-
-Getting Started
-===============
-
 Installation
-------------
+============
+
 
 Testing
-+++++++
+-------
 
 If you are testing a pre-release version of stellarphot we recommend setting up
 a virtual environment and installing stellarphot in this environment.
+
+Only use one of the methods below for making a virtual environment.
 
 Creating an environment with `conda` or `mamba`::
 
     mamba create -n stellarphot-test python=3.11
     mamba activate stellarphot-test
-    pip install --pre --upgrade stellarphot
+    pip install pip install git+https://github.com/mwcraig/stellarphot.git@update-docs
 
 Creating an environment with `virtualenv`::
 
@@ -33,16 +32,42 @@ Creating an environment with `virtualenv`::
     pip install --pre --upgrade stellarphot
 
 
+Getting Started
+===============
+
 Overview
 --------
 
+You will go through this process to do photometry.
+
+1. You need to make some settings, like camera properties, observatory information, and passband maps. You may only need
+   to do this step once if you use the same equipment for all of your observations.
+2. Settings specific to an object need to be made:
+
+    a. night of data, like the photometry aperture radius, need to be made.
+    b. a list of the sources for which you want to perform photometry. These lists can be re-used.
+
+3. Review all of the settings that the photometry routines will use.
+3. Once those settings have been done, you can perform photometry on your images.
 
 
-Graphical interface for generating settings
--------------------------------------------
+Graphical interface for making settings
+---------------------------------------
 
-To generate settings using a graphical interface, start JupyterLab. In the launcher will be a section called
-"Stellarphot" with a link to "Generate Settings". Clicking on this link will open a notebook where you can enter settings.
+If you open up JupyterLab, the launcher should have a section that looks like this:
+
+.. image:: /_static/launcher.png
+    :width: 400px
+    :alt: JupyterLab Launcher with stellarphot notebooks
+
+Each of the notebooks corresponds to the steps in the previous section. Open each notebook in order, and run
+all of the cells in the notebook. In each will be a graphical interface to enter the camera and other settings
+(in notebook 1), measuring the seeing and choose comparison stars (in notebook 2), review all of your settings
+(in notebook 3), and perform photometry (in notebook 4).
+
+When the photometry is done there will be a new notebook called `photometry_run.ipynb` that will have a record
+of the photometry that was done.
+
 
 Command line interface for generating settings
 ----------------------------------------------
