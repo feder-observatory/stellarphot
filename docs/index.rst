@@ -22,7 +22,7 @@ Creating an environment with `conda` or `mamba`::
 
     mamba create -n stellarphot-test python=3.11
     mamba activate stellarphot-test
-    pip install pip install git+https://github.com/mwcraig/stellarphot.git@update-docs
+    pip install git+https://github.com/mwcraig/stellarphot.git@update-docs
 
 Creating an environment with `virtualenv`::
 
