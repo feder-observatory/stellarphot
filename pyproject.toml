@@ -20,7 +20,7 @@ dependencies = [
     "camel-converter",
     "ccdproc",
     "ginga",
-    "ipyautoui >=0.7.15",
+    "ipyautoui >=0.7.19",
     "ipyfilechooser",
     "ipywidgets",
     "jupyter-app-launcher",
