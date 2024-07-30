@@ -1,5 +1,7 @@
 import functools
+import logging
 
+import ipyautoui
 import ipywidgets as ipw
 import numpy as np
 from astropy import units as u
@@ -510,9 +512,16 @@ class ComparisonViewer:
         self._object = None
         controls = self._make_control_bar()
 
+        # Capture the logging message issued about setting the file chooser to a file
+        # that does not exist.
+        original_logging_level = ipyautoui.custom.filechooser.logger.level
+        ipyautoui.custom.filechooser.logger.setLevel(logging.CRITICAL)
+
+        # The logging message will be generated here if it is generated.
         self.source_locations = ui_generator(
             SourceLocationSettings, max_field_width="75px"
         )
+        ipyautoui.custom.filechooser.logger.setLevel(original_logging_level)
 
         self.source_and_title = SettingWithTitle(
             "Source location settings", self.source_locations
