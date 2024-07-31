@@ -2,13 +2,17 @@ from enum import Enum
 
 
 class AAVSOFilters(str, Enum):
+    """
+    The definitive list of AAVSO filters is at https://www.aavso.org/filters
+    """
+
     U = "U"
     B = "B"
     V = "V"
-    R = "R"
+    RJ = "RJ"
     Rc = "R"
-    I = "I"  # noqa: E741
     Ic = "I"
+    IJ = "IJ"
     J = "J"
     H = "H"
     K = "K"
@@ -35,4 +39,5 @@ class AAVSOFilters(str, Enum):
     Y = "Y"
     HA = "HA"
     HAC = "HAC"
+    CBB = "CBB"
     O = "O"  # noqa: E741
