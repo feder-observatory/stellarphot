@@ -199,6 +199,10 @@ class TestModelAgnosticActions:
         pydantic_titles = {
             f: [f.replace("_", " "), f.replace("_", "")] for f in settings.keys()
         }
+        # Find any title that were explicitly set in the model definition via Field
+        explicit_titles = {
+            k: v.title for k, v in model.model_fields.items() if v.title is not None
+        }
         title_present = []
 
         for title in pydantic_titles.keys():
@@ -212,6 +216,12 @@ class TestModelAgnosticActions:
                 if present:
                     title_present.append(present)
                     break
+                else:
+                    if title in explicit_titles:
+                        present = explicit_titles[title].lower() in label.lower()
+                        if present:
+                            title_present.append(present)
+                            break
             else:
                 title_present.append(False)
 
