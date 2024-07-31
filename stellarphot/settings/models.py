@@ -401,7 +401,7 @@ class PhotometryApertures(BaseModelWithTableRep):
         ),
     ]
     # Disable the UI element by default because it is often calculate from an image
-    fwhm: Annotated[PositiveFloat, Field(disabled=True, default=1.0)]
+    fwhm: Annotated[PositiveFloat, Field(disabled=True, default=1.0, title="FWHM")]
 
     @property
     def inner_annulus(self):
@@ -702,10 +702,11 @@ class PhotometryOptionalSettings(BaseModelWithTableRep):
     include_dig_noise: Annotated[
         bool,
         Field(
+            title="Include Digitization Noise",
             description=(
                 "Should the digitization noise be included in the calculation of "
                 "the noise for each observation?"
-            )
+            ),
         ),
     ] = True
 
