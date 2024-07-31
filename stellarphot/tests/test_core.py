@@ -712,6 +712,12 @@ def test_catalog_colname_map():
     assert catalog_dat["passband"][0] == "g"
     assert catalog_dat.catalog_name == "VSX"
     assert catalog_dat.catalog_source == "Vizier"
+    catalog_dat.add_row(catalog_dat[0])
+    catalog_dat.add_row(catalog_dat[0])
+    catalog_dat.add_row(catalog_dat[0])
+    catalog_slice = catalog_dat[0:2]
+    assert catalog_slice.catalog_name == "VSX"
+    assert catalog_slice.catalog_source == "Vizier"
 
 
 def test_catalog_bandpassmap():
