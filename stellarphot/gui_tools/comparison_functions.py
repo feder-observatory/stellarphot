@@ -1,5 +1,7 @@
 import functools
+import logging
 
+import ipyautoui
 import ipywidgets as ipw
 import numpy as np
 from astropy import units as u
@@ -481,8 +483,8 @@ class ComparisonViewer:
     def _viewer(self):
         header = ipw.HTML(
             value="""
-        <h2>Click and drag or use arrow keys to pan, use +/- keys to zoom</h2>
-        <h3>Shift-left click (or Crtl-left click)to exclude star as target
+        <h3>Click and drag or use arrow keys to pan, use +/- keys to zoom.</h3>
+        <h3>Shift-left click (or Crtl-left click) to exclude star as target
         or comp. Click again to include.</h3>
         """
         )
@@ -510,9 +512,16 @@ class ComparisonViewer:
         self._object = None
         controls = self._make_control_bar()
 
+        # Capture the logging message issued about setting the file chooser to a file
+        # that does not exist.
+        original_logging_level = ipyautoui.custom.filechooser.logger.level
+        ipyautoui.custom.filechooser.logger.setLevel(logging.CRITICAL)
+
+        # The logging message will be generated here if it is generated.
         self.source_locations = ui_generator(
             SourceLocationSettings, max_field_width="75px"
         )
+        ipyautoui.custom.filechooser.logger.setLevel(original_logging_level)
 
         self.source_and_title = SettingWithTitle(
             "Source location settings", self.source_locations
@@ -525,9 +534,9 @@ class ComparisonViewer:
         inner_box = ipw.HBox()
         source_legend_box = ipw.VBox()
         source_legend_box.children = [
+            self.help_stuff,
             self.object_name,
             self.source_and_title,
-            self.help_stuff,
         ]
         inner_box.children = [iw, source_legend_box]  # legend]
 
@@ -601,7 +610,7 @@ class ComparisonViewer:
         """
         plot_names = []
         comp_table = self.generate_table()
-
+        label_size = 15
         original_mark = self.iw._marker
         for star in comp_table:
             star_id = star["star_id"]
@@ -610,7 +619,7 @@ class ComparisonViewer:
                 self.iw._marker = functools.partial(
                     self.iw.dc.Text,
                     text=label,
-                    fontsize=20,
+                    fontsize=label_size,
                     fontscale=False,
                     color="green",
                 )
@@ -624,7 +633,7 @@ class ComparisonViewer:
                 self.iw._marker = functools.partial(
                     self.iw.dc.Text,
                     text=label,
-                    fontsize=20,
+                    fontsize=label_size,
                     fontscale=False,
                     color="red",
                 )
@@ -638,7 +647,7 @@ class ComparisonViewer:
                 self.iw._marker = functools.partial(
                     self.iw.dc.Text,
                     text=label,
-                    fontsize=20,
+                    fontsize=label_size,
                     fontscale=False,
                     color="blue",
                 )
