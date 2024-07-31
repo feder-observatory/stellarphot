@@ -54,6 +54,11 @@ You will go through this process to do photometry.
 Graphical interface for making settings
 ---------------------------------------
 
+A graphical interface is provided via JupyterLab to make settings. To start JupyterLab, run the following command
+in a terminal::
+
+    jupyter lab
+
 If you open up JupyterLab, the launcher should have a section that looks like this:
 
 .. image:: /_static/launcher.png
