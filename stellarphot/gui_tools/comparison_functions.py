@@ -483,7 +483,7 @@ class ComparisonViewer:
     def _viewer(self):
         header = ipw.HTML(
             value="""
-        <h3>Click and drag or use arrow keys to pan, use +/- keys to zoom</h3>
+        <h3>Click and drag or use arrow keys to pan, use +/- keys to zoom.</h3>
         <h3>Shift-left click (or Crtl-left click) to exclude star as target
         or comp. Click again to include.</h3>
         """
