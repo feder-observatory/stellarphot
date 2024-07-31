@@ -18,7 +18,7 @@ a virtual environment and installing stellarphot in this environment.
 
 Only use one of the methods below for making a virtual environment.
 
-Creating an environment with `conda` or `mamba`::
+Creating an environment with `conda` or `mamba` (use whichever one you have installed)::
 
     mamba create -n stellarphot-test python=3.11
     mamba activate stellarphot-test
