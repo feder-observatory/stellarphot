@@ -483,8 +483,8 @@ class ComparisonViewer:
     def _viewer(self):
         header = ipw.HTML(
             value="""
-        <h2>Click and drag or use arrow keys to pan, use +/- keys to zoom</h2>
-        <h3>Shift-left click (or Crtl-left click)to exclude star as target
+        <h3>Click and drag or use arrow keys to pan, use +/- keys to zoom</h3>
+        <h3>Shift-left click (or Crtl-left click) to exclude star as target
         or comp. Click again to include.</h3>
         """
         )
@@ -534,9 +534,9 @@ class ComparisonViewer:
         inner_box = ipw.HBox()
         source_legend_box = ipw.VBox()
         source_legend_box.children = [
+            self.help_stuff,
             self.object_name,
             self.source_and_title,
-            self.help_stuff,
         ]
         inner_box.children = [iw, source_legend_box]  # legend]
 
