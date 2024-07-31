@@ -85,11 +85,25 @@ def make_markers(iw, RD, vsx, ent, name_or_coord=None):
             iw.center_on(name_or_coord)
 
     if vsx:
-        iw.marker = {"type": "circle", "color": "blue", "radius": 10}
+        # TODO: if astrowidgets ever gets more sensible marker types use those instead
+        # of using the internal interface to marker
+        iw._marker = functools.partial(
+            iw.dc.Box,
+            xradius=10,
+            yradius=10,
+            color="blue",
+        )
         iw.add_markers(
             vsx, skycoord_colname="coords", use_skycoord=True, marker_name="VSX"
         )
-    iw.marker = {"type": "circle", "color": "red", "radius": 10}
+    # TODO: if astrowidgets ever gets more sensible marker types use those instead
+    # of using the internal interface to marker
+    iw._marker = functools.partial(
+        iw.dc.Triangle,
+        xradius=10,
+        yradius=10,
+        color="red",
+    )
     iw.add_markers(
         ent,
         skycoord_colname="coords",
@@ -493,8 +507,8 @@ class ComparisonViewer:
             value="""
         <ul>
         <li>Green circles -- Gaia stars within 2.5 arcmin of target</li>
-        <li>Red circles -- APASS stars within 1 mag of target</li>
-        <li>Blue circles -- VSX variables</li>
+        <li>Red triangles -- Comparison stars from APASS</li>
+        <li>Blue squares -- VSX variables</li>
         <li>Red × -- Exclude as target or comp</li>
         </ul>
         """
