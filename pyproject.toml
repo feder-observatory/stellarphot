@@ -127,8 +127,6 @@ select = [
 "__init__.py" = ["E402", "F403"]
 # Ignore F405 (variable may be from star imports) in docs/conf.py
 "docs/conf.py" = ["F405"]
-# Ignore F811 (redefinition of unused) in core for the moment
-"core.py" = ["F811"]
 
 [tool.codespell]
 skip = '*.svg'

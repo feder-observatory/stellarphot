@@ -649,8 +649,6 @@ class CatalogData(BaseEnhancedTable):
         "mag": None,
         "passband": None,
     }
-    catalog_name = None
-    catalog_source = None
 
     def __init__(
         self,
