@@ -610,7 +610,7 @@ class ComparisonViewer:
         """
         plot_names = []
         comp_table = self.generate_table()
-
+        label_size = 15
         original_mark = self.iw._marker
         for star in comp_table:
             star_id = star["star_id"]
@@ -619,7 +619,7 @@ class ComparisonViewer:
                 self.iw._marker = functools.partial(
                     self.iw.dc.Text,
                     text=label,
-                    fontsize=20,
+                    fontsize=label_size,
                     fontscale=False,
                     color="green",
                 )
@@ -633,7 +633,7 @@ class ComparisonViewer:
                 self.iw._marker = functools.partial(
                     self.iw.dc.Text,
                     text=label,
-                    fontsize=20,
+                    fontsize=label_size,
                     fontscale=False,
                     color="red",
                 )
@@ -647,7 +647,7 @@ class ComparisonViewer:
                 self.iw._marker = functools.partial(
                     self.iw.dc.Text,
                     text=label,
-                    fontsize=20,
+                    fontsize=label_size,
                     fontscale=False,
                     color="blue",
                 )
