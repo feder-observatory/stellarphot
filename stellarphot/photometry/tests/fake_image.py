@@ -1,10 +1,11 @@
 import astropy.io.fits as fits
 import numpy as np
+from astropy.modeling.models import Gaussian2D
 from astropy.nddata import CCDData
 from astropy.table import Table
 from astropy.utils.data import get_pkg_data_filename
 from astropy.wcs import WCS
-from photutils.datasets import make_gaussian_sources_image, make_noise_image
+from photutils.datasets import make_model_image, make_noise_image
 
 
 class FakeImage:
@@ -202,3 +203,71 @@ def shift_FakeCCDImage(ccd_data, x_shift, y_shift):
     shifted_ccd_data.data = srcs + background
 
     return shifted_ccd_data
+
+
+def make_gaussian_sources_image(shape, source_table, oversample=1.0):
+    """
+    Make an image containing 2D Gaussian sources.
+
+    Parameters
+    ----------
+    shape : 2-tuple of int
+        The shape of the output 2D image.
+
+    source_table : `~astropy.table.Table`
+        Table of parameters for the Gaussian sources. Each row of the
+        table corresponds to a Gaussian source whose parameters are
+        defined by the column names. With the exception of ``'flux'``,
+        column names that do not match model parameters will be ignored
+        (flux will be converted to amplitude). If both ``'flux'`` and
+        ``'amplitude'`` are present, then ``'flux'`` will be ignored.
+        Model parameters not defined in the table will be set to the
+        default value.
+
+    oversample : float, optional
+        The sampling factor used to discretize the models on a pixel
+        grid. If the value is 1.0 (the default), then the models will
+        be discretized by taking the value at the center of the pixel
+        bin. Note that this method will not preserve the total flux of
+        very small sources. Otherwise, the models will be discretized by
+        taking the average over an oversampled grid. The pixels will be
+        oversampled by the ``oversample`` factor.
+
+    Note
+    ----
+
+    The body of this function, including the docstring, are copy/pasted from
+    photutils 1.13.0 because the function make_gaussian_sources_image was
+    deprecated in that version. Link:
+
+    https://github.com/astropy/photutils/blob/main/photutils/datasets/images.py#L388
+
+    Returns
+    -------
+    image : 2D `~numpy.ndarray`
+        Image containing 2D Gaussian sources.
+    """
+    model = Gaussian2D(x_stddev=1, y_stddev=1)
+
+    if "x_stddev" in source_table.colnames:
+        xstd = source_table["x_stddev"]
+    else:
+        xstd = model.x_stddev.value  # default
+    if "y_stddev" in source_table.colnames:
+        ystd = source_table["y_stddev"]
+    else:
+        ystd = model.y_stddev.value  # default
+
+    colnames = source_table.colnames
+    if "flux" in colnames and "amplitude" not in colnames:
+        source_table = source_table.copy()
+        source_table["amplitude"] = source_table["flux"] / (2.0 * np.pi * xstd * ystd)
+
+    return make_model_image(
+        shape,
+        model,
+        source_table,
+        x_name="x_mean",
+        y_name="y_mean",
+        discretize_oversample=oversample,
+    )

@@ -6,9 +6,10 @@ from astropy.modeling.models import Gaussian1D
 from astropy.nddata import CCDData
 from astropy.table import Table
 from astropy.utils.data import get_pkg_data_filename
-from photutils.datasets import make_gaussian_sources_image, make_noise_image
+from photutils.datasets import make_noise_image
 
 from stellarphot.photometry import CenterAndProfile, find_center
+from stellarphot.photometry.tests.fake_image import make_gaussian_sources_image
 from stellarphot.settings import Camera
 from stellarphot.settings.tests.test_models import TEST_CAMERA_VALUES
 

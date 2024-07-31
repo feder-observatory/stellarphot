@@ -7,7 +7,7 @@ import matplotlib
 import pytest
 from astropy.nddata import CCDData
 from astrowidgets import ImageWidget
-from photutils.datasets import make_gaussian_sources_image, make_noise_image
+from photutils.datasets import make_noise_image
 
 from stellarphot.gui_tools import (
     seeing_profile_functions as spf,
@@ -16,6 +16,7 @@ from stellarphot.gui_tools.seeing_profile_functions import (
     AP_SETTING_NEEDS_SAVE,
     AP_SETTING_SAVED,
 )
+from stellarphot.photometry.tests.fake_image import make_gaussian_sources_image
 from stellarphot.photometry.tests.test_profiles import RANDOM_SEED, SHAPE, STARS
 from stellarphot.settings import (
     Camera,
