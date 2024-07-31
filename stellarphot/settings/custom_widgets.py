@@ -1016,8 +1016,9 @@ class PhotometryRunner(ipw.VBox):
         self.photometry_notebook_name = photometry_notebook_name
         self.fitsopen = FitsOpener(
             title=(
-                "Choose any image in the folder of images to do photometry on that "
-                "contains the object of interest"
+                "Choose an image of the object of interest to you.</br>Photometry "
+                "will be performed on all images of that object in the folder "
+                "the object is in."
             )
         )
         self.info_box = ipw.HTML()
