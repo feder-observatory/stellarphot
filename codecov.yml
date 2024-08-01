@@ -11,6 +11,7 @@ ignore:
   - "stellarphot/_astropy_init*"
   - "stellarphot/conftest*"
   - "stellarphot/setup_package*"
+  - "stellarphot/tests/*"
   - "stellarphot/**/tests/*"
   - "stellarphot/*version*"
   - "stellarphot/**/__init__.py"
