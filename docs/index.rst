@@ -22,8 +22,7 @@ Creating an environment with `conda` or `mamba` (use whichever one you have inst
 
 Creating an environment with `virtualenv`::
 
-
-    python3 -m venv stellarphot-test
+    python -m venv stellarphot-test
     source stellarphot-test/bin/activate
     pip install --pre stellarphot
 

@@ -19,6 +19,8 @@ useful photometry, with a focus on variable star and exoplanet transit observati
 
 ## Installation
 
+`stellarphot` requires Python 3.10 or later.
+
 You can install `stellarphot` with either `pip` or `conda`.  If you are interested in `stellarphot` for exoplanet transit light curves, `conda` is recommended at the moment because of an issue with installing one of the dependencies.
 
 - Install with `conda` using
