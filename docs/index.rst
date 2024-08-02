@@ -9,28 +9,13 @@ non-programmers and programmers.
 Installation
 ============
 
+Stellarphot is available on PyPI and can be installed with pip::
 
-Testing
--------
+    pip install --pre stellarphot
 
-If you are testing a pre-release version of stellarphot we recommend setting up
-a virtual environment and installing stellarphot in this environment.
+You can remove stellarphot with::
 
-Only use one of the methods below for making a virtual environment.
-
-Creating an environment with `conda` or `mamba` (use whichever one you have installed)::
-
-    mamba create -n stellarphot-test python=3.11
-    mamba activate stellarphot-test
-    pip install git+https://github.com/mwcraig/stellarphot.git@update-docs
-
-Creating an environment with `virtualenv`::
-
-
-    python3 -m venv stellarphot-test
-    source stellarphot-test/bin/activate
-    pip install --pre --upgrade stellarphot
-
+    pip uninstall stellarphot
 
 Getting Started
 ===============
