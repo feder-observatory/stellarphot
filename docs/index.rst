@@ -79,14 +79,16 @@ Editing a settings file directly
 The settings file is a JSON file that can be edited in any text editor.
 
 
-Performing photometry
----------------------
+Performing photometry from the command line
+-------------------------------------------
 
 Once you have made your settings doing photometry is a two line process. First, you
 create a photometry object::
 
-    from stellarphot.photometry import AperurePhotometry
-    phot = AperurePhotometry(photometry_settings)
+    from stellarphot.photometry import AperturePhotometry
+    from stellarphot.settings import PhotometryWorkingDirSettings
+    photometry_settings = PhotometryWorkingDirSettings().load()
+    phot = AperturePhotometry(settings=photometry_settings)
 
 Then you can perform photometry on a single image::
 
