@@ -176,8 +176,8 @@ filterwarnings = [
     'ignore:Deprecated in traitlets 4.1, use the instance:DeprecationWarning',
     # Some WCS headers are issuing warnings
     'ignore:RADECSYS=:',
-    # photutils changed the name of a function again
-    'ignore:The make_gaussian_sources_image function is deprecated',
     # papermill is using deprecated jupyter paths
     'ignore:Jupyter is migrating its paths to use standard platformdirs:DeprecationWarning',
+    # papermill is also using a deprecated method of getting current time
+    'ignore:.*is deprecated and scheduled for removal.*:DeprecationWarning'
 ]
