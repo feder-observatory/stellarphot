@@ -73,18 +73,6 @@ all of the cells in the notebook. In each will be a graphical interface to enter
 When the photometry is done there will be a new notebook called `photometry_run.ipynb` that will have a record
 of the photometry that was done.
 
-
-Command line interface for generating settings
-----------------------------------------------
-
-To generate settings using the command line, run the following command::
-
-    stellarphot-settings
-
-
-This will generate a settings file in the directory in which you run the command
-called `stellarphot_settings.json`. Edit that file in the editor of your choice.
-
 Editing a settings file directly
 --------------------------------
 
