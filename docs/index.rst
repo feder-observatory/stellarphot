@@ -82,8 +82,8 @@ Editing a settings file directly
 The settings file is a JSON file that can be edited in any text editor.
 
 
-Performing photometry from the command line
--------------------------------------------
+Performing photometry from within a Python script
+-------------------------------------------------
 
 Once you have made your settings doing photometry is a two line process. First, you
 create a photometry object::
