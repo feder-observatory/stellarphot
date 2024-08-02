@@ -9,10 +9,6 @@ non-programmers and programmers.
 Installation
 ============
 
-
-Testing
--------
-
 If you are testing a pre-release version of stellarphot we recommend setting up
 a virtual environment and installing stellarphot in this environment.
 
@@ -22,15 +18,21 @@ Creating an environment with `conda` or `mamba` (use whichever one you have inst
 
     mamba create -n stellarphot-test python=3.11
     mamba activate stellarphot-test
-    pip install git+https://github.com/mwcraig/stellarphot.git@update-docs
+    pip install --pre stellarphot
 
 Creating an environment with `virtualenv`::
 
-
-    python3 -m venv stellarphot-test
+    python -m venv stellarphot-test
     source stellarphot-test/bin/activate
-    pip install --pre --upgrade stellarphot
+    pip install --pre stellarphot
 
+To install stellarphot without creating an environment, use::
+
+    pip install --pre stellarphot
+
+You can remove stellarphot with::
+
+    pip uninstall stellarphot
 
 Getting Started
 ===============
@@ -73,32 +75,22 @@ all of the cells in the notebook. In each will be a graphical interface to enter
 When the photometry is done there will be a new notebook called `photometry_run.ipynb` that will have a record
 of the photometry that was done.
 
-
-Command line interface for generating settings
-----------------------------------------------
-
-To generate settings using the command line, run the following command::
-
-    stellarphot-settings
-
-
-This will generate a settings file in the directory in which you run the command
-called `stellarphot_settings.json`. Edit that file in the editor of your choice.
-
 Editing a settings file directly
 --------------------------------
 
 The settings file is a JSON file that can be edited in any text editor.
 
 
-Performing photometry
----------------------
+Performing photometry from within a Python script
+-------------------------------------------------
 
 Once you have made your settings doing photometry is a two line process. First, you
 create a photometry object::
 
-    from stellarphot.photometry import AperurePhotometry
-    phot = AperurePhotometry(photometry_settings)
+    from stellarphot.photometry import AperturePhotometry
+    from stellarphot.settings import PhotometryWorkingDirSettings
+    photometry_settings = PhotometryWorkingDirSettings().load()
+    phot = AperturePhotometry(settings=photometry_settings)
 
 Then you can perform photometry on a single image::
 

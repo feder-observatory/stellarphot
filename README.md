@@ -1,4 +1,4 @@
-# A Python Package for Transforming Stellar Photometry
+# A Python Package for Stellar Photometry
 
 [![Powered by Astropy Badge](http://img.shields.io/badge/powered%20by-AstroPy-orange.svg?style=flat)](http://www.astropy.org)
 [![GitHub Workflow badge](https://github.com/feder-observatory/stellarphot/workflows/Test/badge.svg?branch=main)](https://github.com/feder-observatory/stellarphot/actions?query=workflow%3ATest)
@@ -6,22 +6,26 @@
 [![codecov](https://codecov.io/gh/feder-observatory/stellarphot/graph/badge.svg?token=uVrdNencSQ)](https://codecov.io/gh/feder-observatory/stellarphot)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10679636.svg)](https://doi.org/10.5281/zenodo.10679636)
 
-Stellarphot provides a Python package and accompanying Jupyter notebooks to allow you to turn reduced astronomical images of point sources (e.g. stars) into calibrated astronomical photometry, with a focus on variable star and exoplanet transit observations.  Specifically:
+Stellarphot is a Python package to allow you to turn reduced astronomical images of point sources (e.g. stars) into
+useful photometry, with a focus on variable star and exoplanet transit observations.  Specifically:
 
 - If you have reduced astronomical images as FITS files but haven't obtained photometry yet, `stellarphot` can perform aperture photometry on your images.
 - If you already have aperture photometry for a field, `stellarphot` can
-  - calculate relative flux (like [AstroImageJ](https://www.astro.louisville.edu/software/astroimagej/)), and/or
-  - calculate calibrated magnitudes by transforming to a catalog (e.g. APASS DR9)
+  - choose comparison stars based on a catalog (e.g. APASS DR9),
+  - calculate relative flux (like [AstroImageJ](https://www.astro.louisville.edu/software/astroimagej/)),
+  - calculate calibrated magnitudes by transforming to a catalog (e.g. APASS DR9), and/or
+  - calculate calibrated magnitudes with a user-provided set of comparison stars (as is done in AAVSO submissions).
 - If you are working with exoplanet transit observations, `stellarphot` can turns the photometry into exoplanet transit light curves (see installation notes below).
 
 ## Installation
+
+`stellarphot` requires Python 3.10 or later.
 
 You can install `stellarphot` with either `pip` or `conda`.  If you are interested in `stellarphot` for exoplanet transit light curves, `conda` is recommended at the moment because of an issue with installing one of the dependencies.
 
 - Install with `conda` using
   ```
-  conda install -c conda-forge stellarphot reducer
-  pip install astronbs
+  conda install -c conda-forge stellarphot
   ```
   If you are interested in exoplanet light curve fitting, also install `batman` using
 
@@ -31,25 +35,26 @@ You can install `stellarphot` with either `pip` or `conda`.  If you are interest
 
 - Install with `pip` using
   ```
-  pip install stellarphot reducer astronbs
+  pip install stellarphot
   ```
   or if you are interested in exoplanet light curve fitting you should instead use:
 
   ```
-  pip install stellarphot[exo_fitting] reducer astronbs
+  pip install stellarphot[exo_fitting]
   ```
 
 ## Getting started with stellarphot
 
 1. Start Jupyterlab from the command line: `jupyter lab`
 2. Once JupyterLab opens in your web browser, open the Launcher (see Figure below)
-3. Click on the notebook you want  (see Figure below) and follow the instructions in the notebook.  Any output files will show up in the file browser
+3. Click on the notebook you want (see figure below) and follow the instructions in the notebook.
+Output files and the settings used to generate them will show up in the file browser
 
-<img width="833" alt="stellarphot-screenshot" src="https://user-images.githubusercontent.com/1147167/200139186-100934ca-6d1e-46f9-ac89-a83d05528bb2.png">
+<img width="833" alt="stellarphot-screenshot" src="https://github.com/feder-observatory/stellarphot/blob/bd5e08dca6e390239663bf4d4db797d84abf603c/docs/_static/launcher.png">
 
 ## Questions?
 
-Feel free to contact @mwcraig with your questions about using `stellarphot`.
+Feel free to contact @mwcraig or @JuanCab with your questions about using `stellarphot`.
 
 ## Contributors
 

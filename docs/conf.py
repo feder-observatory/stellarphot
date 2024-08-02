@@ -117,10 +117,6 @@ html_theme_options.update(
     {
         "github_url": "https://github.com/feder-observatory/stellarphot",
         "use_edit_page_button": True,
-        # "logo": {
-        #     "image_light": "_static/astropy_banner_96.png",
-        #     "image_dark": "_static/astropy_banner_96_dark.png",
-        # },
         # https://github.com/pydata/pydata-sphinx-theme/issues/1492
         "navigation_with_keys": False,
     }
@@ -141,12 +137,23 @@ html_css_files = ["astropy.css"]
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-# html_logo = ''
+# html_logo = '_static/stellarphot-logo.svg'
+
+html_theme_options.update(
+    {
+        "logo": {
+            "alt_text": "stellarphot - Home",
+            "text": "stellarphot",
+            "image_light": "_static/stellarphot-logo.svg",
+            "image_dark": "_static/stellarphot-logo.svg",
+        }
+    }
+)
 
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
 # pixels large.
-# html_favicon = ''
+html_favicon = "_static/favicon.ico"
 
 # If not '', a 'Last updated on:' timestamp is inserted at every page bottom,
 # using the given strftime format.
