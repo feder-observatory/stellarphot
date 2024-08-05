@@ -1,11 +1,20 @@
 name: Build and upload to PyPI
 
 on:
+  # Allow manual triggering of the workflow, but note that the upload
+  # to PyPI step will not run manual trigger.
   workflow_dispatch:
+  # Run workflow on pullrequests, but note that the upload to PyPI step
+  # will not run on pull requests.
   pull_request:
+  # Run workflow on push to main branch, but note that the upload to
+  # PyPI step will not run on pushes. We could change that if we wanted
+  # to have it publish on tags -- see the upload_pypi job below.
   push:
     branches:
       - main
+  # Run workflow on GitHub release done through the UI -- this is the only
+  # time the upload to PyPI step will run.
   release:
     types:
       - published
