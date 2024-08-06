@@ -32,8 +32,8 @@ in `.github/workflows/publish.yml`.
     2. What you build here is not what will be uploaded to PyPI. The GitHub Actions workflow will build the package in a clean environment. This step is just to catch errors.
 
 1. Clean up the repository again with `git clean -fxd`.
-1. Check [PyPI](https://pypi.org/project/stellarphot/) for the next release number.
-   [PyPI](https://pypi.org/project/stellarphot/) is the authoritative source for the current version.
+1. Check [PyPI](https://pypi.org/project/stellarphot/#history) for the next release number.
+   [PyPI](https://pypi.org/project/stellarphot/#history) is the authoritative source for the current version. A "yanked" released still counts as a release...you cannot use a release number that has been used before even if it was yanked.
 1. Tag the commit with the version number. The version number should be formatted as `X.Y.Z`, where `X`
    is the major version number, `Y` is the minor version number, and `Z` is the patch version number.
    For an alpha release add `.alphaN` where `N` is the alpha number. For example, `1.0.0.alpha1`. For a
@@ -52,6 +52,7 @@ in `.github/workflows/publish.yml`.
 1. Click the "Create release from tag" button.
     1. The tag should be filled for you.
     1. The release title should be the same as the tag.
+    1. Select the "Previous tag" -- the "auto" option may not work if the previous tag was a pre-release. For example, the eventual release of `2.0.0` should have a previous release of `1.4.14`, not whatever the most recent testing release was.
     1. Click the "Generate release notes" button. This will fill in the release notes with the
        commit messages since the last release.
     1. Review the release notes.
