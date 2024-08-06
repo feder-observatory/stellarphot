@@ -59,16 +59,24 @@ source = "vcs"
 [tool.hatch.build.hooks.vcs]
 version-file = "stellarphot/_version.py"
 
+[tool.hatch.build.targets.sdist]
+# This section determines what files are included in the source distribution
+include = [
+    # The source code
+    "/stellarphot",
+    # Logo for JupyterLab launcher
+    "/docs/_static/stellarphot-logo.svg",
+    # Configuration for jupyter-app-launcher
+    "/.jp_app_launcher_stellarphot.yaml"
+]
+
 [tool.hatch.build.targets.wheel.shared-data]
-"stellarphot/notebooks/photometry" = "share/jupyter/stellarphot/photometry"
+# This section determines what data files are included in the wheel
+# and where they should eventually be installed in the user's environment.
+"docs/_static/stellarphot-logo.svg" = "share/jupyter/stellarphot/stellarphot-logo.svg"
+# This includes the notebooks used in the launcher
 "stellarphot/notebooks" = "share/jupyter/stellarphot"
 ".jp_app_launcher_stellarphot.yaml" = "share/jupyter/jupyter_app_launcher/jp_app_launcher_stellarphot.yaml"
-"docs/_static/stellarphot-logo.svg" = "share/jupyter/stellarphot/stellarphot-logo.svg"
-
-[tool.hatch.build.targets.sdist]
-include = [
-    "/stellarphot",
-]
 
 [tool.coverage]
 
