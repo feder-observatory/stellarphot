@@ -4,9 +4,8 @@ import re
 
 import astropy.units as u
 import pytest
-from astropy.coordinates import EarthLocation, Latitude, Longitude, SkyCoord
+from astropy.coordinates import EarthLocation, Latitude, Longitude
 from astropy.table import Table
-from astropy.time import Time
 from pydantic import ValidationError
 
 from stellarphot.settings import ui_generator
@@ -37,20 +36,31 @@ TEST_CAMERA_VALUES = dict(
 )
 
 TEST_EXOPLANET_SETTINGS = dict(
-    epoch=Time(0, format="jd"),
-    period=0 * u.min,
+    epoch={
+        "jd1": 0.0,
+        "jd2": 0.0,
+        "format": "jd",
+        "scale": "utc",
+        "precision": 3,
+        "in_subfmt": "*",
+        "out_subfmt": "*",
+    },
+    period="0.0 min",
     identifier="a planet",
-    coordinate=SkyCoord(
-        ra="00:00:00.00", dec="+00:00:00.0", frame="icrs", unit=("hour", "degree")
-    ),
+    coordinate={
+        "ra": "0d00m00s",
+        "dec": "0d00m00s",
+        "representation_type": "spherical",
+        "frame": "icrs",
+    },
     depth=0,
-    duration=0 * u.min,
+    duration="0.0 min",
 )
 
 TEST_OBSERVATORY_SETTINGS = dict(
     name="test observatory",
-    longitude="43.0 deg",
-    latitude="45.0 deg",
+    longitude="43d00m00s",
+    latitude="45d00m00s",
     elevation="311.0 m",
     AAVSO_code="test",
     TESS_telescope_code="tess test",
@@ -96,13 +106,13 @@ TEST_SOURCE_LOCATION_SETTINGS = dict(
 )
 
 TEST_PHOTOMETRY_SETTINGS = dict(
-    camera=Camera(**TEST_CAMERA_VALUES),
-    observatory=Observatory(**TEST_OBSERVATORY_SETTINGS),
-    photometry_apertures=PhotometryApertures(**TEST_APERTURE_SETTINGS),
-    source_location_settings=SourceLocationSettings(**TEST_SOURCE_LOCATION_SETTINGS),
-    photometry_optional_settings=PhotometryOptionalSettings(**TEST_PHOTOMETRY_OPTIONS),
-    passband_map=PassbandMap(**TEST_PASSBAND_MAP),
-    logging_settings=LoggingSettings(**TEST_LOGGING_SETTINGS),
+    camera=TEST_CAMERA_VALUES,
+    observatory=TEST_OBSERVATORY_SETTINGS,
+    photometry_apertures=TEST_APERTURE_SETTINGS,
+    source_location_settings=TEST_SOURCE_LOCATION_SETTINGS,
+    photometry_optional_settings=TEST_PHOTOMETRY_OPTIONS,
+    passband_map=TEST_PASSBAND_MAP,
+    logging_settings=TEST_LOGGING_SETTINGS,
 )
 
 
@@ -129,12 +139,14 @@ class TestModelAgnosticActions:
     def test_create_model(self, model, settings):
         # Make sure we can create the model and that the settings are correct.
         mod = model(**settings)
+        mod_dict = mod.model_dump()
         for k, v in settings.items():
-            if k == "your_filter_names_to_aavso":
-                # This is the only nested model, so we need to check it separately
-                assert getattr(mod, k) == [PassbandMapEntry(**x) for x in v]
-            else:
-                assert getattr(mod, k) == v
+            assert mod_dict[k] == v
+            # if k == "your_filter_names_to_aavso":
+            #     # This is the only nested model, so we need to check it separately
+            #     assert getattr(mod, k) == [PassbandMapEntry(**x) for x in v]
+            # else:
+            #     assert getattr(mod, k) == v
 
     def test_model_copy(self, model, settings):
         # Make sure we can create a copy of the model
@@ -185,12 +197,14 @@ class TestModelAgnosticActions:
         values_dict_as_strings = json.loads(model(**settings).model_dump_json())
         ui.value = values_dict_as_strings
         mod = model(**ui.value)
+        mod_dict = mod.model_dump()
         for k, v in settings.items():
-            if k == "your_filter_names_to_aavso":
-                # This is the only nested model, so we need to check it separately
-                assert getattr(mod, k) == [PassbandMapEntry(**x) for x in v]
-            else:
-                assert getattr(mod, k) == v
+            assert mod_dict[k] == v
+            # if k == "your_filter_names_to_aavso":
+            #     # This is the only nested model, so we need to check it separately
+            #     assert getattr(mod, k) == [PassbandMapEntry(**x) for x in v]
+            # else:
+            #     assert getattr(mod, k) == v
 
         # 3) The UI widgets contains the titles generated from pydantic.
         # Pydantic generically is supposed to generate titles from the field names,
@@ -363,7 +377,7 @@ def test_partial_photometry_settings():
 
     for k, v in TEST_PHOTOMETRY_SETTINGS.items():
         pps = PartialPhotometrySettings(**{k: v})
-        assert getattr(pps, k) == v
+        assert pps.model_dump()[k] == v
 
     choices = list(TEST_PHOTOMETRY_SETTINGS.items())
     for i in range(2, 5):
@@ -372,7 +386,7 @@ def test_partial_photometry_settings():
         settings = {k: v for k, v in fields}
         pps = PartialPhotometrySettings(**settings)
         for k, v in settings.items():
-            assert getattr(pps, k) == v
+            assert pps.model_dump()[k] == v
 
 
 def test_camera_unitscheck():
@@ -616,8 +630,8 @@ def test_create_invalid_exoplanet():
     # Set some bad values and make sure they raise validation errors
     values = TEST_EXOPLANET_SETTINGS.copy()
     # Make pediod and duration have invalid units for a time
-    values["period"] = values["period"].value * u.m
-    values["duration"] = values["duration"].value * u.m
+    values["period"] = u.Quantity(values["period"]).value * u.m
+    values["duration"] = u.Quantity(values["duration"]).value * u.m
     # Check that individual values that are bad raise an error
     with pytest.raises(ValidationError, match="2 validation errors"):
         Exoplanet(**values)

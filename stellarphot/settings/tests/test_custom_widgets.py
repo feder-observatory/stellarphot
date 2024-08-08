@@ -1026,7 +1026,7 @@ class TestReviewSettings:
             saved = SavedSettings()
             # Make an instance of the class
             snake_name = to_snake(setting_class.__name__)
-            item = TEST_PHOTOMETRY_SETTINGS[snake_name]
+            item = setting_class.model_validate(TEST_PHOTOMETRY_SETTINGS[snake_name])
             # Save the instance to saved settings file
             saved.add_item(item)
 

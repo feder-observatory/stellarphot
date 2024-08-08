@@ -553,18 +553,20 @@ class TestPhotometryWorkingDirSettings:
         settings_file.save(partial_settings_cam, update=True)
         from_file = settings_file.load()
         # Make sure the camera is there
-        assert from_file.camera == TEST_PHOTOMETRY_SETTINGS["camera"]
+        assert from_file.camera == Camera(**TEST_PHOTOMETRY_SETTINGS["camera"])
 
         # Save a different item, like an observatory
         partial_settings_obs = PartialPhotometrySettings(
-            observatory=TEST_PHOTOMETRY_SETTINGS["observatory"]
+            observatory=Observatory(**TEST_PHOTOMETRY_SETTINGS["observatory"])
         )
         settings_file.save(partial_settings_obs, update=True)
         from_file2 = settings_file.load()
         # Make sure the camera is still there
-        assert from_file2.camera == TEST_PHOTOMETRY_SETTINGS["camera"]
+        assert from_file2.camera == Camera(**TEST_PHOTOMETRY_SETTINGS["camera"])
         # Make sure the observatory is there
-        assert from_file2.observatory == TEST_PHOTOMETRY_SETTINGS["observatory"]
+        assert from_file2.observatory == Observatory(
+            **TEST_PHOTOMETRY_SETTINGS["observatory"]
+        )
 
     def test_save_update_completing_partial_makes_full(self):
         # Test that saving a partial settings file and then updating it to a
