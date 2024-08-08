@@ -49,9 +49,9 @@ TEST_EXOPLANET_SETTINGS = dict(
 
 TEST_OBSERVATORY_SETTINGS = dict(
     name="test observatory",
-    longitude=43 * u.deg,
-    latitude=45 * u.deg,
-    elevation=311 * u.m,
+    longitude="43.0 deg",
+    latitude="45.0 deg",
+    elevation="311.0 m",
     AAVSO_code="test",
     TESS_telescope_code="tess test",
 )
@@ -514,8 +514,8 @@ def test_observatory_lat_long_as_float():
     # we allow them to be entered as floats with an assumed unit of degrees,
     # not just Quantity objects.
     settings = dict(TEST_OBSERVATORY_SETTINGS)
-    settings["latitude"] = settings["latitude"].value
-    settings["longitude"] = settings["longitude"].value
+    settings["latitude"] = u.Quantity(settings["latitude"]).value
+    settings["longitude"] = u.Quantity(settings["longitude"]).value
     obs = Observatory(**settings)
     assert obs == Observatory(**TEST_OBSERVATORY_SETTINGS)
 
