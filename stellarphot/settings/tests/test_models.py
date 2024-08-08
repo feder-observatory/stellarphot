@@ -69,15 +69,15 @@ TEST_PHOTOMETRY_OPTIONS = dict(
 TEST_PASSBAND_MAP = dict(
     name="Example map",
     your_filter_names_to_aavso=[
-        PassbandMapEntry(
+        dict(
             your_filter_name="V",
             aavso_filter_name="V",
         ),
-        PassbandMapEntry(
+        dict(
             your_filter_name="B",
             aavso_filter_name="B",
         ),
-        PassbandMapEntry(
+        dict(
             your_filter_name="rp",
             aavso_filter_name="SR",
         ),
@@ -130,7 +130,11 @@ class TestModelAgnosticActions:
         # Make sure we can create the model and that the settings are correct.
         mod = model(**settings)
         for k, v in settings.items():
-            assert getattr(mod, k) == v
+            if k == "your_filter_names_to_aavso":
+                # This is the only nested model, so we need to check it separately
+                assert getattr(mod, k) == [PassbandMapEntry(**x) for x in v]
+            else:
+                assert getattr(mod, k) == v
 
     def test_model_copy(self, model, settings):
         # Make sure we can create a copy of the model
@@ -182,7 +186,11 @@ class TestModelAgnosticActions:
         ui.value = values_dict_as_strings
         mod = model(**ui.value)
         for k, v in settings.items():
-            assert getattr(mod, k) == v
+            if k == "your_filter_names_to_aavso":
+                # This is the only nested model, so we need to check it separately
+                assert getattr(mod, k) == [PassbandMapEntry(**x) for x in v]
+            else:
+                assert getattr(mod, k) == v
 
         # 3) The UI widgets contains the titles generated from pydantic.
         # Pydantic generically is supposed to generate titles from the field names,
@@ -538,12 +546,13 @@ class TestPassbandMapDictMethods:
 
     def default_pb_map_keys(self):
         return [
-            v.your_filter_name for v in TEST_PASSBAND_MAP["your_filter_names_to_aavso"]
+            v["your_filter_name"]
+            for v in TEST_PASSBAND_MAP["your_filter_names_to_aavso"]
         ]
 
     def default_pb_map_values(self):
         return [
-            v.aavso_filter_name.value
+            v["aavso_filter_name"]
             for v in TEST_PASSBAND_MAP["your_filter_names_to_aavso"]
         ]
 
