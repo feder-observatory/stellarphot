@@ -27,13 +27,13 @@ from stellarphot.settings.models import (
 TEST_APERTURE_SETTINGS = dict(radius=5, gap=10, annulus_width=15, fwhm=3.2)
 
 TEST_CAMERA_VALUES = dict(
-    data_unit=u.adu,
-    gain=2.0 * u.electron / u.adu,
+    data_unit="adu",
+    gain="2.0 electron / adu",
     name="test camera",
-    read_noise=10 * u.electron,
-    dark_current=0.01 * u.electron / u.second,
-    pixel_scale=0.563 * u.arcsec / u.pix,
-    max_data_value=50000 * u.adu,
+    read_noise="10.0 electron",
+    dark_current="0.01 electron / s",
+    pixel_scale="0.563 arcsec / pix",
+    max_data_value="50000.0 adu",
 )
 
 TEST_EXOPLANET_SETTINGS = dict(
@@ -375,7 +375,8 @@ def test_camera_unitscheck():
     # dimensionless_unscaled. So we need to set the units to something that is
     # invalid.
     camera_dict_bad_unit = {
-        k: "5 cows" if hasattr(v, "value") else v for k, v in TEST_CAMERA_VALUES.items()
+        k: "5 cows" if k not in ["name", "data_unit"] else v
+        for k, v in TEST_CAMERA_VALUES.items()
     }
     # All 5 of the attributes after data_unit will be checked for units
     # and noted in the ValidationError message. Rather than checking
@@ -391,7 +392,9 @@ def test_camera_unitscheck():
 def test_camera_negative_max_adu():
     # Check that a negative maximum data value raises an error
     camera_for_test = TEST_CAMERA_VALUES.copy()
-    camera_for_test["max_data_value"] = -1 * camera_for_test["max_data_value"]
+    camera_for_test["max_data_value"] = -1 * u.Quantity(
+        camera_for_test["max_data_value"]
+    )
 
     # Make sure that a negative max_adu raises an error
     with pytest.raises(ValidationError, match="Input should be greater than 0"):

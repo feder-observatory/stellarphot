@@ -3,6 +3,7 @@ from pathlib import Path
 
 import ipywidgets as ipw
 import pytest
+from astropy.units import Quantity
 from camel_converter import to_snake
 from ipyautoui.custom.iterable import ItemBox, ItemControl
 from pydantic import ValidationError
@@ -183,7 +184,7 @@ class TestChooseOrMakeNew:
         choose_or_make_new._edit_button.click()
 
         # Change a value in the camera so we can check that the new value is saved.
-        new_gain = 2 * TEST_CAMERA_VALUES["gain"]
+        new_gain = 2 * Quantity(TEST_CAMERA_VALUES["gain"])
         choose_or_make_new._item_widget.di_widgets["gain"].value = str(new_gain)
         # Simulate a click on the save button...
         choose_or_make_new._item_widget.savebuttonbar.bn_save.click()
@@ -222,7 +223,7 @@ class TestChooseOrMakeNew:
         choose_or_make_new._edit_button.click()
 
         # Change a value in the camera so we can check that the new value is saved.
-        new_gain = 2 * TEST_CAMERA_VALUES["gain"]
+        new_gain = 2 * Quantity(TEST_CAMERA_VALUES["gain"])
         choose_or_make_new._item_widget.di_widgets["gain"].value = str(new_gain)
         # Simulate a click on the save button...
         choose_or_make_new._item_widget.savebuttonbar.bn_save.click()
@@ -372,7 +373,7 @@ class TestChooseOrMakeNew:
         assert choose_or_make_new._item_widget.savebuttonbar.bn_save.disabled
 
         # Edit a value in the camera so the save button is enabled
-        new_gain = 2 * TEST_CAMERA_VALUES["gain"]
+        new_gain = 2 * Quantity(TEST_CAMERA_VALUES["gain"])
         choose_or_make_new._item_widget.di_widgets["gain"].value = str(new_gain)
 
         # The save button should now be enabled
@@ -547,7 +548,7 @@ class TestChooseOrMakeNew:
 
         # set the item widget value to the existing camera with double the gain
         camera_values = TEST_CAMERA_VALUES.copy()
-        camera_values["gain"] = 2 * camera_values["gain"]
+        camera_values["gain"] = 2 * Quantity(camera_values["gain"])
         choose_or_make_new._item_widget.value = Camera(**camera_values)
 
         # Simulate a click on the save button...
@@ -910,7 +911,7 @@ class TestSettingWithTitle:
         camera_title._widget._edit_button.click()
 
         # Edit a value in the camera so the save button is enabled
-        new_gain = 2 * TEST_CAMERA_VALUES["gain"]
+        new_gain = 2 * Quantity(TEST_CAMERA_VALUES["gain"])
         camera_title._widget._item_widget.di_widgets["gain"].value = str(new_gain)
 
         assert SaveStatus.SETTING_NOT_SAVED in camera_title.title.value
