@@ -11,7 +11,7 @@ from stellarphot.settings import (
     settings_files,
 )
 from stellarphot.settings.custom_widgets import PhotometryRunner
-from stellarphot.settings.tests.test_models import DEFAULT_PHOTOMETRY_SETTINGS
+from stellarphot.settings.tests.test_models import TEST_PHOTOMETRY_SETTINGS
 
 
 # See test_settings_file.TestSavedSettings for a detailed description of what the
@@ -50,7 +50,7 @@ class TestPhotometryRunner:
         # or the results of the photometry run, except to ensure that the expected
         # files are created.
         # Make a settings
-        phot_settings = PhotometrySettings.model_validate(DEFAULT_PHOTOMETRY_SETTINGS)
+        phot_settings = PhotometrySettings.model_validate(TEST_PHOTOMETRY_SETTINGS)
 
         # Save a copy to the working directory
         wd_settings = PhotometryWorkingDirSettings()

@@ -15,7 +15,7 @@ from stellarphot.settings import (
     SavedSettings,
     settings_files,  # This import is needed for mocking -- see TestSavedSettings
 )
-from stellarphot.settings.tests.test_models import DEFAULT_PHOTOMETRY_SETTINGS
+from stellarphot.settings.tests.test_models import TEST_PHOTOMETRY_SETTINGS
 
 CAMERA = """
 {
@@ -399,7 +399,7 @@ class TestPhotometryWorkingDirSettings:
     def test_save_complete_settings(self):
         # Test that saving complete settings works.
         settings_file = PhotometryWorkingDirSettings()
-        settings = PhotometrySettings(**DEFAULT_PHOTOMETRY_SETTINGS)
+        settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
         settings_file.save(settings)
         assert settings_file.settings_file.exists()
         assert not settings_file.partial_settings_file.exists()
@@ -408,7 +408,7 @@ class TestPhotometryWorkingDirSettings:
     def test_save_partial_settings_that_are_full_settings(self):
         # Test that saving partial settings that are actually full settings works.
         settings_file = PhotometryWorkingDirSettings()
-        settings = PartialPhotometrySettings(**DEFAULT_PHOTOMETRY_SETTINGS)
+        settings = PartialPhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
         settings_file.save(settings)
         assert settings_file.settings_file.exists()
         assert not settings_file.partial_settings_file.exists()
@@ -424,7 +424,7 @@ class TestPhotometryWorkingDirSettings:
         assert not settings_file.settings_file.exists()
         assert settings_file.partial_settings == partial_settings
 
-        full_settings = PhotometrySettings(**DEFAULT_PHOTOMETRY_SETTINGS)
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
         settings_file.save(full_settings)
         assert settings_file.settings_file.exists()
         assert not settings_file.partial_settings_file.exists()
@@ -436,7 +436,7 @@ class TestPhotometryWorkingDirSettings:
         # Test that saving full settings and then partial settings generates
         # the expected error.
         settings_file = PhotometryWorkingDirSettings()
-        full_settings = PhotometrySettings(**DEFAULT_PHOTOMETRY_SETTINGS)
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
         settings_file.save(full_settings)
         assert settings_file.settings_file.exists()
         assert not settings_file.partial_settings_file.exists()
@@ -476,7 +476,7 @@ class TestPhotometryWorkingDirSettings:
         with settings_file.partial_settings_file.open("w") as f:
             f.write(partial_settings.model_dump_json())
 
-        full_settings = PhotometrySettings(**DEFAULT_PHOTOMETRY_SETTINGS)
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
         with settings_file.settings_file.open("w") as f:
             f.write(full_settings.model_dump_json())
 
@@ -491,13 +491,13 @@ class TestPhotometryWorkingDirSettings:
         # a valid full settings file that do not conflict with each other.
         settings_file = PhotometryWorkingDirSettings()
 
-        partial_settings = PartialPhotometrySettings(**DEFAULT_PHOTOMETRY_SETTINGS)
+        partial_settings = PartialPhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
         # write these settings directly to the directory to avoid any conflict
         # resolution in the save method.
         with settings_file.partial_settings_file.open("w") as f:
             f.write(partial_settings.model_dump_json())
 
-        full_settings = PhotometrySettings(**DEFAULT_PHOTOMETRY_SETTINGS)
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
         with settings_file.settings_file.open("w") as f:
             f.write(full_settings.model_dump_json())
 
@@ -548,29 +548,29 @@ class TestPhotometryWorkingDirSettings:
 
         # Save a Camera first
         partial_settings_cam = PartialPhotometrySettings(
-            camera=DEFAULT_PHOTOMETRY_SETTINGS["camera"]
+            camera=TEST_PHOTOMETRY_SETTINGS["camera"]
         )
         settings_file.save(partial_settings_cam, update=True)
         from_file = settings_file.load()
         # Make sure the camera is there
-        assert from_file.camera == DEFAULT_PHOTOMETRY_SETTINGS["camera"]
+        assert from_file.camera == TEST_PHOTOMETRY_SETTINGS["camera"]
 
         # Save a different item, like an observatory
         partial_settings_obs = PartialPhotometrySettings(
-            observatory=DEFAULT_PHOTOMETRY_SETTINGS["observatory"]
+            observatory=TEST_PHOTOMETRY_SETTINGS["observatory"]
         )
         settings_file.save(partial_settings_obs, update=True)
         from_file2 = settings_file.load()
         # Make sure the camera is still there
-        assert from_file2.camera == DEFAULT_PHOTOMETRY_SETTINGS["camera"]
+        assert from_file2.camera == TEST_PHOTOMETRY_SETTINGS["camera"]
         # Make sure the observatory is there
-        assert from_file2.observatory == DEFAULT_PHOTOMETRY_SETTINGS["observatory"]
+        assert from_file2.observatory == TEST_PHOTOMETRY_SETTINGS["observatory"]
 
     def test_save_update_completing_partial_makes_full(self):
         # Test that saving a partial settings file and then updating it to a
         # full settings file works.
         settings_file = PhotometryWorkingDirSettings()
-        almost_complete_settings = DEFAULT_PHOTOMETRY_SETTINGS.copy()
+        almost_complete_settings = TEST_PHOTOMETRY_SETTINGS.copy()
         the_observatory = almost_complete_settings.pop("observatory")
 
         # Make and save an object that has all settings except observatory
@@ -585,6 +585,6 @@ class TestPhotometryWorkingDirSettings:
         settings_file.save(the_last_setting, update=True)
         from_file2 = settings_file.load()
         # Make sure we have the full settings
-        assert from_file2 == PhotometrySettings(**DEFAULT_PHOTOMETRY_SETTINGS)
+        assert from_file2 == PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
         # Make sure we have no partial settings
         assert settings_file.partial_settings is None
