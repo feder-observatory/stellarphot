@@ -48,9 +48,13 @@ DEFAULT_SOURCE_LOCATIONS = SourceLocationSettings(
     use_coordinates=COORDS2USE,
 )
 
-PHOTOMETRY_OPTIONS = PhotometryOptionalSettings()
-# This used to be the default; it has switched to exact
-PHOTOMETRY_OPTIONS.method = "center"
+
+@pytest.fixture
+def photometry_optional_settings():
+    pos = PhotometryOptionalSettings()
+    # This used to be the default; it has switched to exact
+    pos.method = "center"
+    return pos
 
 
 @pytest.fixture
@@ -120,13 +124,19 @@ def passband_map():
 
 
 @pytest.fixture
-def photometry_settings(fake_camera, fake_obs, photometry_apertures, passband_map):
+def photometry_settings(
+    fake_camera,
+    fake_obs,
+    photometry_apertures,
+    photometry_optional_settings,
+    passband_map,
+):
     return PhotometrySettings(
         camera=fake_camera,
         observatory=fake_obs,
         photometry_apertures=photometry_apertures,
         source_location_settings=DEFAULT_SOURCE_LOCATIONS,
-        photometry_optional_settings=PHOTOMETRY_OPTIONS,
+        photometry_optional_settings=photometry_optional_settings,
         passband_map=passband_map,
         logging_settings=LoggingSettings(),
     )
@@ -220,7 +230,7 @@ class TestAperturePhotometry:
             fake_CCDimage.data = data.astype(int)
 
         # Make a copy of photometry options
-        phot_options = PhotometryOptionalSettings(**PHOTOMETRY_OPTIONS.model_dump())
+        phot_options = photometry_settings.photometry_optional_settings.model_copy()
 
         # Modify options to match test before we used phot_options
         phot_options.reject_background_outliers = False
@@ -314,7 +324,7 @@ class TestAperturePhotometry:
             image[center_px[1], begin:end] = 100 * fake_CCDimage.mean_noise
 
         # Make a copy of photometry options
-        phot_options = PhotometryOptionalSettings(**PHOTOMETRY_OPTIONS.model_dump())
+        phot_options = photometry_settings.photometry_optional_settings.model_copy()
 
         # Modify options to match test before we used phot_options
         phot_options.reject_background_outliers = reject
@@ -388,7 +398,7 @@ class TestAperturePhotometry:
         fake_CCDimage.write(image_file, overwrite=True)
 
         # Make a copy of photometry options
-        phot_options = PhotometryOptionalSettings(**PHOTOMETRY_OPTIONS.model_dump())
+        phot_options = photometry_settings.photometry_optional_settings.model_copy()
 
         # Do the photometry with method = "center" first
         phot_options.method = "center"
@@ -446,7 +456,7 @@ class TestAperturePhotometry:
             found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
 
             # Make a copy of photometry options
-            phot_options = PhotometryOptionalSettings(**PHOTOMETRY_OPTIONS.model_dump())
+            phot_options = photometry_settings.photometry_optional_settings.model_copy()
 
             # Modify options to match test before we used phot_options
             phot_options.include_dig_noise = True
@@ -567,7 +577,7 @@ class TestAperturePhotometry:
             source_list_file = Path(temp_dir) / "source_list.ecsv"
             found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
 
-            phot_options = PhotometryOptionalSettings(**PHOTOMETRY_OPTIONS.model_dump())
+            phot_options = photometry_settings.photometry_optional_settings.model_copy()
 
             # Modify options to match test before we used phot_options
             phot_options.include_dig_noise = True
@@ -622,7 +632,7 @@ class TestAperturePhotometry:
             source_list_file = Path(temp_dir) / "source_list.ecsv"
             found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
 
-            phot_options = PhotometryOptionalSettings(**PHOTOMETRY_OPTIONS.model_dump())
+            phot_options = photometry_settings.photometry_optional_settings.model_copy()
 
             # Modify options to match test before we used phot_options
             phot_options.include_dig_noise = True
@@ -674,7 +684,7 @@ class TestAperturePhotometry:
 
         # Make a copy of photometry options and modify them to match the
         # test_aperture_photometry_no_outlier_rejection settings
-        phot_options = PhotometryOptionalSettings(**PHOTOMETRY_OPTIONS.model_dump())
+        phot_options = photometry_settings.photometry_optional_settings.model_copy()
         phot_options.reject_background_outliers = False
         phot_options.reject_too_close = False
         phot_options.include_dig_noise = True
@@ -757,7 +767,7 @@ class TestAperturePhotometry:
 
             # Make a copy of photometry options based on those used in
             # successful test_photometry_on_directory
-            phot_options = PhotometryOptionalSettings(**PHOTOMETRY_OPTIONS.model_dump())
+            phot_options = photometry_settings.photometry_optional_settings.model_copy()
             phot_options.include_dig_noise = True
             phot_options.reject_too_close = True
             phot_options.reject_background_outliers = True
@@ -1029,7 +1039,7 @@ def test_aperture_photometry_no_outlier_rejection(
         fake_CCDimage.data = data.astype(int)
 
     # Make a copy of photometry options
-    phot_options = PhotometryOptionalSettings(**PHOTOMETRY_OPTIONS.model_dump())
+    phot_options = photometry_settings.photometry_optional_settings.model_copy()
 
     # Modify options to match test before we used phot_options
     phot_options.reject_background_outliers = False
@@ -1122,7 +1132,7 @@ def test_aperture_photometry_with_outlier_rejection(
         image[center_px[1], begin:end] = 100 * fake_CCDimage.mean_noise
 
     # Make a copy of photometry options
-    phot_options = PhotometryOptionalSettings(**PHOTOMETRY_OPTIONS.model_dump())
+    phot_options = photometry_settings.photometry_optional_settings.model_copy()
 
     # Modify options to match test before we used phot_options
     phot_options.reject_background_outliers = reject
@@ -1231,7 +1241,7 @@ def test_photometry_on_directory(coords, photometry_settings):
         found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
 
         # Make a copy of photometry options
-        phot_options = PhotometryOptionalSettings(**PHOTOMETRY_OPTIONS.model_dump())
+        phot_options = photometry_settings.photometry_optional_settings.model_copy()
 
         # Modify options to match test before we used phot_options
         phot_options.include_dig_noise = True
@@ -1348,7 +1358,7 @@ def test_photometry_on_directory_with_no_ra_dec(photometry_settings):
         source_list_file = Path(temp_dir) / "source_list.ecsv"
         found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
 
-        phot_options = PhotometryOptionalSettings(**PHOTOMETRY_OPTIONS.model_dump())
+        phot_options = photometry_settings.photometry_optional_settings.model_copy()
 
         # Modify options to match test before we used phot_options
         phot_options.include_dig_noise = True
@@ -1403,7 +1413,7 @@ def test_photometry_on_directory_with_bad_fits(photometry_settings):
         source_list_file = Path(temp_dir) / "source_list.ecsv"
         found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
 
-        phot_options = PhotometryOptionalSettings(**PHOTOMETRY_OPTIONS.model_dump())
+        phot_options = photometry_settings.photometry_optional_settings.model_copy()
 
         # Modify options to match test before we used phot_options
         phot_options.include_dig_noise = True
