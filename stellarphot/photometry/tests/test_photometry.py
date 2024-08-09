@@ -101,15 +101,18 @@ PASSBAND_MAP = PassbandMap(
 
 DEFAULT_LOGGING_SETTINGS = LoggingSettings()
 
-DEFAULT_PHOTOMETRY_SETTINGS = PhotometrySettings(
-    camera=FAKE_CAMERA,
-    observatory=FAKE_OBS,
-    photometry_apertures=DEFAULT_PHOTOMETRY_APERTURES,
-    source_location_settings=DEFAULT_SOURCE_LOCATIONS,
-    photometry_optional_settings=PHOTOMETRY_OPTIONS,
-    passband_map=PASSBAND_MAP,
-    logging_settings=DEFAULT_LOGGING_SETTINGS,
-)
+
+@pytest.fixture
+def photometry_settings():
+    return PhotometrySettings(
+        camera=FAKE_CAMERA,
+        observatory=FAKE_OBS,
+        photometry_apertures=DEFAULT_PHOTOMETRY_APERTURES,
+        source_location_settings=DEFAULT_SOURCE_LOCATIONS,
+        photometry_optional_settings=PHOTOMETRY_OPTIONS,
+        passband_map=PASSBAND_MAP,
+        logging_settings=DEFAULT_LOGGING_SETTINGS,
+    )
 
 
 class TestAperturePhotometry:
@@ -155,12 +158,13 @@ class TestAperturePhotometry:
 
         return fake_images
 
-    def test_create_aperture_photometry(self, tmp_path):
+    def test_create_aperture_photometry(self, tmp_path, photometry_settings):
         source_list = self.create_source_list()
         source_list_file = tmp_path / "source_list.ecsv"
         source_list.write(source_list_file, overwrite=True)
 
-        photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
+        # We are fine to modify photometry_settings here because pytest will
+        # make a new one for each test.
         photometry_settings.source_location_settings.source_list_file = str(
             source_list_file
         )
@@ -259,7 +263,9 @@ class TestAperturePhotometry:
             )
 
     @pytest.mark.parametrize("reject", [True, False])
-    def test_aperture_photometry_with_outlier_rejection(self, reject, tmp_path):
+    def test_aperture_photometry_with_outlier_rejection(
+        self, reject, tmp_path, photometry_settings
+    ):
         """
         Insert some really large pixel values in the annulus and check that
         the photometry is correct when outliers are rejected and is
@@ -299,7 +305,8 @@ class TestAperturePhotometry:
         phot_options.reject_too_close = False
         phot_options.include_dig_noise = True
 
-        photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
+        # It is fine to modify photometry_settings here because pytest will
+        # make a new one for each test.
         photometry_settings.source_location_settings.source_list_file = str(
             source_list_file
         )
@@ -348,7 +355,7 @@ class TestAperturePhotometry:
                         < expected_deviation
                     )
 
-    def test_photometry_method_argument(self, tmp_path):
+    def test_photometry_method_argument(self, tmp_path, photometry_settings):
         """
         Make sure that setting the method option has an effect on the photometry.
         """
@@ -370,7 +377,6 @@ class TestAperturePhotometry:
         # Do the photometry with method = "center" first
         phot_options.method = "center"
 
-        photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
         photometry_settings.source_location_settings.source_list_file = str(
             source_list_file
         )
@@ -389,7 +395,7 @@ class TestAperturePhotometry:
         assert np.all(phot_exact["aperture_sum"] != phot_center["aperture_sum"])
 
     @pytest.mark.parametrize("coords", ["sky", "pixel"])
-    def test_photometry_on_directory(self, coords):
+    def test_photometry_on_directory(self, coords, photometry_settings):
         # Create list of fake CCDData objects
         num_files = 5
         fake_images = list_of_fakes(num_files)
@@ -432,7 +438,6 @@ class TestAperturePhotometry:
             phot_options.reject_background_outliers = True
             phot_options.fwhm_by_fit = True
 
-            photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
             photometry_settings.photometry_optional_settings = phot_options
             photometry_settings.source_location_settings.use_coordinates = coords
             photometry_settings.source_location_settings.source_list_file = str(
@@ -512,7 +517,7 @@ class TestAperturePhotometry:
                     or np.abs(expected_flux - obs_avg_net_cnts) > expected_deviation
                 )
 
-    def test_photometry_on_directory_with_no_ra_dec(self):
+    def test_photometry_on_directory_with_no_ra_dec(self, photometry_settings):
         # Create list of fake CCDData objects
         num_files = 5
         fake_images = list_of_fakes(num_files)
@@ -554,7 +559,6 @@ class TestAperturePhotometry:
             phot_options.reject_background_outliers = True
             phot_options.fwhm_by_fit = True
 
-            photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
             photometry_settings.photometry_optional_settings = phot_options
             photometry_settings.source_location_settings.source_list_file = str(
                 source_list_file
@@ -569,7 +573,7 @@ class TestAperturePhotometry:
                     object_of_interest=object_name,
                 )
 
-    def test_photometry_on_directory_with_bad_fits(self):
+    def test_photometry_on_directory_with_bad_fits(self, photometry_settings):
         # Create list of fake CCDData objects
         num_files = 5
         clean_fake_images = list_of_fakes(num_files)
@@ -610,7 +614,6 @@ class TestAperturePhotometry:
             phot_options.reject_background_outliers = True
             phot_options.fwhm_by_fit = True
 
-            photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
             photometry_settings.photometry_optional_settings = phot_options
             photometry_settings.source_location_settings.source_list_file = str(
                 source_list_file
@@ -626,8 +629,8 @@ class TestAperturePhotometry:
                     object_of_interest=object_name,
                 )
 
-    def test_invalid_path(self):
-        ap = AperturePhotometry(settings=DEFAULT_PHOTOMETRY_SETTINGS)
+    def test_invalid_path(self, photometry_settings):
+        ap = AperturePhotometry(settings=photometry_settings)
         with pytest.raises(ValueError, match="is not a valid file or directory"):
             ap("invalid_path")
 
@@ -709,7 +712,9 @@ class TestAperturePhotometry:
     # Checking logging for AperturePhotometry for multiple image photometry.
     @pytest.mark.parametrize("logfile", ["test.log", None])
     @pytest.mark.parametrize("console_log", [True, False])
-    def test_logging_multiple_image(self, capsys, logfile, console_log):
+    def test_logging_multiple_image(
+        self, capsys, logfile, console_log, photometry_settings
+    ):
         # Create list of fake CCDData objects
         num_files = 5
         fake_images = list_of_fakes(num_files)
@@ -746,7 +751,6 @@ class TestAperturePhotometry:
             phot_options.reject_background_outliers = True
             phot_options.fwhm_by_fit = True
 
-            photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
             photometry_settings.photometry_optional_settings = phot_options
             photometry_settings.source_location_settings.use_coordinates = "sky"
             photometry_settings.source_location_settings.source_list_file = str(
@@ -1071,7 +1075,9 @@ def test_aperture_photometry_no_outlier_rejection(int_data, tmp_path):
 
 
 @pytest.mark.parametrize("reject", [True, False])
-def test_aperture_photometry_with_outlier_rejection(reject, tmp_path):
+def test_aperture_photometry_with_outlier_rejection(
+    reject, tmp_path, photometry_settings
+):
     """
     Insert some really large pixel values in the annulus and check that
     the photometry is correct when outliers are rejected and is
@@ -1111,7 +1117,6 @@ def test_aperture_photometry_with_outlier_rejection(reject, tmp_path):
     phot_options.reject_too_close = False
     phot_options.include_dig_noise = True
 
-    photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
     photometry_settings.source_location_settings.source_list_file = str(
         source_list_file
     )
@@ -1182,7 +1187,7 @@ def list_of_fakes(num_files):
 
 
 @pytest.mark.parametrize("coords", ["sky", "pixel"])
-def test_photometry_on_directory(coords):
+def test_photometry_on_directory(coords, photometry_settings):
     # Create list of fake CCDData objects
     num_files = 5
     fake_images = list_of_fakes(num_files)
@@ -1222,7 +1227,6 @@ def test_photometry_on_directory(coords):
         phot_options.reject_background_outliers = True
         phot_options.fwhm_by_fit = True
 
-        photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
         photometry_settings.photometry_optional_settings = phot_options
         photometry_settings.source_location_settings.use_coordinates = coords
         photometry_settings.source_location_settings.source_list_file = str(
@@ -1301,7 +1305,7 @@ def test_photometry_on_directory(coords):
             )
 
 
-def test_photometry_on_directory_with_no_ra_dec():
+def test_photometry_on_directory_with_no_ra_dec(photometry_settings):
     # Create list of fake CCDData objects
     num_files = 5
     fake_images = list_of_fakes(num_files)
@@ -1340,7 +1344,6 @@ def test_photometry_on_directory_with_no_ra_dec():
         phot_options.reject_background_outliers = True
         phot_options.fwhm_by_fit = True
 
-        photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
         photometry_settings.photometry_optional_settings = phot_options
         photometry_settings.source_location_settings.source_list_file = str(
             source_list_file
@@ -1356,7 +1359,7 @@ def test_photometry_on_directory_with_no_ra_dec():
             )
 
 
-def test_photometry_on_directory_with_bad_fits():
+def test_photometry_on_directory_with_bad_fits(photometry_settings):
     # Create list of fake CCDData objects
     num_files = 5
     clean_fake_images = list_of_fakes(num_files)
@@ -1396,7 +1399,6 @@ def test_photometry_on_directory_with_bad_fits():
         phot_options.reject_background_outliers = True
         phot_options.fwhm_by_fit = True
 
-        photometry_settings = DEFAULT_PHOTOMETRY_SETTINGS.model_copy()
         photometry_settings.photometry_optional_settings = phot_options
         photometry_settings.source_location_settings.source_list_file = str(
             source_list_file
