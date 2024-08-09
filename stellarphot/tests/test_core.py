@@ -91,16 +91,20 @@ def feder_cg_16m():
     )
 
 
-feder_passbands = PassbandMap(
-    name="Feder Passbands",
-    your_filter_names_to_aavso={
-        "up": "SU",
-        "gp": "SG",
-        "rp": "SR",
-        "zp": "SZ",
-        "ip": "SI",
-    },
-)
+@pytest.fixture
+def feder_passbands():
+    return PassbandMap(
+        name="Feder Passbands",
+        your_filter_names_to_aavso={
+            "up": "SU",
+            "gp": "SG",
+            "rp": "SR",
+            "zp": "SZ",
+            "ip": "SI",
+        },
+    )
+
+
 feder_obs = Observatory(
     name="Feder Observatory", latitude=46.86678, longitude=-96.45328, elevation="311 m"
 )
@@ -482,7 +486,7 @@ def test_photometry_blank():
     assert test_base.observatory is None
 
 
-def test_photometry_data(feder_cg_16m):
+def test_photometry_data(feder_cg_16m, feder_passbands):
     # Create photometry data instance
     phot_data = PhotometryData(
         observatory=feder_obs,
@@ -577,7 +581,7 @@ def test_photometry_data_filter_name_map_preserves_original_names(feder_cg_16m):
     assert phot_data["passband"][1] == "SI"
 
 
-def test_photometry_roundtrip_ecsv(tmp_path, feder_cg_16m):
+def test_photometry_roundtrip_ecsv(tmp_path, feder_cg_16m, feder_passbands):
     # Check that we can save the test data to ECSV and restore it
     file_path = tmp_path / "test_photometry.ecsv"
     phot_data = PhotometryData(
@@ -593,7 +597,7 @@ def test_photometry_roundtrip_ecsv(tmp_path, feder_cg_16m):
     assert phot_data["ra"] == phot_data2["ra"]
 
 
-def test_photometry_slicing(feder_cg_16m):
+def test_photometry_slicing(feder_cg_16m, feder_passbands):
     # Create photometry data instance
     phot_data = PhotometryData(
         observatory=feder_obs,
@@ -620,7 +624,7 @@ def test_photometry_slicing(feder_cg_16m):
     assert two_cols.observatory.earth_location.height.unit == u.m
 
 
-def test_photometry_recursive(feder_cg_16m):
+def test_photometry_recursive(feder_cg_16m, feder_passbands):
     # Create photometry data instance
     phot_data = PhotometryData(
         observatory=feder_obs,
@@ -639,7 +643,7 @@ def test_photometry_recursive(feder_cg_16m):
         )
 
 
-def test_photometry_badtime(feder_cg_16m):
+def test_photometry_badtime(feder_cg_16m, feder_passbands):
     with pytest.raises(ValueError):
         _ = PhotometryData(
             observatory=feder_obs,
@@ -649,7 +653,7 @@ def test_photometry_badtime(feder_cg_16m):
         )
 
 
-def test_photometry_inconsistent_count_units(feder_cg_16m):
+def test_photometry_inconsistent_count_units(feder_cg_16m, feder_passbands):
     with pytest.raises(ValueError):
         _ = PhotometryData(
             observatory=feder_obs,
@@ -659,7 +663,7 @@ def test_photometry_inconsistent_count_units(feder_cg_16m):
         )
 
 
-def test_photometry_inconsistent_computed_col_exists(feder_cg_16m):
+def test_photometry_inconsistent_computed_col_exists(feder_cg_16m, feder_passbands):
     with pytest.raises(ValueError):
         phot_data = PhotometryData(
             observatory=feder_obs,
