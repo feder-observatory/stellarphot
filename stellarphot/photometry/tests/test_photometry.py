@@ -52,16 +52,19 @@ PHOTOMETRY_OPTIONS = PhotometryOptionalSettings()
 # This used to be the default; it has switched to exact
 PHOTOMETRY_OPTIONS.method = "center"
 
-# A camera with not unreasonable settings
-FAKE_CAMERA = Camera(
-    data_unit=u.adu,
-    gain=1.0 * u.electron / u.adu,
-    name="test camera",
-    read_noise=0 * u.electron,
-    dark_current=0.1 * u.electron / u.second,
-    pixel_scale=1 * u.arcsec / u.pixel,
-    max_data_value=40000 * u.adu,
-)
+
+@pytest.fixture
+def fake_camera():
+    # A camera with not unreasonable settings
+    return Camera(
+        data_unit=u.adu,
+        gain=1.0 * u.electron / u.adu,
+        name="test camera",
+        read_noise=0 * u.electron,
+        dark_current=0.1 * u.electron / u.second,
+        pixel_scale=1 * u.arcsec / u.pixel,
+        max_data_value=40000 * u.adu,
+    )
 
 
 @pytest.fixture
@@ -117,9 +120,9 @@ def passband_map():
 
 
 @pytest.fixture
-def photometry_settings(fake_obs, photometry_apertures, passband_map):
+def photometry_settings(fake_camera, fake_obs, photometry_apertures, passband_map):
     return PhotometrySettings(
-        camera=FAKE_CAMERA,
+        camera=fake_camera,
         observatory=fake_obs,
         photometry_apertures=photometry_apertures,
         source_location_settings=DEFAULT_SOURCE_LOCATIONS,
@@ -187,7 +190,7 @@ class TestAperturePhotometry:
         ap_phot = AperturePhotometry(settings=photometry_settings)
 
         # Check that the object was created correctly
-        assert ap_phot.settings.camera is FAKE_CAMERA
+        assert ap_phot.settings.camera is photometry_settings.camera
         assert ap_phot.settings.observatory is photometry_settings.observatory
 
     # The True case below is a regression test for #157
@@ -207,7 +210,9 @@ class TestAperturePhotometry:
         scale_factor = 1.0
         if int_data:
             scale_factor = (
-                0.75 * FAKE_CAMERA.max_data_value.value / fake_CCDimage.data.max()
+                0.75
+                * photometry_settings.camera.max_data_value.value
+                / fake_CCDimage.data.max()
             )
             # For the moment, ensure the integer data is NOT larger than max_adu
             # because until #161 is fixed then having NaN in the data will not succeed.
@@ -1014,7 +1019,9 @@ def test_aperture_photometry_no_outlier_rejection(
     scale_factor = 1.0
     if int_data:
         scale_factor = (
-            0.75 * FAKE_CAMERA.max_data_value.value / fake_CCDimage.data.max()
+            0.75
+            * photometry_settings.camera.max_data_value.value
+            / fake_CCDimage.data.max()
         )
         # For the moment, ensure the integer data is NOT larger than max_adu
         # because until #161 is fixed then having NaN in the data will not succeed.
