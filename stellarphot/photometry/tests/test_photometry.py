@@ -99,8 +99,6 @@ PASSBAND_MAP = PassbandMap(
     },
 )
 
-DEFAULT_LOGGING_SETTINGS = LoggingSettings()
-
 
 @pytest.fixture
 def photometry_settings():
@@ -111,7 +109,7 @@ def photometry_settings():
         source_location_settings=DEFAULT_SOURCE_LOCATIONS,
         photometry_optional_settings=PHOTOMETRY_OPTIONS,
         passband_map=PASSBAND_MAP,
-        logging_settings=DEFAULT_LOGGING_SETTINGS,
+        logging_settings=LoggingSettings(),
     )
 
 
@@ -178,7 +176,9 @@ class TestAperturePhotometry:
 
     # The True case below is a regression test for #157
     @pytest.mark.parametrize("int_data", [True, False])
-    def test_aperture_photometry_no_outlier_rejection(self, int_data, tmp_path):
+    def test_aperture_photometry_no_outlier_rejection(
+        self, int_data, tmp_path, photometry_settings
+    ):
         fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
 
         found_sources = source_detection(
@@ -215,15 +215,10 @@ class TestAperturePhotometry:
         image_file = tmp_path / "fake_image.fits"
         fake_CCDimage.write(image_file, overwrite=True)
 
-        photometry_settings = PhotometrySettings(
-            camera=FAKE_CAMERA,
-            observatory=FAKE_OBS,
-            photometry_apertures=DEFAULT_PHOTOMETRY_APERTURES,
-            source_location_settings=source_locations,
-            photometry_optional_settings=phot_options,
-            passband_map=PASSBAND_MAP,
-            logging_settings=DEFAULT_LOGGING_SETTINGS,
-        )
+        # We can simply change the fields we want to change now that we use
+        # a fixture for photometry_settings.
+        photometry_settings.source_location_settings = source_locations
+        photometry_settings.photometry_optional_settings = phot_options
 
         ap_phot = AperturePhotometry(settings=photometry_settings)
         phot, missing_sources = ap_phot(image_file)
@@ -637,7 +632,9 @@ class TestAperturePhotometry:
     # Checking logging for AperturePhotometry for single image photometry.
     @pytest.mark.parametrize("logfile", ["test.log", None])
     @pytest.mark.parametrize("console_log", [True, False])
-    def test_logging_single_image(self, capsys, logfile, console_log, tmp_path):
+    def test_logging_single_image(
+        self, capsys, logfile, console_log, tmp_path, photometry_settings
+    ):
         # Disable any root logger handlers that are active before using
         # logging since that is expectation of single_image_photometry.
         if logging.root.hasHandlers():
@@ -666,7 +663,7 @@ class TestAperturePhotometry:
         source_locations.source_list_file = str(source_list_file)
 
         # Define the logging settings
-        logging_settings = DEFAULT_LOGGING_SETTINGS.model_copy()
+        logging_settings = photometry_settings.logging_settings.model_copy()
         if logfile:
             # Define the log file and console log settings
             # and make sure to set full path of log file.
@@ -758,7 +755,7 @@ class TestAperturePhotometry:
             )
 
             # Define the logging settings
-            logging_settings = DEFAULT_LOGGING_SETTINGS.model_copy()
+            logging_settings = photometry_settings.logging_settings.model_copy()
             if logfile:
                 logging_settings.logfile = logfile
                 logging_settings.console_log = console_log
@@ -992,7 +989,9 @@ def test_find_too_close():
 
 # The True case below is a regression test for #157
 @pytest.mark.parametrize("int_data", [True, False])
-def test_aperture_photometry_no_outlier_rejection(int_data, tmp_path):
+def test_aperture_photometry_no_outlier_rejection(
+    int_data, tmp_path, photometry_settings
+):
     fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
 
     found_sources = source_detection(
@@ -1025,15 +1024,11 @@ def test_aperture_photometry_no_outlier_rejection(int_data, tmp_path):
 
     source_locations = DEFAULT_SOURCE_LOCATIONS.model_copy()
     source_locations.source_list_file = str(source_list_file)
-    photometry_settings = PhotometrySettings(
-        camera=FAKE_CAMERA,
-        observatory=FAKE_OBS,
-        photometry_apertures=DEFAULT_PHOTOMETRY_APERTURES,
-        source_location_settings=source_locations,
-        photometry_optional_settings=phot_options,
-        passband_map=PASSBAND_MAP,
-        logging_settings=DEFAULT_LOGGING_SETTINGS,
-    )
+
+    # Customize a couple options for this test
+    photometry_settings.source_location_settings = source_locations
+    photometry_settings.photometry_optional_settings = phot_options
+
     phot, missing_sources = single_image_photometry(
         fake_CCDimage,
         photometry_settings,
