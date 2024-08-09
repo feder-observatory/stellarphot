@@ -63,16 +63,19 @@ FAKE_CAMERA = Camera(
     max_data_value=40000 * u.adu,
 )
 
-# Camera with no read noise or dark current
-ZERO_CAMERA = Camera(
-    data_unit=u.adu,
-    gain=1.0 * u.electron / u.adu,
-    name="test camera",
-    read_noise=0 * u.electron,
-    dark_current=0.0 * u.electron / u.second,
-    pixel_scale=1 * u.arcsec / u.pixel,
-    max_data_value=40000 * u.adu,
-)
+
+@pytest.fixture
+def zero_camera():
+    # Camera with no read noise or dark current
+    return Camera(
+        data_unit=u.adu,
+        gain=1.0 * u.electron / u.adu,
+        name="test camera",
+        read_noise=0 * u.electron,
+        dark_current=0.0 * u.electron / u.second,
+        pixel_scale=1 * u.arcsec / u.pixel,
+        max_data_value=40000 * u.adu,
+    )
 
 
 @pytest.fixture
@@ -816,14 +819,14 @@ def test_calc_noise_defaults():
 
 @pytest.mark.parametrize("aperture_area", [5, 20])
 @pytest.mark.parametrize("gain", GAINS)
-def test_calc_noise_source_only(gain, aperture_area):
+def test_calc_noise_source_only(gain, aperture_area, zero_camera):
     # If the only source of noise is Poisson error in the source
     # then the noise should be the square root of the counts.
     counts = 100
     expected = np.sqrt(gain * counts)
 
     # Create camera instance
-    camera = ZERO_CAMERA.model_copy()
+    camera = zero_camera.model_copy()
     camera.gain = gain * camera.gain.unit
 
     np.testing.assert_allclose(
@@ -833,14 +836,14 @@ def test_calc_noise_source_only(gain, aperture_area):
 
 @pytest.mark.parametrize("aperture_area", [5, 20])
 @pytest.mark.parametrize("gain", GAINS)
-def test_calc_noise_dark_only(gain, aperture_area):
+def test_calc_noise_dark_only(gain, aperture_area, zero_camera):
     # Gain should not affect this one. Dark current needs a couple other things,
     # but this is basically Poisson error.
     dark_current = 10
     exposure = 20
 
     # Create camera instance
-    camera = ZERO_CAMERA.model_copy()
+    camera = zero_camera.model_copy()
     # Set gain and dark current to values for test
     camera.dark_current = dark_current * camera.dark_current.unit
     camera.gain = gain * camera.gain.unit
@@ -855,14 +858,14 @@ def test_calc_noise_dark_only(gain, aperture_area):
 
 @pytest.mark.parametrize("aperture_area", [5, 20])
 @pytest.mark.parametrize("gain", GAINS)
-def test_calc_read_noise_only(gain, aperture_area):
+def test_calc_read_noise_only(gain, aperture_area, zero_camera):
     # The read noise per pixel IS the noise. The only multiplier is
     # the number of pixels.
     read_noise = 10
     expected = np.sqrt(aperture_area * read_noise**2)
 
     # Create camera instance
-    camera = ZERO_CAMERA.model_copy()
+    camera = zero_camera.model_copy()
     camera.read_noise = read_noise * camera.read_noise.unit
     camera.gain = gain * camera.gain.unit
 
@@ -873,13 +876,13 @@ def test_calc_read_noise_only(gain, aperture_area):
 
 @pytest.mark.parametrize("aperture_area", [5, 20])
 @pytest.mark.parametrize("gain", GAINS)
-def test_calc_sky_only(gain, aperture_area):
+def test_calc_sky_only(gain, aperture_area, zero_camera):
     # The sky noise per pixel is the poisson and per pixel.
     sky = 10
     expected = np.sqrt(gain * aperture_area * sky)
 
     # Create camera instance
-    camera = ZERO_CAMERA.model_copy()
+    camera = zero_camera.model_copy()
     camera.gain = gain * camera.gain.unit
 
     np.testing.assert_allclose(
@@ -887,7 +890,7 @@ def test_calc_sky_only(gain, aperture_area):
     )
 
 
-def test_annulus_area_term():
+def test_annulus_area_term(zero_camera):
     # Test that noise is correct with an annulus
     aperture_area = 20
 
@@ -898,7 +901,7 @@ def test_annulus_area_term():
     expected = np.sqrt(gain * aperture_area * (1 + aperture_area / annulus_area) * sky)
 
     # Create camera instance
-    camera = ZERO_CAMERA.model_copy()
+    camera = zero_camera.model_copy()
     camera.gain = gain * camera.gain.unit
 
     np.testing.assert_allclose(
@@ -913,7 +916,7 @@ def test_annulus_area_term():
 
 
 @pytest.mark.parametrize("digit,expected", ((False, 89.078616), (True, 89.10182)))
-def test_calc_noise_messy_case(digit, expected):
+def test_calc_noise_messy_case(digit, expected, zero_camera):
     # Do a single test where all the parameters are set and compare with
     # what a calculator gave.
     counts = 1000
@@ -928,7 +931,7 @@ def test_calc_noise_messy_case(digit, expected):
     read_noise = 12
 
     # Create camera instance
-    camera = ZERO_CAMERA.model_copy()
+    camera = zero_camera.model_copy()
     camera.gain = gain * camera.gain.unit
     camera.dark_current = dark_current * camera.dark_current.unit
     camera.read_noise = read_noise * camera.read_noise.unit
