@@ -4,9 +4,8 @@ import re
 
 import astropy.units as u
 import pytest
-from astropy.coordinates import EarthLocation, Latitude, Longitude, SkyCoord
+from astropy.coordinates import EarthLocation, Latitude, Longitude
 from astropy.table import Table
-from astropy.time import Time
 from pydantic import ValidationError
 
 from stellarphot.settings import ui_generator
@@ -24,41 +23,52 @@ from stellarphot.settings.models import (
     SourceLocationSettings,
 )
 
-DEFAULT_APERTURE_SETTINGS = dict(radius=5, gap=10, annulus_width=15, fwhm=3.2)
+TEST_APERTURE_SETTINGS = dict(radius=5, gap=10, annulus_width=15, fwhm=3.2)
 
 TEST_CAMERA_VALUES = dict(
-    data_unit=u.adu,
-    gain=2.0 * u.electron / u.adu,
+    data_unit="adu",
+    gain="2.0 electron / adu",
     name="test camera",
-    read_noise=10 * u.electron,
-    dark_current=0.01 * u.electron / u.second,
-    pixel_scale=0.563 * u.arcsec / u.pix,
-    max_data_value=50000 * u.adu,
+    read_noise="10.0 electron",
+    dark_current="0.01 electron / s",
+    pixel_scale="0.563 arcsec / pix",
+    max_data_value="50000.0 adu",
 )
 
-DEFAULT_EXOPLANET_SETTINGS = dict(
-    epoch=Time(0, format="jd"),
-    period=0 * u.min,
+TEST_EXOPLANET_SETTINGS = dict(
+    epoch={
+        "jd1": 0.0,
+        "jd2": 0.0,
+        "format": "jd",
+        "scale": "utc",
+        "precision": 3,
+        "in_subfmt": "*",
+        "out_subfmt": "*",
+    },
+    period="0.0 min",
     identifier="a planet",
-    coordinate=SkyCoord(
-        ra="00:00:00.00", dec="+00:00:00.0", frame="icrs", unit=("hour", "degree")
-    ),
+    coordinate={
+        "ra": "0d00m00s",
+        "dec": "0d00m00s",
+        "representation_type": "spherical",
+        "frame": "icrs",
+    },
     depth=0,
-    duration=0 * u.min,
+    duration="0.0 min",
 )
 
-DEFAULT_OBSERVATORY_SETTINGS = dict(
+TEST_OBSERVATORY_SETTINGS = dict(
     name="test observatory",
-    longitude=43 * u.deg,
-    latitude=45 * u.deg,
-    elevation=311 * u.m,
+    longitude="43d00m00s",
+    latitude="45d00m00s",
+    elevation="311.0 m",
     AAVSO_code="test",
     TESS_telescope_code="tess test",
 )
 
 # The first setting here is required, the rest are optional. The optional
 # settings below are different than the defaults in the model definition.
-DEFAULT_PHOTOMETRY_OPTIONS = dict(
+TEST_PHOTOMETRY_OPTIONS = dict(
     include_dig_noise=False,
     reject_too_close=False,
     reject_background_outliers=False,
@@ -66,45 +76,43 @@ DEFAULT_PHOTOMETRY_OPTIONS = dict(
     method="center",
 )
 
-DEFAULT_PASSBAND_MAP = dict(
+TEST_PASSBAND_MAP = dict(
     name="Example map",
     your_filter_names_to_aavso=[
-        PassbandMapEntry(
+        dict(
             your_filter_name="V",
             aavso_filter_name="V",
         ),
-        PassbandMapEntry(
+        dict(
             your_filter_name="B",
             aavso_filter_name="B",
         ),
-        PassbandMapEntry(
+        dict(
             your_filter_name="rp",
             aavso_filter_name="SR",
         ),
     ],
 )
 
-DEFAULT_LOGGING_SETTINGS = dict(
+TEST_LOGGING_SETTINGS = dict(
     logfile="test.log",
     console_log=False,
 )
 
-DEFAULT_SOURCE_LOCATION_SETTINGS = dict(
+TEST_SOURCE_LOCATION_SETTINGS = dict(
     shift_tolerance=5,
     source_list_file="test.ecsv",
     use_coordinates="pixel",
 )
 
-DEFAULT_PHOTOMETRY_SETTINGS = dict(
-    camera=Camera(**TEST_CAMERA_VALUES),
-    observatory=Observatory(**DEFAULT_OBSERVATORY_SETTINGS),
-    photometry_apertures=PhotometryApertures(**DEFAULT_APERTURE_SETTINGS),
-    source_location_settings=SourceLocationSettings(**DEFAULT_SOURCE_LOCATION_SETTINGS),
-    photometry_optional_settings=PhotometryOptionalSettings(
-        **DEFAULT_PHOTOMETRY_OPTIONS
-    ),
-    passband_map=PassbandMap(**DEFAULT_PASSBAND_MAP),
-    logging_settings=LoggingSettings(**DEFAULT_LOGGING_SETTINGS),
+TEST_PHOTOMETRY_SETTINGS = dict(
+    camera=TEST_CAMERA_VALUES,
+    observatory=TEST_OBSERVATORY_SETTINGS,
+    photometry_apertures=TEST_APERTURE_SETTINGS,
+    source_location_settings=TEST_SOURCE_LOCATION_SETTINGS,
+    photometry_optional_settings=TEST_PHOTOMETRY_OPTIONS,
+    passband_map=TEST_PASSBAND_MAP,
+    logging_settings=TEST_LOGGING_SETTINGS,
 )
 
 
@@ -112,14 +120,14 @@ DEFAULT_PHOTOMETRY_SETTINGS = dict(
     "model,settings",
     [
         [Camera, TEST_CAMERA_VALUES],
-        [PhotometryApertures, DEFAULT_APERTURE_SETTINGS],
-        [Exoplanet, DEFAULT_EXOPLANET_SETTINGS],
-        [Observatory, DEFAULT_OBSERVATORY_SETTINGS],
-        [PhotometryOptionalSettings, DEFAULT_PHOTOMETRY_OPTIONS],
-        [PassbandMap, DEFAULT_PASSBAND_MAP],
-        [PhotometrySettings, DEFAULT_PHOTOMETRY_SETTINGS],
-        [LoggingSettings, DEFAULT_LOGGING_SETTINGS],
-        [SourceLocationSettings, DEFAULT_SOURCE_LOCATION_SETTINGS],
+        [PhotometryApertures, TEST_APERTURE_SETTINGS],
+        [Exoplanet, TEST_EXOPLANET_SETTINGS],
+        [Observatory, TEST_OBSERVATORY_SETTINGS],
+        [PhotometryOptionalSettings, TEST_PHOTOMETRY_OPTIONS],
+        [PassbandMap, TEST_PASSBAND_MAP],
+        [PhotometrySettings, TEST_PHOTOMETRY_SETTINGS],
+        [LoggingSettings, TEST_LOGGING_SETTINGS],
+        [SourceLocationSettings, TEST_SOURCE_LOCATION_SETTINGS],
     ],
 )
 class TestModelAgnosticActions:
@@ -131,8 +139,14 @@ class TestModelAgnosticActions:
     def test_create_model(self, model, settings):
         # Make sure we can create the model and that the settings are correct.
         mod = model(**settings)
+        mod_dict = mod.model_dump()
         for k, v in settings.items():
-            assert getattr(mod, k) == v
+            assert mod_dict[k] == v
+            # if k == "your_filter_names_to_aavso":
+            #     # This is the only nested model, so we need to check it separately
+            #     assert getattr(mod, k) == [PassbandMapEntry(**x) for x in v]
+            # else:
+            #     assert getattr(mod, k) == v
 
     def test_model_copy(self, model, settings):
         # Make sure we can create a copy of the model
@@ -183,8 +197,14 @@ class TestModelAgnosticActions:
         values_dict_as_strings = json.loads(model(**settings).model_dump_json())
         ui.value = values_dict_as_strings
         mod = model(**ui.value)
+        mod_dict = mod.model_dump()
         for k, v in settings.items():
-            assert getattr(mod, k) == v
+            assert mod_dict[k] == v
+            # if k == "your_filter_names_to_aavso":
+            #     # This is the only nested model, so we need to check it separately
+            #     assert getattr(mod, k) == [PassbandMapEntry(**x) for x in v]
+            # else:
+            #     assert getattr(mod, k) == v
 
         # 3) The UI widgets contains the titles generated from pydantic.
         # Pydantic generically is supposed to generate titles from the field names,
@@ -232,8 +252,8 @@ class TestModelAgnosticActions:
     "model,settings",
     [
         [Camera, TEST_CAMERA_VALUES.copy()],
-        [Observatory, DEFAULT_OBSERVATORY_SETTINGS.copy()],
-        [PassbandMap, DEFAULT_PASSBAND_MAP.copy()],
+        [Observatory, TEST_OBSERVATORY_SETTINGS.copy()],
+        [PassbandMap, TEST_PASSBAND_MAP.copy()],
     ],
 )
 class TestModelsWithName:
@@ -275,7 +295,7 @@ class TestModelsWithName:
     "model,settings",
     [
         [Camera, TEST_CAMERA_VALUES.copy()],
-        [Observatory, DEFAULT_OBSERVATORY_SETTINGS.copy()],
+        [Observatory, TEST_OBSERVATORY_SETTINGS.copy()],
     ],
 )
 class TestModelExamples:
@@ -355,18 +375,18 @@ def test_partial_photometry_settings():
     # Loop over the individual default photometry settings and make sure we can
     # create a PartialPhotometrySettings object with just that field.
 
-    for k, v in DEFAULT_PHOTOMETRY_SETTINGS.items():
+    for k, v in TEST_PHOTOMETRY_SETTINGS.items():
         pps = PartialPhotometrySettings(**{k: v})
-        assert getattr(pps, k) == v
+        assert pps.model_dump()[k] == v
 
-    choices = list(DEFAULT_PHOTOMETRY_SETTINGS.items())
+    choices = list(TEST_PHOTOMETRY_SETTINGS.items())
     for i in range(2, 5):
         # Try a few random subsets of fields
         fields = random.choices(choices, k=i)
         settings = {k: v for k, v in fields}
         pps = PartialPhotometrySettings(**settings)
         for k, v in settings.items():
-            assert getattr(pps, k) == v
+            assert pps.model_dump()[k] == v
 
 
 def test_camera_unitscheck():
@@ -377,7 +397,8 @@ def test_camera_unitscheck():
     # dimensionless_unscaled. So we need to set the units to something that is
     # invalid.
     camera_dict_bad_unit = {
-        k: "5 cows" if hasattr(v, "value") else v for k, v in TEST_CAMERA_VALUES.items()
+        k: "5 cows" if k not in ["name", "data_unit"] else v
+        for k, v in TEST_CAMERA_VALUES.items()
     }
     # All 5 of the attributes after data_unit will be checked for units
     # and noted in the ValidationError message. Rather than checking
@@ -393,7 +414,9 @@ def test_camera_unitscheck():
 def test_camera_negative_max_adu():
     # Check that a negative maximum data value raises an error
     camera_for_test = TEST_CAMERA_VALUES.copy()
-    camera_for_test["max_data_value"] = -1 * camera_for_test["max_data_value"]
+    camera_for_test["max_data_value"] = -1 * u.Quantity(
+        camera_for_test["max_data_value"]
+    )
 
     # Make sure that a negative max_adu raises an error
     with pytest.raises(ValidationError, match="Input should be greater than 0"):
@@ -474,24 +497,24 @@ def test_camera_altunitscheck():
 
 
 def test_create_aperture_settings_correctly():
-    ap_set = PhotometryApertures(**DEFAULT_APERTURE_SETTINGS)
-    assert ap_set.radius == DEFAULT_APERTURE_SETTINGS["radius"]
+    ap_set = PhotometryApertures(**TEST_APERTURE_SETTINGS)
+    assert ap_set.radius == TEST_APERTURE_SETTINGS["radius"]
     assert (
         ap_set.inner_annulus
-        == DEFAULT_APERTURE_SETTINGS["radius"] + DEFAULT_APERTURE_SETTINGS["gap"]
+        == TEST_APERTURE_SETTINGS["radius"] + TEST_APERTURE_SETTINGS["gap"]
     )
     assert (
         ap_set.outer_annulus
-        == DEFAULT_APERTURE_SETTINGS["radius"]
-        + DEFAULT_APERTURE_SETTINGS["gap"]
-        + DEFAULT_APERTURE_SETTINGS["annulus_width"]
+        == TEST_APERTURE_SETTINGS["radius"]
+        + TEST_APERTURE_SETTINGS["gap"]
+        + TEST_APERTURE_SETTINGS["annulus_width"]
     )
 
 
 @pytest.mark.parametrize("bad_one", ["radius", "gap", "annulus_width"])
 def test_create_invalid_values(bad_one):
     # Check that individual values that are bad raise an error
-    bad_settings = DEFAULT_APERTURE_SETTINGS.copy()
+    bad_settings = TEST_APERTURE_SETTINGS.copy()
     bad_settings[bad_one] = -1
     with pytest.raises(ValidationError, match=bad_one):
         PhotometryApertures(**bad_settings)
@@ -499,11 +522,11 @@ def test_create_invalid_values(bad_one):
 
 def test_observatory_earth_location():
     # Check that the earth location is correctly set
-    obs = Observatory(**DEFAULT_OBSERVATORY_SETTINGS)
+    obs = Observatory(**TEST_OBSERVATORY_SETTINGS)
     earth_loc = EarthLocation(
-        lat=DEFAULT_OBSERVATORY_SETTINGS["latitude"],
-        lon=DEFAULT_OBSERVATORY_SETTINGS["longitude"],
-        height=DEFAULT_OBSERVATORY_SETTINGS["elevation"],
+        lat=TEST_OBSERVATORY_SETTINGS["latitude"],
+        lon=TEST_OBSERVATORY_SETTINGS["longitude"],
+        height=TEST_OBSERVATORY_SETTINGS["elevation"],
     )
     assert obs.earth_location == earth_loc
 
@@ -512,16 +535,16 @@ def test_observatory_lat_long_as_float():
     # To make it easier to enter latitude and longitude in a form (e.g. a GUI),
     # we allow them to be entered as floats with an assumed unit of degrees,
     # not just Quantity objects.
-    settings = dict(DEFAULT_OBSERVATORY_SETTINGS)
-    settings["latitude"] = settings["latitude"].value
-    settings["longitude"] = settings["longitude"].value
+    settings = dict(TEST_OBSERVATORY_SETTINGS)
+    settings["latitude"] = u.Quantity(settings["latitude"]).value
+    settings["longitude"] = u.Quantity(settings["longitude"]).value
     obs = Observatory(**settings)
-    assert obs == Observatory(**DEFAULT_OBSERVATORY_SETTINGS)
+    assert obs == Observatory(**TEST_OBSERVATORY_SETTINGS)
 
 
 def test_source_locations_negative_shift_tolerance():
     # Check that a negative shift tolerance raises an error
-    settings = dict(DEFAULT_SOURCE_LOCATION_SETTINGS)
+    settings = dict(TEST_SOURCE_LOCATION_SETTINGS)
     settings["shift_tolerance"] = -1
     with pytest.raises(
         ValidationError, match="Input should be greater than or equal to 0"
@@ -533,18 +556,18 @@ class TestPassbandMapDictMethods:
     """Test all of the dict methods we implement for the PassbandMap class."""
 
     def create_passband_map(self):
-        return PassbandMap(**DEFAULT_PASSBAND_MAP)
+        return PassbandMap(**TEST_PASSBAND_MAP)
 
     def default_pb_map_keys(self):
         return [
-            v.your_filter_name
-            for v in DEFAULT_PASSBAND_MAP["your_filter_names_to_aavso"]
+            v["your_filter_name"]
+            for v in TEST_PASSBAND_MAP["your_filter_names_to_aavso"]
         ]
 
     def default_pb_map_values(self):
         return [
-            v.aavso_filter_name.value
-            for v in DEFAULT_PASSBAND_MAP["your_filter_names_to_aavso"]
+            v["aavso_filter_name"]
+            for v in TEST_PASSBAND_MAP["your_filter_names_to_aavso"]
         ]
 
     def test_keys(self):
@@ -592,7 +615,7 @@ def test_passband_map_init_with_none():
 
 
 def test_passband_map_init_with_passband_map():
-    pb_map = PassbandMap(**DEFAULT_PASSBAND_MAP)
+    pb_map = PassbandMap(**TEST_PASSBAND_MAP)
     pb_map2 = PassbandMap(name="Example map", your_filter_names_to_aavso=pb_map)
     assert pb_map == pb_map2
 
@@ -605,10 +628,10 @@ def test_passband_map_entry_empty_name_raises_error():
 
 def test_create_invalid_exoplanet():
     # Set some bad values and make sure they raise validation errors
-    values = DEFAULT_EXOPLANET_SETTINGS.copy()
+    values = TEST_EXOPLANET_SETTINGS.copy()
     # Make pediod and duration have invalid units for a time
-    values["period"] = values["period"].value * u.m
-    values["duration"] = values["duration"].value * u.m
+    values["period"] = u.Quantity(values["period"]).value * u.m
+    values["duration"] = u.Quantity(values["duration"]).value * u.m
     # Check that individual values that are bad raise an error
     with pytest.raises(ValidationError, match="2 validation errors"):
         Exoplanet(**values)

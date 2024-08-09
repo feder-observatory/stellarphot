@@ -3,6 +3,7 @@ from pathlib import Path
 
 import ipywidgets as ipw
 import pytest
+from astropy.units import Quantity
 from camel_converter import to_snake
 from ipyautoui.custom.iterable import ItemBox, ItemControl
 from pydantic import ValidationError
@@ -30,10 +31,10 @@ from stellarphot.settings.custom_widgets import (
     _add_saving_to_widget,
 )
 from stellarphot.settings.tests.test_models import (
-    DEFAULT_OBSERVATORY_SETTINGS,
-    DEFAULT_PASSBAND_MAP,
-    DEFAULT_PHOTOMETRY_SETTINGS,
     TEST_CAMERA_VALUES,
+    TEST_OBSERVATORY_SETTINGS,
+    TEST_PASSBAND_MAP,
+    TEST_PHOTOMETRY_SETTINGS,
 )
 
 
@@ -125,8 +126,8 @@ class TestChooseOrMakeNew:
         "item_type,setting",
         [
             ("camera", TEST_CAMERA_VALUES),
-            ("observatory", DEFAULT_OBSERVATORY_SETTINGS),
-            ("passband_map", DEFAULT_PASSBAND_MAP),
+            ("observatory", TEST_OBSERVATORY_SETTINGS),
+            ("passband_map", TEST_PASSBAND_MAP),
         ],
     )
     def test_make_new_with_existing_item_resets_value(self, item_type, setting):
@@ -183,7 +184,7 @@ class TestChooseOrMakeNew:
         choose_or_make_new._edit_button.click()
 
         # Change a value in the camera so we can check that the new value is saved.
-        new_gain = 2 * TEST_CAMERA_VALUES["gain"]
+        new_gain = 2 * Quantity(TEST_CAMERA_VALUES["gain"])
         choose_or_make_new._item_widget.di_widgets["gain"].value = str(new_gain)
         # Simulate a click on the save button...
         choose_or_make_new._item_widget.savebuttonbar.bn_save.click()
@@ -222,7 +223,7 @@ class TestChooseOrMakeNew:
         choose_or_make_new._edit_button.click()
 
         # Change a value in the camera so we can check that the new value is saved.
-        new_gain = 2 * TEST_CAMERA_VALUES["gain"]
+        new_gain = 2 * Quantity(TEST_CAMERA_VALUES["gain"])
         choose_or_make_new._item_widget.di_widgets["gain"].value = str(new_gain)
         # Simulate a click on the save button...
         choose_or_make_new._item_widget.savebuttonbar.bn_save.click()
@@ -252,10 +253,10 @@ class TestChooseOrMakeNew:
     def test_choosing_different_item_updates_display(self):
         # Should update the display when a different item is chosen
         saved = SavedSettings()
-        observatory = Observatory(**DEFAULT_OBSERVATORY_SETTINGS)
+        observatory = Observatory(**TEST_OBSERVATORY_SETTINGS)
         saved.add_item(observatory)
 
-        observatory2 = Observatory(**DEFAULT_OBSERVATORY_SETTINGS)
+        observatory2 = Observatory(**TEST_OBSERVATORY_SETTINGS)
         # Make sure this name sorts lower than the first observatory
         observatory2.name = "zzzz" + observatory2.name
         observatory2.elevation = "-200 m"
@@ -281,7 +282,7 @@ class TestChooseOrMakeNew:
         # When an existing PassbandMap is selected the add/remove buttons
         # for individual rows should not be displayed.
         saved = SavedSettings()
-        passband_map = PassbandMap(**DEFAULT_PASSBAND_MAP)
+        passband_map = PassbandMap(**TEST_PASSBAND_MAP)
         saved.add_item(passband_map)
 
         choose_or_make_new = ChooseOrMakeNew("passband_map")
@@ -310,7 +311,7 @@ class TestChooseOrMakeNew:
     def test_make_passband_map(self):
         # Make a passband map and save it, then check that it is in the dropdown
         saved = SavedSettings()
-        passband_map = PassbandMap(**DEFAULT_PASSBAND_MAP)
+        passband_map = PassbandMap(**TEST_PASSBAND_MAP)
         saved.add_item(passband_map)
 
         # Should create a new passband map
@@ -372,7 +373,7 @@ class TestChooseOrMakeNew:
         assert choose_or_make_new._item_widget.savebuttonbar.bn_save.disabled
 
         # Edit a value in the camera so the save button is enabled
-        new_gain = 2 * TEST_CAMERA_VALUES["gain"]
+        new_gain = 2 * Quantity(TEST_CAMERA_VALUES["gain"])
         choose_or_make_new._item_widget.di_widgets["gain"].value = str(new_gain)
 
         # The save button should now be enabled
@@ -547,7 +548,7 @@ class TestChooseOrMakeNew:
 
         # set the item widget value to the existing camera with double the gain
         camera_values = TEST_CAMERA_VALUES.copy()
-        camera_values["gain"] = 2 * camera_values["gain"]
+        camera_values["gain"] = 2 * Quantity(camera_values["gain"])
         choose_or_make_new._item_widget.value = Camera(**camera_values)
 
         # Simulate a click on the save button...
@@ -910,7 +911,7 @@ class TestSettingWithTitle:
         camera_title._widget._edit_button.click()
 
         # Edit a value in the camera so the save button is enabled
-        new_gain = 2 * TEST_CAMERA_VALUES["gain"]
+        new_gain = 2 * Quantity(TEST_CAMERA_VALUES["gain"])
         camera_title._widget._item_widget.di_widgets["gain"].value = str(new_gain)
 
         assert SaveStatus.SETTING_NOT_SAVED in camera_title.title.value
@@ -1025,7 +1026,7 @@ class TestReviewSettings:
             saved = SavedSettings()
             # Make an instance of the class
             snake_name = to_snake(setting_class.__name__)
-            item = DEFAULT_PHOTOMETRY_SETTINGS[snake_name]
+            item = setting_class.model_validate(TEST_PHOTOMETRY_SETTINGS[snake_name])
             # Save the instance to saved settings file
             saved.add_item(item)
 
@@ -1050,7 +1051,7 @@ class TestReviewSettings:
     def test_creation_with_saved_working_dir_settings(self):
         # Check that when there is a saved item in the working directory
         # the badge attached to the name is "needs review"
-        photometry_apertures = DEFAULT_PHOTOMETRY_SETTINGS["photometry_apertures"]
+        photometry_apertures = TEST_PHOTOMETRY_SETTINGS["photometry_apertures"]
         wk_dir = PhotometryWorkingDirSettings()
         partial_settings = PartialPhotometrySettings(
             photometry_apertures=photometry_apertures
@@ -1074,7 +1075,7 @@ class TestReviewSettings:
         saved = SavedSettings()
         camera = Camera(**TEST_CAMERA_VALUES)
         saved.add_item(camera)
-        observatory = Observatory(**DEFAULT_OBSERVATORY_SETTINGS)
+        observatory = Observatory(**TEST_OBSERVATORY_SETTINGS)
         saved.add_item(observatory)
 
         # Create the review widget
@@ -1148,8 +1149,8 @@ class TestReviewSettings:
         # saved user settings.
         wd_settings = PhotometryWorkingDirSettings()
         camera = Camera(**TEST_CAMERA_VALUES)
-        observatory = Observatory(**DEFAULT_OBSERVATORY_SETTINGS)
-        passbands = PassbandMap(**DEFAULT_PASSBAND_MAP)
+        observatory = Observatory(**TEST_OBSERVATORY_SETTINGS)
+        passbands = PassbandMap(**TEST_PASSBAND_MAP)
         wd_settings.save(
             PartialPhotometrySettings(
                 camera=camera, observatory=observatory, passband_map=passbands
@@ -1182,8 +1183,8 @@ class TestReviewSettings:
         # saved user settings.
         wd_settings = PhotometryWorkingDirSettings()
         camera = Camera(**TEST_CAMERA_VALUES)
-        observatory = Observatory(**DEFAULT_OBSERVATORY_SETTINGS)
-        passbands = PassbandMap(**DEFAULT_PASSBAND_MAP)
+        observatory = Observatory(**TEST_OBSERVATORY_SETTINGS)
+        passbands = PassbandMap(**TEST_PASSBAND_MAP)
         wd_settings.save(
             PartialPhotometrySettings(
                 camera=camera, observatory=observatory, passband_map=passbands
