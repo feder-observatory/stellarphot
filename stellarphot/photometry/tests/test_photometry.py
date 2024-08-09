@@ -74,10 +74,17 @@ ZERO_CAMERA = Camera(
     max_data_value=40000 * u.adu,
 )
 
-# Fake observatory location
-FAKE_OBS = Observatory(
-    name="test observatory", latitude=0 * u.deg, longitude=0 * u.deg, elevation=0 * u.m
-)
+
+@pytest.fixture
+def fake_obs():
+    # Fake observatory location
+    return Observatory(
+        name="test observatory",
+        latitude=0 * u.deg,
+        longitude=0 * u.deg,
+        elevation=0 * u.m,
+    )
+
 
 # The fake image used for testing
 FAKE_CCD_IMAGE = FakeCCDImage(seed=SEED)
@@ -107,10 +114,10 @@ def passband_map():
 
 
 @pytest.fixture
-def photometry_settings(photometry_apertures, passband_map):
+def photometry_settings(fake_obs, photometry_apertures, passband_map):
     return PhotometrySettings(
         camera=FAKE_CAMERA,
-        observatory=FAKE_OBS,
+        observatory=fake_obs,
         photometry_apertures=photometry_apertures,
         source_location_settings=DEFAULT_SOURCE_LOCATIONS,
         photometry_optional_settings=PHOTOMETRY_OPTIONS,
@@ -178,7 +185,7 @@ class TestAperturePhotometry:
 
         # Check that the object was created correctly
         assert ap_phot.settings.camera is FAKE_CAMERA
-        assert ap_phot.settings.observatory is FAKE_OBS
+        assert ap_phot.settings.observatory is photometry_settings.observatory
 
     # The True case below is a regression test for #157
     @pytest.mark.parametrize("int_data", [True, False])
