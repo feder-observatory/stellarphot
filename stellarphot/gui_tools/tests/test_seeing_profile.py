@@ -17,7 +17,7 @@ from stellarphot.gui_tools.seeing_profile_functions import (
     AP_SETTING_SAVED,
 )
 from stellarphot.photometry.tests.fake_image import make_gaussian_sources_image
-from stellarphot.photometry.tests.test_profiles import RANDOM_SEED, SHAPE, STARS
+from stellarphot.photometry.tests.test_profiles import RANDOM_SEED, SHAPE
 from stellarphot.settings import (
     Camera,
     Observatory,
@@ -78,14 +78,14 @@ def fake_settings_dir(mocker, tmp_path):
     )
 
 
-def test_seeing_profile_properties(tmp_path):
+def test_seeing_profile_properties(tmp_path, profile_stars):
     # Here we make a seeing profile then load an image.
     profile_widget = spf.SeeingProfileWidget(
         camera=Camera(**TEST_CAMERA_VALUES), _testing_path=tmp_path
     )
 
     # Make a fits file
-    image = make_gaussian_sources_image(SHAPE, STARS) + make_noise_image(
+    image = make_gaussian_sources_image(SHAPE, profile_stars) + make_noise_image(
         SHAPE, mean=10, stddev=100, seed=RANDOM_SEED
     )
 
@@ -112,7 +112,7 @@ def test_seeing_profile_properties(tmp_path):
 
     # Make a mock event object
     Event = namedtuple("Event", ["data_x", "data_y"])
-    star_loc_x, star_loc_y = STARS["x_mean"][0], STARS["y_mean"][0]
+    star_loc_x, star_loc_y = profile_stars["x_mean"][0], profile_stars["y_mean"][0]
     # Sending a mock event will generate plots that we don't want to see
     # so set the matplotlib backend to a non-interactive one
     matplotlib.use("agg")
