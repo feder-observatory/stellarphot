@@ -14,7 +14,7 @@ from stellarphot.settings import Camera
 from stellarphot.settings.tests.test_models import TEST_CAMERA_VALUES
 
 # Make a few round stars
-STARS = Table(
+profile_stars = Table(
     dict(
         amplitude=[1000, 200, 300],
         x_mean=[30, 100, 150],
@@ -29,14 +29,14 @@ RANDOM_SEED = 1230971
 
 
 def test_find_center_no_noise_good_guess():
-    image = make_gaussian_sources_image(SHAPE, STARS)
+    image = make_gaussian_sources_image(SHAPE, profile_stars)
     # Good initial guess, no noise, should converge in one try
     cen1 = find_center(image, (31, 41), max_iters=1)
     np.testing.assert_allclose(cen1, [30, 40])
 
 
 def test_find_center_noise_bad_guess():
-    image = make_gaussian_sources_image(SHAPE, STARS)
+    image = make_gaussian_sources_image(SHAPE, profile_stars)
     noise = make_noise_image(
         SHAPE, distribution="gaussian", mean=0, stddev=5, seed=RANDOM_SEED
     )
@@ -47,7 +47,7 @@ def test_find_center_noise_bad_guess():
 
 
 def test_find_center_noise_good_guess():
-    image = make_gaussian_sources_image(SHAPE, STARS)
+    image = make_gaussian_sources_image(SHAPE, profile_stars)
     noise = make_noise_image(
         SHAPE, distribution="gaussian", mean=0, stddev=5, seed=RANDOM_SEED
     )
@@ -59,7 +59,7 @@ def test_find_center_noise_good_guess():
 
 def test_find_center_no_noise_star_at_edge():
     # Trying to put the star at the edge of the initial guess
-    image = make_gaussian_sources_image(SHAPE, STARS)
+    image = make_gaussian_sources_image(SHAPE, profile_stars)
     cen = find_center(image, [45, 65], max_iters=20)
 
     np.testing.assert_allclose(cen, [30, 40], atol=0.02)
@@ -67,7 +67,7 @@ def test_find_center_no_noise_star_at_edge():
 
 def test_find_center_no_star():
     # No star anywhere near the original guess
-    image = make_gaussian_sources_image(SHAPE, STARS)
+    image = make_gaussian_sources_image(SHAPE, profile_stars)
     # Offset the mean from zero to avoid nan center
     noise = make_noise_image(
         SHAPE, distribution="gaussian", mean=1000, stddev=5, seed=RANDOM_SEED
@@ -114,8 +114,8 @@ def test_find_center_dim_star():
 def test_radial_profile():
     # Test that both curve of growth and radial profile are correct
 
-    image = make_gaussian_sources_image(SHAPE, STARS)
-    for row in STARS:
+    image = make_gaussian_sources_image(SHAPE, profile_stars)
+    for row in profile_stars:
         cen = find_center(image, (row["x_mean"], row["y_mean"]), max_iters=10)
 
         # The "stars" have FWHM around 9.5, so make the cutouts used for finding the
@@ -143,7 +143,7 @@ def test_radial_profile():
 
 def test_radial_profile_exposure_is_nan():
     # Check that using an exposure value of NaN returns NaN for the SNR and noise
-    image = make_gaussian_sources_image(SHAPE, STARS)
+    image = make_gaussian_sources_image(SHAPE, profile_stars)
 
     cen = find_center(image, (50, 50), max_iters=10)
 
@@ -158,12 +158,12 @@ def test_radial_profile_exposure_is_nan():
 
 def test_radial_profile_with_background():
     # Regression test for #328 -- image with a background level
-    image = make_gaussian_sources_image(SHAPE, STARS)
+    image = make_gaussian_sources_image(SHAPE, profile_stars)
     noise_stdev = 10
     image = image + make_noise_image(
         image.shape, distribution="gaussian", mean=100, stddev=noise_stdev, seed=43917
     )
-    for row in STARS:
+    for row in profile_stars:
         cen = find_center(image, (row["x_mean"], row["y_mean"]), max_iters=10)
 
         # The "stars" have FWHM around 9.5, so make the cutouts used for finding the
@@ -215,7 +215,7 @@ def test_radial_profile_with_background():
 def test_radial_profile_bigger_profile_than_cutout():
     # Test that the cutout, used for finding the star, can be smaller than
     # the profile radius.
-    image = make_gaussian_sources_image(SHAPE, STARS)
+    image = make_gaussian_sources_image(SHAPE, profile_stars)
 
     # Just look at one star in this test, the last one, which is far from the edges.
     # Prior to a change in CenterAndProfile, this would have raised an error because the
@@ -224,7 +224,7 @@ def test_radial_profile_bigger_profile_than_cutout():
     # outermost annuli.
     profile = CenterAndProfile(
         image,
-        (STARS["x_mean"][-1], STARS["y_mean"][-1]),
+        (profile_stars["x_mean"][-1], profile_stars["y_mean"][-1]),
         centering_cutout_size=20,
         profile_radius=50,
     )
@@ -234,10 +234,10 @@ def test_radial_profile_bigger_profile_than_cutout():
 
 def test_radial_profile_no_profile_size():
     # Test that when we do not provide a profile size it is half the cutout size
-    image = make_gaussian_sources_image(SHAPE, STARS)
+    image = make_gaussian_sources_image(SHAPE, profile_stars)
     profile = CenterAndProfile(
         image,
-        (STARS["x_mean"][-1], STARS["y_mean"][-1]),
+        (profile_stars["x_mean"][-1], profile_stars["y_mean"][-1]),
         centering_cutout_size=50,
     )
 
