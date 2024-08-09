@@ -90,25 +90,28 @@ DEFAULT_PHOTOMETRY_APERTURES = PhotometryApertures(
     fwhm=FAKE_CCD_IMAGE.sources["x_stddev"].mean(),
 )
 
+
 # Passband map for the tests
-PASSBAND_MAP = PassbandMap(
-    name="Example Passband Map",
-    your_filter_names_to_aavso={
-        "B": "B",
-        "rp": "SR",
-    },
-)
+@pytest.fixture
+def passband_map():
+    return PassbandMap(
+        name="Example Passband Map",
+        your_filter_names_to_aavso={
+            "B": "B",
+            "rp": "SR",
+        },
+    )
 
 
 @pytest.fixture
-def photometry_settings():
+def photometry_settings(passband_map):
     return PhotometrySettings(
         camera=FAKE_CAMERA,
         observatory=FAKE_OBS,
         photometry_apertures=DEFAULT_PHOTOMETRY_APERTURES,
         source_location_settings=DEFAULT_SOURCE_LOCATIONS,
         photometry_optional_settings=PHOTOMETRY_OPTIONS,
-        passband_map=PASSBAND_MAP,
+        passband_map=passband_map,
         logging_settings=LoggingSettings(),
     )
 
@@ -671,15 +674,9 @@ class TestAperturePhotometry:
             logging_settings.console_log = console_log
             full_logfile = logging_settings.logfile
 
-        photometry_settings = PhotometrySettings(
-            camera=FAKE_CAMERA,
-            observatory=FAKE_OBS,
-            photometry_apertures=DEFAULT_PHOTOMETRY_APERTURES,
-            source_location_settings=source_locations,
-            photometry_optional_settings=phot_options,
-            passband_map=PASSBAND_MAP,
-            logging_settings=logging_settings,
-        )
+        photometry_settings.source_location_settings = source_locations
+        photometry_settings.photometry_optional_settings = phot_options
+        photometry_settings.logging_settings = logging_settings
 
         # Call the AperturePhotometry class with a single image
         ap_phot = AperturePhotometry(settings=photometry_settings)
