@@ -82,13 +82,16 @@ FAKE_OBS = Observatory(
 # The fake image used for testing
 FAKE_CCD_IMAGE = FakeCCDImage(seed=SEED)
 
+
 # Build default PhotometryOptions for the tests based on the fake image
-DEFAULT_PHOTOMETRY_APERTURES = PhotometryApertures(
-    radius=FAKE_CCD_IMAGE.sources["aperture"][0],
-    gap=FAKE_CCD_IMAGE.sources["aperture"][0],
-    annulus_width=FAKE_CCD_IMAGE.sources["aperture"][0],
-    fwhm=FAKE_CCD_IMAGE.sources["x_stddev"].mean(),
-)
+@pytest.fixture
+def photometry_apertures():
+    return PhotometryApertures(
+        radius=FAKE_CCD_IMAGE.sources["aperture"][0],
+        gap=FAKE_CCD_IMAGE.sources["aperture"][0],
+        annulus_width=FAKE_CCD_IMAGE.sources["aperture"][0],
+        fwhm=FAKE_CCD_IMAGE.sources["x_stddev"].mean(),
+    )
 
 
 # Passband map for the tests
@@ -104,11 +107,11 @@ def passband_map():
 
 
 @pytest.fixture
-def photometry_settings(passband_map):
+def photometry_settings(photometry_apertures, passband_map):
     return PhotometrySettings(
         camera=FAKE_CAMERA,
         observatory=FAKE_OBS,
-        photometry_apertures=DEFAULT_PHOTOMETRY_APERTURES,
+        photometry_apertures=photometry_apertures,
         source_location_settings=DEFAULT_SOURCE_LOCATIONS,
         photometry_optional_settings=PHOTOMETRY_OPTIONS,
         passband_map=passband_map,
@@ -231,7 +234,7 @@ class TestAperturePhotometry:
         # Astropy tables sort in-place so we need to sort the sources table
         # after the fact.
         sources.sort("amplitude")
-        aperture = DEFAULT_PHOTOMETRY_APERTURES.radius
+        aperture = photometry_settings.photometry_apertures.radius
 
         for inp, out in zip(sources, phot, strict=True):
             stdev = inp["x_stddev"]
@@ -272,7 +275,7 @@ class TestAperturePhotometry:
         fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
         sources = fake_CCDimage.sources
 
-        aperture_settings = DEFAULT_PHOTOMETRY_APERTURES
+        aperture_settings = photometry_settings.photometry_apertures
         aperture = aperture_settings.radius
         inner_annulus = aperture_settings.inner_annulus
         outer_annulus = aperture_settings.outer_annulus
@@ -414,7 +417,7 @@ class TestAperturePhotometry:
 
             object_name = fake_images[0].header["OBJECT"]
             sources = fake_images[0].sources
-            aperture_settings = DEFAULT_PHOTOMETRY_APERTURES
+            aperture_settings = photometry_settings.photometry_apertures
             aperture = aperture_settings.radius
 
             # Generate the sourcelist
@@ -1036,7 +1039,7 @@ def test_aperture_photometry_no_outlier_rejection(
     # Astropy tables sort in-place so we need to sort the sources table
     # after the fact.
     sources.sort("amplitude")
-    aperture = DEFAULT_PHOTOMETRY_APERTURES.radius
+    aperture = photometry_settings.photometry_apertures.radius
 
     for inp, out in zip(sources, phot, strict=True):
         stdev = inp["x_stddev"]
@@ -1078,7 +1081,7 @@ def test_aperture_photometry_with_outlier_rejection(
     fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
     sources = fake_CCDimage.sources
 
-    aperture_settings = DEFAULT_PHOTOMETRY_APERTURES
+    aperture_settings = photometry_settings.photometry_apertures
     aperture = aperture_settings.radius
     inner_annulus = aperture_settings.inner_annulus
     outer_annulus = aperture_settings.outer_annulus
@@ -1199,7 +1202,7 @@ def test_photometry_on_directory(coords, photometry_settings):
 
         object_name = fake_images[0].header["OBJECT"]
         sources = fake_images[0].sources
-        aperture_settings = DEFAULT_PHOTOMETRY_APERTURES
+        aperture_settings = photometry_settings.photometry_apertures
         aperture = aperture_settings.radius
 
         # Generate the sourcelist
