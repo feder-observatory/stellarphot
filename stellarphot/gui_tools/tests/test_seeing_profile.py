@@ -17,7 +17,7 @@ from stellarphot.gui_tools.seeing_profile_functions import (
     AP_SETTING_SAVED,
 )
 from stellarphot.photometry.tests.fake_image import make_gaussian_sources_image
-from stellarphot.photometry.tests.test_profiles import RANDOM_SEED, SHAPE, profile_stars
+from stellarphot.photometry.tests.test_profiles import RANDOM_SEED, SHAPE
 from stellarphot.settings import (
     Camera,
     Observatory,
@@ -78,7 +78,7 @@ def fake_settings_dir(mocker, tmp_path):
     )
 
 
-def test_seeing_profile_properties(tmp_path):
+def test_seeing_profile_properties(tmp_path, profile_stars):
     # Here we make a seeing profile then load an image.
     profile_widget = spf.SeeingProfileWidget(
         camera=Camera(**TEST_CAMERA_VALUES), _testing_path=tmp_path

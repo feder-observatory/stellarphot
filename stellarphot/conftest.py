@@ -2,7 +2,11 @@
 # test infrastructure.
 import os
 
+import pytest
+from astropy.table import Table
 from pytest_astropy_header.display import PYTEST_HEADER_MODULES, TESTED_VERSIONS
+
+# astropy-specific-stuff
 
 
 def pytest_configure(config):
@@ -25,3 +29,21 @@ def pytest_unconfigure():
 
     # Undo IERS auto download setting for testing
     iers_conf.reset("auto_download")
+
+
+# stellarphot fixtures
+
+
+@pytest.fixture
+def profile_stars():
+    # Make a few round stars
+    return Table(
+        dict(
+            amplitude=[1000, 200, 300],
+            x_mean=[30, 100, 150],
+            y_mean=[40, 110, 160],
+            x_stddev=[4, 4, 4],
+            y_stddev=[4, 4, 4],
+            theta=[0, 0, 0],
+        )
+    )
