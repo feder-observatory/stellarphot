@@ -39,14 +39,13 @@ GAINS = [1.0, 1.5, 2.0]
 SEED = 5432985
 
 
-# The default coordinate system and shift tolerance to use for the tests
-COORDS2USE = "pixel"
-SHIFT_TOLERANCE = 6
-DEFAULT_SOURCE_LOCATIONS = SourceLocationSettings(
-    source_list_file="",
-    shift_tolerance=SHIFT_TOLERANCE,
-    use_coordinates=COORDS2USE,
-)
+@pytest.fixture
+def source_locations():
+    return SourceLocationSettings(
+        source_list_file="",
+        shift_tolerance=6,
+        use_coordinates="pixel",
+    )
 
 
 @pytest.fixture
@@ -128,6 +127,7 @@ def photometry_settings(
     fake_camera,
     fake_obs,
     photometry_apertures,
+    source_locations,
     photometry_optional_settings,
     passband_map,
 ):
@@ -135,7 +135,7 @@ def photometry_settings(
         camera=fake_camera,
         observatory=fake_obs,
         photometry_apertures=photometry_apertures,
-        source_location_settings=DEFAULT_SOURCE_LOCATIONS,
+        source_location_settings=source_locations,
         photometry_optional_settings=photometry_optional_settings,
         passband_map=passband_map,
         logging_settings=LoggingSettings(),
@@ -240,7 +240,7 @@ class TestAperturePhotometry:
         source_list_file = tmp_path / "source_list.ecsv"
         found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
 
-        source_locations = DEFAULT_SOURCE_LOCATIONS.model_copy()
+        source_locations = photometry_settings.source_location_settings.model_copy()
         source_locations.source_list_file = str(source_list_file)
 
         image_file = tmp_path / "fake_image.fits"
@@ -690,7 +690,7 @@ class TestAperturePhotometry:
         phot_options.include_dig_noise = True
 
         # Define the source locations settings
-        source_locations = DEFAULT_SOURCE_LOCATIONS.model_copy()
+        source_locations = photometry_settings.source_location_settings.model_copy()
         source_locations.source_list_file = str(source_list_file)
 
         # Define the logging settings
@@ -1049,7 +1049,7 @@ def test_aperture_photometry_no_outlier_rejection(
     source_list_file = tmp_path / "source_list.ecsv"
     found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
 
-    source_locations = DEFAULT_SOURCE_LOCATIONS.model_copy()
+    source_locations = photometry_settings.source_location_settings.model_copy()
     source_locations.source_list_file = str(source_list_file)
 
     # Customize a couple options for this test
