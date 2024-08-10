@@ -65,10 +65,21 @@ def _raw_photometry_table():
             "noise_electrons",
             "star_id",
         ],
+        units=[
+            None,
+            u.degree,
+            u.degree,
+            u.adu,
+            u.electron,
+            None,
+        ],
     )
 
-    _ = PhotometryData(raw_table)
-    return expected_flux_ratios, expected_flux_error, raw_table, raw_table[1:4]
+    photom = PhotometryData(raw_table)
+    # MAKE SURE to return photom, not raw_table, below to trigger the bug
+    # https://github.com/feder-observatory/stellarphot/issues/421
+    # in which, it turns out, QTable columns with units cannot be aggregated.
+    return expected_flux_ratios, expected_flux_error, photom, raw_table[1:4]
 
 
 @pytest.mark.parametrize("comp_ra_dec_have_units", [True, False])
@@ -77,6 +88,8 @@ def _raw_photometry_table():
 def test_relative_flux_calculation(
     in_place, star_ra_dec_have_units, comp_ra_dec_have_units
 ):
+    # In addition to checking the flux calculation values, this is also a regression
+    # test for #421.
     expected_flux, expected_error, input_table, comp_star = _raw_photometry_table()
 
     # Try doing it all at once
