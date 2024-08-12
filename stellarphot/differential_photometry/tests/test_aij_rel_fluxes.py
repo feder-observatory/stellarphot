@@ -29,8 +29,8 @@ def _raw_photometry_table():
     # and four stars
     star_ra = 250.0 * u.degree + np.arange(n_stars) * 10 * u.arcmin
     star_dec = np.array([45.0] * n_stars) * u.degree
-    fluxes = np.array([10000.0, 20000, 30000, 40000])
-    errors = np.sqrt(fluxes) + 50
+    fluxes = np.array([10000.0, 20000, 30000, 40000]) * u.adu
+    errors = (np.sqrt(fluxes.value) + 50) * u.electron
     star_ids = np.arange(1, 5, dtype="int")
 
     # Stars 2, 3 and 4 will be the comparison stars
@@ -65,10 +65,21 @@ def _raw_photometry_table():
             "noise_electrons",
             "star_id",
         ],
+        units=[
+            None,
+            u.degree,
+            u.degree,
+            u.adu,
+            u.electron,
+            None,
+        ],
     )
 
-    _ = PhotometryData(raw_table)
-    return expected_flux_ratios, expected_flux_error, raw_table, raw_table[1:4]
+    photom = PhotometryData(raw_table)
+    # MAKE SURE to return photom, not raw_table, below to trigger the bug
+    # https://github.com/feder-observatory/stellarphot/issues/421
+    # in which, it turns out, QTable columns with units cannot be aggregated.
+    return expected_flux_ratios, expected_flux_error, photom, photom[1:4]
 
 
 @pytest.mark.parametrize("comp_ra_dec_have_units", [True, False])
@@ -77,6 +88,8 @@ def _raw_photometry_table():
 def test_relative_flux_calculation(
     in_place, star_ra_dec_have_units, comp_ra_dec_have_units
 ):
+    # In addition to checking the flux calculation values, this is also a regression
+    # test for #421.
     expected_flux, expected_error, input_table, comp_star = _raw_photometry_table()
 
     # Try doing it all at once
@@ -95,7 +108,7 @@ def test_relative_flux_calculation(
     output_table = calc_aij_relative_flux(input_table, comp_star, in_place=in_place)
     output_flux = output_table["relative_flux"]
     output_error = output_table["relative_flux_error"]
-    print(all_expected_flux - output_flux)
+
     np.testing.assert_allclose(output_flux, all_expected_flux)
     np.testing.assert_allclose(output_error, all_expected_error)
     if in_place:
@@ -122,8 +135,7 @@ def test_bad_comp_star(bad_thing):
             ra=last_one["ra"][0], dec=last_one["dec"][0], unit=u.degree
         )
         coord_bad_ra = coord_inp.ra + 3 * u.arcsecond
-        print(len(last_one), coord_inp)
-        input_table["ra"][-1] = coord_bad_ra.degree
+        input_table["ra"][-1] = coord_bad_ra
     elif bad_thing == "NaN":
         input_table["aperture_net_cnts"][-1] = np.nan
 

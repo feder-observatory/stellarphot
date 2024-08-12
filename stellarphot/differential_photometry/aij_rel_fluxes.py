@@ -1,7 +1,7 @@
 import astropy.units as u
 import numpy as np
 from astropy.coordinates import SkyCoord
-from astropy.table import Table
+from astropy.table import QTable, Table
 
 __all__ = ["add_in_quadrature", "calc_aij_relative_flux"]
 
@@ -125,9 +125,11 @@ def calc_aij_relative_flux(
     # stars.
 
     comp_fluxes = star_data["date-obs", counts_column_name, error_column_name][good]
-    # print(np.isnan(comp_fluxes[flux_column_name]).sum(),
-    #       np.isnan(comp_fluxes[error_column_name]).sum())
-    # print(star_data[good][flux_column_name][np.isnan(comp_fluxes[flux_column_name])])
+    # Convert comp_fluxes to a regular Table, not a QTable, to work around
+    # https://github.com/astropy/astropy/issues/10944
+    # in which it was reported that QTable columns with units cannot be aggregated.
+
+    comp_fluxes = Table(comp_fluxes)
 
     # Check whether any of the columns are masked, but with no masked values,
     # and convert to regular column...eventually
@@ -138,7 +140,7 @@ def calc_aij_relative_flux(
     comp_errors = comp_fluxes.groups.aggregate(add_in_quadrature)[error_column_name]
 
     comp_total_vector = np.ones_like(star_data[counts_column_name])
-    comp_error_vector = np.ones_like(star_data[counts_column_name])
+    comp_error_vector = np.ones_like(star_data[error_column_name])
 
     if len(set(comp_num_stars)) > 1:
         raise RuntimeError("Different number of stars in comparison sets")
@@ -147,17 +149,22 @@ def calc_aij_relative_flux(
 
     # Have to remove the flux of the star if the star is a comparison
     # star.
-    is_comp = np.zeros_like(star_data[counts_column_name])
+    # Use the .value below so that we can set the array to 1 and multiply
+    # by it without affecting units of the result.
+    is_comp = np.zeros_like(star_data[counts_column_name]).value
     is_comp[good] = 1
     flux_offset = -star_data[counts_column_name] * is_comp
 
+    # Convert comp_fluxes back to a QTable and redo groups
+    comp_fluxes = QTable(comp_fluxes)
+    comp_fluxes = comp_fluxes.group_by("date-obs")
     # This seems a little hacky; there must be a better way
     for date_obs, comp_total, comp_error in zip(
         comp_fluxes.groups.keys, comp_totals, comp_errors, strict=True
     ):
         this_time = star_data["date-obs"] == date_obs[0]
         comp_total_vector[this_time] *= comp_total
-        comp_error_vector[this_time] = comp_error
+        comp_error_vector[this_time] = comp_error * comp_fluxes[error_column_name].unit
 
     relative_flux = star_data[counts_column_name] / (comp_total_vector + flux_offset)
     relative_flux = relative_flux.flatten()
