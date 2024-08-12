@@ -85,7 +85,6 @@ jobs:
         run: |
           tox -e lint
 
-
   documentation:
     runs-on: ubuntu-latest
     steps:
@@ -115,3 +114,23 @@ jobs:
       - name: Run tests
         run: |
           tox -e build_docs
+
+  table_representation:
+    runs-on: ubuntu-latest
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.11
+          cache: 'pip'
+      - name: Install tox
+        run: |
+          python -m pip install --upgrade pip
+          pip install tox
+
+      - name: Test table representation
+        run: |
+          tox -e table_rep

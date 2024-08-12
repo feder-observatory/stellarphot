@@ -8,3 +8,6 @@ from ._astropy_init import *  # noqa
 # ----------------------------------------------------------------------------
 
 from .core import *
+
+# We load this for its side effect of adding YAML representations for the models
+from .table_representations import *

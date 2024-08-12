@@ -1,0 +1,171 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: star_id, datatype: int64}
+# - {name: ra, unit: deg, datatype: float64}
+# - {name: dec, unit: deg, datatype: float64}
+# - {name: xcenter, unit: pix, datatype: float64}
+# - {name: ycenter, unit: pix, datatype: float64}
+# - {name: fwhm_x, unit: pix, datatype: float64}
+# - {name: fwhm_y, unit: pix, datatype: float64}
+# - {name: width, unit: pix, datatype: float64}
+# - {name: aperture, unit: pix, datatype: float64}
+# - {name: aperture_area, unit: pix, datatype: float64}
+# - {name: annulus_inner, unit: pix, datatype: float64}
+# - {name: annulus_outer, unit: pix, datatype: float64}
+# - {name: annulus_area, unit: pix, datatype: float64}
+# - {name: aperture_sum, unit: adu, datatype: float64}
+# - {name: annulus_sum, unit: adu, datatype: float64}
+# - {name: sky_per_pix_avg, unit: adu / pix, datatype: float64}
+# - {name: sky_per_pix_med, unit: adu / pix, datatype: float64}
+# - {name: sky_per_pix_std, unit: adu / pix, datatype: float64}
+# - {name: aperture_net_cnts, unit: adu, datatype: float64}
+# - {name: noise_cnts, unit: adu, datatype: float64}
+# - {name: noise_electrons, unit: electron, datatype: float64}
+# - {name: snr, unit: adu, datatype: float64}
+# - {name: mag_inst, datatype: float64}
+# - {name: mag_error, unit: 1 / adu, datatype: float64}
+# - {name: exposure, unit: s, datatype: float64}
+# - {name: date-obs, datatype: string}
+# - {name: airmass, datatype: float64}
+# - {name: passband, datatype: string}
+# - {name: file, datatype: string}
+# - {name: bjd, datatype: float64}
+# - {name: night, datatype: int64}
+# meta: !!omap
+# - {date: '2024-08-08 12:36:34 CDT'}
+# - version: {Python: 3.11.9, astropy: 6.1.0, bottleneck: 1.3.8, gwcs: null, matplotlib: 3.8.4, numpy: 1.26.4, photutils: 1.13.0, scipy: 1.13.0,
+#     skimage: 0.23.2, sklearn: 1.5.1}
+# - {aperture_photometry_args: 'method=''exact'', subpixels=5'}
+# - __attributes__:
+#     camera: !Camera {model_json_string: '{"name":"Aspen CG16m","data_unit":"adu","gain":"1.5 electron / adu","read_noise":"10.0 electron","dark_current":"0.01
+#         electron / s","pixel_scale":"0.6 arcsec / pix","max_data_value":"50000.0 adu"}'}
+#     observatory: !Observatory {model_json_string: '{"name":"Feder Observatory","latitude":"46d52m25.68s","longitude":"263d13m55.92s","elevation":"311.0
+#         m","AAVSO_code":null,"TESS_telescope_code":null}'}
+# - __serialized_columns__:
+#     annulus_area:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: &id001 !astropy.units.Unit {unit: pix}
+#       value: !astropy.table.SerializedColumn {name: annulus_area}
+#     annulus_inner:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
+#       value: !astropy.table.SerializedColumn {name: annulus_inner}
+#     annulus_outer:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
+#       value: !astropy.table.SerializedColumn {name: annulus_outer}
+#     annulus_sum:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: &id002 !astropy.units.Unit {unit: adu}
+#       value: !astropy.table.SerializedColumn {name: annulus_sum}
+#     aperture:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
+#       value: !astropy.table.SerializedColumn {name: aperture}
+#     aperture_area:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
+#       value: !astropy.table.SerializedColumn {name: aperture_area}
+#     aperture_net_cnts:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id002
+#       value: !astropy.table.SerializedColumn {name: aperture_net_cnts}
+#     aperture_sum:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id002
+#       value: !astropy.table.SerializedColumn {name: aperture_sum}
+#     bjd:
+#       __class__: astropy.time.core.Time
+#       format: jd
+#       in_subfmt: '*'
+#       out_subfmt: '*'
+#       precision: 3
+#       scale: tdb
+#       value: !astropy.table.SerializedColumn {name: bjd}
+#     date-obs:
+#       __class__: astropy.time.core.Time
+#       format: isot
+#       in_subfmt: '*'
+#       out_subfmt: '*'
+#       precision: 3
+#       scale: utc
+#       value: !astropy.table.SerializedColumn {name: date-obs}
+#     dec:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: &id003 !astropy.units.Unit {unit: deg}
+#       value: !astropy.table.SerializedColumn {name: dec}
+#     exposure:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: !astropy.units.Unit {unit: s}
+#       value: !astropy.table.SerializedColumn {name: exposure}
+#     fwhm_x:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
+#       value: !astropy.table.SerializedColumn {name: fwhm_x}
+#     fwhm_y:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
+#       value: !astropy.table.SerializedColumn {name: fwhm_y}
+#     mag_error:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: !astropy.units.Unit {unit: 1 / adu}
+#       value: !astropy.table.SerializedColumn {name: mag_error}
+#     noise_cnts:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id002
+#       value: !astropy.table.SerializedColumn {name: noise_cnts}
+#     noise_electrons:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: !astropy.units.Unit {unit: electron}
+#       value: !astropy.table.SerializedColumn {name: noise_electrons}
+#     ra:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id003
+#       value: !astropy.table.SerializedColumn {name: ra}
+#     sky_per_pix_avg:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: !astropy.units.Unit {unit: adu / pix}
+#       value: !astropy.table.SerializedColumn {name: sky_per_pix_avg}
+#     sky_per_pix_med:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: !astropy.units.Unit {unit: adu / pix}
+#       value: !astropy.table.SerializedColumn {name: sky_per_pix_med}
+#     sky_per_pix_std:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: !astropy.units.Unit {unit: adu / pix}
+#       value: !astropy.table.SerializedColumn {name: sky_per_pix_std}
+#     snr:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id002
+#       value: !astropy.table.SerializedColumn {name: snr}
+#     width:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
+#       value: !astropy.table.SerializedColumn {name: width}
+#     xcenter:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
+#       value: !astropy.table.SerializedColumn {name: xcenter}
+#     ycenter:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
+#       value: !astropy.table.SerializedColumn {name: ycenter}
+# schema: astropy-2.0
+star_id ra dec xcenter ycenter fwhm_x fwhm_y width aperture aperture_area annulus_inner annulus_outer annulus_area aperture_sum annulus_sum sky_per_pix_avg sky_per_pix_med sky_per_pix_std aperture_net_cnts noise_cnts noise_electrons snr mag_inst mag_error exposure date-obs airmass passband file bjd night
+1 348.99291 31.462859999999992 2581.1729600679614 1894.8522764463778 6.472288136039564 6.113978493682916 6.29313331486124 10.0 314.1592653589793 15.0 30.0 2120.5750411731105 151597.22005738958 191194.4272136953 90.15973248439076 89.9049072265625 12.040766177718677 123272.70473513128 346.5081174322256 519.7621761483384 355.75704733451875 -8.281789186470913 0.0030519035761478 90.0 2018-08-23T05:43:23.000 1.118 r wasp-10-b-S001-R001-C099-r.fit 2458353.7438418595 58352
+2 348.93806 31.174029999999984 1878.0194562513145 162.03322704516248 nan nan nan 10.0 314.1592653589793 15.0 30.0 2120.5750411731105 28742.307249993224 187628.72129508457 88.50836121996564 88.22913360595703 12.16636841848664 nan nan nan nan nan nan 90.0 2018-08-23T05:43:23.000 1.118 r wasp-10-b-S001-R001-C099-r.fit 2458353.743862483 58352
+4 348.53946 31.383030000000005 53.98851376015087 1952.9438992077824 nan nan nan 10.0 314.1592653589793 15.0 30.0 2120.5750411731105 31058.202723457027 192014.3765287908 90.56635337681551 90.4050521850586 12.664281573267651 nan nan nan nan nan nan 90.0 2018-08-23T05:43:23.000 1.118 r wasp-10-b-S001-R001-C099-r.fit 2458353.743858158 58352
+6 348.55259 31.655439999999988 517.9393381156409 3633.0384564045753 9.352924151985958 5.482646943705369 7.417785547845663 10.0 314.1592653589793 15.0 30.0 2120.5750411731105 70602.24187340811 188827.9254897708 89.09426656997564 88.97987747192383 12.285832031781494 42612.4525400875 256.9789173586787 385.46837603801805 165.8208112092367 -7.128463200387758 0.006547647409769283 90.0 2018-08-23T05:43:23.000 1.118 r wasp-10-b-S001-R001-C099-r.fit 2458353.743839563 58352
+9 348.4707900000001 31.70357999999997 153.90187977806133 4034.010959448099 13.763242341088167 5.446632458017699 9.604937399552933 10.0 314.1592653589793 15.0 30.0 2120.5750411731105 66718.36650267456 191485.5492822575 90.314252227812 90.36858367919922 12.498915762649684 38345.30737133957 251.96580626524346 377.9487093978652 152.1845679765516 -7.0139024324698145 0.007134338385527295 90.0 2018-08-23T05:43:23.000 1.118 r wasp-10-b-S001-R001-C099-r.fit 2458353.743838263 58352
+12 348.969448 31.456904000000012 2447.8695201840046 1886.9472819096375 6.260712999064685 6.5469536644610065 6.403833331762845 10.0 314.1592653589793 15.0 30.0 2120.5750411731105 55926.312535330944 187104.0931918746 88.25109264008677 88.24584197998047 12.146693015309289 28201.414104394058 237.12454324753946 355.6868148713092 118.9308104431602 -6.680299088308935 0.009129141565203565 90.0 2018-08-23T05:43:23.000 1.118 r wasp-10-b-S001-R001-C099-r.fit 2458353.743842832 58352
+15 348.970756 31.478601000000012 2485.923279259877 2020.1083766031338 nan nan nan 10.0 314.1592653589793 15.0 30.0 2120.5750411731105 30032.609336466056 186190.08220623079 87.82124916195363 87.80840301513672 12.242558376905325 nan nan nan nan nan nan 90.0 2018-08-23T05:43:23.000 1.118 r wasp-10-b-S001-R001-C099-r.fit 2458353.7438413478 58352
+18 349.029039 31.475152999999995 2790.9356898360775 1928.0457118566526 nan nan nan 10.0 314.1592653589793 15.0 30.0 2120.5750411731105 30570.80126980756 187550.78236702553 88.46536843064719 88.45867919921875 12.158888302362078 nan nan nan nan nan nan 90.0 2018-08-23T05:43:23.000 1.118 r wasp-10-b-S001-R001-C099-r.fit 2458353.743840152 58352
+1 348.99291 31.462859999999992 2618.88035739408 1885.2602609788019 6.2637185509650815 6.848904323134925 6.556311437050003 10.0 314.1592653589793 15.0 30.0 2120.5750411731105 150610.09676186927 180503.89388203953 85.10583770780717 84.88623809814453 12.173568629799174 123873.30930982405 345.3302486320228 517.9953729480342 358.7096983265461 -8.287066224158181 0.0030267824094669885 90.0 2018-08-23T05:55:39.000 1.1 r wasp-10-b-S001-R001-C105-r.fit 2458353.752360768 58352
+2 348.93806 31.174029999999984 1916.023246569375 151.98061878174568 nan nan nan 10.0 314.1592653589793 15.0 30.0 2120.5750411731105 27719.344238103375 178895.64877571823 84.37139168361992 84.60274124145508 12.101932398257887 nan nan nan nan nan nan 90.0 2018-08-23T05:55:39.000 1.1 r wasp-10-b-S001-R001-C105-r.fit 2458353.752381391 58352
+4 348.53946 31.383030000000005 91.98882047265263 1942.9204998156144 nan nan nan 10.0 314.1592653589793 15.0 30.0 2120.5750411731105 29465.34526229653 180238.02889759644 84.99293720615107 84.81370544433594 12.524009680546387 nan nan nan nan nan nan 90.0 2018-08-23T05:55:39.000 1.1 r wasp-10-b-S001-R001-C105-r.fit 2458353.7523770616 58352
+6 348.55259 31.655439999999988 555.1771583116617 3623.091612030084 5.472640627850731 8.936835606058441 7.204738116954585 10.0 314.1592653589793 15.0 30.0 2120.5750411731105 69432.14640609396 179376.6969583449 84.60058230599441 84.51993942260742 12.268088144160014 42854.08961990089 255.18360046628698 382.77540069943046 167.93434037922225 -7.1346025578106165 0.006465242323566676 90.0 2018-08-23T05:55:39.000 1.1 r wasp-10-b-S001-R001-C105-r.fit 2458353.752358467 58352
+9 348.4707900000001 31.70357999999997 191.03029352200687 4024.0190165530244 12.853469271530395 5.371324285112865 9.11239677832163 10.0 314.1592653589793 15.0 30.0 2120.5750411731105 66060.97941802217 181498.4186327603 85.61164780311476 85.25667190551758 12.84366624957955 39165.287038023955 250.80390089648756 376.20585134473134 156.15900270302555 -7.036875158506259 0.006952760879657975 90.0 2018-08-23T05:55:39.000 1.1 r wasp-10-b-S001-R001-C105-r.fit 2458353.7523571663 58352
+12 348.969448 31.456904000000012 2485.6803802205172 1877.0300609317412 6.9670725425235585 6.435187083582631 6.701129813053095 10.0 314.1592653589793 15.0 30.0 2120.5750411731105 54670.428570326294 177923.48464979057 83.91796371467152 83.51546478271484 12.052083840201098 28306.822739303607 235.06668071387972 352.6000210708196 120.42039583550475 -6.684349687313614 0.00901621521393373 90.0 2018-08-23T05:55:39.000 1.1 r wasp-10-b-S001-R001-C105-r.fit 2458353.7523617405 58352
+15 348.970756 31.478601000000012 2522.9239015715953 2010.0949291578386 12.238142034410599 8.628718493245918 10.433430263828258 10.0 314.1592653589793 15.0 30.0 2120.5750411731105 28624.779987469927 176567.06374239016 83.2595024846287 83.2758560180664 12.398775009192981 2468.0358527448625 194.60767681444972 291.91151522167456 12.682109427255696 -4.035500534867076 0.08561164144086275 90.0 2018-08-23T05:55:39.000 1.1 r wasp-10-b-S001-R001-C105-r.fit 2458353.752360256 58352
+18 349.029039 31.475152999999995 2828.921309203133 1918.0327386809925 nan nan nan 10.0 314.1592653589793 15.0 30.0 2120.5750411731105 29595.065124724177 177111.61684437675 83.51425695261642 83.17059326171875 12.167800883644135 nan nan nan nan nan nan 90.0 2018-08-23T05:55:39.000 1.1 r wasp-10-b-S001-R001-C105-r.fit 2458353.752359061 58352
