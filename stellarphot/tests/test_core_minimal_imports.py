@@ -5,7 +5,7 @@ from stellarphot.core import PhotometryData
 
 # Why is this in a separate file?
 #
-# The bug we are trying to reproduce happens only no objects from
+# The bug we are trying to reproduce happens only when no objects from
 # stellarphot.settings.models have been created. In test_core we create several of
 # the objects, which adds to the table registry methods for reading our custom objects.
 # Here we do a bare minimum of imports to avoid that.
