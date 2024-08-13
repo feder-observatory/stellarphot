@@ -10,7 +10,7 @@ from astropy.coordinates import SkyCoord
 from astropy.table import Table
 from astropy.time import Time
 from astropy.utils.data import download_file
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from stellarphot.settings.astropy_pydantic import (
     AstropyValidator,
@@ -26,6 +26,15 @@ DEFAULT_TABLE_LOCATION = "who.the.heck.knows"
 TOI_TABLE_URL = "https://exofop.ipac.caltech.edu/tess/download_toi.php?output=csv"
 GAIA_APERTURE_SERVER = "https://www.astro.louisville.edu/"
 TIC_regex = re.compile(r"[tT][iI][cC][^\d]?(?P<star>\d+)(?P<planet>\.\d\d)?")
+
+MODEL_DEFAULT_CONFIGURATION = ConfigDict(
+    # Make sure default values are valid
+    validate_default=True,
+    # Make sure changes to values made after initialization are valid
+    validate_assignment=True,
+    # Make sure there are no extra fields
+    extra="forbid",
+)
 
 
 @dataclass
@@ -296,6 +305,8 @@ class TOI(BaseModel):
     tess_mag_error : float
         The error in the TESS magnitude of the target.
     """
+
+    model_config = MODEL_DEFAULT_CONFIGURATION
 
     tic_id: int
     coord: Annotated[SkyCoord, AstropyValidator]
