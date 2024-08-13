@@ -101,6 +101,8 @@ include = [
         # Don't complain if tests don't hit assertions
         "raise AssertionError",
         "raise NotImplementedError",
+        # Don't complain about connection errors
+        "raise requests.ConnectionError",
         # Don't complain about script hooks
         "def main(.*):",
         # Ignore branches that don't pertain to this version of Python
