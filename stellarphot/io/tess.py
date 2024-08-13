@@ -2,6 +2,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from typing import Annotated
 
 import requests
 from astropy import units as u
@@ -9,7 +10,13 @@ from astropy.coordinates import SkyCoord
 from astropy.table import Table
 from astropy.time import Time
 from astropy.utils.data import download_file
+from pydantic import BaseModel
 
+from stellarphot.settings.astropy_pydantic import (
+    AstropyValidator,
+    QuantityType,
+    WithPhysicalType,
+)
 from stellarphot.transit_fitting.io import get_tic_info
 
 __all__ = ["TessSubmission", "TOI", "TessTargetFile"]
@@ -246,9 +253,9 @@ class TessSubmission:
             print(f"TIC ID {self.tic_id} is not valid.")
 
 
-class TOI:
+class TOI(BaseModel):
     """
-    A class to hold information about a TOI (TESS Object of Interest).
+    Represent a TOI from the ExoFOP database.
 
     Parameters
     ----------
@@ -256,143 +263,85 @@ class TOI:
     tic_id : int
         The TIC ID of the target.
 
-    toi_table : str, optional
-        The path to the TOI table. If not provided, the default table will
-        be downloaded.
-
-    allow_download : bool, optional
-        Whether to allow the default table to be downloaded if it is not found.
-
-    Attributes
-    ----------
-
     coord : `astropy.coordinates.SkyCoord`
+        The coordinates of the target.
 
-    depth : float
+    depth_ppt : float
+        The depth of the transit in parts per thousand.
 
-    depth_error : float
+    depth_error_ppt : float
+        The error in the depth of the transit in parts per thousand.
 
-    duration : float
+    duration : `astropy.units.Quantity`
+        The duration of the transit; must have units of time.
 
-    duration_error : float
+    duration_error : `astropy.units.Quantity`
+        The error in the duration of the transit; must have units of time.
 
-    epoch : float
+    epoch : `astropy.time.Time`
+        The epoch of the transit.
 
-    epoch_error : float
+    epoch_error : `astropy.units.Quantity`
+        The error in the epoch of the transit; must have units of time.
 
-    period : float
+    period : `astropy.units.Quantity`
+        The period of the transit; must have units of time.
 
-    period_error : float
+    period_error : `astropy.units.Quantity`
+        The error in the period of the transit; must have units of time.
 
     tess_mag : float
+        The TESS magnitude of the target.
 
     tess_mag_error : float
-
-    tic_id : int
+        The error in the TESS magnitude of the target.
     """
 
-    def __init__(self, tic_id, toi_table=DEFAULT_TABLE_LOCATION, allow_download=True):
-        path = Path(toi_table)
-        if not path.is_file():
-            if not allow_download:
-                raise ValueError(f"File {toi_table} not found.")
-            toi_table = download_file(
-                TOI_TABLE_URL, cache=True, show_progress=True, timeout=60
-            )
+    tic_id: int
+    coord: Annotated[SkyCoord, AstropyValidator]
+    depth_ppt: float
+    depth_error_ppt: float
+    duration: Annotated[QuantityType, WithPhysicalType("time")]
+    duration_error: Annotated[QuantityType, WithPhysicalType("time")]
+    epoch: Annotated[Time, AstropyValidator]
+    epoch_error: Annotated[QuantityType, WithPhysicalType("time")]
+    period: Annotated[QuantityType, WithPhysicalType("time")]
+    period_error: Annotated[QuantityType, WithPhysicalType("time")]
+    tess_mag: float
+    tess_mag_error: float
 
-        self._toi_table = Table.read(toi_table, format="ascii.csv")
-        self._toi_table = self._toi_table[self._toi_table["TIC ID"] == tic_id]
-        if len(self._toi_table) != 1:
-            raise RuntimeError(
-                f"Found {len(self._toi_table)} rows in table, expected one."
-            )
-        self._tic_info = get_tic_info(tic_id)
-
-    @property
-    def tess_mag(self):
+    @classmethod
+    def from_tic_id(cls, tic_id):
         """
-        The TESS magnitude of the target.
+        Create a TOI object from a numerical TIC ID number. This will be obtained
+        from ExoFOP-TESS and the TESS Input Catalog (TIC) at MAST.
         """
-        return self._toi_table["TESS Mag"][0]
-
-    @property
-    def tess_mag_error(self):
-        """
-        The uncertainty in the TESS magnitude.
-        """
-        return self._toi_table["TESS Mag err"][0]
-
-    @property
-    def depth(self):
-        """
-        The transit depth of the target in parts per thousand.
-        """
-        return self._toi_table["Depth (ppm)"][0] / 1000
-
-    @property
-    def depth_error(self):
-        """
-        The uncertainty in the transit depth in parts per thousand.
-        """
-        return self._toi_table["Depth (ppm) err"][0] / 1000
-
-    @property
-    def epoch(self):
-        """
-        The epoch of the transit.
-        """
-        return Time(self._toi_table["Epoch (BJD)"][0], scale="tdb", format="jd")
-
-    @property
-    def epoch_error(self):
-        """
-        The uncertainty in the epoch of the transit.
-        """
-        return self._toi_table["Epoch (BJD) err"][0] * u.day
-
-    @property
-    def period(self):
-        """
-        The period of the transit.
-        """
-        return self._toi_table["Period (days)"][0] * u.day
-
-    @property
-    def period_error(self):
-        """
-        The uncertainty in the period of the transit.
-        """
-        return self._toi_table["Period (days) err"][0] * u.day
-
-    @property
-    def duration(self):
-        """
-        The duration of the transit.
-        """
-        return self._toi_table["Duration (hours)"][0] * u.hour
-
-    @property
-    def duration_error(self):
-        """
-        The uncertainty in the duration of the transit.
-        """
-        return self._toi_table["Duration (hours) err"][0] * u.hour
-
-    @property
-    def coord(self):
-        """
-        The coordinates of the target.
-        """
-        return SkyCoord(
-            ra=self._tic_info["ra"][0], dec=self._tic_info["dec"][0], unit="degree"
+        toi_table = download_file(
+            TOI_TABLE_URL, cache=True, show_progress=True, timeout=60
         )
+        toi_table = Table.read(toi_table, format="ascii.csv")
+        toi_table = toi_table[toi_table["TIC ID"] == tic_id]
+        if len(toi_table) != 1:
+            raise RuntimeError(f"Found {len(toi_table)} rows in table, expected one.")
+        toi_table = toi_table[0]
 
-    @property
-    def tic_id(self):
-        """
-        The TIC ID of the target.
-        """
-        return self._tic_info["ID"][0]
+        # Retrieve some additional information from the TIC catalog at MAST.
+        tic_info = get_tic_info(tic_id)
+
+        return cls(
+            tic_id=tic_id,
+            coord=SkyCoord(ra=tic_info["ra"], dec=tic_info["dec"], unit="degree"),
+            depth_ppt=toi_table["Depth (ppm)"] / 1000,
+            depth_error_ppt=toi_table["Depth (ppm) err"] / 1000,
+            duration=toi_table["Duration (hours)"] * u.hour,
+            duration_error=toi_table["Duration (hours) err"] * u.hour,
+            epoch=Time(toi_table["Epoch (BJD)"], scale="tdb", format="jd"),
+            epoch_error=toi_table["Epoch (BJD) err"] * u.day,
+            period=toi_table["Period (days)"] * u.day,
+            period_error=toi_table["Period (days) err"] * u.day,
+            tess_mag=toi_table["TESS Mag"],
+            tess_mag_error=toi_table["TESS Mag err"],
+        )
 
 
 @dataclass
