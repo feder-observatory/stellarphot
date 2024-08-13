@@ -321,7 +321,7 @@ class TOI(BaseModel):
         )
         toi_table = Table.read(toi_table, format="ascii.csv")
         toi_table = toi_table[toi_table["TIC ID"] == tic_id]
-        if len(toi_table) != 1:
+        if len(toi_table) != 1:  # pragma: no cover
             raise RuntimeError(f"Found {len(toi_table)} rows in table, expected one.")
         toi_table = toi_table[0]
 
