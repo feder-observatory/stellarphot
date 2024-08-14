@@ -336,8 +336,9 @@ class TOI(BaseModel):
             raise RuntimeError(f"Found {len(toi_table)} rows in table, expected one.")
         toi_table = toi_table[0]
 
-        # Retrieve some additional information from the TIC catalog at MAST.
-        tic_info = get_tic_info(tic_id)
+        # Retrieve some additional information from the TIC catalog at MAST, and grab
+        # the first row of the table.
+        tic_info = get_tic_info(tic_id)[0]
 
         return cls(
             tic_id=tic_id,
