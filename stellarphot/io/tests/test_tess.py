@@ -188,6 +188,7 @@ class TestTOI:
 
         assert toi_info.coord.separation(new_toi.coord).arcsecond < 0.01
 
+
 class TestTessPhotometrySetup:
     # This auto-used fixture changes the working directory to the temporary directory
     # and then changes back to the original directory after the test is done.
