@@ -146,6 +146,5 @@ class TestTOI:
         # This is a regression test for #427
         json_str = toi_info.model_dump_json()
         new_toi = TOI.model_validate_json(json_str)
-        print(f"Original: {toi_info}")
 
         assert toi_info.coord.separation(new_toi.coord).arcsecond < 0.01
