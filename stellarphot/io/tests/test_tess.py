@@ -1,11 +1,18 @@
+import os
 import re
 import warnings
+from pathlib import Path
 
 import pytest
 from astropy.coordinates import SkyCoord
 from requests import ConnectionError, ReadTimeout
 
-from stellarphot.io.tess import TOI, TessSubmission, TessTargetFile
+from stellarphot.io.tess import (
+    TOI,
+    TessSubmission,
+    TessTargetFile,
+    tess_photometry_setup,
+)
 
 GOOD_HEADER = {
     "date-obs": "2022-06-04T05:44:28.010",
@@ -20,6 +27,14 @@ GOOD_HEADER_WITH_PLANET = {
 }
 
 BAD_HEADER = {}
+
+
+@pytest.fixture
+def tess_tic_expected_values():
+    return dict(
+        tic_id=236158940,
+        expected_coords=SkyCoord(ra=313.41953739, dec=34.35164717, unit="degree"),
+    )
 
 
 def test_good_header_sucess():
@@ -129,17 +144,17 @@ def test_target_file():
 
 class TestTOI:
     @pytest.mark.remote_data
-    def test_from_tic_id(self):
+    def test_from_tic_id(self, tess_tic_expected_values):
         # Nothing special about the TIC ID chosen here. It is one we happened
         # to be looking at when writing this test.
-        tic_id = 236158940
+        tic_id = tess_tic_expected_values["tic_id"]
         toi_info = TOI.from_tic_id(tic_id)
         assert toi_info.tic_id == tic_id
 
         # Test the coordinate, but not other properties because those may change
         # over time as the planet candidate is better refined. The coordinate
         # should always be the same.
-        expected_coord = SkyCoord(ra=313.41953739, dec=34.35164717, unit="degree")
+        expected_coord = tess_tic_expected_values["expected_coords"]
         assert toi_info.coord.separation(expected_coord).arcsecond < 1
 
         # Try round-tripping through json
@@ -149,3 +164,58 @@ class TestTOI:
         print(f"Original: {toi_info}")
 
         assert toi_info.coord.separation(new_toi.coord).arcsecond < 0.01
+
+class TestTessPhotometrySetup:
+    # This auto-used fixture changes the working directory to the temporary directory
+    # and then changes back to the original directory after the test is done.
+    @pytest.fixture(autouse=True)
+    def change_to_tmp_dir(self, tmp_path):
+        original_dir = os.getcwd()
+        os.chdir(tmp_path)
+        # Yielding here is important. It means that when the test is done, the remainder
+        # of the function will be executed. This is important because the test is run in
+        # a temporary directory and we want to change back to the original directory
+        # when the test is done.
+        yield
+        os.chdir(original_dir)
+
+    def test_creation_invalid_input_raises_error(self):
+        with pytest.raises(
+            ValueError, match="Must provide either TIC ID or TOI object"
+        ):
+            tess_photometry_setup()
+
+    @pytest.mark.remote_data
+    @pytest.mark.parametrize("creation_method", ["tic_id", "toi_object"])
+    def test_creation(self, tess_tic_expected_values, creation_method):
+        # Check that we can create the necessary files for TESS photometry
+        # from a TIC ID.
+        tic_id = tess_tic_expected_values["tic_id"]
+        if creation_method == "tic_id":
+            tess_photometry_setup(tic_id=tic_id)
+        else:
+            toi_info = TOI.from_tic_id(tic_id)
+            tess_photometry_setup(TOI_object=toi_info)
+
+        p_info = Path(f"TIC-{tic_id}-info.json")
+        assert p_info.exists()
+
+        p_source_list = Path(f"TIC-{tic_id}-source-list-input.ecsv")
+        assert p_source_list.exists()
+
+    def test_creation_with_overwrite(self, tess_tic_expected_values):
+        # Check to see that an error is raised if the files already exist
+        # and the overwrite flag is not set.
+        tic_id = tess_tic_expected_values["tic_id"]
+        tess_photometry_setup(tic_id=tic_id)
+
+        # Try re-running with both files present, where we hit the error from
+        # the source list file first
+        with pytest.raises(FileExistsError):
+            tess_photometry_setup(tic_id=tic_id)
+
+        # Remove the source list table and try again, this time hitting the
+        # error from the info file
+        Path(f"TIC-{tic_id}-source-list-input.ecsv").unlink()
+        with pytest.raises(FileExistsError):
+            tess_photometry_setup(tic_id=tic_id)
