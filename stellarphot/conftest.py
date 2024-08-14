@@ -3,6 +3,7 @@
 import os
 
 import pytest
+from astropy.coordinates import SkyCoord
 from astropy.table import Table
 from pytest_astropy_header.display import PYTEST_HEADER_MODULES, TESTED_VERSIONS
 
@@ -46,4 +47,13 @@ def profile_stars():
             y_stddev=[4, 4, 4],
             theta=[0, 0, 0],
         )
+    )
+
+
+@pytest.fixture
+def tess_tic_expected_values():
+    # Use this in tests where you need a valid TOI (or TIC) and a coordinate for it.
+    return dict(
+        tic_id=236158940,
+        expected_coords=SkyCoord(ra=313.41953739, dec=34.35164717, unit="degree"),
     )

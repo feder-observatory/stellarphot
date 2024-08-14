@@ -29,14 +29,6 @@ GOOD_HEADER_WITH_PLANET = {
 BAD_HEADER = {}
 
 
-@pytest.fixture
-def tess_tic_expected_values():
-    return dict(
-        tic_id=236158940,
-        expected_coords=SkyCoord(ra=313.41953739, dec=34.35164717, unit="degree"),
-    )
-
-
 def test_good_header_sucess():
     tsub = TessSubmission.from_header(GOOD_HEADER)
     assert tsub.utc_start == "20220604"
@@ -143,6 +135,37 @@ def test_target_file():
 
 
 class TestTOI:
+    @pytest.fixture
+    def sample_toi(self):
+        toi_dict = {
+            "tic_id": 236158940,
+            "coord": {
+                "ra": "313d25m10.33459171s",
+                "dec": "34d21m05.92981069s",
+                "representation_type": "spherical",
+                "frame": "icrs",
+            },
+            "depth_ppt": 3.31,
+            "depth_error_ppt": 0.13131700000000002,
+            "duration": "2.885 h",
+            "duration_error": "0.286 h",
+            "epoch": {
+                "jd1": 2459817.0,
+                "jd2": 0.28766999999061227,
+                "format": "jd",
+                "scale": "tdb",
+                "precision": 3,
+                "in_subfmt": "*",
+                "out_subfmt": "*",
+            },
+            "epoch_error": "0.0018336 d",
+            "period": "2.677573 d",
+            "period_error": "1.8e-05 d",
+            "tess_mag": 11.3283,
+            "tess_mag_error": 0.015,
+        }
+        return TOI.model_validate(toi_dict)
+
     @pytest.mark.remote_data
     def test_from_tic_id(self, tess_tic_expected_values):
         # Nothing special about the TIC ID chosen here. It is one we happened
