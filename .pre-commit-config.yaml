@@ -17,6 +17,7 @@ repos:
         # Attempts to load all json files to verify syntax.
       - id: end-of-file-fixer
         # Makes sure files end in a newline and only a newline.
+        exclude_types: [image]
       - id: trailing-whitespace
         # Trims trailing whitespace.
       - id: mixed-line-ending

@@ -1075,3 +1075,37 @@ class PhotometryRunner(ipw.VBox):
             self.fitsopen.file_chooser.reset()
             self.info_box.value = ""
             self.run_settings = None
+
+
+class Spinner(ipw.VBox):
+    """
+    A spinner widget.
+    """
+
+    def __init__(self, *args, spinner_file=None, message="", **kwargs):
+        if spinner_file is None:
+            spinner_file = get_pkg_data_filename(
+                "data/star_spinner.svg", package="stellarphot"
+            )
+        self._spinner_file = spinner_file
+        super().__init__(*args, **kwargs)
+        with open(spinner_file) as f:
+            self._spinner = ipw.HTML(f.read())
+        self._message = ipw.HTML(message)
+        self.children = [self._message, self._spinner]
+        self.layout.display = "none"
+        self.layout.width = "200px"
+
+    @property
+    def message(self):
+        return self._message.value
+
+    @property
+    def spinner_file(self):
+        return self._spinner_file
+
+    def start(self):
+        self.layout.display = "flex"
+
+    def stop(self):
+        self.layout.display = "none"
