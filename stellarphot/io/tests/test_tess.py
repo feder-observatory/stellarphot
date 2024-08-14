@@ -141,3 +141,11 @@ class TestTOI:
         # should always be the same.
         expected_coord = SkyCoord(ra=313.41953739, dec=34.35164717, unit="degree")
         assert toi_info.coord.separation(expected_coord).arcsecond < 1
+
+        # Try round-tripping through json
+        # This is a regression test for #427
+        json_str = toi_info.model_dump_json()
+        new_toi = TOI.model_validate_json(json_str)
+        print(f"Original: {toi_info}")
+
+        assert toi_info.coord.separation(new_toi.coord).arcsecond < 0.01
