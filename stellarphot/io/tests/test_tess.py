@@ -227,6 +227,7 @@ class TestTessPhotometrySetup:
         p_source_list = Path(f"TIC-{tic_id}-source-list-input.ecsv")
         assert p_source_list.exists()
 
+    @pytest.mark.remote_data
     def test_creation_with_overwrite(self, tess_tic_expected_values):
         # Check to see that an error is raised if the files already exist
         # and the overwrite flag is not set.
