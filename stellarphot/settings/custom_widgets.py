@@ -1097,9 +1097,7 @@ class TessPhotometrySetup(ipw.VBox):
         self.fits_opener = FitsOpener()
         self.confirm = Confirm()
         self.spinner = Spinner(message="<h3>Downloading TIC info...</h3>")
-        self.all_done = ipw.HTML(
-            "<h2>Files have been written, you can close this notebook.</h2>"
-        )
+        self.all_done = ipw.HTML("<h2>Done! Files have been written.</h2>")
 
         # Set up observers
         self.drop.observe(self.watch_drop(), names="value")
