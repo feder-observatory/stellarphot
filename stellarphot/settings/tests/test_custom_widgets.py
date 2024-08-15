@@ -28,6 +28,7 @@ from stellarphot.settings.custom_widgets import (
     ReviewSettings,
     SaveStatus,
     SettingWithTitle,
+    Spinner,
     _add_saving_to_widget,
 )
 from stellarphot.settings.tests.test_models import (
@@ -1260,3 +1261,39 @@ def test_add_saving_with_unrecognized_widget():
     # that is not recognized.
     with pytest.raises(ValueError, match="is not a recognized type of widget"):
         _add_saving_to_widget(ipw.Dropdown())
+
+
+class TestSpinner:
+    def test_create_spinner(self):
+        # Test we can create a spinner and set a message
+        spinner = Spinner()
+        assert spinner.layout.display == "none"
+
+        message = "Hello world"
+        spinner = Spinner(message=message)
+        assert spinner.message == message
+
+        # Just make sure there is some spinner file
+        assert spinner.spinner_file != ""
+
+    def test_start_stop_spinner(self):
+        # Test we can start and stop the spinner
+        spinner = Spinner()
+        spinner.start()
+        assert spinner.layout.display == "flex"
+
+        spinner.stop()
+        assert spinner.layout.display == "none"
+
+    def test_settings_spinner_file(self, tmp_path):
+        # Test that we can set the spinner file. The file we
+        # create here is not valid svg. We just make sure that
+        # the file is read.
+
+        spinner_file = tmp_path / "fake_spinner.svg"
+        spinner_contents = "This is not a valid svg file"
+        spinner_file.write_text(spinner_contents)
+
+        spinner = Spinner(spinner_file=spinner_file)
+        assert spinner.spinner_file == spinner_file
+        assert spinner.children[1].value == spinner_contents

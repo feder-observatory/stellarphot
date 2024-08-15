@@ -22,6 +22,8 @@ from ipyautoui.autoobject import AutoObject
 from ipyautoui.custom.iterable import ItemBox
 from pydantic import ValidationError
 
+from stellarphot.io import tess_photometry_setup
+from stellarphot.io.tess import TIC_regex
 from stellarphot.settings import (
     Camera,
     Observatory,
@@ -1075,3 +1077,139 @@ class PhotometryRunner(ipw.VBox):
             self.fitsopen.file_chooser.reset()
             self.info_box.value = ""
             self.run_settings = None
+
+
+class TessPhotometrySetup(ipw.VBox):
+    """
+    Widget for getting some photometry inputs for a TESS Object of Interest (TOI).
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Define the children of self
+        self.header = ipw.HTML("<h2>Enter the TIC ID of the exoplanet candidate</h2>")
+        self.drop_label = ipw.HTML("How would you like to specify the TIC ID?")
+        self.drop = ipw.Dropdown(
+            options=(("Type in TIC ID", 0), ("Choose an image", 1))
+        )
+        self.tic_id_entry = ipw.IntText(description="TIC ID")
+        self.fits_opener = FitsOpener()
+        self.confirm = Confirm()
+        self.spinner = Spinner(message="<h3>Downloading TIC info...</h3>")
+        self.all_done = ipw.HTML("<h2>Done! Files have been written.</h2>")
+
+        # Set up observers
+        self.drop.observe(self.watch_drop(), names="value")
+        self.tic_id_entry.observe(self.watch_tic_id_text_box(), names="value")
+        self.fits_opener.file_chooser.observe(self.watch_fits_opener(), names="_value")
+        self.confirm.observe(self.watch_confirmation(), names="value")
+
+        # Initialize the widget
+
+        # Hide the "all done" message until it is needed
+        self.all_done.layout.display = "none"
+
+        # Initialize the TIC ID
+        self.tic_id = 0
+
+        # This is correct -- watch_drop returns a function that takes a change dict
+        # Option 0 is to type in the TIC ID
+        self.watch_drop()({"new": 0})
+
+        # Define the children
+        self.children = (
+            self.header,
+            self.drop_label,
+            self.drop,
+            self.tic_id_entry,
+            self.fits_opener.file_chooser,
+            self.confirm,
+            self.spinner,
+            self.all_done,
+        )
+
+    def watch_drop(self):
+        def observer(change):
+            # Change whether a text box for entering the TIC ID is visible or a
+            # file chooser for selecting an image is visible.
+            if change["new"] == 0:
+                self.tic_id_entry.layout.display = "flex"
+                self.fits_opener.file_chooser.layout.display = "none"
+            else:
+                self.tic_id_entry.layout.display = "none"
+                self.fits_opener.file_chooser.layout.display = "flex"
+
+        return observer
+
+    def set_tic_id(self, an_id):
+        # The actual setting of the TIC ID is here so that all observers can
+        # call the same method.
+        self.tic_id = int(an_id)
+        # Display the confirmation widget
+        self.confirm.message = f"Is the TIC ID {self.tic_id} correct?"
+        self.confirm.show()
+
+    def watch_tic_id_text_box(self):
+        def observer(change):
+            # Just set the TIC ID....
+            self.set_tic_id(change["new"])
+
+        return observer
+
+    def watch_fits_opener(self):
+        def observer(_):
+            # The FitsOpener handles loading the header and setting the object.
+            # Here we just need to extract the TIC ID from the object.
+            match = TIC_regex.match(self.fits_opener.object)
+            self.set_tic_id(match.group("star"))
+
+        return observer
+
+    def watch_confirmation(self):
+        def observer(change):
+            # Confirm has a bool value, True if the user says yes, False if no.
+            # The Confirm widget closes itself, so we don't need to do anything
+            # here except to start the spinner, run the setup function, and stop
+            # the spinner.
+            if change["new"]:
+                self.spinner.start()
+                tess_photometry_setup(self.tic_id, overwrite=True)
+                self.spinner.stop()
+                self.all_done.layout.display = "flex"
+
+        return observer
+
+
+class Spinner(ipw.VBox):
+    """
+    A spinner widget.
+    """
+
+    def __init__(self, *args, spinner_file=None, message="", **kwargs):
+        if spinner_file is None:
+            spinner_file = get_pkg_data_filename(
+                "data/star_spinner.svg", package="stellarphot"
+            )
+        self._spinner_file = spinner_file
+        super().__init__(*args, **kwargs)
+        with open(spinner_file) as f:
+            self._spinner = ipw.HTML(f.read())
+        self._message = ipw.HTML(message)
+        self.children = [self._message, self._spinner]
+        self.layout.display = "none"
+        self.layout.width = "200px"
+
+    @property
+    def message(self):
+        return self._message.value
+
+    @property
+    def spinner_file(self):
+        return self._spinner_file
+
+    def start(self):
+        self.layout.display = "flex"
+
+    def stop(self):
+        self.layout.display = "none"

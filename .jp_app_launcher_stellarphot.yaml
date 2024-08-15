@@ -1,3 +1,5 @@
+# Notebook in the "Stellarphot setup" section of the launcher
+
 - title: 1 - Saveable settings
   description: Settings for camera, observatory and passbands
   source: ../stellarphot/01-initial-settings.ipynb
@@ -5,6 +7,8 @@
   cwd: not_used
   type: notebook
   catalog: Stellarphot setup
+
+# Notebook in the "Stellarphot photometry" section of the launcher
 
 - title: 2 - Seeing profile and comparison stars
   description: Choose aperture settings and stars to perform photometry on
@@ -29,3 +33,13 @@
   cwd: not_used
   type: notebook
   catalog: Stellarphot photometry
+
+# Notebook in the "Stellarphot analysis and tools" section of the launcher
+
+- title: Generate TESS target list
+  description: View and export photometry results
+  source: ../stellarphot/tess-target-source-list-generator.ipynb
+  icon: ../stellarphot/stellarphot-logo.svg
+  cwd: not_used
+  type: notebook
+  catalog: Stellarphot analysis and tools

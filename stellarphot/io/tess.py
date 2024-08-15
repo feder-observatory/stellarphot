@@ -12,6 +12,7 @@ from astropy.time import Time
 from astropy.utils.data import download_file
 from pydantic import BaseModel, ConfigDict
 
+from stellarphot import SourceListData
 from stellarphot.settings.astropy_pydantic import (
     AstropyValidator,
     QuantityType,
@@ -19,7 +20,7 @@ from stellarphot.settings.astropy_pydantic import (
 )
 from stellarphot.transit_fitting.io import get_tic_info
 
-__all__ = ["TessSubmission", "TOI", "TessTargetFile"]
+__all__ = ["tess_photometry_setup", "TessSubmission", "TOI", "TessTargetFile"]
 
 # Makes me want to vomit, but....
 DEFAULT_TABLE_LOCATION = "who.the.heck.knows"
@@ -354,6 +355,59 @@ class TOI(BaseModel):
             tess_mag=toi_table["TESS Mag"],
             tess_mag_error=toi_table["TESS Mag err"],
         )
+
+
+def tess_photometry_setup(tic_id=None, TOI_object=None, overwrite=False):
+    """
+    Set up the photometry for a TESS target.
+
+    Parameters
+    ----------
+
+    TIC_ID : int, optional
+        The TIC ID of the target. Must provide either this or TOI_object.
+
+    TOI_object : `stellarphot.io.TOI`, optional
+        The TOI object for the target. Must provide either this or TIC_ID.
+
+    Returns
+    -------
+
+    Nothing. Writes files with the TESS target information.
+    """
+    if tic_id:
+        toi = TOI.from_tic_id(tic_id)
+    elif TOI_object:
+        toi = TOI_object
+    else:
+        raise ValueError("Must provide either TIC ID or TOI object.")
+
+    ttf = TessTargetFile(toi.coord, toi.tess_mag, toi.depth_ppt)
+    new_table = Table(
+        {
+            "star_id": list(range(len(ttf.table))),
+            "ra": ttf.table["coords"].ra,
+            "dec": ttf.table["coords"].dec,
+            "marker name": ["TESS Targets"] * len(ttf.table),
+            "coords": ttf.table["coords"],
+        }
+    )
+    sld = SourceListData(input_data=new_table)
+    sl_name = f"TIC-{toi.tic_id}-source-list-input.ecsv"
+    try:
+        sld.write(sl_name, overwrite=overwrite)
+    except OSError as e:
+        raise FileExistsError(
+            f"Source list {sl_name} already exists: Use overwrite=True to replace"
+        ) from e
+
+    info_path = Path(f"TIC-{toi.tic_id}-info.json")
+    if info_path.exists() and not overwrite:
+        raise FileExistsError(
+            f"{info_path} already exists. Use overwrite=True to replace."
+        )
+    with open(info_path, "w") as f:
+        f.write(toi.model_dump_json(indent=2))
 
 
 @dataclass
