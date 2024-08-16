@@ -1,3 +1,10 @@
+1.4.15 (2024-08-16)
+-------------------
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
++ Increase minimum angular separation between comparison stars and variable stars.
+
 1.4.14 (2024-03-27)
 -------------------
 
