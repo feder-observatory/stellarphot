@@ -388,11 +388,10 @@ class ComparisonViewer:
                 self.ccd.shape[0] / 2, self.ccd.shape[1] / 2
             )
 
-    def _set_file(self, change):  # noqa: ARG002
+    def _save_source_location_file(self):
         """
-        Widget callbacks need to accept a change argument, even if not used.
+        Save the source location file.
         """
-        self._init()
         # Save the initial source list if there is a file name for it and if the target
         # coordinates are known. The target coordinates are needed to generate the
         # source list table.
@@ -401,6 +400,13 @@ class ComparisonViewer:
             and self.target_coord is not None
         ):
             self._save_aperture_to_file(None)
+
+    def _set_file(self, change):  # noqa: ARG002
+        """
+        Widget callbacks need to accept a change argument, even if not used.
+        """
+        self._init()
+        self._save_source_location_file()
 
     def _set_target_file(self, change):
         """
@@ -411,6 +417,7 @@ class ComparisonViewer:
         # Only call init if a file has been chosen
         if self._file_chooser.file_chooser.value != ".":
             self._init()
+            self._save_source_location_file()
 
     def _make_observers(self):
         self._show_labels_button.observe(self._show_label_button_handler, names="value")
