@@ -8,6 +8,7 @@ from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astropy.coordinates.name_resolve import NameResolveError
 from astropy.table import Table
+from ipyautoui.custom import FileChooser
 
 try:
     from astrowidgets import ImageWidget
@@ -401,10 +402,21 @@ class ComparisonViewer:
         ):
             self._save_aperture_to_file(None)
 
+    def _set_target_file(self, change):
+        """
+        Set the target file.
+        """
+        input_source_list_name = change["new"]
+        self.targets_from_file = SourceListData.read(input_source_list_name)
+        # Only call init if a file has been chosen
+        if self._file_chooser.file_chooser.value != ".":
+            self._init()
+
     def _make_observers(self):
         self._show_labels_button.observe(self._show_label_button_handler, names="value")
         self._save_var_info.on_click(self._save_variables_to_file)
         self._file_chooser.file_chooser.observe(self._set_file, names="_value")
+        self._choose_input_source_list.observe(self._set_target_file, names="_value")
 
     def _save_variables_to_file(self, button=None, filename=""):  # noqa: ARG002
         """
@@ -566,10 +578,17 @@ class ComparisonViewer:
             self.object_name,
             self.source_and_title,
         ]
-        inner_box.children = [iw, source_legend_box]  # legend]
+        inner_box.children = [iw, source_legend_box]
+
+        # Add a file chooser for an input source list
+        self._choose_input_source_list = FileChooser(
+            filter_pattern="*.ecsv",
+        )
+        self._choose_input_source_list.title = "OPTIONAL: Choose input source list"
 
         box.children = [
             self._file_chooser.file_chooser,
+            self._choose_input_source_list,
             inner_box,
             controls,
         ]
