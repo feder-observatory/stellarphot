@@ -22,7 +22,7 @@ from stellarphot.settings import (
     SourceLocationSettings,
     ui_generator,
 )
-from stellarphot.settings.custom_widgets import SettingWithTitle
+from stellarphot.settings.custom_widgets import SettingWithTitle, Spinner
 from stellarphot.settings.fits_opener import FitsOpener
 from stellarphot.utils.comparison_utils import (
     crossmatch_APASS2VSX,
@@ -305,11 +305,19 @@ class ComparisonViewer:
         self.ccd = self.fits_file.ccd
         self.fits_file.load_in_image_widget(self.iw)
 
+        spinner = Spinner(message="Loading variable/comparison stars")
+        legend = self._legend_spinner_box.children[0]
+        spinner.start()
+        self._legend_spinner_box.children = [spinner]
+        self.help_stuff.selected_index = 1
+
         self.vsx = set_up(self.ccd)
 
         apass, vsx_apass_angle, targets_apass_angle = crossmatch_APASS2VSX(
             self.ccd, self.targets_from_file, self.vsx
         )
+
+        self._legend_spinner_box.children = [legend]
 
         apass_good_coord, good_stars = mag_scale(
             self.target_mag,
@@ -542,7 +550,13 @@ class ComparisonViewer:
         )
 
         self.source_locations.savebuttonbar.fns_onsave_add_action(self.save)
-        self.help_stuff = ipw.Accordion(children=[header, legend])
+
+        # Put the legend in a box whose children can be changed to a
+        # spinner while loading.
+        self._legend_spinner_box = ipw.VBox()
+        self._legend_spinner_box.children = [legend]
+
+        self.help_stuff = ipw.Accordion(children=[header, self._legend_spinner_box])
         self.help_stuff.titles = ["Help", "Legend"]
         box = ipw.VBox()
         inner_box = ipw.HBox()
