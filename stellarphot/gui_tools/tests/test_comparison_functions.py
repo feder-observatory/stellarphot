@@ -1,3 +1,4 @@
+import gzip
 import os
 import re
 import warnings
@@ -14,6 +15,7 @@ from astropy.utils.exceptions import AstropyWarning
 from astropy.wcs import WCS
 from astropy.wcs.wcs import FITSFixedWarning
 
+from stellarphot import SourceListData
 from stellarphot.gui_tools import comparison_functions as cf
 from stellarphot.settings import PhotometryWorkingDirSettings
 
@@ -145,7 +147,7 @@ def test_loading_second_image_succeeds(tmp_path):
     file_name = "TIC.fits"
     path = tmp_path / file_name
     ccd.write(path, overwrite=True)
-    print(path)
+
     with warnings.catch_warnings():
         # Ignore the warning about the WCS having non-standard keywords (the SIP
         # distortion parameters).
@@ -182,7 +184,7 @@ def test_loading_second_image_succeeds(tmp_path):
     # Also make sure this is where the viewer is actually centered
     # Get the value of the HTML widget that shows the coordinates
     view_coord_text = comparison_widget.iw.children[1].value
-    print(view_coord_text)
+
     # Extract the coordinates from the text
     match = re.search(
         r"RA: +(\d+:\d+:[.\d]+), +DEC: +([+\d]+:\d+:[.\d]+)", view_coord_text
@@ -194,3 +196,45 @@ def test_loading_second_image_succeeds(tmp_path):
     # close to the target coordinates, where by close I mean "less than the
     # diagonal width of the frame".
     assert viewer_coord.separation(wasp_coord) < 1 * u.degree
+
+
+def test_loading_input_source_list(tmp_path):
+    # Test that we can load a source list from a file
+    comparison_widget = cf.ComparisonViewer()
+    compressed_input_source_list = get_pkg_data_filename(
+        "tests/data/TIC-402828941-source-list-input.ecsv.gz", package="stellarphot"
+    )
+    with gzip.open(compressed_input_source_list, "rb") as f:
+        source_list_content = f.read()
+    input_source_list = tmp_path / "input-sources.ecsv"
+    input_source_list.write_text(source_list_content.decode("utf-8"))
+    ccd = CCDData.read(
+        get_pkg_data_filename(
+            "tests/data/TIC_402828941-tiny.fit.bz2", package="stellarphot"
+        )
+    )
+    file_name = "TIC.fits"
+    path = tmp_path / file_name
+    ccd.write(path, overwrite=True)
+
+    with warnings.catch_warnings():
+        # Ignore the warning about the WCS having non-standard keywords (the SIP
+        # distortion parameters).
+        warnings.filterwarnings(
+            "ignore",
+            message="Some non-standard WCS keywords were excluded",
+            category=AstropyWarning,
+        )
+        comparison_widget._file_chooser.file_chooser.value = path
+
+    comparison_widget._choose_input_source_list.value = input_source_list
+
+    # Check that the number of tess targets matches the number in the
+    # input source list
+
+    comp_viewer_sources = SourceListData.read("source_locations.ecsv")
+    input_sources = SourceListData.read(input_source_list)
+
+    num_tess = np.sum(comp_viewer_sources["marker name"] == "TESS Targets")
+
+    assert num_tess == len(input_sources)
