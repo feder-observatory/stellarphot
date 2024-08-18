@@ -158,13 +158,16 @@ def mag_scale(
     good_filter = apass["passband"] == passband
     high_mag = apass["mag"] < cmag + dimmer_dmag
     low_mag = apass["mag"] > cmag - brighter_dmag
+
+    too_close = 2.0 * u.arcsec
+
     if len(v_angle) > 0:
-        good_v_angle = v_angle > 1.0 * u.arcsec
+        good_v_angle = v_angle > too_close
     else:
         good_v_angle = True
 
     if len(RD_angle) > 0:
-        good_RD_angle = RD_angle > 1.0 * u.arcsec
+        good_RD_angle = RD_angle > too_close
     else:
         good_RD_angle = True
 
