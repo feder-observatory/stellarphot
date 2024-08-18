@@ -8,6 +8,7 @@ from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astropy.coordinates.name_resolve import NameResolveError
 from astropy.table import Table
+from ipyautoui.custom import FileChooser
 
 try:
     from astrowidgets import ImageWidget
@@ -22,7 +23,7 @@ from stellarphot.settings import (
     SourceLocationSettings,
     ui_generator,
 )
-from stellarphot.settings.custom_widgets import SettingWithTitle
+from stellarphot.settings.custom_widgets import SettingWithTitle, Spinner
 from stellarphot.settings.fits_opener import FitsOpener
 from stellarphot.utils.comparison_utils import (
     crossmatch_APASS2VSX,
@@ -305,11 +306,19 @@ class ComparisonViewer:
         self.ccd = self.fits_file.ccd
         self.fits_file.load_in_image_widget(self.iw)
 
+        spinner = Spinner(message="Loading variable/comparison stars")
+        legend = self._legend_spinner_box.children[0]
+        spinner.start()
+        self._legend_spinner_box.children = [spinner]
+        self.help_stuff.selected_index = 1
+
         self.vsx = set_up(self.ccd)
 
         apass, vsx_apass_angle, targets_apass_angle = crossmatch_APASS2VSX(
             self.ccd, self.targets_from_file, self.vsx
         )
+
+        self._legend_spinner_box.children = [legend]
 
         apass_good_coord, good_stars = mag_scale(
             self.target_mag,
@@ -379,11 +388,10 @@ class ComparisonViewer:
                 self.ccd.shape[0] / 2, self.ccd.shape[1] / 2
             )
 
-    def _set_file(self, change):  # noqa: ARG002
+    def _save_source_location_file(self):
         """
-        Widget callbacks need to accept a change argument, even if not used.
+        Save the source location file.
         """
-        self._init()
         # Save the initial source list if there is a file name for it and if the target
         # coordinates are known. The target coordinates are needed to generate the
         # source list table.
@@ -393,10 +401,29 @@ class ComparisonViewer:
         ):
             self._save_aperture_to_file(None)
 
+    def _set_file(self, change):  # noqa: ARG002
+        """
+        Widget callbacks need to accept a change argument, even if not used.
+        """
+        self._init()
+        self._save_source_location_file()
+
+    def _set_target_file(self, change):
+        """
+        Set the target file.
+        """
+        input_source_list_name = change["new"]
+        self.targets_from_file = SourceListData.read(input_source_list_name)
+        # Only call init if a file has been chosen
+        if self._file_chooser.file_chooser.value != ".":
+            self._init()
+            self._save_source_location_file()
+
     def _make_observers(self):
         self._show_labels_button.observe(self._show_label_button_handler, names="value")
         self._save_var_info.on_click(self._save_variables_to_file)
         self._file_chooser.file_chooser.observe(self._set_file, names="_value")
+        self._choose_input_source_list.observe(self._set_target_file, names="_value")
 
     def _save_variables_to_file(self, button=None, filename=""):  # noqa: ARG002
         """
@@ -542,7 +569,13 @@ class ComparisonViewer:
         )
 
         self.source_locations.savebuttonbar.fns_onsave_add_action(self.save)
-        self.help_stuff = ipw.Accordion(children=[header, legend])
+
+        # Put the legend in a box whose children can be changed to a
+        # spinner while loading.
+        self._legend_spinner_box = ipw.VBox()
+        self._legend_spinner_box.children = [legend]
+
+        self.help_stuff = ipw.Accordion(children=[header, self._legend_spinner_box])
         self.help_stuff.titles = ["Help", "Legend"]
         box = ipw.VBox()
         inner_box = ipw.HBox()
@@ -552,10 +585,17 @@ class ComparisonViewer:
             self.object_name,
             self.source_and_title,
         ]
-        inner_box.children = [iw, source_legend_box]  # legend]
+        inner_box.children = [iw, source_legend_box]
+
+        # Add a file chooser for an input source list
+        self._choose_input_source_list = FileChooser(
+            filter_pattern="*.ecsv",
+        )
+        self._choose_input_source_list.title = "OPTIONAL: Choose input source list"
 
         box.children = [
             self._file_chooser.file_chooser,
+            self._choose_input_source_list,
             inner_box,
             controls,
         ]
