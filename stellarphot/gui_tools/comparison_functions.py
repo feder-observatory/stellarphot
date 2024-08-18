@@ -255,7 +255,7 @@ class ComparisonViewer:
         directory=".",
         target_mag=10,
         bright_mag_limit=8,
-        dim_mag_limit=17,
+        dim_mag_limit=15,
         targets_from_file=None,
         object_coordinate=None,
         photom_apertures_file=None,
