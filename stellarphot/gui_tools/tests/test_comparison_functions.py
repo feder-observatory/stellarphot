@@ -198,6 +198,7 @@ def test_loading_second_image_succeeds(tmp_path):
     assert viewer_coord.separation(wasp_coord) < 1 * u.degree
 
 
+@pytest.mark.remote_data
 def test_loading_input_source_list(tmp_path):
     # Test that we can load a source list from a file
     comparison_widget = cf.ComparisonViewer()
