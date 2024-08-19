@@ -13,7 +13,7 @@ New Features
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 + Major reorganizaiton of code including moving functions to new modules. [#130, #133]
-+ Now requires python 3.10 or later. [#147]
++ Now requires Python 3.10 or later. [#147]
 + Use pydantic for aperture settings. [#154]
 + Stomped bug in handling of ``NaN``s in ``single_image_photometry``. [#157]
 
@@ -21,6 +21,137 @@ Bug Fixes
 ^^^^^^^^^
 + Fixed dependence on non-release version of astrowidgets for overwrite capability on output images. [#108]
 + Fixed computation of FWHM when fitting to data that includes NaNs. [#164]
+
+1.4.15 (2024-08-16)
+-------------------
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
++ Increase minimum angular separation between comparison stars and variable stars.
+
+1.4.14 (2024-03-27)
+-------------------
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
++ Use ccd data unit instead of adu.
+
+1.4.13 (2024-02-14)
+------------------
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
++ Allow exposure keyword in FITS header to be set.
+
+1.4.12 (2024-02-12)
+------------------
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
++ Astropy 6 compatibility.
+
+1.4.11 (2023-11-29)
+------------------
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
++ Fix minor errors notebook 06 and 07.
+
+1.4.10 (2023-11-17)
+------------------
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
++ Make it easier to exclude data form transit analysis.
+
+1.4.9 (2023-11-08)
+------------------
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
++ Add more file chooser dialogs and other simplifications.
+
+1.4.8 (2023-10-27)
+------------------
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
++ Use `astropy.timeseries.LombScargle` instead of `gatspy` for periodogram.
+
+1.4.7 (2023-10-20)
+------------------
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
++ Add option to display predetermined label names in `ComparisonViewer.show_labels`.
+
+1.4.6 (2023-09-29)
+------------------
+
+Bug Fixes
+^^^^^^^^^
+
++ Fix field length in AAVSO writer. [#172]
++ Fix issue in ``TessTargetFile`` on Windows. [#171]
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
++ Add a number to the name of the photometry transform notebook. [#173]
+
+1.4.5 (2023-09-27)
+------------------
+
+Bug Fixes
+^^^^^^^^^
+
++ Re-update imports in ``transform_pared_back.ipynb``.
+
+1.4.4 (2023-09-27)
+------------------
+
+Bug Fixes
+^^^^^^^^^
+
++ Update imports in ``transform_pared_back.ipynb``.
+
+1.4.3 (2023-09-27)
+------------------
+
+Bug Fixes
+^^^^^^^^^
+
++ Do not use ``Quantity`` in boolean comparisons. [#170]
+
+
+1.4.2 (2023-08-14)
+------------------
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
++ Do release from proper branch.
+
+1.4.1 (2023-08-14)
+------------------
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
++ Include AAVSO file format description. [#155]
+
+Bug Fixes
+^^^^^^^^^
+
+1.4.0 (2023-08-03)
+------------------
+
+New Features
+^^^^^^^^^^^^
++ Add class for writing AAVSO files. [#146]
 
 1.3.9 (2023-06-16)
 ------------------
