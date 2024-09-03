@@ -424,7 +424,7 @@ def transform_magnitudes(
     transform_catalog_coords = SkyCoord(
         transform_catalog["RAJ2000"], transform_catalog["DEJ2000"], unit="deg"
     )
-    input_coords = SkyCoord(input_mags["RA"], input_mags["Dec"])
+    input_coords = SkyCoord(input_mags["ra"], input_mags["dec"])
 
     transform_catalog_index, d2d, _ = match_coordinates_sky(
         input_coords, transform_catalog_coords
@@ -597,7 +597,7 @@ def transform_to_catalog(
         observed_mags_grouped.groups.keys, observed_mags_grouped.groups, strict=True
     ):
         one_image = one_image_inp[one_image_inp["passband"] == obs_filter]
-        our_coords = SkyCoord(one_image["RA"], one_image["Dec"], unit="degree")
+        our_coords = SkyCoord(one_image["ra"], one_image["dec"], unit="degree")
         if cat is None or cat_coords is None:
             cat = apass_dr9(
                 our_coords[0], radius=1 * u.degree, clip_by_frame=False, padding=0
