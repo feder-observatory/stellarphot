@@ -760,6 +760,9 @@ def test_catalog_bandpassmap():
     assert catalog_dat.catalog_name == "VSX"
     assert catalog_dat.catalog_source == "Vizier"
 
+    # Also test that we can read the bandpass map
+    assert catalog_dat.passband_map["g"] == "SG"
+
 
 def test_catalog_recursive():
     # Construct good objects
