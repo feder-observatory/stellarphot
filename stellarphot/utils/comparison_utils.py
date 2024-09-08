@@ -116,7 +116,7 @@ def crossmatch_APASS2VSX(CCD, RD, vsx):
 
 
 def mag_scale(
-    cmag, apass, v_angle, RD_angle, brighter_dmag=0.44, dimmer_dmag=0.75, passband="r"
+    cmag, apass, v_angle, RD_angle, brighter_dmag=0.44, dimmer_dmag=0.75, passband="SR"
 ):
     """
     Select comparison stars that are 1) not close the VSX stars or to other
