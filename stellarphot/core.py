@@ -965,8 +965,8 @@ class CatalogData(BaseEnhancedTable):
 
     def passband_columns(self, passbands=None):
         """
-        Return a copy of the catalog with passbands as column names instead
-        of the default format, which has s single column for passbands.
+        Return an `astropy.table.Table` with passbands as column names instead
+        of the default format, which has a single column for passbands.
 
         Parameters
         ----------
@@ -976,9 +976,9 @@ class CatalogData(BaseEnhancedTable):
 
         Returns
         -------
-        `stellarphot.CatalogData`
+        `astropy.table.Table`
             Table of catalog information with passbands as column names. See Notes below
-            for important details bat column names.
+            for important details about column names.
 
         Notes
         -----
