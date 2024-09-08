@@ -760,6 +760,9 @@ def test_catalog_bandpassmap():
     assert catalog_dat.catalog_name == "VSX"
     assert catalog_dat.catalog_source == "Vizier"
 
+    # Also test that we can read the bandpass map
+    assert catalog_dat.passband_map["g"] == "SG"
+
 
 def test_catalog_recursive():
     # Construct good objects
@@ -1014,6 +1017,11 @@ def test_find_apass():
     # It is hard to imagine the RAs matching and other entries not matching,
     # so just check the RAs.
     assert set(ra.value for ra in all_apass["ra"]) == set(expected_all["RAJ2000"])
+
+    # The passbands ought to have been translated to the AAVSO standard names.
+    # This is a regression test for #439.
+    for band in ["B", "V", "SG", "SR", "SI"]:
+        assert band in all_apass["passband"]
 
 
 # Load test apertures

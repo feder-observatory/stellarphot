@@ -9,7 +9,7 @@ from astropy.time import Time
 from astropy.wcs import WCS
 from astroquery.vizier import Vizier
 
-from .settings import Camera, Observatory
+from .settings import Camera, Observatory, PassbandMap
 
 __all__ = [
     "BaseEnhancedTable",
@@ -290,7 +290,7 @@ class PhotometryData(BaseEnhancedTable):
         AAVSO passband names. This is used to automatically
         update the passband column to AAVSO standard names if desired. See
         the documentation for `stellarphot.settings.PassbandMap` for more
-        information. The object behaves like a dictinoary when accessing it.
+        information. The object behaves like a dictionary when accessing it.
 
     retain_user_computed: bool, optional (Default: False)
         If True, any computed columns (see USAGE NOTES below) that already
@@ -611,7 +611,7 @@ class CatalogData(BaseEnhancedTable):
         AAVSO passband names. This is used to automatically
         update the passband column to AAVSO standard names if desired. See
         the documentation for `stellarphot.settings.PassbandMap` for more
-        information. The object behaves like a dictinoary when accessing it.
+        information. The object behaves like a dictionary when accessing it.
 
     Attributes
     ----------
@@ -621,6 +621,13 @@ class CatalogData(BaseEnhancedTable):
     catalog_source: str
         User readable designation for the source of the catalog (could be a
         URL or a journal reference).
+
+    passband_map: `stellarphot.settings.PassbandMap`
+        An object containing a mapping from instrumental passband names to
+        AAVSO passband names. This is used to automatically
+        update the passband column to AAVSO standard names if desired. See
+        the documentation for `stellarphot.settings.PassbandMap` for more
+        information. The object behaves like a dictionary when accessing it.
 
     Notes
     -----
@@ -696,6 +703,14 @@ class CatalogData(BaseEnhancedTable):
     @property
     def catalog_source(self):
         return self.meta["catalog_source"]
+
+    @property
+    def passband_map(self):
+        return self._passband_map
+
+    @passband_map.setter
+    def passband_map(self, value):
+        self._passband_map = value
 
     @staticmethod
     def _tidy_vizier_catalog(data, mag_column_regex, color_column_regex):
@@ -1017,6 +1032,21 @@ def apass_dr9(field_center, radius=1 * u.degree, clip_by_frame=False, padding=10
 
     # IAU says there is a space between the acronym and the coordinates.
     raw_catalog["id"] = [f"{designation_acronym} {coord}" for coord in coord_string]
+
+    # Translate the passbands to AAVSO standard names.
+    # No need to change B and V since those are already correct.
+    # Do this *after* initialization so that the original APASS band names
+    # are used for the tidy-ification operation.
+    raw_catalog.passband_map = PassbandMap(
+        name="APASS",
+        your_filter_names_to_aavso={
+            "g": "SG",
+            "r": "SR",
+            "i": "SI",
+        },
+    )
+    raw_catalog._update_passbands()
+
     return raw_catalog
 
 
