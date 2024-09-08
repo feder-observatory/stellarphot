@@ -983,9 +983,9 @@ class CatalogData(BaseEnhancedTable):
         Notes
         -----
 
-        The column names in the output will be the passband names with "mag_" as a
+        The column names in the output will be the passband names with ``mag_`` as a
         prefix. An error column for each passband will be generated, with the prefix
-        "mag_error_". If the catalog already has columns with these names, they will
+        ``mag_error_``. If the catalog already has columns with these names, they will
         be overwritten. The input catalog will not be changed.
         """
         catalog_passbands = set(self["passband"])
