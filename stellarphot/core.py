@@ -963,6 +963,65 @@ class CatalogData(BaseEnhancedTable):
 
         return cat
 
+    def passband_columns(self, passbands=None):
+        """
+        Return an `astropy.table.Table` with passbands as column names instead
+        of the default format, which has a single column for passbands.
+
+        Parameters
+        ----------
+        passbands : list, optional
+            List of passbands to include in the output. If not provided, all
+            passbands in the catalog will be included.
+
+        Returns
+        -------
+        `astropy.table.Table`
+            Table of catalog information with passbands as column names. See Notes below
+            for important details about column names.
+
+        Notes
+        -----
+
+        The column names in the output will be the passband names with ``mag_`` as a
+        prefix. An error column for each passband will be generated, with the prefix
+        ``mag_error_``. If the catalog already has columns with these names, they will
+        be overwritten. The input catalog will not be changed.
+        """
+        catalog_passbands = set(self["passband"])
+        if passbands is None:
+            passbands = catalog_passbands
+        input_passbands = set(passbands)
+        missing_passbands = input_passbands - catalog_passbands
+        if missing_passbands:
+            raise ValueError(
+                f"Passbands \"{', '.join(missing_passbands)}\" not found in catalog."
+            )
+        passband_mask = np.zeros(len(self), dtype=bool)
+        for passband in input_passbands:
+            passband_mask |= self["passband"] == passband
+
+        reduced_input = self[passband_mask]
+
+        # Switch to pandas for making the new table.
+        df = reduced_input.to_pandas()
+
+        # This makes a MultiIndex for the columns -- "mag" and "mag_error" are the
+        # top level, and the passbands are the second level.
+        df = df.pivot(
+            columns="passband", index=["id", "ra", "dec"], values=["mag", "mag_error"]
+        )
+
+        # The column names are a MultiIndex, so we flatten them to either "mag_band"
+        # or "mag_error_band", where "band" is the passband name.
+        df.columns = df.columns.to_series().str.join("_")
+
+        # We also reset the index which was set to the id, ra, and dec columns above.
+        df = df.reset_index()
+
+        # Convert back to an astropy table and return it.
+        return Table.from_pandas(df)
+
 
 def apass_dr9(field_center, radius=1 * u.degree, clip_by_frame=False, padding=100):
     """

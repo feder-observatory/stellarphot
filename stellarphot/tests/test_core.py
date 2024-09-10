@@ -839,6 +839,54 @@ def test_tidy_vizier_catalog_several_mags():
     assert set(result["passband"]) == {"V", "B", "i", "r-i", "B-V"}
 
 
+def test_catalog_to_passband_columns():
+    # Test that the passband columns are correctly identified
+    # even if the passband names are not in the passband map.
+    apass_input = Table.read(get_pkg_data_filename("data/test_apass_subset.ecsv"))
+
+    input_data = CatalogData._tidy_vizier_catalog(
+        apass_input,
+        r"^([a-zA-Z]+|[a-zA-Z]+-[a-zA-Z]+)_?mag$",
+        r"^([a-zA-Z]+-[a-zA-Z]+)$",
+    )
+    print(input_data.colnames)
+    input_data["RAJ2000"].unit = u.deg
+    input_data["DEJ2000"].unit = u.deg
+    cat = CatalogData(
+        input_data=input_data,
+        colname_map=dict(recno="id", RAJ2000="ra", DEJ2000="dec"),
+        catalog_name="APASS",
+        catalog_source="Vizier",
+        passband_map=dict(g="SG", r="SR", i="SI"),
+    )
+
+    # Check that calling with a bad filter name raises an error
+    with pytest.raises(ValueError, match="not found in catalog"):
+        cat.passband_columns(["not a filter"])
+
+    # These are the only passbands in the input test data
+    passbands = ["V", "SI"]
+    new_cat = cat.passband_columns(passbands=passbands)
+
+    # Check the column names
+    for pb in passbands:
+        assert f"mag_{pb}" in new_cat.colnames
+        assert f"mag_error_{pb}" in new_cat.colnames
+
+    # Check the data
+    assert set(new_cat["mag_V"]) == set(apass_input["Vmag"])
+    assert set(new_cat["mag_error_V"]) == set(apass_input["e_Vmag"])
+    assert set(new_cat["mag_SI"]) == set(apass_input["i_mag"])
+    assert set(new_cat["mag_error_SI"]) == set(apass_input["e_i_mag"])
+
+    # Check that calling with no passbands returns all of the passbands
+    new_cat = cat.passband_columns()
+    cat_pbs = set(cat["passband"])
+    for pb in cat_pbs:
+        assert f"mag_{pb}" in new_cat.colnames
+        assert f"mag_error_{pb}" in new_cat.colnames
+
+
 @pytest.mark.remote_data
 def test_catalog_from_vizier_search_apass():
     # Nothing special about this point...
