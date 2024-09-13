@@ -188,6 +188,16 @@
         "code",
         "userTesting"
       ]
+    },
+    {
+      "login": "janeglanzer",
+      "name": "Jane Glanzer",
+      "avatar_url": "https://avatars.githubusercontent.com/u/21367441?v=4",
+      "profile": "https://github.com/janeglanzer",
+      "contributions": [
+        "code",
+        "userTesting"
+      ]
     }
   ],
   "commitType": "docs",
