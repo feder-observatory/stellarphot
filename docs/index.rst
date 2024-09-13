@@ -53,8 +53,8 @@ You will go through this process to do photometry.
 #. Once those settings have been done, you can perform photometry on your images.
 
 
-Graphical interface for making settings
----------------------------------------
+Graphical interface for making settings and doing photometry
+------------------------------------------------------------
 
 A graphical interface is provided via JupyterLab to make settings. To start JupyterLab, run the following command
 in a terminal::
