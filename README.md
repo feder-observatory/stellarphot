@@ -61,7 +61,6 @@ Feel free to contact @mwcraig or @JuanCab with your questions about using `stell
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
 <!-- prettier-ignore-start -->
 <!-- markdownlint-disable -->
-
 <table>
   <tbody>
     <tr>
@@ -80,6 +79,7 @@ Feel free to contact @mwcraig or @JuanCab with your questions about using `stell
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/clkotnik"><img src="https://avatars.githubusercontent.com/u/26798912?v=4?s=100" width="100px;" alt="clkotnik"/><br /><sub><b>clkotnik</b></sub></a><br /><a href="#ideas-clkotnik" title="Ideas, Planning, & Feedback">🤔</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/meyerpa"><img src="https://avatars.githubusercontent.com/u/14203298?v=4?s=100" width="100px;" alt="Paige Meyer"/><br /><sub><b>Paige Meyer</b></sub></a><br /><a href="https://github.com/feder-observatory/stellarphot/commits?author=meyerpa" title="Documentation">📖</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/stottsco"><img src="https://avatars.githubusercontent.com/u/14881940?v=4?s=100" width="100px;" alt="stottsco"/><br /><sub><b>stottsco</b></sub></a><br /><a href="https://github.com/feder-observatory/stellarphot/commits?author=stottsco" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/isobelsnellenberger"><img src="https://avatars.githubusercontent.com/u/36014334?v=4?s=100" width="100px;" alt="Isobel Snellenberger"/><br /><sub><b>Isobel Snellenberger</b></sub></a><br /><a href="https://github.com/feder-observatory/stellarphot/commits?author=isobelsnellenberger" title="Code">💻</a></td>
     </tr>
   </tbody>
   <tfoot>
@@ -92,7 +92,6 @@ Feel free to contact @mwcraig or @JuanCab with your questions about using `stell
     </tr>
   </tfoot>
 </table>
-
 
 <!-- markdownlint-restore -->
 <!-- prettier-ignore-end -->
