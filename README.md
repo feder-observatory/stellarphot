@@ -81,6 +81,9 @@ Feel free to contact @mwcraig or @JuanCab with your questions about using `stell
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/stottsco"><img src="https://avatars.githubusercontent.com/u/14881940?v=4?s=100" width="100px;" alt="stottsco"/><br /><sub><b>stottsco</b></sub></a><br /><a href="https://github.com/feder-observatory/stellarphot/commits?author=stottsco" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/isobelsnellenberger"><img src="https://avatars.githubusercontent.com/u/36014334?v=4?s=100" width="100px;" alt="Isobel Snellenberger"/><br /><sub><b>Isobel Snellenberger</b></sub></a><br /><a href="https://github.com/feder-observatory/stellarphot/commits?author=isobelsnellenberger" title="Code">💻</a></td>
     </tr>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="http://stefannelson.github.io"><img src="https://avatars.githubusercontent.com/u/9082855?v=4?s=100" width="100px;" alt="Stefan Nelson"/><br /><sub><b>Stefan Nelson</b></sub></a><br /><a href="https://github.com/feder-observatory/stellarphot/commits?author=stefannelson" title="Code">💻</a> <a href="#userTesting-stefannelson" title="User Testing">📓</a></td>
+    </tr>
   </tbody>
   <tfoot>
     <tr>

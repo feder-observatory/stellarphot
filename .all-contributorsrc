@@ -167,6 +167,16 @@
       "contributions": [
         "code"
       ]
+    },
+    {
+      "login": "stefannelson",
+      "name": "Stefan Nelson",
+      "avatar_url": "https://avatars.githubusercontent.com/u/9082855?v=4",
+      "profile": "http://stefannelson.github.io",
+      "contributions": [
+        "code",
+        "userTesting"
+      ]
     }
   ],
   "commitType": "docs",
