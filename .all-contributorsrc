@@ -178,6 +178,16 @@
         "code",
         "userTesting"
       ]
+    },
+    {
+      "login": "walkerna22",
+      "name": "Nathan Walker",
+      "avatar_url": "https://avatars.githubusercontent.com/u/4551626?v=4",
+      "profile": "https://github.com/walkerna22",
+      "contributions": [
+        "code",
+        "userTesting"
+      ]
     }
   ],
   "commitType": "docs",
