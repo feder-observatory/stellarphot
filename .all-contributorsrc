@@ -158,6 +158,15 @@
       "contributions": [
         "code"
       ]
+    },
+    {
+      "login": "isobelsnellenberger",
+      "name": "Isobel Snellenberger",
+      "avatar_url": "https://avatars.githubusercontent.com/u/36014334?v=4",
+      "profile": "https://github.com/isobelsnellenberger",
+      "contributions": [
+        "code"
+      ]
     }
   ],
   "commitType": "docs",
