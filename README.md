@@ -84,6 +84,7 @@ Feel free to contact @mwcraig or @JuanCab with your questions about using `stell
     <tr>
       <td align="center" valign="top" width="14.28%"><a href="http://stefannelson.github.io"><img src="https://avatars.githubusercontent.com/u/9082855?v=4?s=100" width="100px;" alt="Stefan Nelson"/><br /><sub><b>Stefan Nelson</b></sub></a><br /><a href="https://github.com/feder-observatory/stellarphot/commits?author=stefannelson" title="Code">💻</a> <a href="#userTesting-stefannelson" title="User Testing">📓</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/walkerna22"><img src="https://avatars.githubusercontent.com/u/4551626?v=4?s=100" width="100px;" alt="Nathan Walker"/><br /><sub><b>Nathan Walker</b></sub></a><br /><a href="https://github.com/feder-observatory/stellarphot/commits?author=walkerna22" title="Code">💻</a> <a href="#userTesting-walkerna22" title="User Testing">📓</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/janeglanzer"><img src="https://avatars.githubusercontent.com/u/21367441?v=4?s=100" width="100px;" alt="Jane Glanzer"/><br /><sub><b>Jane Glanzer</b></sub></a><br /><a href="https://github.com/feder-observatory/stellarphot/commits?author=janeglanzer" title="Code">💻</a> <a href="#userTesting-janeglanzer" title="User Testing">📓</a></td>
     </tr>
   </tbody>
   <tfoot>
