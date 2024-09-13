@@ -593,6 +593,17 @@ def transform_to_catalog(
     cat = None
     cat_coords = None
 
+    def fake_it(one_image):
+        # Accumulate the parameters
+        popt = [np.nan] * len(all_params)
+        for param, value in zip(all_params, popt, strict=True):
+            param.extend([value] * len(one_image))
+        nana = [np.nan] * len(one_image)
+        cal_mags.extend(nana)
+        cat_mags.extend(nana)
+        cat_colors.extend(nana)
+        resids.extend(nana)
+
     for file, one_image_inp in zip(
         observed_mags_grouped.groups.keys, observed_mags_grouped.groups, strict=True
     ):
@@ -602,13 +613,16 @@ def transform_to_catalog(
             cat = apass_dr9(
                 our_coords[0], radius=1 * u.degree, clip_by_frame=False, padding=0
             )
-            cat_coords = SkyCoord(cat["ra"], cat["dec"])
-            cat["color"] = cat[cat_color[0]] - cat[cat_color[1]]
+            cat = cat.passband_columns(
+                passbands=[cat_filter, cat_color[0], cat_color[1]]
+            )
+            cat_coords = SkyCoord(cat["ra"], cat["dec"], unit="degree")
+            cat["color"] = cat[f"mag_{cat_color[0]}"] - cat[f"mag_{cat_color[1]}"]
 
         cat_idx, d2d, _ = our_coords.match_to_catalog_sky(cat_coords)
 
         mag_inst = one_image[obs_mag_col]
-        cat_mag = cat[cat_filter][cat_idx]
+        cat_mag = cat[f"mag_{cat_filter}"][cat_idx]
         color = cat["color"][cat_idx]
 
         # Impose some constraints on what is included in the fit
@@ -619,7 +633,21 @@ def transform_to_catalog(
             & ~np.isnan(one_image[obs_mag_col])
         )
 
+        if not (any(good_dat) or any(good_cat)):
+            print(f"No good data in {file[0]}")
+            fake_it(one_image)
+            continue
+
         mag_diff = cat_mag - mag_inst
+
+        if (
+            (not (any(good_dat) or any(good_cat)))
+            or all(np.isnan(mag_diff))
+            or all(mag_diff.mask)
+        ):
+            print(f"No good data in {file[0]}")
+            fake_it(one_image)
+            continue
 
         good_data = good_dat & (
             np.abs(mag_diff - np.nanmedian(mag_diff[good_dat & ~mag_diff.mask])) < 1
@@ -630,6 +658,11 @@ def transform_to_catalog(
             pass
 
         good = good_cat & good_data
+
+        if not any(good):
+            print(f"No good data in {file[0]}")
+            fake_it(one_image)
+            continue
 
         # Prep for fitting
         init_guess = (a_cen, 0, 0, 0, zero_point_mid)
