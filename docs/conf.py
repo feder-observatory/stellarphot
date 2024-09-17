@@ -69,7 +69,7 @@ rst_epilog += """
 """
 
 # extensions += ["sphinxcontrib.autodoc_pydantic"]
-
+extensions += ["sphinx_design"]
 # -- Project information ------------------------------------------------------
 
 # This does not *have* to match the package name, but typically does
