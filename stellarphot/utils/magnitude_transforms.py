@@ -11,7 +11,7 @@ from scipy.optimize import curve_fit
 from ..core import apass_dr9
 
 __all__ = [
-    "f",
+    "calibrated_from_instrumental",
     "opts_to_str",
     "calc_residual",
     "filter_transform",
@@ -21,7 +21,7 @@ __all__ = [
 ]
 
 
-def f(X, a, b, c, d, z):
+def calibrated_from_instrumental(X, a, b, c, d, z):
     """
     Calculate the calibrated magnitudes from the instrumental magnitudes and colors.
 
@@ -649,7 +649,12 @@ def transform_to_catalog(
 
         # Do the fit
         popt, pcov = curve_fit(
-            f, X, catm - offset, p0=init_guess, bounds=fit_bounds, sigma=errors
+            calibrated_from_instrumental,
+            X,
+            catm - offset,
+            p0=init_guess,
+            bounds=fit_bounds,
+            sigma=errors,
         )
 
         # Accumulate the parameters
@@ -657,13 +662,13 @@ def transform_to_catalog(
             param.extend([value] * len(one_image))
 
         # Calculate and accumulate residual
-        residual = calc_residual(f(X, *popt) + offset, catm)
+        residual = calc_residual(calibrated_from_instrumental(X, *popt) + offset, catm)
         resids.extend([residual] * len(one_image))
 
         # Calculate calibrated magnitudes and accumulate, settings ones with
         # no catalog match to NaN
         X = (mag_inst, color)
-        cal_mag = f(X, *popt)
+        cal_mag = calibrated_from_instrumental(X, *popt)
         if fit_diff:
             cal_mag = cal_mag + X[0]
         bad_match = d2d.arcsecond > 1
