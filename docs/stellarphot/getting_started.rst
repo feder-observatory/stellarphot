@@ -32,14 +32,15 @@ You can remove stellarphot with::
 Overview
 ========
 
-You will go through this process to do photometry.
+You will go through this process to do photometry:
 
-#. You need to make some settings, like camera properties, observatory information, and passband maps. You may only need
-   to do this step once if you use the same equipment for all of your observations.
+#. You need to make some equipment-related settings, like camera properties, observatory information, and passband maps. You may
+   only need to do this step once if you use the same equipment for all of your observations.
 #. Settings specific to an object need to be made:
 
-   #. night of data, like the photometry aperture radius, need to be made.
-   #. a list of the sources for which you want to perform photometry. These lists can be re-used.
+   #. Some settings, like the photometry aperture size, may need to be changed for each night.
+   #. Others, like a list of the sources for which you want to perform photometry in a particular
+      field, can be reused.
 
 #. Review all of the settings that the photometry routines will use.
 #. Once those settings have been done, you can perform photometry on your images.
@@ -70,7 +71,7 @@ of the photometry that was done.
 Editing a settings file directly
 ================================
 
-The settings file is a JSON file that can be edited in any text editor.
+The settings file is a JSON file that can be edited in any text editor. A sample json file is at
 
 
 Performing photometry from within a Python script
