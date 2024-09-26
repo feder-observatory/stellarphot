@@ -71,8 +71,10 @@ of the photometry that was done.
 Editing a settings file directly
 ================================
 
-The settings file is a JSON file that can be edited in any text editor. A sample json file is at
+The settings file is a JSON file that can be edited in any text editor. A sample setting
+file is below, along with the JSON schema, which is a formal description of the settings file.
 
+.. include:: ../auto_examples/index.rst
 
 Performing photometry from within a Python script
 =================================================

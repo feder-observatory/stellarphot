@@ -1,8 +1,8 @@
 """
-"This" is my example-script
-===========================
+JSON Schema for Photometry Settings
+===================================
 
-This example doesn't do much, it just makes a simple plot
+The JSON schema for photometry settings is here.
 """
 
 import json
