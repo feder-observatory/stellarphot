@@ -219,7 +219,17 @@ class Camera(BaseModelWithTableRep):
     <Quantity 50000. adu>
     """
 
-    model_config = MODEL_DEFAULT_CONFIGURATION
+    # This ensures that just the first line of the docstring is used as the
+    # model description. The json schema is really hard to read if the
+    # description is too long.
+
+    # WHen a subclass has a ConfigDict it is merged with the parent class's
+    # ConfigDict.
+    model_config = ConfigDict(
+        json_schema_extra=dict(
+            description=_extract_short_description(__doc__),
+        )
+    )
 
     name: Annotated[
         NonEmptyStr,
@@ -344,6 +354,18 @@ class PhotometryApertures(BaseModelWithTableRep):
     ...     fwhm=3.0
     ... )
     """
+
+    # This ensures that just the first line of the docstring is used as the
+    # model description. The json schema is really hard to read if the
+    # description is too long.
+
+    # WHen a subclass has a ConfigDict it is merged with the parent class's
+    # ConfigDict.
+    model_config = ConfigDict(
+        json_schema_extra=dict(
+            description=_extract_short_description(__doc__),
+        )
+    )
 
     radius: Annotated[
         PositiveInt,
@@ -483,6 +505,18 @@ class Observatory(BaseModelWithTableRep):
 
     """
 
+    # This ensures that just the first line of the docstring is used as the
+    # model description. The json schema is really hard to read if the
+    # description is too long.
+
+    # WHen a subclass has a ConfigDict it is merged with the parent class's
+    # ConfigDict.
+    model_config = ConfigDict(
+        json_schema_extra=dict(
+            description=_extract_short_description(__doc__),
+        )
+    )
+
     name: Annotated[
         NonEmptyStr,
         Field(description="Name of the observatory", examples=["My Observatory"]),
@@ -580,6 +614,18 @@ class SourceLocationSettings(BaseModelWithTableRep):
     shift_tolerance=5.0)
     """
 
+    # This ensures that just the first line of the docstring is used as the
+    # model description. The json schema is really hard to read if the
+    # description is too long.
+
+    # WHen a subclass has a ConfigDict it is merged with the parent class's
+    # ConfigDict.
+    model_config = ConfigDict(
+        json_schema_extra=dict(
+            description=_extract_short_description(__doc__),
+        )
+    )
+
     source_list_file: Annotated[
         str,
         Field(
@@ -668,6 +714,18 @@ class PhotometryOptionalSettings(BaseModelWithTableRep):
     False
     """
 
+    # This ensures that just the first line of the docstring is used as the
+    # model description. The json schema is really hard to read if the
+    # description is too long.
+
+    # WHen a subclass has a ConfigDict it is merged with the parent class's
+    # ConfigDict.
+    model_config = ConfigDict(
+        json_schema_extra=dict(
+            description=_extract_short_description(__doc__),
+        )
+    )
+
     include_dig_noise: Annotated[
         bool,
         Field(
@@ -731,6 +789,15 @@ class PassbandMapEntry(BaseModel):
 
     """
 
+    # This ensures that just the first line of the docstring is used as the
+    # model description. The json schema is really hard to read if the
+    # description is too long.
+    model_config = ConfigDict(
+        json_schema_extra=dict(
+            description=_extract_short_description(__doc__),
+        )
+    )
+
     your_filter_name: Annotated[
         NonEmptyStr, Field(description="Instrumental Filter Name")
     ]
@@ -787,6 +854,18 @@ class PassbandMap(BaseModelWithTableRep):
     'SR'
 
     """
+
+    # This ensures that just the first line of the docstring is used as the
+    # model description. The json schema is really hard to read if the
+    # description is too long.
+
+    # WHen a subclass has a ConfigDict it is merged with the parent class's
+    # ConfigDict.
+    model_config = ConfigDict(
+        json_schema_extra=dict(
+            description=_extract_short_description(__doc__),
+        )
+    )
 
     name: Annotated[
         NonEmptyStr,
@@ -867,6 +946,18 @@ class LoggingSettings(BaseModelWithTableRep):
     LoggingSettings(logfile=None, console_log=True)
     """
 
+    # This ensures that just the first line of the docstring is used as the
+    # model description. The json schema is really hard to read if the
+    # description is too long.
+
+    # WHen a subclass has a ConfigDict it is merged with the parent class's
+    # ConfigDict.
+    model_config = ConfigDict(
+        json_schema_extra=dict(
+            description=_extract_short_description(__doc__),
+        )
+    )
+
     logfile: Annotated[str | None, Field(description="File to save log to")] = None
     console_log: Annotated[bool, Field(description="Show log on console?")] = True
 
@@ -877,9 +968,6 @@ SCHEMA_EXTRAS = dict(show_null=True)
 class PhotometrySettings(BaseModelWithTableRep):
     """
     Settings for performing aperture photometry.
-    """
-
-    """
 
     Parameters
     ----------
@@ -914,9 +1002,18 @@ class PhotometrySettings(BaseModelWithTableRep):
 
     """
 
-    # Title must be set below for now to ensure the UI looks good. May be able to be
-    # removed once this bug is fixed:
-    # https://github.com/maxfordham/ipyautoui/issues/290
+    # This ensures that just the first line of the docstring is used as the
+    # model description. The json schema is really hard to read if the
+    # description is too long.
+
+    # WHen a subclass has a ConfigDict it is merged with the parent class's
+    # ConfigDict.
+    model_config = ConfigDict(
+        json_schema_extra=dict(
+            description=_extract_short_description(__doc__),
+        )
+    )
+
     camera: Annotated[
         Camera,
         Field(

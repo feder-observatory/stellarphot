@@ -37,6 +37,7 @@ dependencies = [
 docs = [
     "sphinx",
     "sphinx-astropy[confv2]",
+    "sphinx-design",
     "graphviz",
 ]
 exo_fitting = [

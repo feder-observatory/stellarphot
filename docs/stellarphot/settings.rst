@@ -1,5 +1,5 @@
-Settings
-========
+Photometry Settings
+===================
 
 Overview
 --------

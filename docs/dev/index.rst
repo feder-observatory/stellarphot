@@ -1,5 +1,5 @@
-Contributing to ``stellarphot``
--------------------------------
+Contributing
+------------
 
 Installation for one-time testing
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -109,3 +109,8 @@ Some specific examples
 
     settings
     moving_code
+
+.. toctree::
+    :hidden:
+
+    testing_installation

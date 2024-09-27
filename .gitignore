@@ -25,6 +25,8 @@ pip-wheel-metadata
 # Sphinx
 docs/api
 docs/_build
+docs/auto_examples
+docs/sg_execution_times.rst
 
 # Eclipse editor project files
 .project
