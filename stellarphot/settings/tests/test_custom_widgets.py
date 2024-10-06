@@ -4,9 +4,9 @@ from pathlib import Path
 import ipywidgets as ipw
 import pytest
 from astropy.units import Quantity
-from camel_converter import to_snake
 from ipyautoui.custom.iterable import ItemBox, ItemControl
 from pydantic import ValidationError
+from pydantic.alias_generators import to_snake
 
 from stellarphot.settings import (
     Camera,
