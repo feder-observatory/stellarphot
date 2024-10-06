@@ -23,7 +23,7 @@ dependencies = [
     "ipyautoui >=0.7.19",
     "ipyfilechooser",
     "ipywidgets",
-    "jupyter-app-launcher",
+    "jupyter-app-launcher >=0.3.0",
     "matplotlib",
     "papermill",
     "pandas",
