@@ -613,6 +613,10 @@ class CatalogData(BaseEnhancedTable):
         the documentation for `stellarphot.settings.PassbandMap` for more
         information. The object behaves like a dictionary when accessing it.
 
+    no_catalog_error: bool, optional (Default: False)
+        If True, the catalog data does not contain error information, so a
+        column of NaNs will be added for the error values.
+
     Attributes
     ----------
     catalog_name: str
@@ -643,8 +647,13 @@ class CatalogData(BaseEnhancedTable):
     ra                    u.deg
     dec                   u.deg
     mag                   None
+    mag_error             None   (see note below)
     passband              None
     =================     =======
+
+    If the catalog data does not contain error information, then set the option
+    ``no_catalog_error=True`` when creating the object.  This will add a column
+    of NaNs for the error values.
     """
 
     # Define columns that must be in table and provide information about their type, and
@@ -654,6 +663,7 @@ class CatalogData(BaseEnhancedTable):
         "ra": u.deg,
         "dec": u.deg,
         "mag": None,
+        "mag_error": None,
         "passband": None,
     }
 
@@ -665,6 +675,7 @@ class CatalogData(BaseEnhancedTable):
         catalog_source=None,
         colname_map=None,
         passband_map=None,
+        no_catalog_error=False,
         **kwargs,
     ):
         if (input_data is None) and (catalog_name is None) and (catalog_source is None):
@@ -673,11 +684,35 @@ class CatalogData(BaseEnhancedTable):
             self._passband_map = passband_map
 
             if input_data is not None:
+                # Check whether the colname_map has an entry for mag_error
+                # that is None. If it does, and there is no mag_error column
+                # in the input data, then add a column on NaNs to the input
+                # data for mag_error.
+
+                if (
+                    # colname_map must be provided
+                    colname_map is not None
+                    and
+                    # mag_error must not be in the colname map as a value
+                    "mag_error" not in colname_map.values()
+                    and
+                    # mag_error must not be in the input data
+                    "mag_error" not in input_data.colnames
+                    and
+                    # user has opted in to making a column of NaNs
+                    no_catalog_error
+                ):
+                    input_data_copy = input_data.copy()
+                    # Make the error column of NaNs
+                    input_data_copy["mag_error"] = np.full(len(input_data), np.nan)
+                else:
+                    input_data_copy = input_data
+
                 # Convert input data to QTable (while also checking for required
                 # columns)
                 super().__init__(
                     table_description=self.catalog_descript,
-                    input_data=input_data,
+                    input_data=input_data_copy,
                     colname_map=colname_map,
                     **kwargs,
                 )
@@ -828,6 +863,7 @@ class CatalogData(BaseEnhancedTable):
         mag_column_regex=r"^([a-zA-Z]+|[a-zA-Z]+-[a-zA-Z]+)_?mag$",
         color_column_regex=r"^([a-zA-Z]+-[a-zA-Z]+)$",
         prepare_catalog=None,
+        no_catalog_error=False,
     ):
         """
         Return the items from catalog that are within the search radius and
@@ -871,6 +907,11 @@ class CatalogData(BaseEnhancedTable):
 
         prepare_catalog : callable, optional
             Function to call on the catalog after it is retrieved from Vizier.
+
+
+        no_catalog_error: bool, optional (Default: False)
+            If True, the catalog data does not contain error information, so a
+            column of NaNs will be added for the error values.
 
         Returns
         -------
@@ -948,6 +989,7 @@ class CatalogData(BaseEnhancedTable):
             colname_map=colname_map,
             catalog_name=desired_catalog,
             catalog_source="Vizier",
+            no_catalog_error=no_catalog_error,
         )
 
         # ...and now that the column names are standardized, clip by frame if
@@ -1160,6 +1202,7 @@ def vsx_vizier(field_center, radius=1 * u.degree, clip_by_frame=False, padding=1
         padding=padding,
         colname_map=vsx_map,
         prepare_catalog=prepare_cat,
+        no_catalog_error=True,
     )
 
 
