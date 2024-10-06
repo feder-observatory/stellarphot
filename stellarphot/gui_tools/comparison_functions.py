@@ -216,6 +216,9 @@ class ComparisonViewer:
     observatory : `stellarphot.settings.Observatory`, optional
         Observatory information.
 
+    passband_map : `stellarphot.settings.PassbandMap`, optional
+        Passband information.
+
     Attributes
     ----------
 
@@ -261,6 +264,7 @@ class ComparisonViewer:
         photom_apertures_file=None,
         overwrite_outputs=True,
         observatory=None,
+        passband_map=None,
     ):
         self._label_name = "labels"
         self._circle_name = "target circle"
@@ -273,6 +277,7 @@ class ComparisonViewer:
         self.targets_from_file = targets_from_file
         self.target_coord = object_coordinate
         self.observatory = observatory
+        self.passband_map = passband_map
 
         # This function defines several attributes in addition to returning the box and
         # image viewer. You should take a look at it to see what it does.
@@ -320,6 +325,19 @@ class ComparisonViewer:
 
         self._legend_spinner_box.children = [legend]
 
+        # This was the default for historical reasons, but...
+        passband = "SR"
+
+        # ...if the image has a filter, use that instead
+        if "filter" in self.fits_file.header:
+            image_passband = self.fits_file.header["FILTER"]
+            if self.passband_map and image_passband in self.passband_map:
+                passband = self.passband_map[image_passband]
+            else:
+                passband = image_passband
+
+        print(passband)
+
         apass_good_coord, good_stars = mag_scale(
             self.target_mag,
             apass,
@@ -327,6 +345,7 @@ class ComparisonViewer:
             targets_apass_angle,
             brighter_dmag=self.target_mag - self.bright_mag_limit,
             dimmer_dmag=self.dim_mag_limit - self.target_mag,
+            passband=passband,
         )
 
         apass_comps = in_field(apass_good_coord, self.ccd, apass, good_stars)
