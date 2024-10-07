@@ -743,6 +743,7 @@ def test_catalog_colname_map():
         catalog_name="VSX",
         catalog_source="Vizier",
         colname_map=vsx_colname_map,
+        no_catalog_error=True,
     )
 
     assert catalog_dat["id"][0] == "ASASSN-V J000052.03+002216.6"
@@ -774,6 +775,7 @@ def test_catalog_bandpassmap():
         catalog_source="Vizier",
         colname_map=vsx_colname_map,
         passband_map=passband_map,
+        no_catalog_error=True,
     )
 
     assert catalog_dat["passband"][0] == "SG"
@@ -798,6 +800,7 @@ def test_catalog_recursive():
         catalog_name="VSX",
         catalog_source="Vizier",
         colname_map=vsx_colname_map,
+        no_catalog_error=True,
     )
 
     # Attempt recursive call
@@ -978,11 +981,15 @@ def test_catalog_from_vizier_search_vsx(location_method):
         clip_by_frame=False,
         colname_map=vsx_map,
         prepare_catalog=prepare_cat,
+        no_catalog_error=True,
     )
 
     assert my_cat["id"][0] == "DQ Psc"
     assert my_cat["passband"][0] == "Hp"
     assert my_cat["Type"][0] == "SRB"
+
+    # Make sure has been set to NaN
+    assert np.isnan(my_cat["mag_error"][0])
 
 
 def test_from_vizier_with_coord_and_frame_clip_fails():
@@ -1045,7 +1052,11 @@ def test_vsx_results(clip, data_file):
     # Turn this into an HDU to get the standard FITS image keywords
     ccd_im = ccd.to_hdu()
 
-    actual = vsx_vizier(ccd_im[0].header, radius=0.5 * u.degree, clip_by_frame=clip)
+    actual = vsx_vizier(
+        ccd_im[0].header,
+        radius=0.5 * u.degree,
+        clip_by_frame=clip,
+    )
     assert set(actual["OID"]) == set(expected["OID"])
 
 
