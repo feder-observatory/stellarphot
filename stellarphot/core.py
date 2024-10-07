@@ -353,11 +353,10 @@ class PhotometryData(BaseEnhancedTable):
     In addition to these required columns, the following columns are created based
     on the input data during creation.
 
-    bjd    (only if ra and dec are all real numbers, otherwise set to np.nan)
     night
 
     If these computed columns already exist in `data` class the class
-    will throw an error a ValueError UNLESS`ignore_computed=True`
+    will throw an error a `ValueError` UNLESS ``ignore_computed=True``
     is passed to the initializer, in which case the columns will be
     retained and not replaced with the computed values.
     """
@@ -485,8 +484,8 @@ class PhotometryData(BaseEnhancedTable):
                         f"{input_data[this_col].unit})."
                     )
 
-            # Compute additional columns (not done yet)
-            computed_columns = ["bjd", "night"]
+            # Compute additional columns
+            computed_columns = ["night"]
 
             # Check if columns exist already, if they do and retain_user_computed is
             # False,  throw an error.
@@ -502,8 +501,6 @@ class PhotometryData(BaseEnhancedTable):
                     # Compute the columns that need to be computed (match requires
                     # python>=3.10)
                     match this_col:
-                        case "bjd":
-                            self["bjd"] = self.add_bjd_col(self.observatory)
 
                         case "night":
                             # Generate integer counter for nights. This should be
@@ -536,7 +533,7 @@ class PhotometryData(BaseEnhancedTable):
                                 name="night",
                             )
 
-                        case _:
+                        case _:  # pragma: no cover
                             raise ValueError(
                                 f"Trying to compute column ({this_col}). "
                                 "This should never happen."
@@ -547,18 +544,36 @@ class PhotometryData(BaseEnhancedTable):
                 self._passband_map = passband_map.model_copy()
                 self._update_passbands()
 
-    def add_bjd_col(self, observatory):
+    def add_bjd_col(self, observatory=None, bjd_coordinates=None):
         """
         Returns a astropy column of barycentric Julian date times corresponding to
         the input observations.  It modifies that table in place.
-        """
 
-        if np.isnan(self["ra"]).any() or np.isnan(self["dec"]).any():
+        Parameters
+        ----------
+        observatory: `stellarphot.settings.Observatory`
+            Information about the observatory. Defaults to the observatory in
+            the table metadata.
+
+        bjd_coordinates: `astropy.coordinates.SkyCoord`, optional (Default: None)
+            The coordinates to use for computing the BJD. If None, the RA and Dec
+            columns in the table will be used.
+        """
+        if observatory is None:
+            if self.observatory is None:
+                raise ValueError(
+                    "You must provide an observatory object to compute BJD."
+                )
+            observatory = self.observatory
+
+        if bjd_coordinates is None and (
+            np.isnan(self["ra"]).any() or np.isnan(self["dec"]).any()
+        ):
             print(
-                "WARNING: BJD could not be computed in output PhotometryData object "
+                "WARNING: BJD could not be computed "
                 "because some RA or Dec values are missing."
             )
-            return np.full(len(self), np.nan)
+            self["bjd"] = np.full(len(self), np.nan)
         else:
             # Convert times at start of each observation to TDB (Barycentric Dynamical
             # Time)
@@ -567,14 +582,18 @@ class PhotometryData(BaseEnhancedTable):
             times_tdb.format = "jd"  # Switch to JD format
 
             # Compute light travel time corrections
-            ip_peg = SkyCoord(ra=self["ra"], dec=self["dec"], unit="degree")
+            if bjd_coordinates is None:
+                sky_coords = SkyCoord(ra=self["ra"], dec=self["dec"], unit="degree")
+            else:
+                sky_coords = bjd_coordinates
+
             ltt_bary = times.light_travel_time(
-                ip_peg, location=observatory.earth_location
+                sky_coords, location=observatory.earth_location
             )
             time_barycenter = times_tdb + ltt_bary
 
             # Return BJD at midpoint of exposure at each location
-            return Time(time_barycenter + self["exposure"] / 2, scale="tdb")
+            self["bjd"] = Time(time_barycenter + self["exposure"] / 2, scale="tdb")
 
 
 class CatalogData(BaseEnhancedTable):

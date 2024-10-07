@@ -491,8 +491,11 @@ def test_photometry_blank():
     assert test_base.observatory is None
 
 
-def test_photometry_data(feder_cg_16m, feder_passbands, feder_obs):
+@pytest.mark.parametrize("bjd_coordinates", [None, "custom"])
+def test_photometry_data(feder_cg_16m, feder_passbands, feder_obs, bjd_coordinates):
     # Create photometry data instance
+    custom_coord = SkyCoord(30.0, "22:30:20.77733059", unit="degree")
+
     phot_data = PhotometryData(
         observatory=feder_obs,
         camera=feder_cg_16m,
@@ -517,16 +520,33 @@ def test_photometry_data(feder_cg_16m, feder_passbands, feder_obs):
     assert phot_data.observatory.earth_location.height.unit == u.m
     assert phot_data["night"][0] == 59909
 
-    # Checking the BJD computation against Ohio State online calculator for
-    # UTC 2022 11 27 06 27 29.620
-    # Latitude 46.86678
-    # Longitude -96.45328
-    # Elevation 311
-    # RA 78.17278712191924
-    # Dec 22 30 20.77733059
-    # which returned 2459910.775405664 (Uses custom IDL, astropy is SOFA checked).
-    # Demand a difference of less than 1/20 of a second.
-    assert (phot_data["bjd"][0].value - 2459910.775405664) * 86400 < 0.05
+    if bjd_coordinates is None:
+        # BJD calculation is done based on the locations of individual stars
+        phot_data.add_bjd_col()
+        # Checking the BJD computation against Ohio State online calculator for
+        # UTC 2022 11 27 06 27 29.620
+        # Latitude 46.86678
+        # Longitude -96.45328
+        # Elevation 311
+        # RA 78.17278712191924
+        # Dec 22 30 20.77733059
+        # which returned 2459910.775405664 (Uses custom IDL, astropy is SOFA checked).
+        # Demand a difference of less than 1/20 of a second.
+        assert (phot_data["bjd"][0].value - 2459910.775405664) * 86400 < 0.05
+    else:
+        # Do the BJD calculation based on the provided coordinates, same for
+        # all strs in the image.
+        phot_data.add_bjd_col(bjd_coordinates=custom_coord)
+        # Checking the BJD computation against Ohio State online calculator for
+        # UTC 2022 11 27 06 27 29.620
+        # Latitude 46.86678
+        # Longitude -96.45328
+        # Elevation 311
+        # RA 30
+        # Dec 22 30 20.77733059
+        # which returned 2459910.774772048 (Uses custom IDL, astropy is SOFA checked).
+        # Demand a difference of less than 1/20 of a second.
+        assert (phot_data["bjd"][0].value - 2459910.774772048) * 86400 < 0.05
 
 
 def test_photometry_data_short_filter_name(feder_cg_16m, feder_obs):
