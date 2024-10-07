@@ -1203,6 +1203,7 @@ def test_to_lightcurve(simple_photometry_data, target_by, target_star_id):
     assert (lc["star_id"] == target_star_id).all()
 
 
+@pytest.mark.remote_data
 def test_to_lightcurve_from_name(simple_photometry_data):
     # Make a few more rows of data, changing only date_obs, then update the BJD
     delta_t = 3 * u.minute
