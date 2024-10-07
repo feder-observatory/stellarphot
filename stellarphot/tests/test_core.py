@@ -6,7 +6,7 @@ from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astropy.io import ascii, fits
 from astropy.nddata import CCDData
-from astropy.table import Table
+from astropy.table import Table, vstack
 from astropy.time import Time
 from astropy.utils.data import get_pkg_data_filename
 from astropy.wcs import WCS
@@ -1163,3 +1163,81 @@ def test_sourcelist_slicing():
     # Checking attributes survive slicing
     assert slicing_test.has_ra_dec
     assert slicing_test.has_x_y
+
+
+@pytest.mark.parametrize("target_by", ["star_id", "coordinates"])
+@pytest.mark.parametrize("target_star_id", [1, 6])
+def test_to_lightcurve(simple_photometry_data, target_by, target_star_id):
+    # Make a few more rows of data, changing only date_obs, then update the BJD
+    delta_t = 3 * u.minute
+    new_data = [simple_photometry_data.copy()]
+    t_init = simple_photometry_data["date-obs"][0]
+
+    for i in range(1, 5):
+        data = simple_photometry_data.copy()
+        data["date-obs"] = t_init + i * delta_t
+        new_data.append(data)
+
+    # Make a new table with the new data
+    new_table = vstack(new_data)
+
+    select_star_id = simple_photometry_data["star_id"] == target_star_id
+    star_id_coords = SkyCoord(
+        simple_photometry_data["ra"][select_star_id],
+        simple_photometry_data["dec"][select_star_id],
+    )
+
+    selectors = dict(
+        star_id=target_star_id,
+        coordinates=star_id_coords,
+    )
+
+    assert isinstance(new_table, PhotometryData)
+
+    # Grab just the keywords we need for this test
+    selector = {target_by: selectors[target_by]}
+    lc = new_table.lightcurve_for(**selector)
+
+    # We made 5 times, so there should be 5 rows in the lightcurve
+    assert len(lc) == 5
+    assert (lc["star_id"] == target_star_id).all()
+
+
+def test_to_lightcurve_from_name(simple_photometry_data):
+    # Make a few more rows of data, changing only date_obs, then update the BJD
+    delta_t = 3 * u.minute
+    new_data = [simple_photometry_data.copy()]
+    t_init = simple_photometry_data["date-obs"][0]
+
+    for i in range(1, 5):
+        data = simple_photometry_data.copy()
+        data["date-obs"] = t_init + i * delta_t
+        new_data.append(data)
+
+    # Make a new table with the new data
+    new_table = vstack(new_data)
+
+    assert isinstance(new_table, PhotometryData)
+
+    lc = new_table.lightcurve_for(name="wasp 10")
+
+    # We made 5 times, so there should be 5 rows in the lightcurve
+    assert len(lc) == 5
+    # wasp 10 is star_id 1
+    assert (lc["star_id"] == 1).all()
+
+
+def test_to_lightcurve_argument_logic(simple_photometry_data):
+    # providing no argument should raise an error
+    with pytest.raises(
+        ValueError, match="Either star_id, coordinates or name must be provided"
+    ):
+        simple_photometry_data.lightcurve_for()
+
+    # providing two arguments should raise an error
+    with pytest.raises(
+        ValueError, match="Only one of star_id, coordinates, or name can be provided"
+    ):
+        simple_photometry_data.lightcurve_for(
+            star_id=1, coordinates=SkyCoord(0, 0, unit="deg")
+        )

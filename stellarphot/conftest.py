@@ -5,7 +5,10 @@ import os
 import pytest
 from astropy.coordinates import SkyCoord
 from astropy.table import Table
+from astropy.utils.data import get_pkg_data_filename
 from pytest_astropy_header.display import PYTEST_HEADER_MODULES, TESTED_VERSIONS
+
+from stellarphot import PhotometryData
 
 # astropy-specific-stuff
 
@@ -57,3 +60,22 @@ def tess_tic_expected_values():
         tic_id=236158940,
         expected_coords=SkyCoord(ra=313.41953739, dec=34.35164717, unit="degree"),
     )
+
+
+@pytest.fixture
+def simple_photometry_data():
+    # Grab the test photometry file and simplify it a bit.
+    data_file = get_pkg_data_filename("tests/data/test_photometry_data.ecsv")
+    pd_input = PhotometryData.read(data_file)
+
+    # Keep stars 1, 6, 9, 12, first time slice only
+    # These stars have no NaNs in them and we only need one image to generate
+    # more test data from that.
+    first_slice = pd_input["file"] == "wasp-10-b-S001-R001-C099-r.fit"
+    ids = [1, 6, 9, 12]
+    good_star = pd_input["star_id"] == ids[0]
+
+    for an_id in ids[1:]:
+        good_star = good_star | (pd_input["star_id"] == an_id)
+
+    return pd_input[good_star & first_slice]
