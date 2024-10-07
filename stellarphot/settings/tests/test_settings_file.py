@@ -15,7 +15,7 @@ from stellarphot.settings import (
     SavedSettings,
     settings_files,  # This import is needed for mocking -- see TestSavedSettings
 )
-from stellarphot.settings.tests.test_models import TEST_PHOTOMETRY_SETTINGS
+from stellarphot.settings.constants import TEST_PHOTOMETRY_SETTINGS
 
 CAMERA = """
 {
