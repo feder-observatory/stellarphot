@@ -686,7 +686,7 @@ class CatalogData(BaseEnhancedTable):
             if input_data is not None:
                 # Check whether the colname_map has an entry for mag_error
                 # that is None. If it does, and there is no mag_error column
-                # in the input data, then add a column on NaNs to the input
+                # in the input data, then add a column of NaNs to the input
                 # data for mag_error.
 
                 if (
