@@ -22,6 +22,12 @@ from stellarphot.settings import (
     settings_files,
     ui_generator,
 )
+from stellarphot.settings.constants import (
+    TEST_CAMERA_VALUES,
+    TEST_OBSERVATORY_SETTINGS,
+    TEST_PASSBAND_MAP,
+    TEST_PHOTOMETRY_SETTINGS,
+)
 from stellarphot.settings.custom_widgets import (
     ChooseOrMakeNew,
     Confirm,
@@ -30,12 +36,6 @@ from stellarphot.settings.custom_widgets import (
     SettingWithTitle,
     Spinner,
     _add_saving_to_widget,
-)
-from stellarphot.settings.tests.test_models import (
-    TEST_CAMERA_VALUES,
-    TEST_OBSERVATORY_SETTINGS,
-    TEST_PASSBAND_MAP,
-    TEST_PHOTOMETRY_SETTINGS,
 )
 
 

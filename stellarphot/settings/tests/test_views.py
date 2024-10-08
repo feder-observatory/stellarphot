@@ -1,5 +1,5 @@
 from stellarphot.settings import Camera, SourceLocationSettings, ui_generator
-from stellarphot.settings.tests.test_models import TEST_CAMERA_VALUES
+from stellarphot.settings.constants import TEST_CAMERA_VALUES
 
 
 class TestUiGenerator:

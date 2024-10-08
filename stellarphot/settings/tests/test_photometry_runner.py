@@ -10,8 +10,8 @@ from stellarphot.settings import (
     PhotometryWorkingDirSettings,
     settings_files,
 )
+from stellarphot.settings.constants import TEST_PHOTOMETRY_SETTINGS
 from stellarphot.settings.custom_widgets import PhotometryRunner
-from stellarphot.settings.tests.test_models import TEST_PHOTOMETRY_SETTINGS
 
 
 # See test_settings_file.TestSavedSettings for a detailed description of what the

@@ -25,7 +25,7 @@ from stellarphot.settings import (
     PhotometryWorkingDirSettings,
     settings_files,  # This import is needed for mocking
 )
-from stellarphot.settings.tests.test_models import (
+from stellarphot.settings.constants import (
     TEST_CAMERA_VALUES,
 )
 

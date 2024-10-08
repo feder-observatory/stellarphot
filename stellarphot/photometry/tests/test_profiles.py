@@ -10,7 +10,7 @@ from photutils.datasets import make_noise_image
 from stellarphot.photometry import CenterAndProfile, find_center
 from stellarphot.photometry.tests.fake_image import make_gaussian_sources_image
 from stellarphot.settings import Camera
-from stellarphot.settings.tests.test_models import TEST_CAMERA_VALUES
+from stellarphot.settings.constants import TEST_CAMERA_VALUES
 
 SHAPE = (300, 300)
 RANDOM_SEED = 1230971
