@@ -1,5 +1,6 @@
 import re
 
+import lightkurve as lk
 import numpy as np
 import pandas as pd
 from astropy import units as u
@@ -594,6 +595,79 @@ class PhotometryData(BaseEnhancedTable):
 
             # Return BJD at midpoint of exposure at each location
             self["bjd"] = Time(time_barycenter + self["exposure"] / 2, scale="tdb")
+
+    def lightcurve_for(self, target, flux_column="mag_inst"):
+        """
+        Return the light curve for a single star as a `lightkurve.LightCurve` object.
+        One of the parameters `star_id`, `coordinates` or `name` must be specified.
+
+        Parameters
+        ----------
+        target : str, int, or `astropy.coordinates.SkyCoord`
+            The target star. This can be a star_id, a SkyCoord object, or a name that
+            can be resolved by `astropy.coordinates.SkyCoord.from_name`.
+
+        flux_column : str, optional
+            The name of the column to use as the flux. Default is 'mag_inst'. This need
+            not actually be a flux.
+
+        Returns
+        -------
+        `lightkurve.LightCurve`
+            The light curve for the star. This includes all of the columns in the
+            `stellarphot.`PhotometryData` object and columns ``time``, ``flux``, and
+            ``flux_err``.
+        """
+
+        # This will get set if we need to find the star_id from the coordinates
+        coordinates = None
+
+        if isinstance(target, str):
+            # If the target is a string, it could be a star_id or a name that can be
+            # resolved to coordinates.
+
+            # Try star_id first, since that doesn't require a network call
+            if target in self["star_id"]:
+                star_id = target
+            else:
+                coordinates = SkyCoord.from_name(target)
+        elif isinstance(target, SkyCoord):
+            coordinates = target
+        else:
+            star_id = target
+
+        if coordinates is not None:
+            # Find the star_id for the closest coordinate match
+            my_coordinates = SkyCoord(self["ra"], self["dec"])
+            idx, d2d, _ = coordinates.match_to_catalog_sky(my_coordinates)
+            star_id = self["star_id"][idx]
+            if d2d > 1 * u.arcsec:
+                raise ValueError(
+                    f"No matching star in the photometry data found at {coordinates}."
+                )
+
+        star_data = self[self["star_id"] == star_id]
+
+        if len(star_data) == 0:
+            raise ValueError(f"No star found that matched {target}.")
+
+        # Create the columns that light curve needs, adding metadata about where each
+        # column came from.
+        star_data["time"] = star_data["bjd"]
+        star_data.meta["time"] = "BJD at midpoint of exposure, column bjd"
+
+        star_data["flux"] = star_data[flux_column]
+        star_data.meta["flux"] = "Instrumental magnitude, column mag_inst"
+
+        # Why value? Because the instrumental magnitude error is fubar,
+        # see #463
+        flux_error_col = (
+            "mag_error" if flux_column == "mag_inst" else flux_column + "_error"
+        )
+        star_data["flux_err"] = star_data[flux_error_col].value
+        star_data.meta["flux_err"] = "Error in instrumental magnitude, column mag_error"
+
+        return lk.LightCurve(star_data)
 
 
 class CatalogData(BaseEnhancedTable):
