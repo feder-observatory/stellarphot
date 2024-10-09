@@ -613,9 +613,24 @@ def transform_to_catalog(
             cat = apass_dr9(
                 our_coords[0], radius=1 * u.degree, clip_by_frame=False, padding=0
             )
-            cat = cat.passband_columns(
-                passbands=[cat_filter, cat_color[0], cat_color[1]]
+            cat = cat.passband_columns(passbands=["B", "V", "SR", "SG", "SI"])
+            cat["mag_RC"] = filter_transform(
+                cat,
+                output_filter="R",
+                g="mag_SG",
+                r="mag_SR",
+                i="mag_SI",
+                transform="jester",
             )
+            cat["mag_IC"] = filter_transform(
+                cat,
+                output_filter="I",
+                g="mag_SG",
+                r="mag_SR",
+                i="mag_SI",
+                transform="jester",
+            )
+
             cat_coords = SkyCoord(cat["ra"], cat["dec"], unit="degree")
             cat["color"] = cat[f"mag_{cat_color[0]}"] - cat[f"mag_{cat_color[1]}"]
 
