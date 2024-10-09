@@ -1165,6 +1165,7 @@ def test_sourcelist_slicing():
     assert slicing_test.has_x_y
 
 
+# Keep the name option separate because it requires remote data access
 @pytest.mark.parametrize("target_by", ["star_id", "coordinates"])
 @pytest.mark.parametrize("target_star_id", [1, 6])
 def test_to_lightcurve(simple_photometry_data, target_by, target_star_id):
@@ -1181,26 +1182,32 @@ def test_to_lightcurve(simple_photometry_data, target_by, target_star_id):
     # Make a new table with the new data
     new_table = vstack(new_data)
 
+    # make absolutely sure we have a PhotometryData object
+    assert isinstance(new_table, PhotometryData)
+
+    # Get the coordinates of the target star
     select_star_id = simple_photometry_data["star_id"] == target_star_id
     star_id_coords = SkyCoord(
         simple_photometry_data["ra"][select_star_id],
         simple_photometry_data["dec"][select_star_id],
     )
 
-    selectors = dict(
-        star_id=target_star_id,
-        coordinates=star_id_coords,
-    )
-
-    assert isinstance(new_table, PhotometryData)
+    if target_by == "coordinates":
+        target = star_id_coords
+    else:
+        target = target_star_id
 
     # Grab just the keywords we need for this test
-    selector = {target_by: selectors[target_by]}
-    lc = new_table.lightcurve_for(**selector)
+    lc = new_table.lightcurve_for(target)
 
     # We made 5 times, so there should be 5 rows in the lightcurve
     assert len(lc) == 5
+
+    # We should only have the star_id we wanted
     assert (lc["star_id"] == target_star_id).all()
+
+    # The default flux should be the mag_inst column for the target, so check that
+    assert (lc["flux"] == simple_photometry_data["mag_inst"][select_star_id]).all()
 
 
 @pytest.mark.remote_data
@@ -1220,7 +1227,7 @@ def test_to_lightcurve_from_name(simple_photometry_data):
 
     assert isinstance(new_table, PhotometryData)
 
-    lc = new_table.lightcurve_for(name="wasp 10")
+    lc = new_table.lightcurve_for("wasp 10")
 
     # We made 5 times, so there should be 5 rows in the lightcurve
     assert len(lc) == 5
@@ -1228,17 +1235,23 @@ def test_to_lightcurve_from_name(simple_photometry_data):
     assert (lc["star_id"] == 1).all()
 
 
-def test_to_lightcurve_argument_logic(simple_photometry_data):
+def test_to_lightcurve_argument_errors(simple_photometry_data):
     # providing no argument should raise an error
-    with pytest.raises(
-        ValueError, match="Either star_id, coordinates or name must be provided"
-    ):
+    with pytest.raises(TypeError, match="missing 1 required positional argument"):
         simple_photometry_data.lightcurve_for()
 
-    # providing two arguments should raise an error
+    # Providing a coordinate that does not match anything should raise an error
     with pytest.raises(
-        ValueError, match="Only one of star_id, coordinates, or name can be provided"
+        ValueError, match="No matching star in the photometry data found"
     ):
-        simple_photometry_data.lightcurve_for(
-            star_id=1, coordinates=SkyCoord(0, 0, unit="deg")
-        )
+        simple_photometry_data.lightcurve_for(SkyCoord(0, 0, unit="deg"))
+
+    # Providing a star_id that does not match anything should raise an error
+    with pytest.raises(ValueError, match="No star found that matched"):
+        simple_photometry_data.lightcurve_for(999)
+
+    # Turn star_id into a string and check that we can match star_id in that case
+    simple_photometry_data["star_id"] = simple_photometry_data["star_id"].astype(str)
+
+    lc = simple_photometry_data.lightcurve_for("1")
+    assert len(lc) == 1

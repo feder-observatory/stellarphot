@@ -577,26 +577,16 @@ class PhotometryData(BaseEnhancedTable):
             # Return BJD at midpoint of exposure at each location
             return Time(time_barycenter + self["exposure"] / 2, scale="tdb")
 
-    def lightcurve_for(
-        self, star_id=None, coordinates=None, name=None, flux_column="mag_inst"
-    ):
+    def lightcurve_for(self, target, flux_column="mag_inst"):
         """
         Return the light curve for a single star as a `lightkurve.LightCurve` object.
         One of the parameters `star_id`, `coordinates` or `name` must be specified.
 
         Parameters
         ----------
-        star_id : str, optional
-            The star_id of the star in the photometry data. If not provided, coordinates
-            or name must be provided.
-
-        coordinates : `astropy.coordinates.SkyCoord`, optional
-            The coordinates of the star in the photometry data. If not provided, star_id
-            or name must be provided.
-
-        name : str, optional
-            The name of the star in Simbad. If not provided, star_id or coordinates must
-            be provided.
+        target : str, int, or `astropy.coordinates.SkyCoord`
+            The target star. This can be a star_id, a SkyCoord object, or a name that
+            can be resolved by `astropy.coordinates.SkyCoord.from_name`.
 
         flux_column : str, optional
             The name of the column to use as the flux. Default is 'mag_inst'. This need
@@ -609,18 +599,23 @@ class PhotometryData(BaseEnhancedTable):
             `stellarphot.`PhotometryData` object and columns ``time``, ``flux``, and
             ``flux_err``.
         """
-        num_args = sum([star_id is not None, coordinates is not None, name is not None])
 
-        if num_args == 0:
-            raise ValueError("Either star_id, coordinates or name must be provided.")
+        # This will get set if we need to find the star_id from the coordinates
+        coordinates = None
 
-        if num_args > 1:
-            raise ValueError(
-                "Only one of star_id, coordinates, or name can be provided."
-            )
+        if isinstance(target, str):
+            # If the target is a string, it could be a star_id or a name that can be
+            # resolved to coordinates.
 
-        if name is not None:
-            coordinates = SkyCoord.from_name(name)
+            # Try star_id first, since that doesn't require a network call
+            if target in self["star_id"]:
+                star_id = target
+            else:
+                coordinates = SkyCoord.from_name(target)
+        elif isinstance(target, SkyCoord):
+            coordinates = target
+        else:
+            star_id = target
 
         if coordinates is not None:
             # Find the star_id for the closest coordinate match
@@ -629,11 +624,13 @@ class PhotometryData(BaseEnhancedTable):
             star_id = self["star_id"][idx]
             if d2d > 1 * u.arcsec:
                 raise ValueError(
-                    "No star in the photometry data is close enough to the "
-                    "provided coordinates."
+                    f"No matching star in the photometry data found at {coordinates}."
                 )
 
         star_data = self[self["star_id"] == star_id]
+
+        if len(star_data) == 0:
+            raise ValueError(f"No star found that matched {target}.")
 
         # Create the columns that light curve needs, adding metadata about where each
         # column came from.
