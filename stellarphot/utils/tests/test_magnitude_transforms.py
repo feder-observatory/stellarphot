@@ -73,8 +73,8 @@ def generate_tables(n_stars, mag_model):
     ra, dec = generate_star_coordinates(n_stars)
 
     # Instrumental magnitudes
-    ra_col = Column(name="RA", data=ra)
-    dec_col = Column(name="Dec", data=dec)
+    ra_col = Column(name="ra", data=ra)
+    dec_col = Column(name="dec", data=dec)
 
     instrumental = Table([instr_mags, ra_col, dec_col])
 
