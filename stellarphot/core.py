@@ -657,9 +657,10 @@ class PhotometryData(BaseEnhancedTable):
 
         passbands = set(star_data["passband"])
 
+        passband_strings = ", ".join(sorted(passbands))
         if len(passbands) > 1 and passband is None:
             raise ValueError(
-                f"Multiple passbands found for this star: {sorted(passbands)}. "
+                f"Multiple passbands found for this star: {passband_strings}. "
                 f"You must specify a passband."
             )
 
@@ -667,7 +668,7 @@ class PhotometryData(BaseEnhancedTable):
             if passband not in passbands:
                 raise ValueError(
                     f"Passband {passband} not found for this star. "
-                    f"Passbands in the data are {sorted(passbands)}."
+                    f"Passbands in the data are {passband_strings}."
                 )
             star_data = star_data[star_data["passband"] == passband]
 
