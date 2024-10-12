@@ -79,3 +79,26 @@ def simple_photometry_data():
         good_star = good_star | (pd_input["star_id"] == an_id)
 
     return pd_input[good_star & first_slice]
+
+
+@pytest.fixture
+def stellphotv1_photometry_data(two_filters):
+    """
+    Load photometry data form version 1 of stellarphot.
+
+    By default the data has two filters, with the filter name part of the column name,
+    e.g. "mag_inst_B" and "mag_inst_ip".
+
+    Parameters
+    ----------
+    two_filters : bool
+        If True, return data with two filters. If False, return data with only the "B"
+        filter and column name "mag_inst_B".
+    """
+    # Grab the test photometry file and simplify it a bit.
+    data_file = get_pkg_data_filename("utils/tests/data/sp1-data-two-filters.csv")
+    data = Table.read(data_file)
+    if not two_filters:
+        data = data[data["filter"] == "B"]
+        del data["mag_inst_ip"]
+    return data
