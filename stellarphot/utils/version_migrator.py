@@ -87,7 +87,8 @@ class VersionMigrator:
         """
         if self.from_version.major == 1 and self.to_version.major == 2:
             return self._migrate_v1_v2(data)
-        else:
+        else:  # pragma: no cover
+            # do not cover because right now no other version combo possible
             raise ValueError(
                 f"Migration from version {self.from_version} to version "
                 f"{self.to_version} is not supported."
