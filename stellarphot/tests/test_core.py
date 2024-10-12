@@ -1286,3 +1286,25 @@ def test_to_lightcurve_argument_errors(simple_photometry_data):
 
     lc = simple_photometry_data.lightcurve_for("1")
     assert len(lc) == 1
+
+
+def test_to_lightcurve_multiple_passbands(simple_photometry_data):
+    # Check that data with multiple passbands can be converted to a lightcurve
+    second_filter = simple_photometry_data.copy()
+    second_filter["passband"] = "SG"
+    two_filters = vstack([simple_photometry_data, second_filter])
+    lc_sr = two_filters.lightcurve_for(1, passband="SR")
+    assert all(lc_sr["passband"] == "SR")
+
+    # Make sure not specifying a passband in this case fails
+    with pytest.raises(
+        ValueError, match=r"Multiple passbands found for this star: \['SG', 'SR'\]"
+    ):
+        two_filters.lightcurve_for(1)
+
+    # Make sure specifying a passband that doesn't exist fails
+    with pytest.raises(
+        ValueError,
+        match=r"Passband SI not found for this star",
+    ):
+        two_filters.lightcurve_for(1, passband="SI")
