@@ -1298,7 +1298,7 @@ def test_to_lightcurve_multiple_passbands(simple_photometry_data):
 
     # Make sure not specifying a passband in this case fails
     with pytest.raises(
-        ValueError, match=r"Multiple passbands found for this star: \['SG', 'SR'\]"
+        ValueError, match=r"Multiple passbands found for this star: .*'SG', 'SR'.*"
     ):
         two_filters.lightcurve_for(1)
 
