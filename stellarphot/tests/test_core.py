@@ -491,6 +491,23 @@ def test_photometry_blank():
     assert test_base.observatory is None
 
 
+def test_photometry_with_colname_map(feder_cg_16m, feder_passbands, feder_obs):
+    # Rename one of the columns in the test data to something else
+    # and provide a colname_map that should fix it.
+    # Regression test for #469
+    this_phot_data = testphot_clean.copy()
+    this_phot_data.rename_column("aperture_net_cnts", "bad_column")
+    colname_map = {"bad_column": "aperture_net_cnts"}
+    pd = PhotometryData(
+        input_data=this_phot_data,
+        colname_map=colname_map,
+        observatory=feder_obs,
+        camera=feder_cg_16m,
+        passband_map=feder_passbands,
+    )
+    assert "bad_column" not in pd.columns
+
+
 @pytest.mark.parametrize("bjd_coordinates", [None, "custom"])
 def test_photometry_data(feder_cg_16m, feder_passbands, feder_obs, bjd_coordinates):
     # Create photometry data instance
