@@ -18,6 +18,15 @@ class VersionMigrator:
 
     to_version : str
         The version of the data to migrate to.
+
+    camera : Camera
+        The camera settings for the data.
+
+    observatory : Observatory
+        The observatory settings for the data.
+
+    passband_map : PassbandMap
+        The passband map for the data.
     """
 
     known_versions = ("1", "2")
@@ -55,22 +64,43 @@ class VersionMigrator:
 
     @property
     def from_version(self):
+        """
+        The stellarphot major version to migrate from.
+        """
         return self._from_version
 
     @property
     def to_version(self):
+        """
+        The stellarphot major version to migrate to.
+        """
         return self._to_version
 
     def migrate(self, data):
         """
         Migrate data from one version to another.
+
+        Parameters
+        ----------
+        data : `astropy.table.Table` or `stellarphot.PhotometryData`
+            The data to migrate.
         """
         if self.from_version.major == 1 and self.to_version.major == 2:
             return self._migrate_v1_v2(data)
+        else:
+            raise ValueError(
+                f"Migration from version {self.from_version} to version "
+                f"{self.to_version} is not supported."
+            )
 
     def _migrate_v1_v2(self, data):
         """
         Migrate data from version 1 to version 2.
+
+        Parameters
+        ----------
+        data : `astropy.table.Table` or `stellarphot.PhotometryData`
+            The data to migrate.
         """
         new_data = data.copy()
 
