@@ -599,7 +599,7 @@ class PhotometryData(BaseEnhancedTable):
             # Return BJD at midpoint of exposure at each location
             self["bjd"] = Time(time_barycenter + self["exposure"] / 2, scale="tdb")
 
-    def lightcurve_for(self, target, flux_column="mag_inst"):
+    def lightcurve_for(self, target, flux_column="mag_inst", passband=None):
         """
         Return the light curve for a single star as a `lightkurve.LightCurve` object.
         One of the parameters `star_id`, `coordinates` or `name` must be specified.
@@ -613,6 +613,10 @@ class PhotometryData(BaseEnhancedTable):
         flux_column : str, optional
             The name of the column to use as the flux. Default is 'mag_inst'. This need
             not actually be a flux.
+
+        passband : str, optional
+            The passband to use to generate the lightcurve for. This is only
+            needed if there is more that one passband in the data.
 
         Returns
         -------
@@ -649,10 +653,27 @@ class PhotometryData(BaseEnhancedTable):
                     f"No matching star in the photometry data found at {coordinates}."
                 )
 
+        if star_id not in self["star_id"]:
+            raise ValueError(f"No star found that matched {target}.")
+
         star_data = self[self["star_id"] == star_id]
 
-        if len(star_data) == 0:
-            raise ValueError(f"No star found that matched {target}.")
+        passbands = set(star_data["passband"])
+
+        passband_strings = ", ".join(sorted(passbands))
+        if len(passbands) > 1 and passband is None:
+            raise ValueError(
+                f"Multiple passbands found for this star: {passband_strings}. "
+                f"You must specify a passband."
+            )
+
+        if passband is not None:
+            if passband not in passbands:
+                raise ValueError(
+                    f"Passband {passband} not found for this star. "
+                    f"Passbands in the data are {passband_strings}."
+                )
+            star_data = star_data[star_data["passband"] == passband]
 
         # Create the columns that light curve needs, adding metadata about where each
         # column came from.
