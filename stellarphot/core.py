@@ -438,6 +438,9 @@ class PhotometryData(BaseEnhancedTable):
                 **kwargs,
             )
 
+            # From this point forward we should be using self to get at any data
+            # columns, because that is where BaseEnhancedTable has put the data.
+
             # Perform input validation
             if not isinstance(self.observatory, Observatory):
                 raise TypeError(
@@ -465,24 +468,24 @@ class PhotometryData(BaseEnhancedTable):
             ]
             cnts_unit = self[counts_columns[0]].unit
             for this_col in counts_columns[1:]:
-                if input_data[this_col].unit != cnts_unit:
+                if self[this_col].unit != cnts_unit:
                     raise ValueError(
                         f"input_data['{this_col}'] has inconsistent units "
                         f"with input_data['{counts_columns[0]}'] (should "
                         f"be {cnts_unit} but it's "
-                        f"{input_data[this_col].unit})."
+                        f"{self[this_col].unit})."
                     )
             for this_col in counts_per_pixel_columns:
                 if cnts_unit is None:
                     perpixel = u.pixel**-1
                 else:
                     perpixel = cnts_unit * u.pixel**-1
-                if input_data[this_col].unit != perpixel:
+                if self[this_col].unit != perpixel:
                     raise ValueError(
                         f"input_data['{this_col}'] has inconsistent units "
                         f"with input_data['{counts_columns[0]}'] (should "
                         f"be {perpixel} but it's "
-                        f"{input_data[this_col].unit})."
+                        f"{self[this_col].unit})."
                     )
 
             # Compute additional columns
