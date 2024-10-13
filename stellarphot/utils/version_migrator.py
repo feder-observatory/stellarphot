@@ -147,7 +147,7 @@ class VersionMigrator:
             "Dec": "dec",
         }
 
-        # THe new night calculation is better, so drop the old one
+        # The new night calculation is better, so drop the old one
         del new_data["night"]
 
         # Handle changes in instrumental magnitude column names
