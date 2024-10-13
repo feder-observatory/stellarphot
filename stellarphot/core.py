@@ -438,7 +438,7 @@ class PhotometryData(BaseEnhancedTable):
                 **kwargs,
             )
 
-            # From this point forwarsd we should be using self to get at any data
+            # From this point forward we should be using self to get at any data
             # columns, because that is where BaseEnhancedTable has put the data.
 
             # Perform input validation
