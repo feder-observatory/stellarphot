@@ -51,8 +51,8 @@ class TestVersionMigrator:
             VersionMigrator(from_version="2", to_version="2")
 
         # An invalid version should raise an error
-        with pytest.raises(InvalidVersion, match="notta parsable version"):
-            VersionMigrator(from_version="notta parsable version")
+        with pytest.raises(InvalidVersion, match="not a parsable version"):
+            VersionMigrator(from_version="not a parsable version")
 
         # An unknown from or to version should raise an error
         with pytest.raises(ValueError, match="Unknown version"):
