@@ -3,7 +3,9 @@ import numpy as np
 from astropy.coordinates import SkyCoord
 from astropy.table import QTable, Table
 
-__all__ = ["add_in_quadrature", "calc_aij_relative_flux"]
+from stellarphot import PhotometryData, SourceListData
+
+__all__ = ["add_in_quadrature", "calc_aij_relative_flux", "add_relative_flux_column"]
 
 
 def add_in_quadrature(array):
@@ -192,3 +194,59 @@ def calc_aij_relative_flux(
     star_data["comparison error"] = comp_error_vector
 
     return star_data
+
+
+def add_relative_flux_column(
+    photometry_data_file,
+    source_list_file,
+    add_name="-relative-flux",
+    verbose=False,
+):
+    """
+    Add AIJ-style relative flux columns to a photometry data file.
+
+    Parameters
+    ----------
+
+    photometry_data_file : str
+        Path to the photometry data file.
+
+    source_list_file : str
+        Path to the source list file.
+
+    add_name : str,  optional
+        String to add to the end of the new file name before the suffix.
+
+    Returns
+    -------
+
+    None; writes a file with the relative flux columns added.
+    """
+    if verbose:
+        print("Reading photometry data and source list")
+    photometry_data = PhotometryData.read(photometry_data_file)
+    source_list = SourceListData.read(source_list_file)
+    output_file = photometry_data_file.stem + add_name + photometry_data_file.suffix
+    source_list["coord"] = SkyCoord(
+        ra=source_list["ra"], dec=source_list["dec"], frame="icrs"
+    )
+    comp_bool = source_list["marker name"] == ["APASS comparison"]
+    only_comp_stars = source_list[comp_bool]
+    if verbose:
+        print("Adding AIJ-style relative flux columns to photomotry data")
+    flux_table = calc_aij_relative_flux(photometry_data, only_comp_stars)
+    # Add bjd if needed
+
+    if "bjd" not in flux_table.colnames:
+        if verbose:
+            print("Adding BJD column to photometry data")
+        # Add dummy BJD column so the whole table has one
+        flux_table["bjd"] = np.nan
+        flux_group = flux_table.group_by("file")
+        for group in flux_group.groups:
+            mean_ra = group["ra"].mean()
+            mean_dec = group["dec"].mean()
+            group.add_bjd_col(bjd_coordinates=SkyCoord(mean_ra, mean_dec))
+    if verbose:
+        print("Writing photometry data with relative flux columns")
+    flux_table.write(output_file, overwrite=True)
