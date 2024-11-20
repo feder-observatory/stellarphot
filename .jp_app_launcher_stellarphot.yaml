@@ -37,8 +37,16 @@
 # Notebook in the "Stellarphot analysis and tools" section of the launcher
 
 - title: Generate TESS target list
-  description: View and export photometry results
+  description: Retrieve TESS target list and TIC information
   source: ../stellarphot/tess-target-source-list-generator.ipynb
+  icon: ../stellarphot/stellarphot-logo.svg
+  cwd: not_used
+  type: notebook
+  catalog: Stellarphot analysis and tools
+
+- title: Calculate relative flux
+  description: Add a relative flux column to the photometry table
+  source: ../stellarphot/relative-flux-calculation.ipynb
   icon: ../stellarphot/stellarphot-logo.svg
   cwd: not_used
   type: notebook
