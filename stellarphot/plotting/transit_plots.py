@@ -2,7 +2,12 @@ import numpy as np
 from astropy import units as u
 from matplotlib import pyplot as plt
 
-__all__ = ["plot_many_factors", "bin_data", "scale_and_shift"]
+__all__ = [
+    "plot_many_factors",
+    "bin_data",
+    "scale_and_shift",
+    "plot_transit_lightcurve",
+]
 
 
 def plot_many_factors(photometry, shift, scale, ax=None):
@@ -50,7 +55,6 @@ def plot_many_factors(photometry, shift, scale, ax=None):
     if ax is None:
         ax = plt.gca()
 
-    print(f"{scale_airmass.min()} {scale_airmass.max()}")
     ax.plot(
         x_times,
         scale_counts,
@@ -170,3 +174,123 @@ def scale_and_shift(data_set, scale, shift, pos=True):
     data_set += shift
 
     return data_set
+
+
+def plot_transit_lightcurve(
+    photometry,
+    mod,
+    tess_info,
+    bin_size,
+    low=0.82,
+    high=1.06,
+):
+    # These affect spacing of lines on final plot
+    scale = 0.15 * (high - low)
+    shift = -0.72 * (high - low)
+    # (RMS={rel_flux_rms:.5f})
+    grid_y_ticks = np.arange(low, high, 0.02)
+
+    date_obs = photometry["date-obs"][0]
+    phot_filter = photometry["passband"][0]
+    exposure_time = photometry["exposure"][0]
+
+    midpoint = tess_info.transit_time_for_observation(photometry["bjd"])
+    start = midpoint - 0.5 * tess_info.duration
+    end = midpoint + 0.5 * tess_info.duration
+
+    detrended_by = []
+    if not mod.model.airmass_trend.fixed:
+        detrended_by.append("Airmass")
+    if not mod.model.spp_trend.fixed:
+        detrended_by.append("SPP")
+    if not mod.model.width_trend.fixed:
+        detrended_by.append("Width")
+
+    flux_full_detrend = mod.data_light_curve(detrend_by="all")
+    flux_full_detrend_model = mod.model_light_curve(detrend_by="all")
+    rel_detrended_flux = flux_full_detrend / np.mean(flux_full_detrend)
+
+    rel_detrended_flux_rms = np.std(rel_detrended_flux)
+    rel_model_rms = np.std(flux_full_detrend_model - rel_detrended_flux)
+
+    rel_flux_rms = np.std(mod.data)
+
+    fig, ax = plt.subplots(1, 1, figsize=(8, 11))
+
+    plt.plot(
+        (photometry["bjd"] - 2400000 * u.day).jd,
+        photometry["normalized_flux"],
+        "b.",
+        label=f"rel_flux_T1 (RMS={rel_flux_rms:.5f})",
+        ms=4,
+    )
+
+    plt.plot(
+        mod.times,
+        flux_full_detrend - 0.04,
+        ".",
+        c="r",
+        ms=4,
+        label=f"rel_flux_T1 ({detrended_by})(RMS={rel_detrended_flux_rms:.5f}), "
+        f"(bin size={bin_size} min)",
+    )
+
+    plt.plot(
+        mod.times,
+        flux_full_detrend - 0.08,
+        ".",
+        c="g",
+        ms=4,
+        label=f"rel_flux_T1 ({detrended_by} with transit fit)(RMS={rel_model_rms:.5f}),"
+        f" (bin size={bin_size})",
+    )
+    plt.plot(
+        mod.times,
+        flux_full_detrend_model - 0.08,
+        c="g",
+        ms=4,
+        label=f"rel_flux_T1 Transit Model ([P={mod.model.period.value:.4f}], "
+        f"(Rp/R*)^2={(mod.model.rp.value)**2:.4f}, \na/R*={mod.model.a.value:.4f}, "
+        f"[Tc={mod.model.t0.value + 2400000:.4f}], "
+        f"[u1={mod.model.limb_u1.value:.1f}, u2={mod.model.limb_u2.value:.1f})",
+    )
+
+    plot_many_factors(photometry, shift, scale)
+
+    plt.vlines(start.jd - 2400000, low, 1.025, colors="r", linestyle="--", alpha=0.5)
+    plt.vlines(end.jd - 2400000, low, 1.025, colors="r", linestyle="--", alpha=0.5)
+    plt.text(
+        start.jd - 2400000,
+        low + 0.0005,
+        f"Predicted\nIngress\n{start.jd-2400000-int(start.jd - 2400000):.3f}",
+        horizontalalignment="center",
+        c="r",
+    )
+    plt.text(
+        end.jd - 2400000,
+        low + 0.0005,
+        f"Predicted\nEgress\n{end.jd-2400000-int(end.jd - 2400000):.3f}",
+        horizontalalignment="center",
+        c="r",
+    )
+
+    plt.ylim(low, high)
+    plt.xlabel("Barycentric Julian Date (TDB)", fontname="Arial")
+    plt.ylabel("Relative Flux (normalized)", fontname="Arial")
+    plt.title(
+        f"TIC {tess_info.tic_id}.01   UT{date_obs}\nPaul P. Feder Observatory 0.4m "
+        f"({phot_filter} filter, {exposure_time} exp, "
+        f"fap {photometry['aperture'][0].value:.0f}"
+        f"-{photometry['annulus_inner'][0].value:.0f}"
+        f"-{photometry['annulus_outer'][0].value:.0f})\n",
+        fontsize=14,
+        fontname="Arial",
+    )
+    plt.legend(loc="upper center", frameon=False, fontsize=8, bbox_to_anchor=(0.6, 1.0))
+    ax.set_yticks(grid_y_ticks)
+    plt.grid()
+
+    plt.savefig(
+        f"TIC{tess_info.tic_id}-01_{date_obs}_Paul-P-Feder-0.4m_{phot_filter}_lightcurve.png",
+        facecolor="w",
+    )
