@@ -85,6 +85,53 @@ class TessAnalysisInputControls(ipw.VBox):
         return self._passband.value
 
 
+def filter_by_dates(
+    phot_times=None,
+    use_no_data_before=None,
+    use_no_data_between=None,
+    use_no_data_after=None,
+):
+    n_dropped = 0
+
+    bad_data = phot_times < use_no_data_before
+
+    n_dropped = bad_data.sum()
+
+    if n_dropped > 0:
+        print(
+            f"👉👉👉👉 Dropping {n_dropped} data points before "
+            f"BJD {use_no_data_before}"
+        )
+
+    bad_data = bad_data | (
+        (use_no_data_between[0][0] < phot_times)
+        & (phot_times < use_no_data_between[0][1])
+    )
+
+    new_dropped = bad_data.sum() - n_dropped
+
+    if new_dropped:
+        print(
+            f"👉👉👉👉 Dropping {new_dropped} data points between "
+            f"BJD {use_no_data_between[0][0]} and {use_no_data_between[0][1]}"
+        )
+
+    n_dropped += new_dropped
+
+    bad_data = bad_data | (phot_times > use_no_data_after)
+
+    new_dropped = bad_data.sum() - n_dropped
+
+    if new_dropped:
+        print(
+            f"👉👉👉👉 Dropping {new_dropped} data points after "
+            f"BJD {use_no_data_after}"
+        )
+
+    n_dropped += new_dropped
+    return bad_data
+
+
 class PhotometrySettingsOLDBAD:
     """
     A class to hold the widgets for photometry settings.
