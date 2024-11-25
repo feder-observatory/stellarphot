@@ -232,7 +232,7 @@ def plot_transit_lightcurve(
         c="r",
         ms=4,
         label=f"rel_flux_T1 ({detrended_by})(RMS={rel_detrended_flux_rms:.5f}), "
-        f"(bin size={bin_size} min)",
+        f"(bin size={bin_size})",
     )
 
     plt.plot(
