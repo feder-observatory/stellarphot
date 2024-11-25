@@ -3,8 +3,10 @@ import re
 import warnings
 from pathlib import Path
 
+import numpy as np
 import pytest
 from astropy.coordinates import SkyCoord
+from astropy.time import Time
 from requests import ConnectionError, ReadTimeout
 
 from stellarphot.io.tess import (
@@ -186,6 +188,25 @@ class TestTOI:
         new_toi = TOI.model_validate_json(json_str)
 
         assert toi_info.coord.separation(new_toi.coord).arcsecond < 0.01
+
+    @pytest.mark.parametrize("start_before_midpoint", [True, False])
+    def test_transit_time_for_observation(self, sample_toi, start_before_midpoint):
+        # For this test we are checking that the correct transit time is identified
+        # for a given observation time.
+        # For the sake of the test, we are going to use the 124th transit of the TOI
+        # as the reference transit.
+        reference_midpoint = sample_toi.epoch + 124 * sample_toi.period
+        if start_before_midpoint:
+            # Start the observation before the midpoint (and before the transit)
+            test_time_start = Time(reference_midpoint - 0.8 * sample_toi.duration)
+        else:
+            # Start the observation after the midpoint
+            test_time_start = Time(reference_midpoint + 0.1 * sample_toi.duration)
+        obs_times = test_time_start + np.linspace(0, 2) * sample_toi.duration
+
+        assert sample_toi.transit_time_for_observation(obs_times).jd == pytest.approx(
+            reference_midpoint.jd
+        )
 
 
 class TestTessPhotometrySetup:

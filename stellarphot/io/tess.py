@@ -1,4 +1,5 @@
 import re
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -355,6 +356,41 @@ class TOI(BaseModel):
             tess_mag=toi_table["TESS Mag"],
             tess_mag_error=toi_table["TESS Mag err"],
         )
+
+    def transit_time_for_observation(self, obs_times):
+        """
+        Calculate the transit time for a set of observation times.
+
+        Parameters
+        ----------
+
+        obs_times : `astropy.time.Time`
+            The times of the observations.
+
+        Returns
+        -------
+
+        `astropy.time.Time`
+            The transit times for the observations.
+        """
+        first_obs = obs_times[0]
+        # Three possible cases here. Either the first time is close to, but before, a
+        # transit, or it is close to, but just after a transit, or it is nowhere close
+        # to a transit.
+        # Assume that the first time is just before a transit
+        cycle_number = int((first_obs - self.epoch) / self.period + 1)
+        that_transit = cycle_number * self.period + self.epoch
+
+        # Check -- is the first time closer to this transit or the one before it?
+        previous_transit = that_transit - self.period
+        if abs(first_obs - previous_transit) < abs(first_obs - that_transit):
+            that_transit = previous_transit
+
+        # Check -- are we way, way, way off from a transit?
+        if abs(first_obs - that_transit) > 3 * self.duration:
+            warnings.warn("Observation times are far from a transit.", stacklevel=2)
+
+        return that_transit
 
 
 def tess_photometry_setup(tic_id=None, TOI_object=None, overwrite=False):
