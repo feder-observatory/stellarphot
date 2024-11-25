@@ -3,6 +3,7 @@ import warnings
 import numpy as np
 from astropy.modeling.fitting import LevMarLSQFitter, _validate_model
 from astropy.modeling.models import custom_model
+from pydantic import BaseModel
 
 # Functions below changed from private to public in astropy 5
 try:
@@ -30,7 +31,7 @@ except ImportError:
         "pip install batman-package"
     )
 
-__all__ = ["VariableArgsFitter", "TransitModelFit"]
+__all__ = ["VariableArgsFitter", "TransitModelOptions", "TransitModelFit"]
 
 
 class VariableArgsFitter(LevMarLSQFitter):
@@ -118,6 +119,17 @@ class VariableArgsFitter(LevMarLSQFitter):
             self.fit_info["param_cov"] = None
 
         return model_copy
+
+
+class TransitModelOptions(BaseModel):
+    bin_size: float = 5.0
+    keep_transit_time_fixed: bool = True
+    transit_time_range: float = 60.0
+    keep_radius_planet_fixed: bool = False
+    keep_radius_orbit_fixed: bool = False
+    fit_airmass: bool = False
+    fit_width: bool = False
+    fit_spp: bool = False
 
 
 class TransitModelFit:
