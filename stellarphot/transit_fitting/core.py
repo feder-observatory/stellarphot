@@ -1,6 +1,7 @@
 import warnings
 
 import numpy as np
+from astropy import units as u
 from astropy.modeling.fitting import LevMarLSQFitter, _validate_model
 from astropy.modeling.models import custom_model
 from pydantic import BaseModel
@@ -397,6 +398,7 @@ class TransitModelFit:
 
     def setup_model(
         self,
+        binned_data=None,
         t0=0,
         depth=0,
         duration=0,
@@ -405,6 +407,7 @@ class TransitModelFit:
         airmass_trend=0.0,
         width_trend=0.0,
         spp_trend=0.0,
+        model_options=None,
     ):
         """
         Configure a transit model for fitting. The ``duration`` and ``depth``
@@ -441,11 +444,28 @@ class TransitModelFit:
         spp_trend : float
             Coefficient for a linear trend in sky per pixel.
 
+        options : TransitModelOptions, optional
+            Options for the transit model fit.
+
         Returns
         -------
         None
             Sets values for the model parameters.
         """
+        if binned_data:
+            self.times = (
+                np.array(
+                    (
+                        binned_data["time_bin_start"] + binned_data["time_bin_size"] / 2
+                    ).value
+                )
+                - 2400000
+            )
+            self.data = binned_data["normalized_flux"].value
+            self.weights = 1 / (binned_data["normalized_flux_error"].value)
+            self.airmass = np.array(binned_data["airmass"])
+            self.width = np.array(binned_data["width"])
+            self.spp = np.array(binned_data["sky_per_pix_avg"])
         self._setup_transit_model()
 
         # rp is related to depth in a straightforward way
@@ -472,6 +492,20 @@ class TransitModelFit:
                 self._set_up_batman_model_for_fitting()
         except ValueError:
             pass
+
+        if model_options is not None:
+            # Setup the model more 🙄
+            self.model.t0.bounds = [
+                t0 - (model_options.transit_time_range * u.min).to("day").value / 2,
+                t0 + (model_options.transit_time_range * u.min).to("day").value / 2,
+            ]
+            self.model.t0.fixed = model_options.keep_transit_time_fixed
+            self.model.a.fixed = model_options.keep_radius_orbit_fixed
+            self.model.rp.fixed = model_options.keep_radius_planet_fixed
+
+            self.model.spp_trend.fixed = not model_options.fit_spp
+            self.model.airmass_trend.fixed = not model_options.fit_airmass
+            self.model.width_trend.fixed = not model_options.fit_width
 
     def fit(self):
         """
