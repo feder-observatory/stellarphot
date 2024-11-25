@@ -51,3 +51,11 @@
   cwd: not_used
   type: notebook
   catalog: Stellarphot analysis and tools
+
+- title: Initial exoplanet model
+  description: Do an initial fit to a transit
+  source: ../stellarphot/tess-intial-model-fit.ipynb
+  icon: ../stellarphot/stellarphot-logo.svg
+  cwd: not_used
+  type: notebook
+  catalog: Stellarphot analysis and tools
