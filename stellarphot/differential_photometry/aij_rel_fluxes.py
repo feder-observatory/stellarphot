@@ -2,6 +2,7 @@ import astropy.units as u
 import numpy as np
 from astropy.coordinates import SkyCoord
 from astropy.table import QTable, Table
+from astropy.time import Time
 
 from stellarphot import PhotometryData, SourceListData
 
@@ -240,13 +241,20 @@ def add_relative_flux_column(
     if "bjd" not in flux_table.colnames:
         if verbose:
             print("Adding BJD column to photometry data")
-        # Add dummy BJD column so the whole table has one
-        flux_table["bjd"] = np.nan
+        # Accumulate the BJD here
+        bjds = []
+
         flux_group = flux_table.group_by("file")
         for group in flux_group.groups:
             mean_ra = group["ra"].mean()
             mean_dec = group["dec"].mean()
             group.add_bjd_col(bjd_coordinates=SkyCoord(mean_ra, mean_dec))
+            bjds.extend(group["bjd"].jd)
+
+    # Each (ephemeral) group had a BJD, this adds the column to the
+    # original table.
+    flux_group["bjd"] = Time(bjds, scale="tdb", format="jd")
+
     if verbose:
         print("Writing photometry data with relative flux columns")
-    flux_table.write(output_file, overwrite=True)
+    flux_group.write(output_file, overwrite=True)
