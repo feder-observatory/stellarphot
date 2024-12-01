@@ -59,3 +59,11 @@
   cwd: not_used
   type: notebook
   catalog: Stellarphot analysis and tools
+
+- title: Second exoplanet model fit
+  description: Second transit model fit
+  source: ../stellarphot/tess-second-model-fit.ipynb
+  icon: ../stellarphot/stellarphot-logo.svg
+  cwd: not_used
+  type: notebook
+  catalog: Stellarphot analysis and tools
