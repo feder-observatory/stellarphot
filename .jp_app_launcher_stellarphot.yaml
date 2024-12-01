@@ -67,3 +67,11 @@
   cwd: not_used
   type: notebook
   catalog: Stellarphot analysis and tools
+
+- title: Exoplanet model fit with EXOTIC
+  description: The final exoplanet fit
+  source: ../stellarphot/tess-EXOTIC-fit.ipynb
+  icon: ../stellarphot/stellarphot-logo.svg
+  cwd: not_used
+  type: notebook
+  catalog: Stellarphot analysis and tools
