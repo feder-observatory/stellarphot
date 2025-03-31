@@ -22,6 +22,10 @@ def pytest_configure(config):
     config.option.astropy_header = True
     PYTEST_HEADER_MODULES.pop("h5py", None)
 
+    # Always display versions of these packages
+    for package in ["astroquery", "photutils", "astrowidgets", "pydantic", "ipyautoui"]:
+        PYTEST_HEADER_MODULES[package] = package
+
     from .version import version
 
     packagename = os.path.basename(os.path.dirname(__file__))
