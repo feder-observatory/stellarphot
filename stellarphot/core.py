@@ -977,7 +977,7 @@ class CatalogData(BaseEnhancedTable):
         clip_by_frame=False,
         padding=100,
         colname_map=None,
-        mag_column_regex=r"^([a-zA-Z]+|[a-zA-Z]+-[a-zA-Z]+)_?mag$",
+        mag_column_regex=r"^([a-zA-Z]+'?|[a-zA-Z]+'?-[a-zA-Z]+'?)_?mag$",
         color_column_regex=r"^([a-zA-Z]+-[a-zA-Z]+)$",
         prepare_catalog=None,
         no_catalog_error=False,
@@ -1264,6 +1264,9 @@ def apass_dr9(field_center, radius=1 * u.degree, clip_by_frame=False, padding=10
             "g": "SG",
             "r": "SR",
             "i": "SI",
+            "g'": "SG",
+            "r'": "SR",
+            "i'": "SI",
         },
     )
     raw_catalog._update_passbands()
