@@ -27,7 +27,7 @@ dependencies = [
     "matplotlib",
     "papermill",
     "pandas",
-    "photutils >=1.9,<2",
+    "photutils >=2,<3",
     "pydantic >=2",
     "pyyaml",
     "platformdirs",
