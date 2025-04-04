@@ -433,6 +433,12 @@ def single_image_photometry(
         method=photometry_options.method,
     )
 
+    # photutils 2.1.0 stopped returning pixel units for x/y center
+    # https://photutils.readthedocs.io/en/stable/changelog.html#id6
+    if photom["xcenter"].unit is None:
+        photom["xcenter"] = photom["xcenter"] * u.pixel
+        photom["ycenter"] = photom["ycenter"] * u.pixel
+
     # Add source ids to the photometry table
     photom["star_id"] = star_ids
     photom["ra"] = ra * u.deg
