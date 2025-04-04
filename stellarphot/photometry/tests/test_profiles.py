@@ -202,7 +202,7 @@ class TestRadialProfile:
                 rad_prof.curve_of_growth.profile[-1] - expected_integral,
             )
 
-            # With the seed above the difference is just under 1.5 standard deviations.
+            # With the seed above the difference is just under 2.0 standard deviations.
             np.testing.assert_allclose(
                 rad_prof.curve_of_growth.profile[-1],
                 expected_integral,
