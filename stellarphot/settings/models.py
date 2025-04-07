@@ -1163,6 +1163,10 @@ class PhotometryRunSettings(BaseModel):
     directory_with_images: Path = "."
     photometry_settings_file: Path = "photometry_settings.json"
     reject_unmatched: Annotated[
-        bool, Field(description="Blah blah", tooltip="WOMA")
-    ] = True
+        bool,
+        Field(
+            description="Drop any stars that do not appear in all images",
+            tooltip="Reject unmatched stars",
+        ),
+    ] = False
     object_of_interest: str | None = None
