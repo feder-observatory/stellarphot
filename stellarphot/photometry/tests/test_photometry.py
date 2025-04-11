@@ -23,6 +23,7 @@ from stellarphot.photometry import (
 from stellarphot.photometry.tests.fake_image import FakeCCDImage, shift_FakeCCDImage
 from stellarphot.settings import (
     Camera,
+    FwhmMethods,
     LoggingSettings,
     Observatory,
     PassbandMap,
@@ -472,7 +473,7 @@ class TestAperturePhotometry:
             phot_options.include_dig_noise = True
             phot_options.reject_too_close = True
             phot_options.reject_background_outliers = True
-            phot_options.fwhm_by_fit = True
+            phot_options.fwhm_method = FwhmMethods.FIT
 
             photometry_settings_for_test.photometry_optional_settings = phot_options
             photometry_settings_for_test.source_location_settings.use_coordinates = (
@@ -597,7 +598,7 @@ class TestAperturePhotometry:
             phot_options.include_dig_noise = True
             phot_options.reject_too_close = True
             phot_options.reject_background_outliers = True
-            phot_options.fwhm_by_fit = True
+            phot_options.fwhm_method = FwhmMethods.FIT
 
             photometry_settings_for_test.photometry_optional_settings = phot_options
             photometry_settings_for_test.source_location_settings.source_list_file = (
@@ -656,7 +657,7 @@ class TestAperturePhotometry:
             phot_options.include_dig_noise = True
             phot_options.reject_too_close = True
             phot_options.reject_background_outliers = True
-            phot_options.fwhm_by_fit = True
+            phot_options.fwhm_method = FwhmMethods.FIT
 
             photometry_settings_for_test.photometry_optional_settings = phot_options
             photometry_settings_for_test.source_location_settings.source_list_file = (
@@ -797,7 +798,7 @@ class TestAperturePhotometry:
             phot_options.include_dig_noise = True
             phot_options.reject_too_close = True
             phot_options.reject_background_outliers = True
-            phot_options.fwhm_by_fit = True
+            phot_options.fwhm_method = FwhmMethods.FIT
 
             photometry_settings_for_test.photometry_optional_settings = phot_options
             photometry_settings_for_test.source_location_settings.use_coordinates = (
@@ -1285,7 +1286,7 @@ def test_photometry_on_directory(coords, photometry_settings_for_test):
         phot_options.include_dig_noise = True
         phot_options.reject_too_close = True
         phot_options.reject_background_outliers = True
-        phot_options.fwhm_by_fit = True
+        phot_options.fwhm_method = FwhmMethods.FIT
 
         photometry_settings_for_test.photometry_optional_settings = phot_options
         photometry_settings_for_test.source_location_settings.use_coordinates = coords
@@ -1404,7 +1405,7 @@ def test_photometry_on_directory_with_no_ra_dec(photometry_settings_for_test):
         phot_options.include_dig_noise = True
         phot_options.reject_too_close = True
         phot_options.reject_background_outliers = True
-        phot_options.fwhm_by_fit = True
+        phot_options.fwhm_method = FwhmMethods.FIT
 
         photometry_settings_for_test.photometry_optional_settings = phot_options
         photometry_settings_for_test.source_location_settings.source_list_file = str(
@@ -1461,7 +1462,7 @@ def test_photometry_on_directory_with_bad_fits(photometry_settings_for_test):
         phot_options.include_dig_noise = True
         phot_options.reject_too_close = True
         phot_options.reject_background_outliers = True
-        phot_options.fwhm_by_fit = True
+        phot_options.fwhm_method = FwhmMethods.FIT
 
         photometry_settings_for_test.photometry_optional_settings = phot_options
         photometry_settings_for_test.source_location_settings.source_list_file = str(

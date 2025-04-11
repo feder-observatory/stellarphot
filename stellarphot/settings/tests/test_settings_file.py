@@ -1,4 +1,5 @@
 import os
+from copy import deepcopy
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -16,6 +17,8 @@ from stellarphot.settings import (
     settings_files,  # This import is needed for mocking -- see TestSavedSettings
 )
 from stellarphot.settings.constants import TEST_PHOTOMETRY_SETTINGS
+
+TEST_PHOTOMETRY_SETTINGS = deepcopy(TEST_PHOTOMETRY_SETTINGS)
 
 CAMERA = """
 {

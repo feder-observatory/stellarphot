@@ -1,6 +1,7 @@
 import os
 import warnings
 from collections import namedtuple
+from copy import deepcopy
 
 import ipywidgets as ipw
 import matplotlib
@@ -28,6 +29,8 @@ from stellarphot.settings import (
 from stellarphot.settings.constants import (
     TEST_CAMERA_VALUES,
 )
+
+TEST_CAMERA_VALUES = deepcopy(TEST_CAMERA_VALUES)
 
 
 def test_keybindings():

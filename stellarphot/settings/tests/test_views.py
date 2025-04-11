@@ -1,5 +1,9 @@
+from copy import deepcopy
+
 from stellarphot.settings import Camera, SourceLocationSettings, ui_generator
 from stellarphot.settings.constants import TEST_CAMERA_VALUES
+
+TEST_CAMERA_VALUES = deepcopy(TEST_CAMERA_VALUES)
 
 
 class TestUiGenerator:

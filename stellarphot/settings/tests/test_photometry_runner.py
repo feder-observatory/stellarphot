@@ -1,4 +1,5 @@
 import os
+from copy import deepcopy
 from pathlib import Path
 
 import ipywidgets as ipw
@@ -12,6 +13,8 @@ from stellarphot.settings import (
 )
 from stellarphot.settings.constants import TEST_PHOTOMETRY_SETTINGS
 from stellarphot.settings.custom_widgets import PhotometryRunner
+
+TEST_PHOTOMETRY_SETTINGS = deepcopy(TEST_PHOTOMETRY_SETTINGS)
 
 
 # See test_settings_file.TestSavedSettings for a detailed description of what the

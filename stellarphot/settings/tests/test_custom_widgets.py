@@ -1,4 +1,5 @@
 import os
+from copy import deepcopy
 from pathlib import Path
 
 import ipywidgets as ipw
@@ -37,6 +38,12 @@ from stellarphot.settings.custom_widgets import (
     Spinner,
     _add_saving_to_widget,
 )
+
+# Make sure we only use copies of the test settings
+TEST_CAMERA_VALUES = deepcopy(TEST_CAMERA_VALUES)
+TEST_OBSERVATORY_SETTINGS = deepcopy(TEST_OBSERVATORY_SETTINGS)
+TEST_PASSBAND_MAP = deepcopy(TEST_PASSBAND_MAP)
+TEST_PHOTOMETRY_SETTINGS = deepcopy(TEST_PHOTOMETRY_SETTINGS)
 
 
 # See test_settings_file.TestSavedSettings for a detailed description of what the
@@ -548,7 +555,7 @@ class TestChooseOrMakeNew:
         choose_or_make_new._choose_existing.value = "none"
 
         # set the item widget value to the existing camera with double the gain
-        camera_values = TEST_CAMERA_VALUES.copy()
+        camera_values = deepcopy(TEST_CAMERA_VALUES)
         camera_values["gain"] = 2 * Quantity(camera_values["gain"])
         choose_or_make_new._item_widget.value = Camera(**camera_values)
 
@@ -663,7 +670,7 @@ class TestChooseOrMakeNew:
 
         # Making a new camera and saving it should bring back, and respect,
         # the hideable details
-        new_camera = TEST_CAMERA_VALUES.copy()
+        new_camera = TEST_CAMERA_VALUES
         new_camera["name"] = "new camera"
         choose_or_make_new._item_widget.value = new_camera
         choose_or_make_new._item_widget.savebuttonbar.bn_save.click()
