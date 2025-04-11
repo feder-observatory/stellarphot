@@ -12,6 +12,7 @@ from astropy.utils.exceptions import AstropyUserWarning
 from stellarphot import SourceListData
 from stellarphot.photometry import compute_fwhm, source_detection
 from stellarphot.photometry.tests.fake_image import FakeImage
+from stellarphot.settings.models import FwhmMethods
 
 # Make sure the tests are deterministic by using a random seed
 SEED = 5432985
@@ -54,12 +55,12 @@ def test_compute_fwhm_with_NaNs():
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore",
-            message="Non-Finite input data has been removed",
+            message=("Input data contains unmasked non-finite values "),
             category=AstropyUserWarning,
         )
-        fwhm_x, fwhm_y = compute_fwhm(
-            image, sources, x_column="x_mean", y_column="y_mean", fit=True
-        )
+    fwhm_x, fwhm_y = compute_fwhm(
+        image, sources, x_column="x_mean", y_column="y_mean", fit_method=FwhmMethods.FIT
+    )
 
     expected_fwhm = np.array(sources["x_stddev"] * gaussian_sigma_to_fwhm)
     assert np.allclose(fwhm_x, expected_fwhm, rtol=1e-2)
@@ -137,8 +138,8 @@ def test_detect_source_with_padding():
     assert len(sources) - 1 == len(found_sources)
 
 
-@pytest.mark.parametrize("fit", [True, False])
-def test_fwhm_computation(fit):
+@pytest.mark.parametrize("fit_method", [FwhmMethods.FIT, FwhmMethods.PROFILE])
+def test_fwhm_computation(fit_method):
     # Regression test for #490, in which FWHM computation is incorrect
     # because the image hasn't been background subtracted.
     ccd_file = get_pkg_data_path("data/cutout_for_fwhm_test.fits")
@@ -156,8 +157,8 @@ def test_fwhm_computation(fit):
         x_column="xcenter",
         y_column="ycenter",
         sky_per_pix_column="sky_per_pix_avg",
-        fit=fit,
+        fit_method=fit_method,
     )
 
     avg_fwhm = np.mean([fwhm_x, fwhm_y])
-    assert np.isclose(avg_fwhm, 6, rtol=0.1)
+    assert np.isclose(avg_fwhm, 6.6, rtol=0.1)

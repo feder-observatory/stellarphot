@@ -51,7 +51,7 @@ TEST_PHOTOMETRY_OPTIONS = dict(
     include_dig_noise=False,
     reject_too_close=False,
     reject_background_outliers=False,
-    fwhm_by_fit=False,
+    fwhm_method="fit",
     method="center",
 )
 

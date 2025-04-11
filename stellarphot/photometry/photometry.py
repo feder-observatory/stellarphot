@@ -530,7 +530,7 @@ def single_image_photometry(
             ccd_image,
             photom,
             fwhm_estimate=photometry_apertures.fwhm,
-            fit_method=photometry_options.fwhm_by_fit,
+            fit_method=photometry_options.fwhm_method,
             sky_per_pix_column="sky_per_pix_avg",
         )
         num_warnings = len(warned)
