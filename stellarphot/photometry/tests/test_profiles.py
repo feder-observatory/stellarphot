@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import numpy as np
 import pytest
 from astropy.coordinates import SkyCoord
@@ -14,6 +16,8 @@ from stellarphot.settings.constants import TEST_CAMERA_VALUES
 
 SHAPE = (300, 300)
 RANDOM_SEED = 1230971
+
+TEST_CAMERA_VALUES = deepcopy(TEST_CAMERA_VALUES)
 
 
 class TestCenter:
