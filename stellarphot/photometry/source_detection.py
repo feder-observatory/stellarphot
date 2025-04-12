@@ -109,9 +109,9 @@ def compute_fwhm(
 
         # Mask any NaNs in the data
         nan_mask = np.isnan(cutout.data)
-        inp_mask = getattr(ccd, "mask", False)
-        if inp_mask:
-            inp_mask = inp_mask[cutout.slices_original()]
+        inp_mask = getattr(ccd, "mask", None)
+        if inp_mask is not None:
+            inp_mask = inp_mask[cutout.slices_original]
             mask = inp_mask | nan_mask
         else:
             mask = nan_mask
