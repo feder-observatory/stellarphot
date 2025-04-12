@@ -670,7 +670,7 @@ class TestChooseOrMakeNew:
 
         # Making a new camera and saving it should bring back, and respect,
         # the hideable details
-        new_camera = TEST_CAMERA_VALUES
+        new_camera = deepcopy(TEST_CAMERA_VALUES)
         new_camera["name"] = "new camera"
         choose_or_make_new._item_widget.value = new_camera
         choose_or_make_new._item_widget.savebuttonbar.bn_save.click()
