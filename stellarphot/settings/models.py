@@ -742,7 +742,7 @@ class PhotometryOptionalSettings(BaseModelWithTableRep):
     # Made this a static method to define inside this class, since this is the only
     # class that needs to handle this.
     @staticmethod
-    def _validate_fwh_method(value: Any) -> Any:
+    def _validate_fwhm_method(value: Any) -> Any:
         if isinstance(value, bool):
             # This is likely an old fwhm_by_fit option, so we convert to one
             # of the new options.
