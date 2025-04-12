@@ -39,7 +39,8 @@ def test_compute_fwhm(units):
     assert np.allclose(fwhm_x, expected_fwhm, rtol=1e-2)
 
 
-def test_compute_fwhm_with_NaNs():
+@pytest.mark.parametrize("mask_by_nan", [True, False])
+def test_compute_fwhm_with_missing_data(mask_by_nan):
     # Regression test for https://github.com/feder-observatory/stellarphot/issues/161
     # We should be able to find FWHM for a source even with NaNs in the image.
     fake_image = FakeImage(seed=SEED)
@@ -47,9 +48,13 @@ def test_compute_fwhm_with_NaNs():
     x, y = sources["x_mean"].astype(int)[0], sources["y_mean"].astype(int)[0]
     image = fake_image.image.copy()
 
-    # Add a NaN to the image at the location of the first source. Note the
-    # usual row/column swap when going to x/y coordinates.
-    image[y, x] = np.nan
+    if mask_by_nan:
+        # Add a NaN to the image at the location of the first source. Note the
+        # usual row/column swap when going to x/y coordinates.
+        image[y, x] = np.nan
+    else:
+        image = CCDData(image, unit=u.adu, mask=np.zeros_like(image, dtype=bool))
+        image.mask[y, x] = True
 
     # We expect a warning about NaNs in the image, so catch it
     with warnings.catch_warnings():
@@ -138,7 +143,9 @@ def test_detect_source_with_padding():
     assert len(sources) - 1 == len(found_sources)
 
 
-@pytest.mark.parametrize("fit_method", [FwhmMethods.FIT, FwhmMethods.PROFILE])
+@pytest.mark.parametrize(
+    "fit_method", [FwhmMethods.FIT, FwhmMethods.PROFILE, FwhmMethods.MOMENTS]
+)
 def test_fwhm_computation(fit_method):
     # Regression test for #490, in which FWHM computation is incorrect
     # because the image hasn't been background subtracted.
@@ -161,4 +168,35 @@ def test_fwhm_computation(fit_method):
     )
 
     avg_fwhm = np.mean([fwhm_x, fwhm_y])
-    assert np.isclose(avg_fwhm, 6.6, rtol=0.1)
+    if fit_method == FwhmMethods.MOMENTS:
+        assert avg_fwhm > 7
+    else:
+        assert np.isclose(avg_fwhm, 6.6, rtol=0.1)
+
+
+def test_compute_fwhm_input_options():
+    with pytest.raises(ValueError, match="Cannot specify both "):
+        compute_fwhm(
+            None, None, sky_per_pix_avg=10, sky_per_pix_column="sky_per_pix_avg"
+        )
+
+    # Make a table with a single column
+    table = QTable({"sky_per_pix_avg": [10]})
+    spp_column = "foo"
+    with pytest.raises(
+        ValueError, match=f"Column {spp_column} not found in sources table"
+    ):
+        compute_fwhm(None, table, sky_per_pix_column=spp_column)
+
+    fake_image = FakeImage(seed=SEED)
+    sources = fake_image.sources
+
+    fit_method = "foo"
+    with pytest.raises(ValueError, match=f"Unknown fit method: {fit_method}"):
+        compute_fwhm(
+            fake_image.image,
+            sources,
+            fit_method=fit_method,
+            x_column="x_mean",
+            y_column="y_mean",
+        )
