@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class AAVSOFilters(str, Enum):
+class AAVSOFilters(StrEnum):
     """
     The definitive list of AAVSO filters is at https://www.aavso.org/filters
     """

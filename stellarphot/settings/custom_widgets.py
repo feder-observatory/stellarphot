@@ -1,17 +1,7 @@
 # Some settings require custom widgets to be displayed in the GUI. These are defined in
 # this module.
 
-# This workaround is for Python < 3.11. It is not needed in Python 3.11 and later.
-try:
-    from enum import StrEnum
-except ImportError:
-    from enum import Enum
-
-    class StrEnum(str, Enum):
-        """
-        A class that allows for string values in an Enum pre-Python 3.11.
-        """
-
+from enum import StrEnum
 
 import ipywidgets as ipw
 import papermill as pm

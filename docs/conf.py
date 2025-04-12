@@ -26,6 +26,7 @@
 
 import datetime
 import sys
+import tomllib
 from importlib import import_module
 from pathlib import Path
 
@@ -35,11 +36,6 @@ from sphinx_astropy.conf.v2 import (  # noqa: E402
     html_theme_options,
     rst_epilog,
 )
-
-if sys.version_info < (3, 11):
-    import tomli as tomllib
-else:
-    import tomllib
 
 # Grab minversion from pyproject.toml
 with (Path(__file__).parents[1] / "pyproject.toml").open("rb") as f:
