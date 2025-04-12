@@ -786,7 +786,7 @@ class PhotometryOptionalSettings(BaseModelWithTableRep):
 
     fwhm_method: Annotated[
         FwhmMethods,
-        BeforeValidator(_validate_fwh_method),
+        BeforeValidator(_validate_fwhm_method),
         Field(
             description=(
                 "Should the FWHM be calculated by fitting a Gaussian to "
