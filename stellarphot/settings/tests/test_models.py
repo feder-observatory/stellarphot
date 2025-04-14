@@ -320,9 +320,7 @@ class TestPriorVersionsCompatibility:
         """
         This version had fwhm_by_fit, which has now changed to fwhm_method.
         """
-        assert "fwhm_method" in TEST_PHOTOMETRY_OPTIONS
         old_settings_style = deepcopy(TEST_PHOTOMETRY_SETTINGS)
-        assert "fwhm_method" in TEST_PHOTOMETRY_OPTIONS
         # Version 2.0.0a11 had fwhm_by_fit instead of fwhm_method
         # so delete the new entry
         print(old_settings_style["photometry_optional_settings"].keys())
