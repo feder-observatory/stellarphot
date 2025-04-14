@@ -630,6 +630,10 @@ def transform_to_catalog(
                 i="mag_SI",
                 transform="jester",
             )
+            # Yes, this is dumb. You fix it if you want it less dumb.
+            cat["mag_R"] = cat["mag_RC"]
+            cat["mag_I"] = cat["mag_IC"]
+            # The dumbness has ended for now
 
             cat_coords = SkyCoord(cat["ra"], cat["dec"], unit="degree")
             cat["color"] = cat[f"mag_{cat_color[0]}"] - cat[f"mag_{cat_color[1]}"]
