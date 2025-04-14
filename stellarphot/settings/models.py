@@ -19,7 +19,6 @@ from pydantic import (
     Field,
     NonNegativeFloat,
     PositiveFloat,
-    PositiveInt,
     create_model,
     field_validator,
     model_validator,
@@ -370,32 +369,55 @@ class PhotometryApertures(BaseModelWithTableRep):
         )
     )
 
+    variable_aperture: Annotated[
+        bool,
+        Field(
+            default=False,  # To match the original default
+            description=(
+                "Should the aperture be variable? If True, the aperture will be "
+                "calculated from the average FWHM of the stars in each image."
+            ),
+        ),
+    ]
+
     radius: Annotated[
-        PositiveInt,
+        PositiveFloat,
         Field(
             default=1,
-            description="radius of circular aperture, in pixels",
-            json_schema_extra=dict(autoui="ipywidgets.BoundedIntText"),
+            description="radius of circular aperture, in pixels or multiple of FWHM",
+            json_schema_extra=dict(autoui="ipywidgets.BoundedFloatText"),
         ),
     ]
     gap: Annotated[
-        PositiveInt,
+        PositiveFloat,
         Field(
             default=1,
             description="Size of gap between aperture and annulus, in pixels",
-            json_schema_extra=dict(autoui="ipywidgets.BoundedIntText"),
+            json_schema_extra=dict(autoui="ipywidgets.BoundedFloatText"),
         ),
     ]
     annulus_width: Annotated[
-        PositiveInt,
+        PositiveFloat,
         Field(
             default=1,
             description=("distance between inner and outer radii of annulus in pixels"),
-            json_schema_extra=dict(autoui="ipywidgets.BoundedIntText"),
+            json_schema_extra=dict(autoui="ipywidgets.BoundedFloatText"),
         ),
     ]
     # Disable the UI element by default because it is often calculate from an image
-    fwhm: Annotated[PositiveFloat, Field(disabled=True, default=1.0, title="FWHM")]
+    fwhm_estimate: Annotated[
+        PositiveFloat,
+        Field(
+            disabled=True,
+            default=1.0,
+            title="FWHM estimate",
+            description="FWHM estimate in pixels",
+            validation_alias=AliasChoices(
+                "fwhm",  # for backwards compatibility,
+                "fwhm_estimate",  # yes, pydantic does make you do this
+            ),
+        ),
+    ]
 
     @property
     def inner_annulus(self):

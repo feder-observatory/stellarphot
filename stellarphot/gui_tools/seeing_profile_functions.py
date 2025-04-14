@@ -539,7 +539,7 @@ class SeeingProfileWidget:
                     radius=aperture_radius,
                     gap=default_gap,
                     annulus_width=default_annulus_width,
-                    fwhm=rad_prof.FWHM,
+                    fwhm_estimate=rad_prof.FWHM,
                 )
                 update_aperture_settings = True
             else:

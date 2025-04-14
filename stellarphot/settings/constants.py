@@ -2,7 +2,13 @@
 # non-test places too. Putting them here ensures they can be imported
 # without needing test dependencies.
 
-TEST_APERTURE_SETTINGS = dict(radius=5, gap=10, annulus_width=15, fwhm=3.2)
+TEST_APERTURE_SETTINGS = dict(
+    variable_aperture=False,
+    radius=5,
+    gap=10,
+    annulus_width=15,
+    fwhm_estimate=3.2,
+)
 
 TEST_CAMERA_VALUES = dict(
     data_unit="adu",

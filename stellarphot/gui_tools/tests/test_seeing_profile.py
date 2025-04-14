@@ -127,7 +127,7 @@ def test_seeing_profile_properties(tmp_path, profile_stars):
         handler(profile_widget.iw, Event(star_loc_x, star_loc_y))
 
         # The FWHM should be close to 9.6
-        assert 9 < profile_widget.aperture_settings.value["fwhm"] < 10
+        assert 9 < profile_widget.aperture_settings.value["fwhm_estimate"] < 10
 
         # Get a copy of the current aperture settings
         phot_aps = dict(profile_widget.aperture_settings.value)

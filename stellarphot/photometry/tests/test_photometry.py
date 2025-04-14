@@ -105,7 +105,7 @@ def photometry_apertures():
         radius=FAKE_CCD_IMAGE.sources["aperture"][0],
         gap=FAKE_CCD_IMAGE.sources["aperture"][0],
         annulus_width=FAKE_CCD_IMAGE.sources["aperture"][0],
-        fwhm=FAKE_CCD_IMAGE.sources["x_stddev"].mean(),
+        fwhm_estimate=FAKE_CCD_IMAGE.sources["x_stddev"].mean(),
     )
 
 
@@ -321,8 +321,8 @@ class TestAperturePhotometry:
         # so we'll only get the correct net flux if these are removed.
         for source in fake_CCDimage.sources:
             center_px = (int(source["x_mean"]), int(source["y_mean"]))
-            begin = center_px[0] + inner_annulus + 1
-            end = begin + (outer_annulus - inner_annulus - 1)
+            begin = int(center_px[0] + inner_annulus + 1)
+            end = begin + int(outer_annulus - inner_annulus - 1)
             # Yes, x and y are deliberately reversed below.
             image[center_px[1], begin:end] = 100 * fake_CCDimage.mean_noise
 

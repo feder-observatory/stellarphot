@@ -380,7 +380,11 @@ def single_image_photometry(
     if use_coordinates == "sky":
         try:
             xcen, ycen = centroid_sources(
-                ccd_image.data, xs, ys, box_size=2 * photometry_apertures.radius + 1
+                # TODO: FIX THIS
+                ccd_image.data,
+                xs,
+                ys,
+                box_size=2 * int(photometry_apertures.radius) + 1,
             )
         except NoOverlapError:
             logger.warning(
@@ -529,7 +533,7 @@ def single_image_photometry(
         fwhm_x, fwhm_y = compute_fwhm(
             ccd_image,
             photom,
-            fwhm_estimate=photometry_apertures.fwhm,
+            fwhm_estimate=photometry_apertures.fwhm_estimate,
             fit_method=photometry_options.fwhm_method,
             sky_per_pix_column="sky_per_pix_avg",
         )
