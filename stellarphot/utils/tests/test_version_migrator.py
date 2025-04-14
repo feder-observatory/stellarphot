@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import pytest
 from astropy import units as u
 from astropy.table import Table
@@ -7,6 +9,9 @@ from stellarphot import PhotometryData
 from stellarphot.settings import Camera, Observatory
 from stellarphot.settings.constants import TEST_CAMERA_VALUES, TEST_OBSERVATORY_SETTINGS
 from stellarphot.utils.version_migrator import VersionMigrator
+
+TEST_CAMERA_VALUES = deepcopy(TEST_CAMERA_VALUES)
+TEST_OBSERVATORY_SETTINGS = deepcopy(TEST_OBSERVATORY_SETTINGS)
 
 
 class TestVersionMigrator:

@@ -1,6 +1,7 @@
 import json
 import random
 import re
+from copy import deepcopy
 
 import astropy.units as u
 import pytest
@@ -23,6 +24,7 @@ from stellarphot.settings.constants import (
 from stellarphot.settings.models import (
     Camera,
     Exoplanet,
+    FwhmMethods,
     LoggingSettings,
     Observatory,
     PartialPhotometrySettings,
@@ -33,6 +35,17 @@ from stellarphot.settings.models import (
     PhotometrySettings,
     SourceLocationSettings,
 )
+
+# NOTE: ALWAYS USE DEEPCOPY ON THESE DICTS SO TESTS DO NOT MODIFY THEM
+TEST_CAMERA_VALUES = deepcopy(TEST_CAMERA_VALUES)
+TEST_APERTURE_SETTINGS = deepcopy(TEST_APERTURE_SETTINGS)
+TEST_EXOPLANET_SETTINGS = deepcopy(TEST_EXOPLANET_SETTINGS)
+TEST_OBSERVATORY_SETTINGS = deepcopy(TEST_OBSERVATORY_SETTINGS)
+TEST_PHOTOMETRY_OPTIONS = deepcopy(TEST_PHOTOMETRY_OPTIONS)
+TEST_PASSBAND_MAP = deepcopy(TEST_PASSBAND_MAP)
+TEST_PHOTOMETRY_SETTINGS = deepcopy(TEST_PHOTOMETRY_SETTINGS)
+TEST_LOGGING_SETTINGS = deepcopy(TEST_LOGGING_SETTINGS)
+TEST_SOURCE_LOCATION_SETTINGS = deepcopy(TEST_SOURCE_LOCATION_SETTINGS)
 
 
 @pytest.mark.parametrize(
@@ -170,9 +183,9 @@ class TestModelAgnosticActions:
 @pytest.mark.parametrize(
     "model,settings",
     [
-        [Camera, TEST_CAMERA_VALUES.copy()],
-        [Observatory, TEST_OBSERVATORY_SETTINGS.copy()],
-        [PassbandMap, TEST_PASSBAND_MAP.copy()],
+        [Camera, deepcopy(TEST_CAMERA_VALUES)],
+        [Observatory, deepcopy(TEST_OBSERVATORY_SETTINGS)],
+        [PassbandMap, deepcopy(TEST_PASSBAND_MAP)],
     ],
 )
 class TestModelsWithName:
@@ -213,8 +226,8 @@ class TestModelsWithName:
 @pytest.mark.parametrize(
     "model,settings",
     [
-        [Camera, TEST_CAMERA_VALUES.copy()],
-        [Observatory, TEST_OBSERVATORY_SETTINGS.copy()],
+        [Camera, TEST_CAMERA_VALUES],
+        [Observatory, TEST_OBSERVATORY_SETTINGS],
     ],
 )
 class TestModelExamples:
@@ -284,6 +297,46 @@ class TestModelExamples:
                     assert model_value == u.Unit(v)
                 else:
                     assert model_value == v
+        assert "fwhm_method" in TEST_PHOTOMETRY_OPTIONS
+
+
+class TestPriorVersionsCompatibility:
+    """
+    Make sure that all prior versions of settings files are still readable
+    by the current version of the code.
+
+    Each method in this test class should contain the release version number
+    of the version it is checking for compatibility.
+    """
+
+    @pytest.mark.parametrize(
+        "old_setting,new_setting",
+        (
+            [True, FwhmMethods.FIT],
+            [False, FwhmMethods.PROFILE],
+        ),
+    )
+    def test_2_0_0a11(self, old_setting, new_setting):
+        """
+        This version had fwhm_by_fit, which has now changed to fwhm_method.
+        """
+        assert "fwhm_method" in TEST_PHOTOMETRY_OPTIONS
+        old_settings_style = deepcopy(TEST_PHOTOMETRY_SETTINGS)
+        assert "fwhm_method" in TEST_PHOTOMETRY_OPTIONS
+        # Version 2.0.0a11 had fwhm_by_fit instead of fwhm_method
+        # so delete the new entry
+        print(old_settings_style["photometry_optional_settings"].keys())
+        del old_settings_style["photometry_optional_settings"]["fwhm_method"]
+
+        # Add the old entry, which was a boolean. Later in the test that the
+        # old_setting is properly mapped to the expected new_setting
+        old_settings_style["photometry_optional_settings"]["fwhm_by_fit"] = old_setting
+
+        # Check that the old settings style can be read in -- no error means all is well
+        settings = PhotometrySettings(**old_settings_style)
+
+        # Check that that the new settings style is correct given the old_setting
+        assert settings.photometry_optional_settings.fwhm_method == new_setting
 
 
 def test_partial_photometry_settings():
@@ -332,7 +385,7 @@ def test_camera_unitscheck():
 
 def test_camera_negative_max_adu():
     # Check that a negative maximum data value raises an error
-    camera_for_test = TEST_CAMERA_VALUES.copy()
+    camera_for_test = deepcopy(TEST_CAMERA_VALUES)
     camera_for_test["max_data_value"] = -1 * u.Quantity(
         camera_for_test["max_data_value"]
     )
@@ -345,7 +398,7 @@ def test_camera_negative_max_adu():
 
 
 def test_camera_incompatible_gain_units():
-    camera_for_test = TEST_CAMERA_VALUES.copy()
+    camera_for_test = deepcopy(TEST_CAMERA_VALUES)
     # Gain unit is incompatible with noise unit (electrons vs. counts)
     camera_for_test["gain"] = 2.0 * u.count / u.adu
 
@@ -372,7 +425,7 @@ def test_camera_unitsless_gain():
 
 
 def test_camera_incompatible_max_val_units():
-    camera_for_test = TEST_CAMERA_VALUES.copy()
+    camera_for_test = TEST_CAMERA_VALUES
     # data unit is adu, not count
     camera_for_test["max_data_value"] = 50000 * u.count
 
@@ -386,7 +439,7 @@ def test_camera_incompatible_max_val_units():
 
 
 def test_camera_incompatible_dark_units():
-    camera_for_test = TEST_CAMERA_VALUES.copy()
+    camera_for_test = TEST_CAMERA_VALUES
     # Dark current unit is incompatible with gain unit (electrons vs. counts)
     camera_for_test["dark_current"] = 0.01 * u.count / u.second
 
@@ -433,7 +486,7 @@ def test_create_aperture_settings_correctly():
 @pytest.mark.parametrize("bad_one", ["radius", "gap", "annulus_width"])
 def test_create_invalid_values(bad_one):
     # Check that individual values that are bad raise an error
-    bad_settings = TEST_APERTURE_SETTINGS.copy()
+    bad_settings = TEST_APERTURE_SETTINGS
     bad_settings[bad_one] = -1
     with pytest.raises(ValidationError, match=bad_one):
         PhotometryApertures(**bad_settings)
@@ -547,7 +600,7 @@ def test_passband_map_entry_empty_name_raises_error():
 
 def test_create_invalid_exoplanet():
     # Set some bad values and make sure they raise validation errors
-    values = TEST_EXOPLANET_SETTINGS.copy()
+    values = TEST_EXOPLANET_SETTINGS
     # Make pediod and duration have invalid units for a time
     values["period"] = u.Quantity(values["period"]).value * u.m
     values["duration"] = u.Quantity(values["duration"]).value * u.m

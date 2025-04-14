@@ -2,6 +2,7 @@
 
 import re
 from copy import deepcopy
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any, Literal, Optional, TypeVar
 
@@ -11,6 +12,7 @@ from astropy.units import Quantity, Unit, UnitConversionError
 from astropy.utils import lazyproperty
 from pydantic import (
     AfterValidator,
+    AliasChoices,
     BaseModel,
     BeforeValidator,
     ConfigDict,
@@ -35,6 +37,7 @@ from .astropy_pydantic import (
 
 __all__ = [
     "Camera",
+    "FwhmMethods",
     "LoggingSettings",
     "PartialPhotometrySettings",
     "PassbandMap",
@@ -651,6 +654,16 @@ class SourceLocationSettings(BaseModelWithTableRep):
     ] = 5.0
 
 
+class FwhmMethods(StrEnum):
+    """
+    Available methods for finding FWHM of stars.
+    """
+
+    FIT = "fit"
+    MOMENTS = "moments"
+    PROFILE = "profile"
+
+
 class PhotometryOptionalSettings(BaseModelWithTableRep):
     """
     Options for performing photometry.
@@ -705,7 +718,7 @@ class PhotometryOptionalSettings(BaseModelWithTableRep):
     ... )
     >>> photometry_options
     PhotometryOptionalSettings(include_dig_noise=True, reject_too_close=False,...
-    reject_background_outliers=True, fwhm_by_fit=True, method='center')
+    reject_background_outliers=True, fwhm_method=<FwhmMethods.FIT: 'fit'>,...
 
     You can also change individual options after the object is created:
 
@@ -718,13 +731,27 @@ class PhotometryOptionalSettings(BaseModelWithTableRep):
     # model description. The json schema is really hard to read if the
     # description is too long.
 
-    # WHen a subclass has a ConfigDict it is merged with the parent class's
+    # When a subclass has a ConfigDict it is merged with the parent class's
     # ConfigDict.
     model_config = ConfigDict(
         json_schema_extra=dict(
             description=_extract_short_description(__doc__),
         )
     )
+
+    # Made this a static method to define inside this class, since this is the only
+    # class that needs to handle this.
+    @staticmethod
+    def _validate_fwhm_method(value: Any) -> Any:
+        if isinstance(value, bool):
+            # This is likely an old fwhm_by_fit option, so we convert to one
+            # of the new options.
+            # Note that originally False meant MOMENTS but it turns out that
+            # method is completely incorrect
+            return FwhmMethods.FIT if value else FwhmMethods.PROFILE
+        else:
+            # Pass the value along to pydantic to validate
+            return value
 
     include_dig_noise: Annotated[
         bool,
@@ -757,15 +784,20 @@ class PhotometryOptionalSettings(BaseModelWithTableRep):
         ),
     ] = True
 
-    fwhm_by_fit: Annotated[
-        bool,
+    fwhm_method: Annotated[
+        FwhmMethods,
+        BeforeValidator(_validate_fwhm_method),
         Field(
             description=(
                 "Should the FWHM be calculated by fitting a Gaussian to "
                 "the star or from image moments?"
-            )
+            ),
+            validation_alias=AliasChoices(
+                "fwhm_by_fit",  # for backwards compatibility,
+                "fwhm_method",  # yes, pydantic does make you do this
+            ),
         ),
-    ] = True
+    ] = FwhmMethods.PROFILE
 
     method: Annotated[
         Literal["exact", "center", "subpixel"],

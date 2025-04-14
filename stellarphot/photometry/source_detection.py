@@ -1,67 +1,18 @@
 import numpy as np
 from astropy import units as u
-from astropy.modeling.fitting import LevMarLSQFitter
-from astropy.modeling.models import Const2D, Gaussian2D
 from astropy.nddata import CCDData
 from astropy.nddata.utils import Cutout2D
-from astropy.stats import gaussian_sigma_to_fwhm, sigma_clipped_stats
+from astropy.stats import sigma_clipped_stats
 from astropy.table import Table
 from photutils.detection import DAOStarFinder
 from photutils.morphology import data_properties
+from photutils.profiles import RadialProfile
+from photutils.psf import fit_fwhm
 
 from stellarphot.core import SourceListData
+from stellarphot.settings.models import FwhmMethods
 
 __all__ = ["source_detection", "compute_fwhm"]
-
-
-def _fit_2dgaussian(data):
-    """
-    Fit a 2D Gaussian to data.
-
-    Written as a replacement for functionality that was removed from
-    photutils.
-
-    This function will be kept private so we don't have to support it.
-
-    Copy/pasted from
-    https://github.com/astropy/photutils/pull/1064/files#diff-9e64908ff7ac552845b4831870a749f397d73c681d218267bd9087c7757e6dd4R285
-
-    Parameters
-    ----------
-    data : array-like
-        The 2D array of data to fit.
-
-    Returns
-    -------
-    gfit : `astropy.modeling.Model`
-        The best-fit 2D Gaussian model.
-    """
-    mask = ~np.isfinite(data)
-
-    # If there are non-finite pixels they need to be masked out
-    # or many of the returned properties will be NaN.
-    props = data_properties(data - np.min(data[~mask]), mask=mask)
-
-    init_const = 0.0  # subtracted data minimum above
-    # ptp = peak-to-peak, i.e. max - min, need to also exclude non-finite
-    # values here.
-    init_amplitude = np.ptp(data[~mask])
-
-    g_init = Const2D(init_const) + Gaussian2D(
-        amplitude=init_amplitude,
-        x_mean=props.xcentroid,
-        y_mean=props.ycentroid,
-        x_stddev=props.semimajor_sigma.value,
-        y_stddev=props.semiminor_sigma.value,
-        theta=props.orientation.value,
-    )
-
-    fitter = LevMarLSQFitter()
-    y, x = np.indices(data.shape)
-    # Call fitter, enabling filtering of NaN/inf values
-    gfit = fitter(g_init, x, y, data, filter_non_finite=True)
-
-    return gfit
 
 
 def compute_fwhm(
@@ -70,8 +21,9 @@ def compute_fwhm(
     fwhm_estimate=5,
     x_column="xcenter",
     y_column="ycenter",
-    fit=True,
-    sky_per_pix_avg=0,
+    fit_method=FwhmMethods.FIT,  # This matches the old default
+    sky_per_pix_avg=None,
+    sky_per_pix_column=None,
 ):
     """
     Computes the FWHM in both x and y directions of sources in an image.
@@ -102,7 +54,14 @@ def compute_fwhm(
         moments of its light distribution using photutils.
 
     sky_per_pix_avg : float or array-like of float, optional (default=0)
-        Sky background to subtract before centroiding.
+        Sky background to subtract before centroiding. Cannot specify both
+        `sky_per_pix_avg` and `sky_per_pix_column`.
+
+    sky_per_pix_column : str, optional
+        The name of the column in `sources` that contains the sky
+        background values for each source. This is used to subtract the
+        sky background from the cutout before computing the FWHM. Cannot
+        specify both `sky_per_pix_avg` and `sky_per_pix_column`.
 
     Returns
     -------
@@ -111,13 +70,31 @@ def compute_fwhm(
         The FWHM of each source in the x and y directions.
 
     """
+    if sky_per_pix_avg is not None and sky_per_pix_column is not None:
+        raise ValueError(
+            "Cannot specify both `sky_per_pix_avg` and `sky_per_pix_column`."
+        )
+
+    if sky_per_pix_column is not None:
+        if sky_per_pix_column not in sources.colnames:
+            raise ValueError(f"Column {sky_per_pix_column} not found in sources table.")
+        sky_values = sources[sky_per_pix_column]
+
+    if sky_per_pix_avg is not None:
+        # User gave a value for the sky background to subtract
+        sky_values = [sky_per_pix_avg] * len(sources)
+    elif sky_per_pix_column is None:
+        # User didn't give a value for the sky background to subtract
+        # so try an of estimate it from the image
+
+        sky_values = [np.nanmedian(ccd.data)] * len(sources)
 
     fwhm_x = []
     fwhm_y = []
-    for source in sources:
+    for source, sky in zip(sources, sky_values, strict=True):
         x = source[x_column]
         y = source[y_column]
-        sky = sky_per_pix_avg
+
         # Cutout2D needs no units on the center position, so remove unit
         # if it is present.
         try:
@@ -127,29 +104,56 @@ def compute_fwhm(
         except AttributeError:
             pass
 
-        cutout = Cutout2D(ccd.data, (x, y), 5 * fwhm_estimate)
-        if fit:
-            fit = _fit_2dgaussian(cutout.data)
-            fwhm_x.append(gaussian_sigma_to_fwhm * fit.x_stddev_1)
-            fwhm_y.append(gaussian_sigma_to_fwhm * fit.y_stddev_1)
-            # print('Still fitting!!')
+        # SKY SUBTRACT SHIT!!
+        cutout = Cutout2D(ccd.data - sky, (x, y), 5 * fwhm_estimate)
+
+        # Mask any NaNs in the data
+        nan_mask = np.isnan(cutout.data)
+        inp_mask = getattr(ccd, "mask", None)
+        if inp_mask is not None:
+            inp_mask = inp_mask[cutout.slices_original]
+            mask = inp_mask | nan_mask
         else:
-            sc = data_properties(cutout.data - sky)
+            mask = nan_mask
 
-            # dat = np.where(cutout.data - sky > 0, cutout.data - sky, 0)
-            # mom1 = _moments(dat, order=1)
-            # xc = mom1[0, 1] / mom1[0, 0]
-            # yc = mom1[1, 0] / mom1[0, 0]
-            # moments = _moments_central(dat,
-            #                            center=(xc, yc), order=2)
-            # mom_scale = (moments / mom1[0, 0])
-            # fwhm_xm = 2 * np.sqrt(np.log(2) * mom_scale[0, 2])
-            # fwhm_ym = 2 * np.sqrt(np.log(2) * mom_scale[2, 0])
+        cutout_xy = cutout.to_cutout_position((x, y))
+        match fit_method:
+            case FwhmMethods.FIT:
+                # Make sure we get an odd fits shape
+                fit_shape = int(2 * ((5 * fwhm_estimate) // 2) + 1)
 
-            fwhm_xm = sc.fwhm.value
-            fwhm_ym = fwhm_xm
-            fwhm_x.append(fwhm_xm)
-            fwhm_y.append(fwhm_ym)
+                # fit_fwhm is supposed to handle NaNs automatically but it doesn't
+                # as of photutils 2.2.0
+                # see https://github.com/astropy/photutils/issues/2029
+                # For now replace any NaN with zero and hope for the best.
+                cutout.data[nan_mask] = 0
+                fit = fit_fwhm(
+                    cutout.data,
+                    xypos=cutout_xy,
+                    fwhm=fwhm_estimate,
+                    fit_shape=fit_shape,
+                    mask=mask,
+                )
+                fit = fit[0]
+
+                fwhm_x.append(fit)  # gaussian_sigma_to_fwhm * fit.x_stddev_1)
+                fwhm_y.append(fit)  # gaussian_sigma_to_fwhm * fit.y_stddev_1)
+                # print('Still fitting!!')
+            case FwhmMethods.MOMENTS:
+                sc = data_properties(cutout.data)
+
+                fwhm_xm = sc.fwhm.value
+                fwhm_ym = fwhm_xm
+                fwhm_x.append(fwhm_xm)
+                fwhm_y.append(fwhm_ym)
+            case FwhmMethods.PROFILE:
+                radii = np.arange(int(3 * fwhm_estimate))
+                profile = RadialProfile(cutout.data, cutout_xy, radii)
+                fwhm = profile.gaussian_fwhm
+                fwhm_x.append(fwhm)
+                fwhm_y.append(fwhm)
+            case _:
+                raise ValueError(f"Unknown fit method: {fit_method}")
 
     return np.array(fwhm_x), np.array(fwhm_y)
 

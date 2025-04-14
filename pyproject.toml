@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "A package for performing stellar photometry."
 readme = "README.md"
 license = { text = "BSD-3-Clause" }
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
     { name = "Matt Craig", email = "mattwcraig@gmail.com" },
 ]
@@ -196,5 +196,7 @@ filterwarnings = [
     # papermill is also using a deprecated method of getting current time
     'ignore:.*is deprecated and scheduled for removal.*:DeprecationWarning',
     # lightkurve is using a deprecated numpy interface
-    'ignore:.*numpy.core.einsumfunc is deprecated and has been renamed.*:DeprecationWarning'
+    'ignore:.*numpy.core.einsumfunc is deprecated and has been renamed.*:DeprecationWarning',
+    # Sometimes gaussian fits are not great
+    'ignore:The fit may be unsuccessful; check fit_info:astropy.utils.exceptions.AstropyUserWarning'
 ]

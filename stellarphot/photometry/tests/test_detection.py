@@ -3,12 +3,16 @@ import warnings
 import numpy as np
 import pytest
 from astropy import units as u
+from astropy.nddata import CCDData
 from astropy.stats import gaussian_sigma_to_fwhm
 from astropy.table import QTable
+from astropy.utils.data import get_pkg_data_path
 from astropy.utils.exceptions import AstropyUserWarning
 
+from stellarphot import SourceListData
 from stellarphot.photometry import compute_fwhm, source_detection
 from stellarphot.photometry.tests.fake_image import FakeImage
+from stellarphot.settings.models import FwhmMethods
 
 # Make sure the tests are deterministic by using a random seed
 SEED = 5432985
@@ -35,7 +39,8 @@ def test_compute_fwhm(units):
     assert np.allclose(fwhm_x, expected_fwhm, rtol=1e-2)
 
 
-def test_compute_fwhm_with_NaNs():
+@pytest.mark.parametrize("mask_by_nan", [True, False])
+def test_compute_fwhm_with_missing_data(mask_by_nan):
     # Regression test for https://github.com/feder-observatory/stellarphot/issues/161
     # We should be able to find FWHM for a source even with NaNs in the image.
     fake_image = FakeImage(seed=SEED)
@@ -43,20 +48,24 @@ def test_compute_fwhm_with_NaNs():
     x, y = sources["x_mean"].astype(int)[0], sources["y_mean"].astype(int)[0]
     image = fake_image.image.copy()
 
-    # Add a NaN to the image at the location of the first source. Note the
-    # usual row/column swap when going to x/y coordinates.
-    image[y, x] = np.nan
+    if mask_by_nan:
+        # Add a NaN to the image at the location of the first source. Note the
+        # usual row/column swap when going to x/y coordinates.
+        image[y, x] = np.nan
+    else:
+        image = CCDData(image, unit=u.adu, mask=np.zeros_like(image, dtype=bool))
+        image.mask[y, x] = True
 
     # We expect a warning about NaNs in the image, so catch it
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore",
-            message="Non-Finite input data has been removed",
+            message=("Input data contains unmasked non-finite values "),
             category=AstropyUserWarning,
         )
-        fwhm_x, fwhm_y = compute_fwhm(
-            image, sources, x_column="x_mean", y_column="y_mean", fit=True
-        )
+    fwhm_x, fwhm_y = compute_fwhm(
+        image, sources, x_column="x_mean", y_column="y_mean", fit_method=FwhmMethods.FIT
+    )
 
     expected_fwhm = np.array(sources["x_stddev"] * gaussian_sigma_to_fwhm)
     assert np.allclose(fwhm_x, expected_fwhm, rtol=1e-2)
@@ -132,3 +141,62 @@ def test_detect_source_with_padding():
 
     # Did we drop one source because it was too close to the edge?
     assert len(sources) - 1 == len(found_sources)
+
+
+@pytest.mark.parametrize(
+    "fit_method", [FwhmMethods.FIT, FwhmMethods.PROFILE, FwhmMethods.MOMENTS]
+)
+def test_fwhm_computation(fit_method):
+    # Regression test for #490, in which FWHM computation is incorrect
+    # because the image hasn't been background subtracted.
+    ccd_file = get_pkg_data_path("data/cutout_for_fwhm_test.fits")
+    source_list_file = get_pkg_data_path("data/source_list_for_fwhm_test.ecsv")
+
+    ccd = CCDData.read(ccd_file, unit=u.adu)
+    source_list = SourceListData.read(source_list_file)
+    # Value below is from the image the cutout was taken from
+    source_list["sky_per_pix_avg"] = np.array([83.69])
+
+    fwhm_x, fwhm_y = compute_fwhm(
+        ccd,
+        source_list,
+        fwhm_estimate=6.85179,
+        x_column="xcenter",
+        y_column="ycenter",
+        sky_per_pix_column="sky_per_pix_avg",
+        fit_method=fit_method,
+    )
+
+    avg_fwhm = np.mean([fwhm_x, fwhm_y])
+    if fit_method == FwhmMethods.MOMENTS:
+        assert avg_fwhm > 7
+    else:
+        assert np.isclose(avg_fwhm, 6.6, rtol=0.1)
+
+
+def test_compute_fwhm_input_options():
+    with pytest.raises(ValueError, match="Cannot specify both "):
+        compute_fwhm(
+            None, None, sky_per_pix_avg=10, sky_per_pix_column="sky_per_pix_avg"
+        )
+
+    # Make a table with a single column
+    table = QTable({"sky_per_pix_avg": [10]})
+    spp_column = "foo"
+    with pytest.raises(
+        ValueError, match=f"Column {spp_column} not found in sources table"
+    ):
+        compute_fwhm(None, table, sky_per_pix_column=spp_column)
+
+    fake_image = FakeImage(seed=SEED)
+    sources = fake_image.sources
+
+    fit_method = "foo"
+    with pytest.raises(ValueError, match=f"Unknown fit method: {fit_method}"):
+        compute_fwhm(
+            fake_image.image,
+            sources,
+            fit_method=fit_method,
+            x_column="x_mean",
+            y_column="y_mean",
+        )
