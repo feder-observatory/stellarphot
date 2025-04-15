@@ -684,7 +684,7 @@ class PhotometryOptionalSettings(BaseModelWithTableRep):
         pixels (e.g. like stars in the annulus)
 
     fwhm_method : `FwhmMethods` (default: ``FwhmMethods.FIT``)
-        Method for finding the FWHM of the star. 'fit'fits a 1D Gaussian to the
+        Method for finding the FWHM of the star. 'fit' fits a 1D Gaussian to the
         star, 'profiile' fits a 1D Gaussian to the radial profile, and
         'moments' uses second order moments of the image, which is terrible.
 
@@ -789,7 +789,7 @@ class PhotometryOptionalSettings(BaseModelWithTableRep):
         BeforeValidator(_validate_fwhm_method),
         Field(
             description=(
-                "Method for finding the FWHM of the star. 'fit'fits a 1D Gaussian to "
+                "Method for finding the FWHM of the star. 'fit' fits a 1D Gaussian to "
                 "the star, 'profiile' fits a 1D Gaussian to the radial profile, and "
                 "'moments' uses second order moments of the image, which is terrible."
             ),
