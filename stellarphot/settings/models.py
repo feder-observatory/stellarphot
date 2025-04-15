@@ -683,10 +683,10 @@ class PhotometryOptionalSettings(BaseModelWithTableRep):
         If ``True``, sigma clip the pixels in the annulus to reject outlying
         pixels (e.g. like stars in the annulus)
 
-    fwhm_by_fit : bool, optional (default: True)
-        If ``True``, the FWHM will be calculated by fitting a Gaussian to
-        the star. If ``False``, the FWHM will be calculated by finding the
-        second order moments of the light distribution. Default is ``True``.
+    fwhm_method : `FwhmMethods` (default: ``FwhmMethods.FIT``)
+        Method for finding the FWHM of the star. 'fit' fits a 1D Gaussian to the
+        star, 'profiile' fits a 1D Gaussian to the radial profile, and
+        'moments' uses second order moments of the image, which is terrible.
 
     method : `typing.Literal["exact", "center", "subpixel"]`, optional
         How to handle partial pixels in the aperture.  If ``'exact'``, the fraction of
@@ -789,8 +789,9 @@ class PhotometryOptionalSettings(BaseModelWithTableRep):
         BeforeValidator(_validate_fwhm_method),
         Field(
             description=(
-                "Should the FWHM be calculated by fitting a Gaussian to "
-                "the star or from image moments?"
+                "Method for finding the FWHM of the star. 'fit' fits a 1D Gaussian to "
+                "the star, 'profiile' fits a 1D Gaussian to the radial profile, and "
+                "'moments' uses second order moments of the image, which is terrible."
             ),
             validation_alias=AliasChoices(
                 "fwhm_by_fit",  # for backwards compatibility,
