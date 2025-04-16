@@ -674,6 +674,93 @@ class TestAperturePhotometry:
                     object_of_interest=object_name,
                 )
 
+    def test_photometry_variable_aperture(self, tmp_path, photometry_settings_for_test):
+        # Create a series of images with sources of different FWHM and
+        # run photometry onthem with a variable aperture radius.
+        fwhm_values = [5, 7.5, 10]
+
+        fake_images = [FakeCCDImage(seed=SEED, fwhm=fwhm) for fwhm in fwhm_values]
+        num_files = len(fake_images)
+        # Write fake images to temporary directory and test
+        # multi_image_photometry on them.
+        # NOTE: ignore_cleanup_errors=True is needed to avoid an error
+        #       when the temporary directory is deleted on Windows.
+
+        # Come up with Filenames
+        temp_file_names = [
+            Path(tmp_path) / f"tempfile_{i:02d}.fits" for i in range(1, num_files + 1)
+        ]
+        # Write the CCDData objects to files
+        for i, image in enumerate(fake_images):
+            image.write(temp_file_names[i])
+        object_name = fake_images[0].header["OBJECT"]
+        sources = fake_images[0].sources
+        aperture_settings = photometry_settings_for_test.photometry_apertures
+
+        fwhm_multiplier = 1.5
+        # Set the aperture radius to be a function of the FWHM
+        aperture_settings.radius = fwhm_multiplier
+        aperture_settings.variable_aperture = True
+
+        # Generate the source list for photometry
+        wcs = fake_images[0].wcs
+        source_coords = wcs.pixel_to_world(
+            sources["x_mean"].value, sources["y_mean"].value
+        )
+        sources["ra"] = source_coords.ra
+        sources["dec"] = source_coords.dec
+        sources["x_mean"] = sources["x_mean"] * u.pixel
+        sources["y_mean"] = sources["y_mean"] * u.pixel
+        sources["star_id"] = list(range(len(sources)))
+        sources.rename_columns(
+            ["x_mean", "y_mean"],
+            ["xcenter", "ycenter"],
+        )
+
+        source_list_file = Path(tmp_path) / "source_list.ecsv"
+        SourceListData(input_data=sources).write(
+            source_list_file, format="ascii.ecsv", overwrite=True
+        )
+
+        # Make a copy of photometry options
+        phot_options = (
+            photometry_settings_for_test.photometry_optional_settings.model_copy()
+        )
+
+        # Modify options to match test before we used phot_options
+        phot_options.include_dig_noise = True
+        phot_options.reject_too_close = True
+        phot_options.reject_background_outliers = True
+        phot_options.fwhm_method = FwhmMethods.FIT
+
+        photometry_settings_for_test.photometry_optional_settings = phot_options
+        photometry_settings_for_test.source_location_settings.use_coordinates = "sky"
+        photometry_settings_for_test.source_location_settings.source_list_file = str(
+            source_list_file
+        )
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="Cannot merge meta key",
+                category=MergeConflictWarning,
+            )
+            ap_phot = AperturePhotometry(settings=photometry_settings_for_test)
+            phot_data = ap_phot(
+                tmp_path,
+                object_of_interest=object_name,
+            )
+
+        grouped = phot_data.group_by("file")
+        for expected_fwhm, group in zip(fwhm_values, grouped.groups, strict=True):
+            # Check that computed fhwm is close
+            assert np.allclose(
+                group["fwhm_x"].value,
+                expected_fwhm,
+                rtol=0.1,
+            )
+            # Check that the aperture radius is set correctly
+            assert np.allclose(group["aperture"].value, fwhm_multiplier * expected_fwhm)
+
     def test_invalid_path(self, photometry_settings_for_test):
         ap = AperturePhotometry(settings=photometry_settings_for_test)
         with pytest.raises(ValueError, match="is not a valid file or directory"):

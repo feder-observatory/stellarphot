@@ -2,6 +2,7 @@ import astropy.io.fits as fits
 import numpy as np
 from astropy.modeling.models import Gaussian2D
 from astropy.nddata import CCDData
+from astropy.stats import gaussian_fwhm_to_sigma
 from astropy.table import Table
 from astropy.utils.data import get_pkg_data_filename
 from astropy.wcs import WCS
@@ -24,10 +25,14 @@ class FakeImage:
         the seed will be randomly generated.
     """
 
-    def __init__(self, noise_dev=1.0, seed=None):
+    def __init__(self, noise_dev=1.0, seed=None, fwhm=None):
         self.image_shape = [400, 500]
         data_file = get_pkg_data_filename("data/test_sources.csv")
         self._sources = Table.read(data_file)
+        if fwhm is not None:
+            # Set the FWHM of the sources to the specified value
+            self._sources["x_stddev"] = gaussian_fwhm_to_sigma * fwhm
+            self._sources["y_stddev"] = gaussian_fwhm_to_sigma * fwhm
         self.mean_noise = self.sources["amplitude"].max() / 100
         self.noise_dev = noise_dev
         self._stars = make_gaussian_sources_image(tuple(self.image_shape), self.sources)
@@ -57,12 +62,13 @@ class FakeCCDImage(CCDData):
     def __init__(self, *args, **kwargs):
         # Pull off the seed argument if it exists.
         seed = kwargs.pop("seed", None)
+        fwhm = kwargs.pop("fwhm", None)
 
         # If no arguments are passed, use the default FakeImage.
         # This dodge is necessary because otherwise we can't copy the CCDData
         # object apparently.
         if (len(args) == 0) and (len(kwargs) == 0):
-            base_data = FakeImage(seed=seed)
+            base_data = FakeImage(seed=seed, fwhm=fwhm)
             super().__init__(base_data.image.copy(), unit="adu")
 
             # Append attributes from the base data object.
