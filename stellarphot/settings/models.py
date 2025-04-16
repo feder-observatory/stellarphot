@@ -433,6 +433,16 @@ class PhotometryApertures(BaseModelWithTableRep):
         """
         return self.inner_annulus + self.annulus_width
 
+    def radius_pixels(self, fwhm):
+        """
+        Return the radius in pixels, depending on whether the aperture is
+        variable or not.
+        """
+        if self.variable_aperture:
+            return fwhm * self.radius
+        else:
+            return self.radius
+
 
 class PhotometryFileSettings(BaseModelWithTableRep):
     """

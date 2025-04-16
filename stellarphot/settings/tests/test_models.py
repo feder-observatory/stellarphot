@@ -481,6 +481,21 @@ def test_create_aperture_settings_correctly():
     )
 
 
+def test_create_aperture_settings_variable_aperture():
+    # Check that the variable aperture flag is set correctly
+    settings = deepcopy(TEST_APERTURE_SETTINGS)
+    settings["variable_aperture"] = True
+    # The radius below is intended as a multiple of the FWHM
+    settings["radius"] = 1.5
+    ap_set = PhotometryApertures(**settings)
+    assert ap_set.variable_aperture is True
+
+    # Check that the radius in pixels is correct
+    fwhm = 5.0
+    radius_pix = ap_set.radius_pixels(fwhm)
+    assert radius_pix == pytest.approx(7.5, rel=1e-6)
+
+
 @pytest.mark.parametrize("bad_one", ["radius", "gap", "annulus_width"])
 def test_create_invalid_values(bad_one):
     # Check that individual values that are bad raise an error

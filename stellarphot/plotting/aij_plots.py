@@ -68,7 +68,7 @@ def seeing_plot(
             variable_aperture=False,
         )
 
-    radius = photometry_settings.radius
+    radius = photometry_settings.radius_pixels(2 * HWHM)
     inner_annulus = photometry_settings.inner_annulus
     outer_annulus = photometry_settings.outer_annulus
 
