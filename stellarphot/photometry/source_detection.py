@@ -31,7 +31,7 @@ def compute_fwhm(
     Parameters
     ----------
 
-    ccd : `astropy.nddata.CCDData`
+    ccd : `astropy.nddata.CCDData` or `numpy.ndarray`
         The CCD Image array.
 
     sources : `astropy.table.Table`
@@ -70,6 +70,8 @@ def compute_fwhm(
         The FWHM of each source in the x and y directions.
 
     """
+    data = ccd.data if isinstance(ccd, CCDData) else ccd
+
     if sky_per_pix_avg is not None and sky_per_pix_column is not None:
         raise ValueError(
             "Cannot specify both `sky_per_pix_avg` and `sky_per_pix_column`."
@@ -104,8 +106,8 @@ def compute_fwhm(
         except AttributeError:
             pass
 
-        # SKY SUBTRACT SHIT!!
-        cutout = Cutout2D(ccd.data - sky, (x, y), 5 * fwhm_estimate)
+        # SKY SUBTRACT STUFF!!
+        cutout = Cutout2D(data - sky, (x, y), 5 * fwhm_estimate)
 
         # Mask any NaNs in the data
         nan_mask = np.isnan(cutout.data)
