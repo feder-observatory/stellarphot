@@ -11,7 +11,7 @@ from astropy.utils.exceptions import AstropyUserWarning
 
 from stellarphot import SourceListData
 from stellarphot.photometry import compute_fwhm, source_detection
-from stellarphot.photometry.tests.fake_image import FakeImage
+from stellarphot.photometry.tests.fake_image import FakeCCDImage, FakeImage
 from stellarphot.settings.models import FwhmMethods
 
 # Make sure the tests are deterministic by using a random seed
@@ -71,11 +71,27 @@ def test_compute_fwhm_with_missing_data(mask_by_nan):
     assert np.allclose(fwhm_x, expected_fwhm, rtol=1e-2)
 
 
-def test_detect_source_number_location():
+@pytest.mark.parametrize("image_is_ccd", [True, False])
+@pytest.mark.parametrize("find_fwhm", [True, False])
+@pytest.mark.parametrize("stddev_input", [True, False])
+@pytest.mark.parametrize("spp_unit", [None, u.adu / u.pixel])
+@pytest.mark.parametrize("provide_spp_input", [True, False, None])
+def test_detect_source_number_location(
+    provide_spp_input, spp_unit, stddev_input, find_fwhm, image_is_ccd
+):
     """
     Make sure we detect the sources in the input table....
     """
-    fake_image = FakeImage(seed=SEED)
+    # Skip some cmobinations we really don't need to test
+    if not provide_spp_input and spp_unit is not None:
+        pytest.skip("No point in testing this combination")
+    if image_is_ccd:
+        fake_image = FakeCCDImage(seed=SEED)
+        image = fake_image
+    else:
+        fake_image = FakeImage(seed=SEED)
+        image = fake_image.image
+
     sources = QTable(
         fake_image.sources,
         units={
@@ -86,13 +102,26 @@ def test_detect_source_number_location():
         },
     )
     # print(sources)
-    # Pass only one value for the sky background for source detection
-    sky_per_pix = sources["sky_per_pix_avg"].mean()
+    if provide_spp_input:
+        # Pass only one value for the sky background for source detection
+        sky_per_pix = sources["sky_per_pix_avg"].mean()
+        sky_per_pix *= spp_unit if spp_unit else 1
+    else:
+        sky_per_pix = None
+        print(sources["sky_per_pix_avg"].mean())
+
+    stddev = fake_image.noise_dev if stddev_input else None
+
+    fwhm = 2 * sources["x_stddev"].mean()
+
     found_sources = source_detection(
-        fake_image.image,
-        fwhm=2 * sources["x_stddev"].mean(),
+        image,
+        fwhm=fwhm,
+        find_fwhm=find_fwhm,
         threshold=10,
         sky_per_pix_avg=sky_per_pix,
+        stddev=stddev,
+        verbose=True,  # Run verbose=True on this test to cover all verbose lines
     )
     # Sort by flux so we can reliably match them
     sources.sort("amplitude")
@@ -105,12 +134,13 @@ def test_detect_source_number_location():
         # Do the positions match?
         np.testing.assert_allclose(out["xcenter"], inp["x_mean"], rtol=1e-5, atol=0.05)
         np.testing.assert_allclose(out["ycenter"], inp["y_mean"], rtol=1e-5, atol=0.05)
-        np.testing.assert_allclose(
-            gaussian_sigma_to_fwhm * (inp["x_stddev"] + inp["y_stddev"]) / 2,
-            out["width"],
-            rtol=1e-5,
-            atol=0.05,
-        )
+        if find_fwhm:
+            np.testing.assert_allclose(
+                gaussian_sigma_to_fwhm * (inp["x_stddev"] + inp["y_stddev"]) / 2,
+                out["width"],
+                rtol=1e-5,
+                atol=0.05,
+            )
 
 
 def test_detect_source_with_padding():
@@ -141,6 +171,11 @@ def test_detect_source_with_padding():
 
     # Did we drop one source because it was too close to the edge?
     assert len(sources) - 1 == len(found_sources)
+
+
+def test_detect_source_bad_input():
+    with pytest.raises(ValueError, match="ccd must be a numpy array or CCDData object"):
+        source_detection(None)
 
 
 @pytest.mark.parametrize(
