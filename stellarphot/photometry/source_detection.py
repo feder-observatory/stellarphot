@@ -164,9 +164,11 @@ def source_detection(
     sigma=3.0,
     iters=5,
     threshold=10.0,
+    stddev=None,
     find_fwhm=True,
     sky_per_pix_avg=0,
     padding=0,
+    verbose=False,
 ):
     """
     Returns an SourceListData object containing the position of sources
@@ -195,6 +197,11 @@ def source_detection(
     threshold : float, optional. (default=10.0)
         The number of standard deviations above which to select sources.
 
+    stddev : float, optional
+        If provided, this value will be used as the standard deviation
+        of the image.  If not provided, the standard deviation will be
+        calculated using `sigma_clipped_stats` on the image.
+
     find_fwhm : bool, optional (default=True)
         If ``True``, estimate the FWHM of each source by fitting a 2D Gaussian
         to it. If ``False``, the 'fwhm_x', 'fwhm_y', and 'width' columns of
@@ -208,6 +215,10 @@ def source_detection(
     padding : int, optional (default=0)
         Distance from the edge of the image to ignore when searching for
         sources.
+
+    verbose : bool, optional
+        If ``True``, print additional information about the source
+        detection process.
 
     Returns
     -------
@@ -228,34 +239,47 @@ def source_detection(
     if isinstance(fwhm, u.Quantity):
         fwhm = fwhm.value
 
+    if verbose:
+        print(
+            "source_detection: You may see a warning about invalid values in the "
+            "input image.  This is expected if any pixels are saturated and can be "
+            "ignored."
+        )
+
     # Get statistics of the input image (and use them to estimate the sky background
     # if not provided).  Using clipped stats should hopefully get rid of any
-    # bright stars that might be in the image, so the mean should be a good
-    # estimate of the sky background.
-    print(
-        "source_detection: You may see a warning about invalid values in the "
-        "input image.  This is expected if any pixels are saturated and can be "
-        "ignored."
-    )
-    mean, median, std = sigma_clipped_stats(ccd, sigma=sigma, maxiters=iters)
-    print(
-        f"source_detection: sigma_clipped_stats mean={mean:.4f}, "
-        f"median={median:.4f}, std={std:.4f}"
-    )
+    # bright stars that might be in the image. Only do this if stddev is not provided.
+    if stddev is None:
+        mean, median, stddev = sigma_clipped_stats(ccd, sigma=sigma, maxiters=iters)
+    else:
+        # Set median to None to indicate sigma clipped stats were not
+        # calculated.
+        median = None
+
     if sky_per_pix_avg is None:
-        sky_per_pix_avg = mean
-        print(f"source_detection: sky_per_pix_avg set to {sky_per_pix_avg:.4f}")
+        if median is not None:
+            # We calculated sigma clipped stats, so use them
+            sky_per_pix_avg = median
+        else:
+            # A median is a pretty good estimate of the sky background, so use it
+            # for detection. For *photometry* a better estimate is needed, but for
+            # detection, the median is good enough and much faster than sigma clipping.
+            sky_per_pix_avg = np.nanmedian(ccd.data)
+        if verbose:
+            print(f"source_detection: sky_per_pix_avg set to {sky_per_pix_avg:.4f}")
 
     # Identify sources applying DAOStarFinder to a "sky subtracted"
     # image.
-    print(
-        f"source_detection: threshold set to {threshold}* standard deviation "
-        f"({std:.4f})"
-    )
-    print(f"source_detection: Assuming fwhm of {fwhm} for DAOStarFinder")
+    if verbose:
+        print(
+            f"source_detection: threshold set to {threshold}* standard deviation "
+            f"({stddev:.4f})"
+        )
+        print(f"source_detection: Assuming fwhm of {fwhm} for DAOStarFinder")
+
     # daofind should be run on background subtracted image
     # (fails, or at least returns garbage, if sky_per_pix_avg is too low)
-    daofind = DAOStarFinder(fwhm=fwhm, threshold=threshold * std)
+    daofind = DAOStarFinder(fwhm=fwhm, threshold=threshold * stddev)
     if isinstance(ccd, CCDData):
         sources = daofind(ccd.data - sky_per_pix_avg)
     else:
@@ -277,7 +301,8 @@ def source_detection(
         padding_smt = f" (after removing {src_cnt0-len(sources)} sources near the edge)"
 
     src_cnt = len(sources)
-    print(f"source_detection: {src_cnt} sources identified{padding_smt}.")
+    if verbose:
+        print(f"source_detection: {src_cnt} sources identified{padding_smt}.")
 
     # If image as WCS, compute RA and Dec of each source
     try:
