@@ -10,7 +10,7 @@ from astropy.utils.data import get_pkg_data_path
 from astropy.utils.exceptions import AstropyUserWarning
 
 from stellarphot import SourceListData
-from stellarphot.photometry import compute_fwhm, source_detection
+from stellarphot.photometry import compute_fwhm, fast_fwhm_from_image, source_detection
 from stellarphot.photometry.tests.fake_image import FakeCCDImage, FakeImage
 from stellarphot.settings.models import FwhmMethods
 
@@ -234,4 +234,73 @@ def test_compute_fwhm_input_options():
             fit_method=fit_method,
             x_column="x_mean",
             y_column="y_mean",
+        )
+
+
+@pytest.mark.parametrize(
+    "aggregate_by,n_bright_expect",
+    (
+        [None, 20],
+        ["mean", 1],
+        ["median", 1],
+    ),
+)
+def test_fast_fwhm_from_image(aggregate_by, n_bright_expect):
+    # This should maybe be split into a few tests. Putting that aside, this test
+    # checks that
+    # + the FWHM estimate is correct
+    # + changing the max_adu changes the sources that are used
+    expected_fwhm = 5.5
+    fake_image = FakeImage(seed=SEED, fwhm=expected_fwhm, n_repeats=5)
+    n_bright = 20
+    fwhms = fast_fwhm_from_image(
+        fake_image.image,
+        5,
+        noise=fake_image.noise_dev,
+        n_brightest_sources=n_bright,
+        max_adu=65000,
+        aggregate_by=aggregate_by,
+    )
+
+    # Make sure we got the right number of sources
+    assert len(np.atleast_1d(fwhms)) == n_bright_expect
+
+    if aggregate_by is None:
+        # Check that the FWHM values are reasonable
+        assert np.allclose(fwhms, fake_image.input_fwhm, rtol=0.01)
+    else:
+        assert fwhms == pytest.approx(fake_image.input_fwhm, rel=0.01)
+
+    # Make sure some of the stars are over the max_adu and check that
+    # we get a different list of sources.
+    max_adu = fake_image.sources["amplitude"].max() * 0.6
+    fwhms_some_max_out = fast_fwhm_from_image(
+        fake_image.image,
+        5,
+        noise=fake_image.noise_dev,
+        n_brightest_sources=n_bright,
+        max_adu=max_adu,
+        aggregate_by=aggregate_by,
+    )
+
+    if aggregate_by is None:
+        # Make sure we got different sources
+        assert fwhms.mean() != fwhms_some_max_out.mean()
+    else:
+        assert fwhms != fwhms_some_max_out
+
+
+def test_fast_fwhm_from_image_bad_aggregate():
+    # check that providing a bad aggregate_by method raises an error
+    expected_fwhm = 5.5
+    fake_image = FakeImage(seed=SEED, fwhm=expected_fwhm, n_repeats=5)
+    n_bright = 20
+    with pytest.raises(ValueError, match="Unknown aggregate_by method"):
+        fast_fwhm_from_image(
+            fake_image.image,
+            5,
+            noise=fake_image.noise_dev,
+            n_brightest_sources=n_bright,
+            max_adu=65000,
+            aggregate_by="foo",
         )
