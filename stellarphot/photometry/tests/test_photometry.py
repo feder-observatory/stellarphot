@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 from astropy import units as u
 from astropy.io import ascii
+from astropy.stats import gaussian_sigma_to_fwhm
 from astropy.utils.data import get_pkg_data_filename
 from astropy.utils.metadata.exceptions import MergeConflictWarning
 
@@ -238,6 +239,10 @@ class TestAperturePhotometry:
         phot_options.reject_too_close = False
         phot_options.include_dig_noise = True
 
+        # Set the camera noise to the value in the fake image
+        unit = photometry_settings_for_test.camera.read_noise
+        photometry_settings_for_test.camera.read_noise = fake_CCDimage.noise_dev * unit
+
         source_list_file = tmp_path / "source_list.ecsv"
         found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
 
@@ -432,6 +437,12 @@ class TestAperturePhotometry:
         # Create list of fake CCDData objects
         num_files = 5
         fake_images = self.list_of_fakes(num_files)
+
+        # Set the camera noise to the noise in the test images
+        noise_unit = photometry_settings_for_test.camera.read_noise.unit
+        photometry_settings_for_test.camera.read_noise = (
+            fake_images[0].noise_dev * noise_unit
+        )
 
         # Write fake images to temporary directory and test
         # multi_image_photometry on them.
@@ -676,26 +687,39 @@ class TestAperturePhotometry:
 
     def test_photometry_variable_aperture(self, tmp_path, photometry_settings_for_test):
         # Create a series of images with sources of different FWHM and
-        # run photometry onthem with a variable aperture radius.
+        # run photometry on them with a variable aperture radius.
         fwhm_values = [5, 7.5, 10]
 
-        fake_images = [FakeCCDImage(seed=SEED, fwhm=fwhm) for fwhm in fwhm_values]
+        # Set the camera noise and use this as the noise for the image
+        noise = 1 * u.electron
+        photometry_settings_for_test.camera.read_noise = noise
+
+        fake_images = [
+            FakeCCDImage(seed=SEED, fwhm=fwhm, noise_dev=noise.value)
+            for fwhm in fwhm_values
+        ]
         num_files = len(fake_images)
         # Write fake images to temporary directory and test
         # multi_image_photometry on them.
         # NOTE: ignore_cleanup_errors=True is needed to avoid an error
         #       when the temporary directory is deleted on Windows.
 
-        # Come up with Filenames
+        # Come up with filenames
         temp_file_names = [
             Path(tmp_path) / f"tempfile_{i:02d}.fits" for i in range(1, num_files + 1)
         ]
         # Write the CCDData objects to files
         for i, image in enumerate(fake_images):
             image.write(temp_file_names[i])
+
         object_name = fake_images[0].header["OBJECT"]
         sources = fake_images[0].sources
+
+        # Get the expected fwhm of the sources, and make sure we use that in
+        # the aperture settings.
         aperture_settings = photometry_settings_for_test.photometry_apertures
+        fwhm_est = gaussian_sigma_to_fwhm * sources["x_stddev"].mean()
+        aperture_settings.fwhm_estimate = fwhm_est
 
         fwhm_multiplier = 1.5
         # Set the aperture radius to be a function of the FWHM
@@ -751,15 +775,19 @@ class TestAperturePhotometry:
             )
 
         grouped = phot_data.group_by("file")
+        tolerance = 0.01
         for expected_fwhm, group in zip(fwhm_values, grouped.groups, strict=True):
             # Check that computed fhwm is close
             assert np.allclose(
                 group["fwhm_x"].value,
                 expected_fwhm,
-                rtol=0.1,
+                rtol=tolerance,
             )
-            # Check that the aperture radius is set correctly
-            assert np.allclose(group["aperture"].value, fwhm_multiplier * expected_fwhm)
+            # Check that the aperture radius is set correctly; use the same tolerance
+            # as the fwhm
+            assert np.allclose(
+                group["aperture"].value, fwhm_multiplier * expected_fwhm, rtol=tolerance
+            )
 
     def test_invalid_path(self, photometry_settings_for_test):
         ap = AperturePhotometry(settings=photometry_settings_for_test)
