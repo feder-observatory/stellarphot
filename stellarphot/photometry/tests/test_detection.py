@@ -251,7 +251,7 @@ def test_fast_fwhm_from_image(aggregate_by, n_bright_expect):
     # + the FWHM estimate is correct
     # + changing the max_adu changes the sources that are used
     expected_fwhm = 5.5
-    fake_image = FakeImage(seed=SEED, fwhm=expected_fwhm, n_repeats=5)
+    fake_image = FakeImage(seed=SEED, fwhm=expected_fwhm, n_repeats_per_side=5)
     n_bright = 20
     fwhms = fast_fwhm_from_image(
         fake_image.image,
@@ -293,7 +293,7 @@ def test_fast_fwhm_from_image(aggregate_by, n_bright_expect):
 def test_fast_fwhm_from_image_bad_aggregate():
     # check that providing a bad aggregate_by method raises an error
     expected_fwhm = 5.5
-    fake_image = FakeImage(seed=SEED, fwhm=expected_fwhm, n_repeats=5)
+    fake_image = FakeImage(seed=SEED, fwhm=expected_fwhm, n_repeats_per_side=5)
     n_bright = 20
     with pytest.raises(ValueError, match="Unknown aggregate_by method"):
         fast_fwhm_from_image(

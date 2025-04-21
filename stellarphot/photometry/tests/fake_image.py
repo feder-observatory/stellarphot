@@ -23,9 +23,16 @@ class FakeImage:
     seed : int, optional
         The seed to use for the random number generator. If not specified,
         the seed will be randomly generated.
+
+    fwhm : float, optional
+        The full width at half maximum (FWHM) of the sources in pixels. If
+        not specified, the FWHM will be set to value in the data file.
+
+    n_repeats_per_side : int, optional
+        The number of times to repeat the sources in each direction.
     """
 
-    def __init__(self, noise_dev=1.0, seed=None, fwhm=None, n_repeats=1):
+    def __init__(self, noise_dev=1.0, seed=None, fwhm=None, n_repeats_per_side=1):
         self.image_shape = np.array([400, 500])
         data_file = get_pkg_data_filename("data/test_sources.csv")
         self._sources = Table.read(data_file)
@@ -34,15 +41,17 @@ class FakeImage:
             # Set the FWHM of the sources to the specified value
             self._sources["x_stddev"] = gaussian_fwhm_to_sigma * fwhm
             self._sources["y_stddev"] = gaussian_fwhm_to_sigma * fwhm
-        if n_repeats > 1:
+        if n_repeats_per_side > 1:
             amplitude_scales = np.logspace(
-                start=np.log10(0.1), stop=np.log10(60.0), num=n_repeats**2
+                start=np.log10(0.1), stop=np.log10(60.0), num=n_repeats_per_side**2
             )
             # Reshape to n_repeats x n_repeats
-            amplitude_scales = amplitude_scales.reshape((n_repeats, n_repeats))
+            amplitude_scales = amplitude_scales.reshape(
+                (n_repeats_per_side, n_repeats_per_side)
+            )
             extra_sources = []
-            for i in range(n_repeats):
-                for j in range(n_repeats):
+            for i in range(n_repeats_per_side):
+                for j in range(n_repeats_per_side):
                     if i == 0 and j == 0:
                         continue
                     new_sources = self._sources.copy()
@@ -63,7 +72,7 @@ class FakeImage:
             self._sources = vstack([self._sources] + extra_sources)
             # Reset the image shape -- this needs to be after the loop above so that
             # the new source positions are based on the original image shape
-            self.image_shape = self.image_shape * n_repeats
+            self.image_shape = self.image_shape * n_repeats_per_side
 
         self.mean_noise = self.sources["amplitude"].max() / 100
         self.noise_dev = noise_dev
@@ -106,7 +115,7 @@ class FakeCCDImage(CCDData):
         # object apparently.
         if (len(args) == 0) and (len(kwargs) == 0):
             base_data = FakeImage(
-                seed=seed, fwhm=fwhm, noise_dev=noise_dev, n_repeats=n_repeats
+                seed=seed, fwhm=fwhm, noise_dev=noise_dev, n_repeats_per_side=n_repeats
             )
             super().__init__(base_data.image.copy(), unit="adu")
 
