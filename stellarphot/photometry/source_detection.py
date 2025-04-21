@@ -437,7 +437,7 @@ def fast_fwhm_from_image(
 
     with warnings.catch_warnings():
         # block_reduce generates some warnings about things like unit, wcs, etc
-        # that are set on ccd buut not preserved in the reduced image.
+        # that are set on ccd but not preserved in the reduced image.
         # That is expected, so ignore it.
         warnings.filterwarnings(
             "ignore",
@@ -471,7 +471,7 @@ def fast_fwhm_from_image(
 
     # Only keep the n_brightest sources (eventually)
     n_brightest = min(len(block_sources), int(n_brightest_sources))
-    # Pad n_bnrightest a bit in case some of these end up being too bright
+    # Pad n_brightest a bit in case some of these end up being too bright
     fwhm_est_sources = block_sources[: int(1.2 * n_brightest)]
 
     # Estimate the x and y positions of the sources in the original image
