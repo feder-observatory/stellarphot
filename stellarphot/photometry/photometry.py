@@ -393,7 +393,6 @@ def single_image_photometry(
     if use_coordinates == "sky":
         try:
             xcen, ycen = centroid_sources(
-                # TODO: FIX THIS
                 ccd_image.data,
                 xs,
                 ys,
