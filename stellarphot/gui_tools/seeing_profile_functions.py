@@ -393,8 +393,9 @@ class SeeingProfileWidget:
             self._update_plots()
             ape = PhotometryApertures(**change["new"])
             self.aperture_settings.description = (
-                f"Inner annulus: {ape.inner_annulus}, "
-                f"outer annulus: {ape.outer_annulus}"
+                f"Aperture radius: {ape.radius_pixels(ape.fwhm_estimate):.2f} pix, "
+                f"Inner annulus: {ape.inner_annulus:.2f} pix, "
+                f"outer annulus: {ape.outer_annulus:.2f} pix"
             )
 
         self.aperture_settings.observe(aperture_obs, names="_value")
