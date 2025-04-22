@@ -424,7 +424,7 @@ class PhotometryApertures(BaseModelWithTableRep):
         """
         Radius of the inner annulus in pixels.
         """
-        return self.radius + self.gap
+        return self.radius_pixels(self.fwhm_estimate) + self.gap
 
     @property
     def outer_annulus(self):
