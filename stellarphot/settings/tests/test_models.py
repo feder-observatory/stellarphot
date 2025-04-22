@@ -466,34 +466,59 @@ def test_camera_altunitscheck():
     assert c.model_dump() == camera_for_test
 
 
-def test_create_aperture_settings_correctly():
-    ap_set = PhotometryApertures(**TEST_APERTURE_SETTINGS)
-    assert ap_set.radius == TEST_APERTURE_SETTINGS["radius"]
-    assert (
-        ap_set.inner_annulus
-        == TEST_APERTURE_SETTINGS["radius"] + TEST_APERTURE_SETTINGS["gap"]
+class TestPhotometryApertureSettings:
+    """
+    Put tests specific to, and isolated to, `PhotometryAperture` settings here.
+    """
+
+    @pytest.mark.parametrize(
+        "variable_aperture,radius",
+        [
+            (True, 1.5),
+            (False, 5.0),
+        ],
     )
-    assert (
-        ap_set.outer_annulus
-        == TEST_APERTURE_SETTINGS["radius"]
-        + TEST_APERTURE_SETTINGS["gap"]
-        + TEST_APERTURE_SETTINGS["annulus_width"]
-    )
+    def test_create_aperture_settings_correctly(self, variable_aperture, radius):
+        # Check that the inner and outer annulus are set correctly.
+        ap_set = PhotometryApertures(**TEST_APERTURE_SETTINGS)
+        assert ap_set.radius == TEST_APERTURE_SETTINGS["radius"]
 
+        ap_set.variable_aperture = variable_aperture
+        ap_set.radius = radius
+        if variable_aperture:
+            expected_inner = (
+                radius * TEST_APERTURE_SETTINGS["fwhm_estimate"]
+                + TEST_APERTURE_SETTINGS["gap"]
+            )
+            expected_outer = (
+                radius * TEST_APERTURE_SETTINGS["fwhm_estimate"]
+                + TEST_APERTURE_SETTINGS["gap"]
+                + TEST_APERTURE_SETTINGS["annulus_width"]
+            )
+        else:
+            expected_inner = radius + TEST_APERTURE_SETTINGS["gap"]
+            expected_outer = (
+                radius
+                + TEST_APERTURE_SETTINGS["gap"]
+                + TEST_APERTURE_SETTINGS["annulus_width"]
+            )
+        assert ap_set.inner_annulus == expected_inner
+        assert ap_set.outer_annulus == expected_outer
 
-def test_create_aperture_settings_variable_aperture():
-    # Check that the variable aperture flag is set correctly
-    settings = deepcopy(TEST_APERTURE_SETTINGS)
-    settings["variable_aperture"] = True
-    # The radius below is intended as a multiple of the FWHM
-    settings["radius"] = 1.5
-    ap_set = PhotometryApertures(**settings)
-    assert ap_set.variable_aperture is True
+    def test_create_aperture_settings_variable_aperture(self):
+        # Check that the variable aperture flag is set correctly
+        # and that radius_pixels is calculated correctly.
+        settings = deepcopy(TEST_APERTURE_SETTINGS)
+        settings["variable_aperture"] = True
+        # The radius below is intended as a multiple of the FWHM
+        settings["radius"] = 1.5
+        ap_set = PhotometryApertures(**settings)
+        assert ap_set.variable_aperture is True
 
-    # Check that the radius in pixels is correct
-    fwhm = 5.0
-    radius_pix = ap_set.radius_pixels(fwhm)
-    assert radius_pix == pytest.approx(7.5, rel=1e-6)
+        # Check that the radius in pixels is correct
+        fwhm = 5.0
+        radius_pix = ap_set.radius_pixels(fwhm)
+        assert radius_pix == pytest.approx(7.5, rel=1e-6)
 
 
 @pytest.mark.parametrize("bad_one", ["radius", "gap", "annulus_width"])
