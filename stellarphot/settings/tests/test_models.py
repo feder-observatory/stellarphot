@@ -507,7 +507,7 @@ class TestPhotometryApertureSettings:
 
     def test_create_aperture_settings_variable_aperture(self):
         # Check that the variable aperture flag is set correctly
-        # and that radius_pixles is calculated correctly.
+        # and that radius_pixels is calculated correctly.
         settings = deepcopy(TEST_APERTURE_SETTINGS)
         settings["variable_aperture"] = True
         # The radius below is intended as a multiple of the FWHM
