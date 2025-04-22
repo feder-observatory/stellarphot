@@ -2,7 +2,8 @@ import astropy.io.fits as fits
 import numpy as np
 from astropy.modeling.models import Gaussian2D
 from astropy.nddata import CCDData
-from astropy.table import Table
+from astropy.stats import gaussian_fwhm_to_sigma
+from astropy.table import Table, vstack
 from astropy.utils.data import get_pkg_data_filename
 from astropy.wcs import WCS
 from photutils.datasets import make_model_image, make_noise_image
@@ -22,12 +23,57 @@ class FakeImage:
     seed : int, optional
         The seed to use for the random number generator. If not specified,
         the seed will be randomly generated.
+
+    fwhm : float, optional
+        The full width at half maximum (FWHM) of the sources in pixels. If
+        not specified, the FWHM will be set to value in the data file.
+
+    n_repeats_per_side : int, optional
+        The number of times to repeat the sources in each direction.
     """
 
-    def __init__(self, noise_dev=1.0, seed=None):
-        self.image_shape = [400, 500]
+    def __init__(self, noise_dev=1.0, seed=None, fwhm=None, n_repeats_per_side=1):
+        self.image_shape = np.array([400, 500])
         data_file = get_pkg_data_filename("data/test_sources.csv")
         self._sources = Table.read(data_file)
+        self.input_fwhm = fwhm
+        if fwhm is not None:
+            # Set the FWHM of the sources to the specified value
+            self._sources["x_stddev"] = gaussian_fwhm_to_sigma * fwhm
+            self._sources["y_stddev"] = gaussian_fwhm_to_sigma * fwhm
+        if n_repeats_per_side > 1:
+            amplitude_scales = np.logspace(
+                start=np.log10(0.1), stop=np.log10(60.0), num=n_repeats_per_side**2
+            )
+            # Reshape to n_repeats x n_repeats
+            amplitude_scales = amplitude_scales.reshape(
+                (n_repeats_per_side, n_repeats_per_side)
+            )
+            extra_sources = []
+            for i in range(n_repeats_per_side):
+                for j in range(n_repeats_per_side):
+                    if i == 0 and j == 0:
+                        continue
+                    new_sources = self._sources.copy()
+                    new_sources["x_mean"] = (
+                        self._sources["x_mean"] + i * self.image_shape[1]
+                    )
+                    new_sources["y_mean"] = (
+                        self._sources["y_mean"] + j * self.image_shape[0]
+                    )
+                    # Tinker with the amplitudes a bit to get more variation
+                    # in the image
+                    new_sources["amplitude"] = (
+                        self._sources["amplitude"] * amplitude_scales[i, j]
+                    )
+                    # Add the new sources to the list
+                    extra_sources.append(new_sources)
+            # Concatenate the new sources to the original sources
+            self._sources = vstack([self._sources] + extra_sources)
+            # Reset the image shape -- this needs to be after the loop above so that
+            # the new source positions are based on the original image shape
+            self.image_shape = self.image_shape * n_repeats_per_side
+
         self.mean_noise = self.sources["amplitude"].max() / 100
         self.noise_dev = noise_dev
         self._stars = make_gaussian_sources_image(tuple(self.image_shape), self.sources)
@@ -57,12 +103,20 @@ class FakeCCDImage(CCDData):
     def __init__(self, *args, **kwargs):
         # Pull off the seed argument if it exists.
         seed = kwargs.pop("seed", None)
+        # Pull off the fwhm argument if it exists.
+        fwhm = kwargs.pop("fwhm", None)
+        # Pull off the noise_dev argument if it exists.
+        noise_dev = kwargs.pop("noise_dev", 1.0)
+        # Pull off the n_repeats argument if it exists.
+        n_repeats = kwargs.pop("n_repeats", 1)
 
         # If no arguments are passed, use the default FakeImage.
         # This dodge is necessary because otherwise we can't copy the CCDData
         # object apparently.
         if (len(args) == 0) and (len(kwargs) == 0):
-            base_data = FakeImage(seed=seed)
+            base_data = FakeImage(
+                seed=seed, fwhm=fwhm, noise_dev=noise_dev, n_repeats_per_side=n_repeats
+            )
             super().__init__(base_data.image.copy(), unit="adu")
 
             # Append attributes from the base data object.

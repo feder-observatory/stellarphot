@@ -539,7 +539,7 @@ class SeeingProfileWidget:
                     radius=aperture_radius,
                     gap=default_gap,
                     annulus_width=default_annulus_width,
-                    fwhm=rad_prof.FWHM,
+                    fwhm_estimate=rad_prof.FWHM,
                 )
                 update_aperture_settings = True
             else:
@@ -603,7 +603,9 @@ class SeeingProfileWidget:
             plt.plot(cog.radius, cog.profile)
             plt.xlim(0, 40)
             ylim = plt.ylim()
-            plt.vlines(ap_settings.radius, *plt.ylim(), colors=["red"])
+            plt.vlines(
+                ap_settings.radius_pixels(rad_prof.FWHM), *plt.ylim(), colors=["red"]
+            )
             plt.ylim(*ylim)
             plt.grid()
 
@@ -627,7 +629,9 @@ class SeeingProfileWidget:
             )
             plt.xlim(0, 40)
             ylim = plt.ylim()
-            plt.vlines(ap_settings.radius, *plt.ylim(), colors=["red"])
+            plt.vlines(
+                ap_settings.radius_pixels(rad_prof.FWHM), *plt.ylim(), colors=["red"]
+            )
             plt.ylim(*ylim)
             plt.xlabel("Aperture radius (pixels)")
             plt.ylabel("SNR")

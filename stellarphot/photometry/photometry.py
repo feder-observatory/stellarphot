@@ -26,7 +26,7 @@ from stellarphot.settings import (
     PhotometrySettings,
 )
 
-from .source_detection import compute_fwhm
+from .source_detection import compute_fwhm, fast_fwhm_from_image
 
 __all__ = [
     "AperturePhotometry",
@@ -311,12 +311,25 @@ def single_image_photometry(
             "use_coordinates='sky' but sourcelist does not have" "RA/Dec coordinates!"
         )
 
+    if photometry_apertures.variable_aperture:
+        # Get a fast, robust estimate of the FWHM of the sources for setting
+        # the aperture size.
+        fwhm = fast_fwhm_from_image(
+            ccd_image,
+            photometry_apertures.fwhm_estimate,
+            noise=camera.read_noise.value,
+            max_adu=camera.max_data_value.value,
+        )
+    else:
+        # Use the FWHM from the settings
+        fwhm = photometry_apertures.fwhm_estimate
+
     # Reject sources that are within an aperture diameter of each other.
     dropped_sources = []
     try:
         too_close = find_too_close(
             sourcelist,
-            photometry_apertures.radius,
+            photometry_apertures.radius_pixels(fwhm),
             pixel_scale=camera.pixel_scale.value,
         )
     except Exception as err:
@@ -380,7 +393,10 @@ def single_image_photometry(
     if use_coordinates == "sky":
         try:
             xcen, ycen = centroid_sources(
-                ccd_image.data, xs, ys, box_size=2 * photometry_apertures.radius + 1
+                ccd_image.data,
+                xs,
+                ys,
+                box_size=2 * int(photometry_apertures.radius_pixels(fwhm)) + 1,
             )
         except NoOverlapError:
             logger.warning(
@@ -418,7 +434,7 @@ def single_image_photometry(
 
     # Define apertures and annuli for the aperture photometry
     aper_locs = np.array([xs, ys]).T
-    apers = CircularAperture(aper_locs, r=photometry_apertures.radius)
+    apers = CircularAperture(aper_locs, r=photometry_apertures.radius_pixels(fwhm))
     annuli = CircularAnnulus(
         aper_locs,
         r_in=photometry_apertures.inner_annulus,
@@ -529,7 +545,7 @@ def single_image_photometry(
         fwhm_x, fwhm_y = compute_fwhm(
             ccd_image,
             photom,
-            fwhm_estimate=photometry_apertures.fwhm,
+            fwhm_estimate=photometry_apertures.fwhm_estimate,
             fit_method=photometry_options.fwhm_method,
             sky_per_pix_column="sky_per_pix_avg",
         )

@@ -1,18 +1,21 @@
+import warnings
+
 import numpy as np
 from astropy import units as u
-from astropy.nddata import CCDData
+from astropy.nddata import CCDData, block_reduce
 from astropy.nddata.utils import Cutout2D
 from astropy.stats import sigma_clipped_stats
 from astropy.table import Table
+from astropy.utils.exceptions import AstropyUserWarning
 from photutils.detection import DAOStarFinder
 from photutils.morphology import data_properties
 from photutils.profiles import RadialProfile
-from photutils.psf import fit_fwhm
+from photutils.psf import fit_2dgaussian, fit_fwhm
 
 from stellarphot.core import SourceListData
 from stellarphot.settings.models import FwhmMethods
 
-__all__ = ["source_detection", "compute_fwhm"]
+__all__ = ["source_detection", "compute_fwhm", "fast_fwhm_from_image"]
 
 
 def compute_fwhm(
@@ -361,3 +364,178 @@ def source_detection(
 
     sl_data = SourceListData(input_data=sources, colname_map=colnamemap)
     return sl_data
+
+
+def fast_fwhm_from_image(
+    ccd,
+    fwhm_estimate,
+    noise=10,
+    n_brightest_sources=30,
+    max_adu=40000,
+    block_size=8,
+    min_block_fwhm=1,
+    aggregate_by="mean",
+):
+    """
+    Compute the FWHM of a CCD image by block reducing it, running source detection
+    on the reduced image, and then computing the FWHM of the detected sources in the
+    original image.
+
+    Parameters
+    ----------
+    ccd : `numpy.ndarray` or `astropy.nddata.CCDData`
+        The CCD image array.
+    fwhm_estimate : float
+        The initial estimate for the FWHM of the sources in the image.
+    noise : float, optional
+        The estimated noise in the image.
+    n_brightest_sources : int, optional
+        The number of brightest sources to use for the FWHM estimate.
+    max_adu : float, optional
+        The maximum ADU value for a pixel in the image. Sources with peak
+        fluxes greater than this value will be ignored.
+    block_size : int, optional
+        The size of the blocks to use for block reduction. The image will be
+        divided into blocks of this size, and source detection will be done on the
+        reduced image.
+    min_block_fwhm : float, optional
+        The minimum FWHM to allow after the block reduction. If the estimated FWHM
+        is smaller than this value, the block size will be changed.
+    aggregate_by : str, optional
+        The method to use for aggregating the FWHM estimates. Can be 'mean' or
+        'median'. If None, the FWHM estimates will not be aggregated.
+
+    Returns
+    -------
+    fwhm : float or np.ndarray
+        The FWHM of the sources in the image. If `aggregate_by` is None, this will
+        be an array of FWHM values for each source. Otherwise, it will be a single
+        value.
+
+    Notes
+    -----
+
+    The approach here is to detect sources in the image and measure their FWHM. To
+    keep this reasonably fast, we block reduce the image and then run source detection
+    on the reduced image. We then use the positions of the detected sources to
+    estimate the FWHM of the sources in the original image. Only the brightest
+    sources are used to estimate the FWHM, and sources that are too bright (i.e.,
+    have a peak flux greater than `max_adu`) are ignored.
+    """
+    # Check whether the reduced fwhm is larger than the minimum and reset block_size
+    # if it is too small.
+    if fwhm_estimate / block_size < min_block_fwhm:
+        block_size = int(fwhm_estimate / min_block_fwhm)
+
+    # Get data and mask from CCDData object
+    if isinstance(ccd, CCDData):
+        data = ccd.data
+        mask = ccd.mask
+    else:
+        data = ccd
+        mask = None
+
+    with warnings.catch_warnings():
+        # block_reduce generates some warnings about things like unit, wcs, etc
+        # that are set on ccd but not preserved in the reduced image.
+        # That is expected, so ignore it.
+        warnings.filterwarnings(
+            "ignore",
+            message="The following attributes were set on the data object",
+            category=AstropyUserWarning,
+        )
+        reduced_data = block_reduce(data, block_size=block_size)
+
+    # Pick a padding that is about 1% of the block reduced image size
+    padding = int(0.01 * reduced_data.shape[0])
+
+    block_sources = source_detection(
+        reduced_data,
+        fwhm=fwhm_estimate / block_size,
+        stddev=noise * block_size,  # noise adds in quadrature
+        sky_per_pix_avg=None,  # make source_detection do the sky subtraction
+        find_fwhm=False,
+        threshold=20,
+        padding=padding,
+    )
+
+    # Reverse sort by peak flux
+    block_sources.sort("peak", reverse=True)
+    # To estimate whether the sources are too bright, divide the peak
+    # flux by the area of the block.  If this is greater than max_adu,
+    # then the sources are too bright.
+    too_bright = block_sources["peak"] / block_size**2 > max_adu
+
+    # Drop the sources that are too bright
+    block_sources = block_sources[~too_bright]
+
+    # Only keep the n_brightest sources (eventually)
+    n_brightest = min(len(block_sources), int(n_brightest_sources))
+    # Pad n_brightest a bit in case some of these end up being too bright
+    fwhm_est_sources = block_sources[: int(1.2 * n_brightest)]
+
+    # Estimate the x and y positions of the sources in the original image
+    fwhm_est_sources["xcenter"] = block_size * (fwhm_est_sources["xcenter"].value + 0.5)
+    fwhm_est_sources["ycenter"] = block_size * (fwhm_est_sources["ycenter"].value + 0.5)
+
+    # Compute the FWHM of the sources in the original image
+    # Make sure fit_shape is an odd number about 5 times the estimated fwhm
+    fit_shape = int(2 * ((5 * fwhm_estimate) // 2) + 1)
+
+    # This next bit is a little sneaky. We mask any values in the image larger than
+    # max_adu. After we do the PSF fitting, we only keep results in which there were
+    # no masked pixels in the fit. As a result, stars that are too bright in the image
+    # will be ignored in the event they made it through the block reduction.
+    mask = np.zeros_like(ccd.data, dtype=bool) if mask is None else mask
+    mask |= data > max_adu
+
+    with warnings.catch_warnings():
+        # fit_2dgaussian generates some warnings if some of the fits do not converge.
+        # This probably does not actually affect real images, but it affects tests.
+        # We suppress the warnings here and check the fit results for flags that
+        # indicate a bad fit.
+        warnings.filterwarnings(
+            "ignore",
+            message=r"One or more fit\(s\) may not have converged. Please check the",
+            category=AstropyUserWarning,
+        )
+        # This is faster than calling our own compute_fwhm, so do this.
+        fit = fit_2dgaussian(
+            data - np.nanmedian(data),
+            xypos=list(
+                zip(
+                    fwhm_est_sources["xcenter"],
+                    fwhm_est_sources["ycenter"],
+                    strict=True,
+                )
+            ),
+            fwhm=fwhm_estimate,
+            fix_fwhm=False,
+            fit_shape=fit_shape,
+            mask=mask,
+        )
+
+    results = fit.results
+
+    # Only keep good fits -- this is where saturated pixels get removed,
+    # because they were masked in the input image and flags=1 means there
+    # were masked pixels in the fit.
+    results = results[results["flags"] == 0]
+
+    # Estimates of the FWHM that are larger than the fit_shape are bad, so drop
+    # any of those
+    results = results[results["fwhm_fit"] < fit_shape]
+
+    # Only keep the desired number of sources
+    fwhm = results["fwhm_fit"][:n_brightest]
+
+    if aggregate_by is not None:
+        match aggregate_by:
+            case "mean":
+                fwhm = np.mean(fwhm)
+            case "median":
+                fwhm = np.median(fwhm)
+            case _:
+                raise ValueError(f"Unknown aggregate_by method: {aggregate_by}")
+
+    return fwhm
