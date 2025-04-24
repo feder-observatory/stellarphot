@@ -2,17 +2,22 @@ import logging
 import warnings
 from pathlib import Path
 
-import bottleneck as bn
 import numpy as np
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astropy.nddata import CCDData, NoOverlapError
+from astropy.stats import SigmaClip
 from astropy.table import Column, vstack
 from astropy.time import Time
 from astropy.utils.exceptions import AstropyUserWarning
 from astropy.wcs import FITSFixedWarning
 from ccdproc import ImageFileCollection
-from photutils.aperture import CircularAnnulus, CircularAperture, aperture_photometry
+from photutils.aperture import (
+    ApertureStats,
+    CircularAnnulus,
+    CircularAperture,
+    aperture_photometry,
+)
 from photutils.centroids import centroid_sources
 from pydantic import BaseModel, validate_call
 from scipy.spatial.distance import cdist
@@ -32,7 +37,6 @@ __all__ = [
     "AperturePhotometry",
     "single_image_photometry",
     "multi_image_photometry",
-    "faster_sigma_clip_stats",
     "find_too_close",
     "clipped_sky_per_pix_stats",
     "calculate_noise",
@@ -852,57 +856,6 @@ def multi_image_photometry(
     return all_phot
 
 
-def faster_sigma_clip_stats(data, sigma=5, iters=5, axis=None):
-    """
-    Calculate sigma clipped stats quickly using NaNs instead of masking
-    and using bottleneck where possible.
-
-    Parameters
-    ----------
-
-    data : numpy array
-        The data to be clipped. *The data should have had masked values
-        replaced with NaN prior to calling this function.*
-
-    sigma : float, optional
-        Number of standard deviations (estimated with the MAD) a point must
-        be from the central value (median) to be rejected.
-
-    iters : int, optional
-        Number of sigma clipping iterations to perform. Fewer iterations than
-        this may be performed because iterations stop when no new data is
-        being clipped.
-
-    axis : int, optional
-        axis along which to perform the median.
-
-    Returns
-    -------
-    mean, median, std : float or numpy array
-        Clipped statistics; shape depends on the shape of the input.
-    """
-    data = data.copy()
-    for _ in range(iters):
-        central = bn.nanmedian(data, axis=axis)
-        try:
-            central = central[:, np.newaxis]
-        except (ValueError, IndexError, TypeError):
-            pass
-
-        std_dif = 1.4826 * bn.nanmedian(np.abs(data - central))
-
-        clips = np.abs(data - central) / std_dif > sigma
-
-        if np.nansum(clips) == 0:
-            break
-        data[clips] = np.nan
-    return (
-        bn.nanmean(data, axis=axis),
-        bn.nanmedian(data, axis=axis),
-        bn.nanstd(data, axis=axis),
-    )
-
-
 def find_too_close(sourcelist, aperture_rad, pixel_scale=None):
     """
     Identify sources that are closer together than twice the aperture radius.
@@ -991,29 +944,14 @@ def clipped_sky_per_pix_stats(data, annulus, sigma=5, iters=5):
         Average, median and standard deviation of the sky per pixel.
 
     """
-    # Get a list of masks from the annuli
-    # Use the 'center' method because then pixels are either in or out. To use
-    # 'partial' or 'exact' we would need to do a weighted sigma clip and
-    # I'm not sure how to do that.
-    masks = annulus.to_mask(method="center")
-
-    anul_list = []
-    for mask in masks:
-        # Multiply the mask times the data
-        to_clip = mask.multiply(data.data, fill_value=np.nan)
-        anul_list.append(to_clip.flatten())
-    # Convert the list to an array for doing the sigma clip
-    anul_array = np.array(anul_list)
-    # Turn all zeros into np.nan...
-    anul_array[anul_array == 0] = np.nan
-    avg_sky_per_pix, med_sky_per_pix, std_sky_per_pix = faster_sigma_clip_stats(
-        anul_array, sigma=sigma, iters=iters, axis=1
-    )
+    # Use ApertureStats from photutils to get what we need.
+    sigclip = SigmaClip(sigma=sigma, maxiters=iters)
+    ap_stats = ApertureStats(data, annulus, sigma_clip=sigclip, sum_method="center")
 
     return (
-        avg_sky_per_pix * data.unit,
-        med_sky_per_pix * data.unit,
-        std_sky_per_pix * data.unit,
+        ap_stats.mean,
+        ap_stats.median,
+        ap_stats.std,
     )
 
 
