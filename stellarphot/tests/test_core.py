@@ -1124,8 +1124,8 @@ def test_find_apass():
 @pytest.mark.remote_data
 def test_find_refcat2():
     CCD_SHAPE = [2048, 3073]
-    # This is really checking from APASS DR9 on Vizier, or at least that
-    # is where the "expected" data is drawn from.
+    # This test is for refcat2. The "expected" data used for comparison
+    # is derived from APASS DR9 on Vizier.
     expected_all = Table.read(
         get_pkg_data_filename("data/all_refcat2_ey_uma_sorted_ra_first_20.fits")
     )

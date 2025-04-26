@@ -1340,7 +1340,7 @@ def vsx_vizier(field_center, radius=1 * u.degree, clip_by_frame=False, padding=1
 
 def refcat2(field_center, radius=1 * u.degree, clip_by_frame=False, padding=100):
     """
-    Return the items from APASS DR9 that are within the search radius and
+    Return the items from Refcat2 that are within the search radius and
     (optionally) within the field of view of a frame.
 
     Parameters
