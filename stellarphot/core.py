@@ -1091,8 +1091,7 @@ class CatalogData(BaseEnhancedTable):
         # element.
         cat = cat[0]
 
-        if prepare_catalog is not None:
-            final_cat = prepare_catalog(cat)
+        final_cat = prepare_catalog(cat) if prepare_catalog is not None else cat
 
         if tidy_catalog:
             final_cat = CatalogData._tidy_vizier_catalog(
