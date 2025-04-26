@@ -1000,6 +1000,7 @@ def test_catalog_from_vizier_search_vsx(location_method):
         colname_map=vsx_map,
         prepare_catalog=prepare_cat,
         no_catalog_error=True,
+        tidy_catalog=False,
     )
 
     assert my_cat["id"][0] == "DQ Psc"
