@@ -27,7 +27,7 @@ repos:
 # Per the ruff documentation, this should be before black
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
-    rev: v0.11.6
+    rev: v0.11.7
     hooks:
       # Run the linter.
       - id: ruff
@@ -42,12 +42,10 @@ repos:
         # supported by your project here, or alternatively use
         # pre-commit's default_language_version, see
         # https://pre-commit.com/#top_level-default_language_version
-        language_version: python3.11
+        language_version: python3.13
 
   # per the documentation this should add codespell spell checking
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1
     hooks:
     - id: codespell
-    additional_dependencies:
-      - tomli
