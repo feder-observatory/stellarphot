@@ -1207,7 +1207,7 @@ def apass_dr9(field_center, radius=1 * u.degree, clip_by_frame=False, padding=10
 
     clip_by_frame : bool, optional
         If ``True``, only return items that are within the field of view
-        of the frame. Default is ``True``.
+        of the frame.
 
     padding : int, optional
         Coordinates need to be at least this many pixels in from the edge
@@ -1299,7 +1299,7 @@ def vsx_vizier(field_center, radius=1 * u.degree, clip_by_frame=False, padding=1
 
     clip_by_frame : bool, optional
         If ``True``, only return items that are within the field of view
-        of the frame. Default is ``True``.
+        of the frame.
 
     padding : int, optional
         Coordinates need to be at least this many pixels in from the edge
@@ -1355,7 +1355,7 @@ def refcat2(field_center, radius=1 * u.degree, clip_by_frame=False, padding=100)
 
     clip_by_frame : bool, optional
         If ``True``, only return items that are within the field of view
-        of the frame. Default is ``True``.
+        of the frame.
 
     padding : int, optional
         Coordinates need to be at least this many pixels in from the edge
