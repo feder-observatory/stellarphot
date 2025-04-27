@@ -18,6 +18,7 @@ from stellarphot.core import (
     PhotometryData,
     SourceListData,
     apass_dr9,
+    refcat2,
     vsx_vizier,
 )
 from stellarphot.settings import Camera, Observatory, PassbandMap
@@ -999,6 +1000,7 @@ def test_catalog_from_vizier_search_vsx(location_method):
         colname_map=vsx_map,
         prepare_catalog=prepare_cat,
         no_catalog_error=True,
+        tidy_catalog=False,
     )
 
     assert my_cat["id"][0] == "DQ Psc"
@@ -1118,6 +1120,48 @@ def test_find_apass():
     # This is a regression test for #439.
     for band in ["B", "V", "SG", "SR", "SI"]:
         assert band in all_apass["passband"]
+
+
+@pytest.mark.remote_data
+def test_find_refcat2():
+    CCD_SHAPE = [2048, 3073]
+    # This test is for refcat2. The "expected" data used for comparison
+    # is derived from APASS DR9 on Vizier.
+    expected_all = Table.read(
+        get_pkg_data_filename("data/all_refcat2_ey_uma_sorted_ra_first_20.fits")
+    )
+
+    wcs_file = get_pkg_data_filename("data/sample_wcs_ey_uma.fits")
+    with fits.open(wcs_file) as hdulist:
+        with warnings.catch_warnings():
+            # Ignore the warning about the WCS having a different number of
+            # axes than the (non-existent) image.
+            warnings.filterwarnings(
+                "ignore",
+                message="The WCS transformation has more",
+                category=FITSFixedWarning,
+            )
+            wcs = WCS(hdulist[0].header)
+    wcs.pixel_shape = list(reversed(CCD_SHAPE))
+    ccd = CCDData(data=np.zeros(CCD_SHAPE), wcs=wcs, unit="adu")
+
+    # Turn this into an HDU to get the standard FITS image keywords
+    ccd_im = ccd.to_hdu()
+    all_refcat2 = refcat2(ccd_im[0].header, radius=10 * u.arcmin)
+
+    # # Reference data was sorted by RA, first 20 entries kept
+    # # There are 10 magnitude or color columns, so 10 * 20 = 200 rows
+    # # in the resulting table.
+    all_refcat2.sort("ra")
+    all_refcat2 = all_refcat2[:200]
+
+    # # It is hard to imagine the RAs matching and other entries not matching,
+    # # so just check the RAs.
+    assert set(ra.value for ra in all_refcat2["ra"]) == set(expected_all["RA_ICRS"])
+
+    # # The passbands ought to have been translated to the AAVSO standard names.
+    for band in ["GBP", "GRP", "GG", "SG", "SR", "SI", "SZ", "J", "H", "K"]:
+        assert band in all_refcat2["passband"]
 
 
 # Load test apertures

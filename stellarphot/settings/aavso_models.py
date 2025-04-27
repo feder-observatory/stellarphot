@@ -26,6 +26,9 @@ class AAVSOFilters(StrEnum):
     SG = "SG"
     SR = "SR"
     SI = "SI"
+    GG = "GG"  # This is in VSX -- it is Gaia G
+    GBP = "GBP"  # This is not in VSX -- it is Gaia BP
+    GRP = "GRP"  # This is not in VSX -- it is Gaia RP
     STU = "STU"
     STV = "STV"
     STB = "STB"

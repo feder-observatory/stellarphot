@@ -9,6 +9,7 @@ from astropy.table import Column, QTable, Table, TableAttribute
 from astropy.time import Time
 from astropy.wcs import WCS
 from astroquery.vizier import Vizier
+from astroquery.xmatch import XMatch
 
 from .settings import Camera, Observatory, PassbandMap
 
@@ -981,6 +982,7 @@ class CatalogData(BaseEnhancedTable):
         color_column_regex=r"^([a-zA-Z]+-[a-zA-Z]+)$",
         prepare_catalog=None,
         no_catalog_error=False,
+        tidy_catalog=True,
     ):
         """
         Return the items from catalog that are within the search radius and
@@ -1030,6 +1032,12 @@ class CatalogData(BaseEnhancedTable):
             If True, the catalog data does not contain error information, so a
             column of NaNs will be added for the error values.
 
+        tidy_catalog : bool, optional
+            If ``True``, the catalog will be tidied into a long format with one
+            row per passband *after* running the catalog through `prepare_catlog` if
+            that is not ``None``. If ``False``, no tidying will be done. See Notes
+            below for more information about tidy data format.
+
         Returns
         -------
 
@@ -1044,13 +1052,16 @@ class CatalogData(BaseEnhancedTable):
         For example, the Johnson V magnitude column is
         ``Vmag`` or ``V_mag``. The default value for ``mag_column_regex`` will match any
         column name that starts with a letter or letters, followed by ``mag`` or
-        ``_mag`` with an underscore in between.
+        ``_mag``.
 
         In many Vizier catalogs, the color columns are named with the passbands
         separated by a hyphen. For example, the Johnson V-I color column is
         ``V-I``. The default value for ``color_column_regex`` will match any
         column name that starts with a letter or letters, followed by a hyphen,
         followed by a letter or letters.
+
+        Tidy data formats are those where each row is a single observation of a
+        single object in a single passband.
         """
 
         if isinstance(field_center, SkyCoord):
@@ -1076,19 +1087,19 @@ class CatalogData(BaseEnhancedTable):
                 )
             center = SkyCoord(*wcs.wcs.crval, unit="deg")
 
-        # Get catalog via cone search
-        Vizier.ROW_LIMIT = -1  # Set row_limit to have no limit
-        cat = Vizier.query_region(center, radius=radius, catalog=desired_catalog)
+        # Get catalog via cone search -- all columns, no limit on rows
+        vizier = Vizier(columns=["all"], row_limit=-1)
+        cat = vizier.query_region(center, radius=radius, catalog=desired_catalog)
 
         # Vizier always returns list even if there is only one element. Grab that
         # element.
         cat = cat[0]
 
-        if prepare_catalog is not None:
-            final_cat = prepare_catalog(cat)
-        else:
+        final_cat = prepare_catalog(cat) if prepare_catalog is not None else cat
+
+        if tidy_catalog:
             final_cat = CatalogData._tidy_vizier_catalog(
-                cat, mag_column_regex, color_column_regex
+                final_cat, mag_column_regex, color_column_regex
             )
 
         # Since we go through pandas, we lose the units, so we need to add them back
@@ -1200,7 +1211,7 @@ def apass_dr9(field_center, radius=1 * u.degree, clip_by_frame=False, padding=10
 
     clip_by_frame : bool, optional
         If ``True``, only return items that are within the field of view
-        of the frame. Default is ``True``.
+        of the frame.
 
     padding : int, optional
         Coordinates need to be at least this many pixels in from the edge
@@ -1292,7 +1303,7 @@ def vsx_vizier(field_center, radius=1 * u.degree, clip_by_frame=False, padding=1
 
     clip_by_frame : bool, optional
         If ``True``, only return items that are within the field of view
-        of the frame. Default is ``True``.
+        of the frame.
 
     padding : int, optional
         Coordinates need to be at least this many pixels in from the edge
@@ -1326,7 +1337,126 @@ def vsx_vizier(field_center, radius=1 * u.degree, clip_by_frame=False, padding=1
         colname_map=vsx_map,
         prepare_catalog=prepare_cat,
         no_catalog_error=True,
+        tidy_catalog=False,
     )
+
+
+def refcat2(field_center, radius=1 * u.degree, clip_by_frame=False, padding=100):
+    """
+    Return the items from Refcat2 that are within the search radius and
+    (optionally) within the field of view of a frame.
+
+    Parameters
+    ----------
+    field_center : `astropy.coordinates.SkyCoord`, `astropy.wcs.WCS`, or FITS header
+        Either a `~astropy.coordinates.SkyCoord` object, a `~astropy.wcs.WCS` object
+        or a FITS header with WCS information. The input coordinate should be the
+        center of the frame; if a header or WCS is the input then the center of the
+        frame will be determined from the WCS.
+
+    radius : `astropy.units.Quantity`, optional
+        Radius around which to search.
+
+    clip_by_frame : bool, optional
+        If ``True``, only return items that are within the field of view
+        of the frame.
+
+    padding : int, optional
+        Coordinates need to be at least this many pixels in from the edge
+        of the frame to be considered in the field of view. Default value
+        is 100.
+
+    Returns
+    -------
+
+    `stellarphot.CatalogData`
+        Table of catalog information.
+
+    Notes
+    -----
+    Refcat2 includes Gaia DR2 RA/Dec and magnitudes but does **not** include
+    the Gaia DR2 ID number. This function looks up the Gaia DR2 ID number and uses
+    it as the ID column.
+
+    The reference for the refcat2 paper is:
+
+    Tonry, J. L., Denneau, L., Flewelling, H., et al. 2018, ApJ, 867,
+    https://iopscience.iop.org/article/10.3847/1538-4357/aae386
+    """
+    refcat2_colnames = {
+        # There is no refcat2 ID number, but below we will match the Gaia DR2
+        # ID number to the RA/Dec and use that as the ID.
+        "RA_ICRS": "ra",
+        "DE_ICRS": "dec",
+    }
+
+    def process_refcat2(catalog):
+        """
+        This function does a few things:
+
+        1. Filter out galaxies from the catalog.
+        2. Only keep stars that are in the Gaia DR2 catalog.
+        3. Add the Gaia DR2 ID number to the catalog as the ID column.
+        """
+        # 1.
+        # The refcat2 paper says that "Virtually all galaxies can be rejected by
+        # selecting objects for which Gaia provides a nonzero proper-motion
+        # uncertainty," which in the Vizer download are called e_pmRA and e_pmDE,
+        # "at the cost of about 0.7% of all real stars." Seems like a reasonable
+        # trade-off. Vizier omits the zero entries and astroquery returns a mask for the
+        # zero entries, so galaxies are the masked ones.
+        galaxies = catalog["e_pmRA"].mask & catalog["e_pmDE"].mask
+        catalog = catalog[~galaxies]
+
+        # 2.
+        # Also from the paper, "A non-Gaia star may be identified in Refcat2 because it
+        # will always have dGaia = 0." In the Vizier version of refcat2, this column is
+        # called e_Gmag and instead of being zero, the value is masked.
+        catalog = catalog[~catalog["e_Gmag"].mask]
+
+        # 3.
+        # Everything left should be a Gaia star, so match to that.
+        # This adds some not-insignificant time to getting the catalog, but
+        # the result is automatically cached by astroquery, which helps.
+        result = XMatch.query(
+            cat1=catalog,
+            cat2="gaia_dr2_j2015p5",  # "vizier:I/345/gaia2",
+            max_distance=0.01 * u.arcsec,
+            colRA1="RA_ICRS",
+            colDec1="DE_ICRS",
+        )
+        catalog["id"] = result["source_id"]
+        return catalog
+
+    raw_catalog = CatalogData.from_vizier(
+        field_center,
+        "J/ApJ/867/105/refcat2",
+        radius=radius,
+        clip_by_frame=clip_by_frame,
+        padding=padding,
+        colname_map=refcat2_colnames,
+        prepare_catalog=process_refcat2,
+    )
+
+    # Translate the passbands to AAVSO standard names.
+    # No need to change B and V since those are already correct.
+    # Do this *after* initialization so that the original passband names
+    # are used for the tidy-ification operation.
+    raw_catalog.passband_map = PassbandMap(
+        name="refcat2",
+        your_filter_names_to_aavso={
+            "G": "GG",
+            "BP": "GBP",
+            "RP": "GRP",
+            "g": "SG",
+            "r": "SR",
+            "i": "SI",
+            "z": "SZ",
+        },
+    )
+    raw_catalog._update_passbands()
+
+    return raw_catalog
 
 
 class SourceListData(BaseEnhancedTable):
