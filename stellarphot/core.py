@@ -1033,9 +1033,10 @@ class CatalogData(BaseEnhancedTable):
             column of NaNs will be added for the error values.
 
         tidy_catalog : bool, optional
-            If True, the catalog will be tidied into a long format with one
+            If ``True``, the catalog will be tidied into a long format with one
             row per passband *after* running the catalog through `prepare_catlog` if
-            that is not ``None``. If False, no tidying will be done.
+            that is not ``None``. If ``False``, no tidying will be done. See Notes
+            below for more information about tidy data format.
 
         Returns
         -------
@@ -1051,13 +1052,16 @@ class CatalogData(BaseEnhancedTable):
         For example, the Johnson V magnitude column is
         ``Vmag`` or ``V_mag``. The default value for ``mag_column_regex`` will match any
         column name that starts with a letter or letters, followed by ``mag`` or
-        ``_mag`` with an underscore in between.
+        ``_mag``.
 
         In many Vizier catalogs, the color columns are named with the passbands
         separated by a hyphen. For example, the Johnson V-I color column is
         ``V-I``. The default value for ``color_column_regex`` will match any
         column name that starts with a letter or letters, followed by a hyphen,
         followed by a letter or letters.
+
+        Tidy data formats are those where each row is a single observation of a
+        single object in a single passband.
         """
 
         if isinstance(field_center, SkyCoord):
@@ -1396,10 +1400,10 @@ def refcat2(field_center, radius=1 * u.degree, clip_by_frame=False, padding=100)
         """
         # 1.
         # The refcat2 paper says that "Virtually all galaxies can be rejected by
-        # selecting objects for which Gaia provides a nonzero proper-motion uncertainty,"
-        # which in the Vizer download are called e_pmRA and e_pmDE, "at the cost
-        # of about 0.7% of all real stars." Seems like a reasonable trade-off.
-        # Vizier omits the zero entries and astroquery returns a mask for the
+        # selecting objects for which Gaia provides a nonzero proper-motion
+        # uncertainty," which in the Vizer download are called e_pmRA and e_pmDE,
+        # "at the cost of about 0.7% of all real stars." Seems like a reasonable
+        # trade-off. Vizier omits the zero entries and astroquery returns a mask for the
         # zero entries, so galaxies are the masked ones.
         galaxies = catalog["e_pmRA"].mask & catalog["e_pmDE"].mask
         catalog = catalog[~galaxies]
