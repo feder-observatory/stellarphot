@@ -1396,7 +1396,7 @@ def refcat2(field_center, radius=1 * u.degree, clip_by_frame=False, padding=100)
         """
         # 1.
         # The refcat2 paper says that "Virtually all galaxies can be rejected by
-        # selecting objects forwhich Gaia provides a nonzero proper-motion uncertainty,"
+        # selecting objects for which Gaia provides a nonzero proper-motion uncertainty,"
         # which in the Vizer download are called e_pmRA and e_pmDE, "at the cost
         # of about 0.7% of all real stars." Seems like a reasonable trade-off.
         # Vizier omits the zero entries and astroquery returns a mask for the
@@ -1412,7 +1412,7 @@ def refcat2(field_center, radius=1 * u.degree, clip_by_frame=False, padding=100)
 
         # 3.
         # Everything left should be a Gaia star, so match to that.
-        # This adds some not-insigifcant time to getting the catalog, but
+        # This adds some not-insignificant time to getting the catalog, but
         # the result is automatically cached by astroquery, which helps.
         result = XMatch.query(
             cat1=catalog,
