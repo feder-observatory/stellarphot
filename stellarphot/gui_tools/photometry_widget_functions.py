@@ -1,18 +1,12 @@
 from pathlib import Path
 
 import ipywidgets as ipw
-from ccdproc import ImageFileCollection
 from ipyautoui.custom import FileChooser
 
 from stellarphot import PhotometryData
-from stellarphot.settings import (
-    PhotometryApertures,
-    PhotometryFileSettings,
-    ui_generator,
-)
 from stellarphot.settings.custom_widgets import Spinner
 
-__all__ = ["TessAnalysisInputControls", "PhotometrySettingsOLDBAD"]
+__all__ = ["TessAnalysisInputControls"]
 
 
 class TessAnalysisInputControls(ipw.VBox):
@@ -130,95 +124,3 @@ def filter_by_dates(
 
     n_dropped += new_dropped
     return bad_data
-
-
-class PhotometrySettingsOLDBAD:
-    """
-    A class to hold the widgets for photometry settings.
-
-    Attributes
-    ----------
-
-    aperture_locations : `pathlib.Path`
-        This is the path to the file containing the aperture locations.
-
-    box : `ipywidgets.VBox`
-        This is a box containing the widgets.
-
-    image_folder : `pathlib.Path`
-        This is the path to the folder containing the images.
-
-    ifc : `ccdproc.ImageFileCollection`
-        The ImageFileCollection for the selected folder.
-
-    object_name : str
-        The name of the object.
-    """
-
-    def __init__(self):
-        self._file_loc_widget = ui_generator(PhotometryFileSettings)
-        self._object_name = ipw.Dropdown(
-            description="Choose object", style=dict(description_width="initial")
-        )
-
-        self._file_loc_widget.observe(self._update_locations)
-        self.ifc = None
-        self._box = ipw.VBox()
-        self._box.children = [self._file_loc_widget, self._object_name]
-
-    @property
-    def box(self):
-        """
-        The box containing the widgets.
-        """
-        return self._box
-
-    @property
-    def image_folder(self):
-        """
-        The path to the folder containing the images.
-        """
-        return self.file_locations.image_folder
-
-    @property
-    def aperture_locations(self):
-        """
-        The path to the file containing the aperture locations
-        """
-        return self.file_locations.aperture_locations_file
-
-    @property
-    def object_name(self):
-        """
-        The name of the object.
-        """
-        return self._object_name.value
-
-    def _update_locations(self, change):
-        self.file_locations = PhotometryFileSettings(**self._file_loc_widget.value)
-        self._update_ifc(change)
-        if Path(self.file_locations.aperture_settings_file).is_file():
-            self._update_aperture_settings(change)
-
-    def _update_ifc(self, change):
-        self.ifc = ImageFileCollection(self.file_locations.image_folder)
-        self._update_object_list(change)
-
-    def _update_object_list(self, change):  # noqa: ARG002
-        """
-        Widget callbacks need to accept a single argument, even if it is not used.
-        """
-        if self.ifc.summary:
-            self._object_name.options = sorted(
-                set(self.ifc.summary["object"][~self.ifc.summary["object"].mask])
-            )
-        else:
-            self._object_name.options = []
-
-    def _update_aperture_settings(self, change):  # noqa: ARG002
-        """
-        Widget callbacks need to accept a single argument, even if it is not used.
-        """
-        self.aperture_settings = PhotometryApertures.parse_file(
-            self.file_locations.aperture_settings_file
-        )
