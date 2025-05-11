@@ -161,7 +161,7 @@ class PanStarrs1ToJohnsonCousinsMixin:
                     from_band_name = "gp1"
 
                 case "V":
-                    # THere are three options in the Pan-STARRS1 paper
+                    # There are three options in the Pan-STARRS1 paper
                     # for the V band: g_p1, r_p1, and w_p1.
                     from_band_name = ps1_band_for_V
                 case "Rc":
