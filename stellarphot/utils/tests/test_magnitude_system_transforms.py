@@ -157,7 +157,7 @@ class TestPanStarrs1ToJohnsonCousins:
                 [20.0, 19.0, 18.0, 17.0, 16.0, 15.0],
             ]
         )
-        # Trensform just a single row
+        # Transform just a single row
         fake_jc_mags = ps1_to_jc(fake_gp1_mags[1, :])
         assert fake_jc_mags.shape == (4,)
         assert np.isclose(

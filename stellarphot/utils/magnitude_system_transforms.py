@@ -135,7 +135,7 @@ class PanStarrs1ToJohnsonCousinsMixin:
         ----------
         from_magnitudes : np.ArrayLike
             Pan-STARRS1 magnitudes to transform. The shape should either be (6,)
-            or (n, 6), where n is the number of magnitudesin the Pan-STARRS1 system
+            or (n, 6), where n is the number of magnitudes in the Pan-STARRS1 system
             you wish to transform to Johnson-Cousins system.
 
         """
