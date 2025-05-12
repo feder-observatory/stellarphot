@@ -1,6 +1,6 @@
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import numpy as np
 from astropy.utils.data import get_pkg_data_path
@@ -82,6 +82,25 @@ class MagnitudeTransform(BaseModel):
         return np.polynomial.Polynomial(self.polynomial_coefficients)
 
 
+def _parse_transform_coefficients(
+    input: Any,
+) -> dict[tuple[str, str], MagnitudeTransform]:
+    """
+    Parse the transform coefficients to ensure they are in the correct format.
+    """
+    if isinstance(input, str):
+        return input
+
+    if not isinstance(input, dict):
+        raise ValueError(
+            "Transform coefficients must be a dictionary of "
+            "magnitude transformations."
+        )
+    return {
+        tuple(k.split(",")) if isinstance(k, str) else k: v for k, v in input.items()
+    }
+
+
 class MagnitudeSystemTransform(BaseModel):
     """
     Class for magnitude system transformation from one single
@@ -112,10 +131,7 @@ class MagnitudeSystemTransform(BaseModel):
             )
         ),
         BeforeValidator(
-            lambda x: {
-                tuple(k.split(",")) if isinstance(k, str) else k: v
-                for k, v in x.items()
-            }
+            _parse_transform_coefficients,
         ),
     ]
 
