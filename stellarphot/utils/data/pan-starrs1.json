@@ -1,0 +1,11 @@
+{
+  "name": "PANSTARRS1",
+  "passbands": [
+      "gp1",
+      "rp1",
+      "ip1",
+      "zp1",
+      "yp1",
+      "wp1"
+    ]
+}

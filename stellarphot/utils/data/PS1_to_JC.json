@@ -1,0 +1,92 @@
+{
+    "name": "PAN-STARRS1 to Johnson/Cousins",
+    "reference": "https://doi.org/10.1088/0004-637x/750/2/99",
+    "from_system": {
+        "name": "PANSTARRS1",
+        "passbands": [
+            "gp1",
+            "rp1",
+            "ip1",
+            "zp1",
+            "yp1",
+            "wp1"
+            ]
+    },
+    "to_system": {
+        "name": "JC",
+        "passbands": [
+            "B",
+            "V",
+            "Rc",
+            "Ic"
+        ]
+    },
+    "transform_coefficients": {
+        "gp1,B":{
+            "name": "gp1 to B",
+            "from_passband": "gp1",
+            "to_passband": "B",
+            "polynomial_coefficients": [
+                0.212,
+                0.556,
+                0.034
+            ],
+            "residual": 0.032
+        },
+        "gp1,V": {
+            "name": "gp1 to V",
+            "from_passband": "gp1",
+            "to_passband": "V",
+            "polynomial_coefficients": [
+                0.005,
+                -0.536,
+                0.011
+            ],
+            "residual": 0.012
+        },
+        "rp1,V": {
+            "name": "rp1 to V",
+            "from_passband": "rp1",
+            "to_passband": "V",
+            "polynomial_coefficients": [
+                0.005,
+                0.462,
+                0.013
+            ],
+            "residual": 0.012
+        },
+        "rp1,Rc": {
+            "name": "rp1 to Rc",
+            "from_passband": "rp1",
+            "to_passband": "Rc",
+            "polynomial_coefficients": [
+                -0.137,
+                -0.108,
+                -0.029
+            ],
+            "residual": 0.015
+        },
+        "ip1,Ic": {
+            "name": "ip1 to Ic",
+            "from_passband": "ip1",
+            "to_passband": "Ic",
+            "polynomial_coefficients": [
+                -0.366,
+                -0.136,
+                -0.018
+            ],
+            "residual": 0.017
+        },
+        "wp1,V": {
+            "name": "wp1 to V",
+            "from_passband": "wp1",
+            "to_passband": "V",
+            "polynomial_coefficients": [
+                -0.021,
+                 0.299,
+                 0.187
+            ],
+            "residual": 0.025
+        }
+    }
+}

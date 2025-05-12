@@ -477,8 +477,8 @@ def transform_magnitudes(
 
 def transform_to_catalog(
     observed_mags_grouped,
-    obs_mag_col,
     obs_filter,
+    obs_mag_col="mag_inst",
     obs_error_column=None,
     cat_filter="r_mag",
     cat_color=("r_mag", "i_mag"),
@@ -501,8 +501,7 @@ def transform_to_catalog(
 
     observed_magnitudes_grouped : `astropy.table.Table`
         An astropy table, grouped by whatever you want that separates the data into
-        data from just one image. BJD of the center of the observatory is one reasonable
-        choice
+        data from just one image and just one filter.
 
     obs_mag_col : str
         Name of the column in `observed_magnitudes_grouped` that contains instrumental
