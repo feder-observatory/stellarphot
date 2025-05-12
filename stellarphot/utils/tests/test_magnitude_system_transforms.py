@@ -3,15 +3,19 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from astropy.coordinates import SkyCoord
 from astropy.utils.data import get_pkg_data_path
 from pydantic import ValidationError
 
+from stellarphot import apass_dr9, refcat2
 from stellarphot.utils.magnitude_system_transforms import (
     MagnitudeSystem,
     MagnitudeSystemNames,
     MagnitudeSystemTransform,
     MagnitudeTransform,
     PanStarrs1ToJohnsonCousins,
+    transform_apass_bands,
+    transform_refcat2_bands,
 )
 
 
@@ -172,3 +176,43 @@ class TestPanStarrs1ToJohnsonCousins:
             fake_jc_mags[0, 0],
             gp1_B_poly(fake_gp1_mags[0, 0] - fake_gp1_mags[0, 1]) + fake_gp1_mags[0, 0],
         )
+
+
+class TestCatalogTransforms:
+    @pytest.mark.remote_data
+    def test_apass_adds_RI(self):
+        # Get some APASS data
+        apass = apass_dr9(SkyCoord(0, 0, unit="degree"), radius="1 arcmin")
+        assert "mag_R" not in apass.columns
+        assert "mag_I" not in apass.columns
+
+        # Transform the data to add R and I
+        apass_trans = apass.passband_columns(
+            ["R", "I"], transformer=transform_apass_bands
+        )
+        assert "mag_R" in apass_trans.columns
+        assert "mag_I" in apass_trans.columns
+
+    @pytest.mark.remote_data
+    def test_refcats_adds_BVRI(self):
+        # Get some APASS data
+        refcat = refcat2(SkyCoord(0, 0, unit="degree"), radius="1 arcmin")
+        assert "mag_B" not in refcat.columns
+        assert "mag_V" not in refcat.columns
+        assert "mag_R" not in refcat.columns
+        assert "mag_I" not in refcat.columns
+
+        # Transform the data to add B, V, R, and I
+        refcat_trans = refcat.passband_columns(
+            ["B", "V", "R", "I"], transformer=transform_refcat2_bands
+        )
+        assert "mag_B" in refcat_trans.columns
+        assert "mag_V" in refcat_trans.columns
+        assert "mag_R" in refcat_trans.columns
+        assert "mag_I" in refcat_trans.columns
+
+        # Make sure an error is raised when a unknown band is requested
+        with pytest.raises(
+            ValueError, match="Transformer did not add columns for passbands"
+        ):
+            refcat.passband_columns(["X"], transformer=transform_refcat2_bands)
