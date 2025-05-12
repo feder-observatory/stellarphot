@@ -18,6 +18,7 @@ __all__ = [
     "PhotometryData",
     "CatalogData",
     "apass_dr9",
+    "refcat2",
     "vsx_vizier",
     "SourceListData",
 ]
