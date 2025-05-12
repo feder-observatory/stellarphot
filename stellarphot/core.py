@@ -1134,7 +1134,7 @@ class CatalogData(BaseEnhancedTable):
 
         return cat
 
-    def passband_columns(self, passbands=None):
+    def passband_columns(self, passbands=None, transformer=None):
         """
         Return an `astropy.table.Table` with passbands as column names instead
         of the default format, which has a single column for passbands.
@@ -1144,6 +1144,12 @@ class CatalogData(BaseEnhancedTable):
         passbands : list, optional
             List of passbands to include in the output. If not provided, all
             passbands in the catalog will be included.
+
+        transformer : callable, optional
+            Function to transform the data in the passband columns. The function
+            should take a single argument, which is the data in the passband
+            column, and return the transformed data. If not provided, no
+            transformation will be applied.
 
         Returns
         -------
@@ -1164,7 +1170,12 @@ class CatalogData(BaseEnhancedTable):
             passbands = catalog_passbands
         input_passbands = set(passbands)
         missing_passbands = input_passbands - catalog_passbands
-        if missing_passbands:
+        if missing_passbands == input_passbands:
+            # The user only request transformed passbands, give them all of them
+            # instead.
+            input_passbands = catalog_passbands
+        if missing_passbands and transformer is None:
+            # If there are missing passbands and no transformer, raise an error
             raise ValueError(
                 f"Passbands \"{', '.join(missing_passbands)}\" not found in catalog."
             )
@@ -1173,6 +1184,10 @@ class CatalogData(BaseEnhancedTable):
             passband_mask |= self["passband"] == passband
 
         reduced_input = self[passband_mask]
+
+        # Grab a copy of the metadata to make sure it is preserved. to_pands will
+        # strip the metadata from the table.
+        metadata = reduced_input.meta.copy()
 
         # Switch to pandas for making the new table.
         df = reduced_input.to_pandas()
@@ -1190,8 +1205,26 @@ class CatalogData(BaseEnhancedTable):
         # We also reset the index which was set to the id, ra, and dec columns above.
         df = df.reset_index()
 
-        # Convert back to an astropy table and return it.
-        return Table.from_pandas(df)
+        # Convert back to an astropy table
+        return_table = Table.from_pandas(df)
+
+        # Add the metadata back to the table
+        return_table.meta.update(metadata)
+
+        # If we have missing columns try feeding the table into the transformer
+        if missing_passbands:
+            return_table = transformer(return_table)
+            still_missing = [
+                band
+                for band in missing_passbands
+                if f"mag_{band}" not in return_table.colnames
+            ]
+            if still_missing:
+                raise ValueError(
+                    f"Transformer did not add columns for passbands "
+                    f"{', '.join(still_missing)}."
+                )
+        return return_table
 
 
 def apass_dr9(field_center, radius=1 * u.degree, clip_by_frame=False, padding=100):
