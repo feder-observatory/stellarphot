@@ -214,3 +214,85 @@ class PanStarrs1ToJohnsonCousins(
         # Load the transformation from a file
         path = Path(get_pkg_data_path("data/PS1_to_JC.json"))
         return cls.model_validate_json(path.read_text())
+
+
+def transform_apass_bands(table):
+    """
+    A function for transforming from the native APASS bassbands to Johnson/Cousins
+    R and I bands.
+
+    Parameters
+    ----------
+    table : `astropy.table.Table`
+        Table of catalog information. This is assumed to be in "passband" format
+    """
+    # Putting this here to avoid a circular import
+    from .magnitude_transforms import filter_transform
+
+    table["mag_RC"] = filter_transform(
+        table,
+        output_filter="R",
+        g="mag_SG",
+        r="mag_SR",
+        i="mag_SI",
+        transform="jester",
+    )
+    table["mag_IC"] = filter_transform(
+        table,
+        output_filter="I",
+        g="mag_SG",
+        r="mag_SR",
+        i="mag_SI",
+        transform="jester",
+    )
+
+    # Yes, this is dumb. You fix it if you want it less dumb.
+    table["mag_R"] = table["mag_RC"]
+    table["mag_I"] = table["mag_IC"]
+    # The dumbness has ended for now
+
+    return table
+
+
+def transform_refcat2_bands(table):
+    """
+    A function for transforming from the native RefCat2 bassbands to Johnson/Cousins
+    BVRI bands.
+
+    Parameters
+    ----------
+    table : `astropy.table.Table`
+        Table of catalog information. This is assumed to be in "passband" format
+    """
+    transform = PanStarrs1ToJohnsonCousins.load()
+
+    # Prepare the data for the transformation
+    num_rows = len(table)
+
+    transform_input = np.array(
+        [
+            table["mag_SG"],
+            table["mag_SR"],
+            table["mag_SI"],
+            table["mag_SZ"],
+            [0] * num_rows,  # Placeholder for the y_p1 band
+            [0] * num_rows,  # Placeholder for the w_p1 band
+        ]
+    )
+
+    transformed_data = transform(
+        transform_input.T,
+        ps1_band_for_V="gp1",
+    )
+
+    table["mag_B"] = transformed_data[:, 0]
+    table["mag_V"] = transformed_data[:, 1]
+    table["mag_RC"] = transformed_data[:, 2]
+    table["mag_IC"] = transformed_data[:, 3]
+
+    # Yes, this is dumb. You fix it if you want it less dumb.
+    table["mag_R"] = table["mag_RC"]
+    table["mag_I"] = table["mag_IC"]
+    # The dumbness has ended for now
+
+    return table
