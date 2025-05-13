@@ -1186,7 +1186,7 @@ class CatalogData(BaseEnhancedTable):
 
         reduced_input = self[passband_mask]
 
-        # Grab a copy of the metadata to make sure it is preserved. to_pands will
+        # Grab a copy of the metadata to make sure it is preserved. to_pandas will
         # strip the metadata from the table.
         metadata = reduced_input.meta.copy()
 
