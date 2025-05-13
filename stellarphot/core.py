@@ -1171,8 +1171,9 @@ class CatalogData(BaseEnhancedTable):
         input_passbands = set(passbands)
         missing_passbands = input_passbands - catalog_passbands
         if missing_passbands == input_passbands:
-            # The user only request transformed passbands, give them all of them
-            # instead.
+            # The user only request transformed passbands, give them all of the
+            # native passbands instead. The catalog native passbands will be necessary
+            # to do any transforms of the data.
             input_passbands = catalog_passbands
         if missing_passbands and transformer is None:
             # If there are missing passbands and no transformer, raise an error

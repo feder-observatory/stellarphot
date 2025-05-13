@@ -291,6 +291,7 @@ def transform_refcat2_bands(table):
     table["mag_IC"] = transformed_data[:, 3]
 
     # Yes, this is dumb. You fix it if you want it less dumb.
+    # We should only have one name for RC and IC, not two...
     table["mag_R"] = table["mag_RC"]
     table["mag_I"] = table["mag_IC"]
     # The dumbness has ended for now
