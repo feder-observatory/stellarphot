@@ -8,7 +8,8 @@ from astropy.stats import sigma_clip
 from astropy.table import MaskedColumn
 from scipy.optimize import curve_fit
 
-from ..core import apass_dr9
+from ..core import apass_dr9, refcat2
+from .magnitude_system_transforms import transform_apass_bands, transform_refcat2_bands
 
 __all__ = [
     "calibrated_from_instrumental",
@@ -480,6 +481,7 @@ def transform_to_catalog(
     obs_filter,
     obs_mag_col="mag_inst",
     obs_error_column=None,
+    cat_name="apass_dr9",
     cat_filter="r_mag",
     cat_color=("r_mag", "i_mag"),
     a_delta=0.5,
@@ -603,39 +605,42 @@ def transform_to_catalog(
         cat_colors.extend(nana)
         resids.extend(nana)
 
+    one_coord = SkyCoord(
+        observed_mags_grouped["ra"][0], observed_mags_grouped["dec"][0], unit="degree"
+    )
+    if cat is None or cat_coords is None:
+        if cat_name == "apass_dr9":
+            cat = apass_dr9(
+                one_coord, radius=1 * u.degree, clip_by_frame=False, padding=0
+            )
+            cat = cat.passband_columns(
+                passbands=["B", "V", "R", "I", "SR", "SG", "SI"],
+                transformer=transform_apass_bands,
+            )
+        elif cat_name == "refcat2":
+            cat = refcat2(
+                one_coord, radius=1 * u.degree, clip_by_frame=False, padding=0
+            )
+            cat = cat.passband_columns(
+                # Catalog native passbands will be automatically
+                # made to.
+                passbands=["B", "V", "R", "I"],
+                transformer=transform_refcat2_bands,
+            )
+        else:
+            raise ValueError(
+                f"Unknown catalog name {cat_name}. "
+                "Must be one of 'apass_dr9' or 'refcat2'."
+            )
+
+        cat_coords = SkyCoord(cat["ra"], cat["dec"], unit="degree")
+        cat["color"] = cat[f"mag_{cat_color[0]}"] - cat[f"mag_{cat_color[1]}"]
+
     for file, one_image_inp in zip(
         observed_mags_grouped.groups.keys, observed_mags_grouped.groups, strict=True
     ):
         one_image = one_image_inp[one_image_inp["passband"] == obs_filter]
         our_coords = SkyCoord(one_image["ra"], one_image["dec"], unit="degree")
-        if cat is None or cat_coords is None:
-            cat = apass_dr9(
-                our_coords[0], radius=1 * u.degree, clip_by_frame=False, padding=0
-            )
-            cat = cat.passband_columns(passbands=["B", "V", "SR", "SG", "SI"])
-            cat["mag_RC"] = filter_transform(
-                cat,
-                output_filter="R",
-                g="mag_SG",
-                r="mag_SR",
-                i="mag_SI",
-                transform="jester",
-            )
-            cat["mag_IC"] = filter_transform(
-                cat,
-                output_filter="I",
-                g="mag_SG",
-                r="mag_SR",
-                i="mag_SI",
-                transform="jester",
-            )
-            # Yes, this is dumb. You fix it if you want it less dumb.
-            cat["mag_R"] = cat["mag_RC"]
-            cat["mag_I"] = cat["mag_IC"]
-            # The dumbness has ended for now
-
-            cat_coords = SkyCoord(cat["ra"], cat["dec"], unit="degree")
-            cat["color"] = cat[f"mag_{cat_color[0]}"] - cat[f"mag_{cat_color[1]}"]
 
         cat_idx, d2d, _ = our_coords.match_to_catalog_sky(cat_coords)
 
@@ -644,7 +649,10 @@ def transform_to_catalog(
         color = cat["color"][cat_idx]
 
         # Impose some constraints on what is included in the fit
-        good_cat = ~(color.mask | cat_mag.mask) & (d2d.arcsecond < 1)
+        good_cat = ~(
+            getattr(color, "mask", False)
+            | getattr(cat_mag, "mask", False) & (d2d.arcsecond < 1)
+        )
         good_dat = (
             (one_image[obs_mag_col] < -3)
             & (one_image[obs_mag_col] > -20)
@@ -661,14 +669,15 @@ def transform_to_catalog(
         if (
             (not (any(good_dat) or any(good_cat)))
             or all(np.isnan(mag_diff))
-            or all(mag_diff.mask)
+            or all(getattr(mag_diff, "mask", [False]))
         ):
             print(f"No good data in {file[0]}")
             fake_it(one_image)
             continue
 
+        mag_diff_mask = getattr(mag_diff, "mask", np.array([False]))
         good_data = good_dat & (
-            np.abs(mag_diff - np.nanmedian(mag_diff[good_dat & ~mag_diff.mask])) < 1
+            np.abs(mag_diff - np.nanmedian(mag_diff[good_dat & ~mag_diff_mask])) < 1
         )
         try:
             good_data = good_data & ~one_image[obs_mag_col].mask
@@ -686,7 +695,9 @@ def transform_to_catalog(
         init_guess = (a_cen, 0, 0, 0, zero_point_mid)
         X = (mag_inst[good], color[good])
         catm = cat_mag[good]
-        if catm.mask.any() or X[1].mask.any() or np.isnan(X[0]).any():
+        catm_mask = getattr(catm, "mask", np.array([False]))
+        X1_mask = getattr(X[1], "mask", np.array([False]))
+        if catm_mask.any() or X1_mask.any() or np.isnan(X[0]).any():
             print("heck")
         if obs_error_column is not None:
             errors = one_image[obs_error_column][good]
