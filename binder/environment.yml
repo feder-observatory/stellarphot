@@ -20,4 +20,5 @@ dependencies:
   - pydantic >=2
   - pyyaml
   - platformdirs
-  - stellarphot==2.0.0a15
+  - pip:
+    - stellarphot==2.0.0a15
