@@ -16,3 +16,4 @@ photutils >=2,<3
 pydantic >=2
 pyyaml
 platformdirs
+stellarphot==2.0.0a15
