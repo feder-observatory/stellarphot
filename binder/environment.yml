@@ -1,0 +1,23 @@
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - astropy >=5
+  - astroquery
+  - astrowidgets
+  - bottleneck
+  - ccdproc
+  - ginga
+  - ipyautoui >=0.7.19
+  - ipyfilechooser
+  - ipywidgets
+  - jupyter-app-launcher >=0.3.0
+  - lightkurve
+  - matplotlib
+  - papermill
+  - pandas
+  - photutils >=2,<3
+  - pydantic >=2
+  - pyyaml
+  - platformdirs
+  - stellarphot==2.0.0a15
