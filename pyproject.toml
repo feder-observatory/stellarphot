@@ -197,6 +197,8 @@ filterwarnings = [
     'ignore:.*is deprecated and scheduled for removal.*:DeprecationWarning',
     # lightkurve is using a deprecated numpy interface
     'ignore:.*numpy.core.einsumfunc is deprecated and has been renamed.*:DeprecationWarning',
+    # lightkurve issues a warning about an optional import
+    'ignore:the tpfmodel submodule is not available without oktopus:UserWarning',
     # Sometimes gaussian fits are not great
     'ignore:The fit may be unsuccessful; check fit_info:astropy.utils.exceptions.AstropyUserWarning'
 ]
