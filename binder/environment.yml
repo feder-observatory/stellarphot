@@ -1,0 +1,7 @@
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - astropy >=7
+  - pip:
+    - stellarphot==2.0.0a15
