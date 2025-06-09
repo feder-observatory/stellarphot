@@ -45,8 +45,8 @@ def serialize_models_in_table_meta(table_meta):
 
     Parameters
     ----------
-    table : `~astropy.table.Table`
-        The table whose metadata will be serialized.
+    table_meta : dict
+        The metadata dictionary of the table.
     """
     model_classes = tuple(getattr(models, model_name) for model_name in models.__all__)
 
@@ -87,8 +87,8 @@ def deserialize_models_in_table_meta(table_meta):
 
     Parameters
     ----------
-    table : `~astropy.table.Table`
-        The table whose metadata will be deserialized.
+    table_meta : dict
+        The metadata dictionary of the table.
     """
     known_models = {
         model_name: getattr(models, model_name) for model_name in models.__all__
