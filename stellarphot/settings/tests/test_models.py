@@ -103,7 +103,7 @@ class TestModelAgnosticActions:
 
     def test_model_table_round_trip(self, model, settings, tmp_path):
         # Make sure that we can write the model to a table metadata and read it back in
-        # as long as we are use BaseEnhancedTable or a subclass.
+        # as long as we are using BaseEnhancedTable or a subclass.
         mod = model(**settings)
         table = BaseEnhancedTable({"data": [1, 2, 3]})
         table.meta["model"] = mod
