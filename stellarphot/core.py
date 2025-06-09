@@ -1,10 +1,12 @@
 import re
+from copy import deepcopy
 
 import lightkurve as lk
 import numpy as np
 import pandas as pd
 from astropy import units as u
 from astropy.coordinates import SkyCoord
+from astropy.io.ascii import InconsistentTableError
 from astropy.table import Column, QTable, Table, TableAttribute
 from astropy.time import Time
 from astropy.wcs import WCS
@@ -12,6 +14,11 @@ from astroquery.vizier import Vizier
 from astroquery.xmatch import XMatch
 
 from .settings import Camera, Observatory, PassbandMap
+from .table_representations import (
+    _generate_old_table_representers,
+    deserialize_models_in_table_meta,
+    serialize_models_in_table_meta,
+)
 
 __all__ = [
     "BaseEnhancedTable",
@@ -258,6 +265,50 @@ class BaseEnhancedTable(QTable):
             keepers = keepers & new_keepers
 
         return self[keepers]
+
+    @classmethod
+    def read(cls, *args, **kwargs):
+        """
+        Read a table from a file and return it as an instance of this class.
+
+        Parameters
+        ----------
+        filename : str
+            The name of the file to read.
+        **kwargs : dict
+            Additional keyword arguments to pass to the `astropy.table.Table.read`
+            method.
+        """
+        # Try reading the table using the QTable.read method
+        try:
+            table = QTable.read(*args, **kwargs)
+        except InconsistentTableError:
+            # Likely reading an old Table that has models in the metadata.
+            # Keep this around for a while to support old tables.
+            _generate_old_table_representers()
+            table = QTable.read(*args, **kwargs)
+        else:
+            # If we got here, we can assume the table is a new one and has
+            # models as dictionaries in the metadata.
+            deserialize_models_in_table_meta(table)
+        return cls(table)
+
+    def write(self, *args, **kwargs):
+        """
+        Write the table to a file.
+
+        Parameters
+        ----------
+        filename : str
+            The name of the file to write.
+        **kwargs : dict
+            Additional keyword arguments to pass to the `astropy.table.Table.write`
+            method.
+        """
+        original_meta = deepcopy(self.meta)
+        serialize_models_in_table_meta(self.meta)
+        super().write(*args, **kwargs)
+        self.meta = original_meta
 
 
 class PhotometryData(BaseEnhancedTable):
