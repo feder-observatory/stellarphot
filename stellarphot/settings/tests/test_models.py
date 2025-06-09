@@ -6,6 +6,7 @@ from copy import deepcopy
 import astropy.units as u
 import pytest
 from astropy.coordinates import EarthLocation, Latitude, Longitude
+from astropy.table import Table
 from pydantic import ValidationError
 
 from stellarphot import BaseEnhancedTable
@@ -107,10 +108,21 @@ class TestModelAgnosticActions:
         table = BaseEnhancedTable({"data": [1, 2, 3]})
         table.meta["model"] = mod
         table_path = tmp_path / "test_table.ecsv"
-        print(f"{mod=}")
         table.write(table_path)
         new_table = BaseEnhancedTable.read(table_path)
         assert new_table.meta["model"] == mod
+
+    def test_plain_table_readability(self, model, settings, tmp_path):
+        # Make sure that we can write the model to a table metadata and read it back in
+        # as long as we are use BaseEnhancedTable or a subclass.
+        mod = model(**settings)
+        table = BaseEnhancedTable({"data": [1, 2, 3]})
+        table.meta["model"] = mod
+        table_path = tmp_path / "test_table.ecsv"
+        print(f"{mod=}")
+        table.write(table_path)
+        new_table = Table.read(table_path)
+        assert mod.__class__.__name__ == new_table.meta["model"]["_model_name"]
 
     def test_settings_ui_generation(self, model, settings):
         # Check a few things about the UI generation:
