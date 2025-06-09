@@ -1,3 +1,5 @@
+import json
+
 from astropy.io.misc.yaml import AstropyDumper, AstropyLoader
 
 from stellarphot.settings import models
@@ -35,8 +37,83 @@ def generate_table_representers(cls):
     AstropyLoader.add_constructor(class_string, _constructor)
 
 
-# This code is deliberately executable so that it can be executed on import, which
-# should assure that Table representations are generated for all models.
-for model_name in models.__all__:
-    model_class = getattr(models, model_name)
-    generate_table_representers(model_class)
+def serialize_models_in_table_meta(table_meta):
+    """
+    Serialize the models in the table metadata **IN PLACE**.
+    This is used to ensure that the models are represented as simple
+    dictionaries when written to disk.
+
+    Parameters
+    ----------
+    table_meta : dict
+        The metadata dictionary of the table.
+    """
+    model_classes = tuple(getattr(models, model_name) for model_name in models.__all__)
+
+    for key, value in table_meta.items():
+        # If the value is a model instance, serialize it
+        if isinstance(value, model_classes):
+            model_instance = value
+            # So, funny story. model_dump gives you a nice dictionary, in which
+            # things like Longitude are turned into strings. However, writing them
+            # to ECSV fails, because ECSV doesn't understand np.str_, and - guess what -
+            # a Longitude returns a np.str_ when you do str(some_longitude).
+            # The upshot is that the workaround here, i.e. using model_dump to get
+            # simple objects into the header, does not work unless all string values
+            # are converted to str.
+            #
+            # The issue has been reported in
+            # https://github.com/astropy/astropy/issues/18235
+            #
+
+            # Dumping to json ensures that all the objects are converted to
+            # very basic types, which is easy enough to convert to a dictionary.
+
+            # Use model_dump_json to get a simple dictionary representation
+            model_json = model_instance.model_dump_json()
+            model_dict = json.loads(model_json)
+            table_meta[key] = model_dict
+            table_meta[key]["_model_name"] = model_instance.__class__.__name__
+        # If the value is a dict, recurse
+        elif isinstance(value, dict):
+            serialize_models_in_table_meta(value)
+
+
+def deserialize_models_in_table_meta(table_meta):
+    """
+    Deserialize the models in the table metadata **IN PLACE**.
+    This is used to ensure that the models are restored from simple
+    dictionaries when read from disk.
+
+    Parameters
+    ----------
+    table_meta : dict
+        The metadata dictionary of the table.
+    """
+    known_models = {
+        model_name: getattr(models, model_name) for model_name in models.__all__
+    }
+
+    model_keys_in_meta = []
+    for key, value in table_meta.meta.items():
+        # Check if the value is a dictionary and has a "_model_name" key
+        if isinstance(value, dict) and "_model_name" in value:
+            # Check if the model name is in the known models
+            if value["_model_name"] in known_models.keys():
+                model_keys_in_meta.append(key)
+
+    for key in model_keys_in_meta:
+        model_name = table_meta.meta[key].pop("_model_name")
+        table_meta.meta[key] = known_models[model_name].model_validate(
+            table_meta.meta[key]
+        )
+
+
+def _generate_old_table_representers():
+    """
+    This provides what is needed to read the "old-style" data tables in
+    which the models were stored as objects in the table metadata.
+    """
+    for model_name in models.__all__:
+        model_class = getattr(models, model_name)
+        generate_table_representers(model_class)
