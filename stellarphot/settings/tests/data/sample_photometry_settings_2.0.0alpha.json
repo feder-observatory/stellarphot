@@ -1,0 +1,67 @@
+{
+    "camera": {
+        "name": "CG16m",
+        "data_unit": "adu",
+        "gain": "1.5 electron / adu",
+        "read_noise": "10.0 electron",
+        "dark_current": "0.01 electron / s",
+        "pixel_scale": "0.6 arcsec / pix",
+        "max_data_value": "50000.0 adu"
+    },
+    "observatory": {
+        "name": "Feder",
+        "latitude": "46d52m25.68s",
+        "longitude": "263d13m55.92s",
+        "elevation": "311.0 m",
+        "AAVSO_code": null,
+        "TESS_telescope_code": null
+    },
+    "passband_map": {
+        "name": "Filter wheel",
+        "your_filter_names_to_aavso": [
+            {
+                "your_filter_name": "r",
+                "aavso_filter_name": "SR"
+            },
+            {
+                "your_filter_name": "r'",
+                "aavso_filter_name": "SR"
+            },
+            {
+                "your_filter_name": "rp",
+                "aavso_filter_name": "SR"
+            },
+            {
+                "your_filter_name": "gp",
+                "aavso_filter_name": "SG"
+            },
+            {
+                "your_filter_name": "ip",
+                "aavso_filter_name": "SI"
+            }
+        ]
+    },
+    "photometry_apertures": {
+        "variable_aperture": true,
+        "radius": 1.4,
+        "gap": 5.0,
+        "annulus_width": 15.0,
+        "fwhm_estimate": 10.098432649301587
+    },
+    "source_location_settings": {
+        "source_list_file": "source_locations.ecsv",
+        "use_coordinates": "sky",
+        "shift_tolerance": 5.0
+    },
+    "photometry_optional_settings": {
+        "include_dig_noise": true,
+        "reject_too_close": false,
+        "reject_background_outliers": true,
+        "fwhm_method": "profile",
+        "method": "exact"
+    },
+    "logging_settings": {
+        "logfile": null,
+        "console_log": true
+    }
+}

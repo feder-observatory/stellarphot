@@ -2,11 +2,13 @@ import json
 import random
 import re
 from copy import deepcopy
+from pathlib import Path
 
 import astropy.units as u
 import pytest
 from astropy.coordinates import EarthLocation, Latitude, Longitude
 from astropy.table import Table
+from astropy.utils.data import get_pkg_data_path
 from pydantic import ValidationError
 
 from stellarphot import BaseEnhancedTable
@@ -339,7 +341,7 @@ class TestPriorVersionsCompatibility:
         print(old_settings_style["photometry_optional_settings"].keys())
         del old_settings_style["photometry_optional_settings"]["fwhm_method"]
 
-        # Add the old entry, which was a boolean. Later in the test that the
+        # Add the old entry, which was a boolean. Later in the test check that the
         # old_setting is properly mapped to the expected new_setting
         old_settings_style["photometry_optional_settings"]["fwhm_by_fit"] = old_setting
 
@@ -348,6 +350,23 @@ class TestPriorVersionsCompatibility:
 
         # Check that that the new settings style is correct given the old_setting
         assert settings.photometry_optional_settings.fwhm_method == new_setting
+
+    def test_reading_2_0_0_alpha_files(self):
+        """
+        Test that we can read the settings files from
+        2.0.0 alpha releases.
+        """
+        settings_file = Path(
+            get_pkg_data_path("data/sample_photometry_settings_2.0.0alpha.json")
+        )
+
+        phot_settings = PhotometrySettings.model_validate_json(
+            settings_file.read_text()
+        )
+
+        assert hasattr(
+            phot_settings.photometry_optional_settings, "partial_pixel_method"
+        )
 
 
 def test_partial_photometry_settings():

@@ -1,4 +1,5 @@
 import warnings
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -8,7 +9,7 @@ from astropy.io import ascii, fits
 from astropy.nddata import CCDData
 from astropy.table import Table, vstack
 from astropy.time import Time
-from astropy.utils.data import get_pkg_data_filename
+from astropy.utils.data import get_pkg_data_filename, get_pkg_data_path
 from astropy.wcs import WCS
 from astropy.wcs.wcs import FITSFixedWarning
 
@@ -1369,3 +1370,14 @@ def test_to_lightcurve_multiple_passbands(simple_photometry_data):
         match=r"Passband SI not found for this star",
     ):
         two_filters.lightcurve_for(1, passband="SI")
+
+
+def test_reading_2_0_0_alpha_photometry_file():
+    """
+    Just make sure that old photometry files are still readable.
+    """
+    settings_file = Path(
+        get_pkg_data_path("data/sample_small_photometry_2.0.0alpha.ecsv")
+    )
+    phot = PhotometryData.read(settings_file)
+    assert len(phot) == 5
