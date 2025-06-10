@@ -58,7 +58,7 @@ TEST_PHOTOMETRY_OPTIONS = dict(
     reject_too_close=False,
     reject_background_outliers=False,
     fwhm_method="fit",
-    method="center",
+    partial_pixel_method="center",
 )
 
 TEST_PASSBAND_MAP = dict(

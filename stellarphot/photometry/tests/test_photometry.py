@@ -52,7 +52,7 @@ def source_locations():
 def photometry_optional_settings():
     pos = PhotometryOptionalSettings()
     # This used to be the default; it has switched to exact
-    pos.method = "center"
+    pos.partial_pixel_method = "center"
     return pos
 
 
@@ -413,7 +413,7 @@ class TestAperturePhotometry:
         )
 
         # Do the photometry with method = "center" first
-        phot_options.method = "center"
+        phot_options.partial_pixel_method = "center"
 
         photometry_settings_for_test.source_location_settings.source_list_file = str(
             source_list_file
@@ -426,7 +426,7 @@ class TestAperturePhotometry:
         # Now redo photometry with method="exact". Whether the flux is larger or smaller
         # in this case depends on the exact position of the sources in the image.
         # Here we just check that the flux is different.
-        phot_options.method = "exact"
+        phot_options.partial_pixel_method = "exact"
         photometry_settings_for_test.photometry_optional_settings = phot_options
         ap_phot_exact = AperturePhotometry(settings=photometry_settings_for_test)
         phot_exact, _ = ap_phot_exact(image_file)
