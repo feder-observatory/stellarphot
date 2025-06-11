@@ -109,6 +109,10 @@ include = [
         # Ignore branches that don't pertain to this version of Python
         "pragma: py{ignore_python_version}",
     ]
+    omit = [
+        # Don't include tox stuff, please
+        ".tox/**/*",
+    ]
 
 [tool.black]
 line-length = 88
