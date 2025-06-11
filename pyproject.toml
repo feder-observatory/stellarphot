@@ -84,13 +84,13 @@ include = [
     [tool.coverage.run]
     source = ["stellarphot"]
     omit = [
-        "stellarphot/_astropy_init*",
-        "stellarphot/conftest*",
-        "stellarphot/setup_package*",
-        "stellarphot/tests/*",
-        "stellarphot/**/tests/*",
-        "stellarphot/*version*",
-        "stellarphot/**/__init__.py"
+        "*/conftest*",
+        "*/setup_package*",
+        "*/tests/*",
+        "*/**/tests/*",
+        "*/*version*",
+        "*/**/__init__.py",
+        ".tox/**/*",
     ]
 
     [tool.coverage.report]
