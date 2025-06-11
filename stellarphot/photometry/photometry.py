@@ -450,7 +450,7 @@ def single_image_photometry(
         ccd_image.data,
         (apers, annuli),
         mask=ccd_image.mask,
-        method=photometry_options.method,
+        method=photometry_options.partial_pixel_method,
     )
 
     # photutils 2.1.0 stopped returning pixel units for x/y center

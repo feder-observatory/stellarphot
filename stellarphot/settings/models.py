@@ -720,7 +720,7 @@ class PhotometryOptionalSettings(BaseModelWithTableRep):
         star, 'profiile' fits a 1D Gaussian to the radial profile, and
         'moments' uses second order moments of the image, which is terrible.
 
-    method : `typing.Literal["exact", "center", "subpixel"]`, optional
+    partial_pixel_method : `typing.Literal["exact", "center", "subpixel"]`, optional
         How to handle partial pixels in the aperture.  If ``'exact'``, the fraction of
         the flux included is the fraction of the pixel within the aperture. If
         ``'center'``, whether a pixel's flux is included is determined by whether the
@@ -746,7 +746,7 @@ class PhotometryOptionalSettings(BaseModelWithTableRep):
     ...     reject_too_close=False,
     ...     reject_background_outliers=True,
     ...     fwhm_by_fit=True,
-    ...     method="center"
+    ...     partial_pixel_method="center"
     ... )
     >>> photometry_options
     PhotometryOptionalSettings(include_dig_noise=True, reject_too_close=False,...
@@ -832,10 +832,14 @@ class PhotometryOptionalSettings(BaseModelWithTableRep):
         ),
     ] = FwhmMethods.PROFILE
 
-    method: Annotated[
+    partial_pixel_method: Annotated[
         Literal["exact", "center", "subpixel"],
         Field(
             description="How to handle partial pixels in the aperture.",
+            validation_alias=AliasChoices(
+                "method",  # for backwards compatibility,
+                "partial_pixel_method",  # yes, pydantic does make you do this
+            ),
         ),
     ] = "exact"
 

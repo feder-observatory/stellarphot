@@ -1,0 +1,156 @@
+# %ECSV 1.0
+# ---
+# datatype:
+# - {name: star_id, datatype: int64}
+# - {name: ra, unit: deg, datatype: float64}
+# - {name: dec, unit: deg, datatype: float64}
+# - {name: xcenter, unit: pix, datatype: float64}
+# - {name: ycenter, unit: pix, datatype: float64}
+# - {name: fwhm_x, unit: pix, datatype: float64}
+# - {name: fwhm_y, unit: pix, datatype: float64}
+# - {name: width, unit: pix, datatype: float64}
+# - {name: aperture, unit: pix, datatype: float64}
+# - {name: aperture_area, unit: pix, datatype: float64}
+# - {name: annulus_inner, unit: pix, datatype: float64}
+# - {name: annulus_outer, unit: pix, datatype: float64}
+# - {name: annulus_area, unit: pix, datatype: float64}
+# - {name: aperture_sum, unit: adu, datatype: float64}
+# - {name: annulus_sum, unit: adu, datatype: float64}
+# - {name: sky_per_pix_avg, unit: adu / pix, datatype: float64}
+# - {name: sky_per_pix_med, unit: adu / pix, datatype: float64}
+# - {name: sky_per_pix_std, unit: adu / pix, datatype: float64}
+# - {name: aperture_net_cnts, unit: adu, datatype: float64}
+# - {name: noise_cnts, unit: adu, datatype: float64}
+# - {name: noise_electrons, unit: electron, datatype: float64}
+# - {name: snr, unit: adu, datatype: float64}
+# - {name: mag_inst, datatype: float64}
+# - {name: mag_error, unit: 1 / adu, datatype: float64}
+# - {name: exposure, unit: s, datatype: float64}
+# - {name: date-obs, datatype: string}
+# - {name: airmass, datatype: float64}
+# - {name: passband, datatype: string}
+# - {name: file, datatype: string}
+# - {name: night, datatype: int64}
+# meta: !!omap
+# - {date: '2025-05-08 01:03:01 CDT'}
+# - version: {Python: 3.12.3, astropy: 6.1.2, bottleneck: 1.4.0, gwcs: null, matplotlib: 3.9.1.post1, numpy: 1.26.4, photutils: 2.2.0,
+#     scipy: 1.14.0, skimage: 0.24.0}
+# - {aperture_photometry_args: 'method=''exact'', subpixels=5'}
+# - {aperture0: CircularAperture}
+# - {aperture0_r: 10.776490598159448}
+# - {aperture1: CircularAnnulus}
+# - {aperture1_r_in: 19.13780570902222}
+# - {aperture1_r_out: 34.13780570902222}
+# - __attributes__:
+#     camera: {_model_name: Camera, dark_current: 0.01 electron / s, data_unit: adu, gain: 1.5 electron / adu, max_data_value: 50000.0
+#         adu, name: CG16m, pixel_scale: 0.6 arcsec / pix, read_noise: 10.0 electron}
+#     observatory: {AAVSO_code: null, TESS_telescope_code: null, _model_name: Observatory, elevation: 311.0 m, latitude: 46d52m25.68s,
+#       longitude: 263d13m55.92s, name: Feder}
+# - __serialized_columns__:
+#     annulus_area:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: &id001 !astropy.units.Unit {unit: pix}
+#       value: !astropy.table.SerializedColumn {name: annulus_area}
+#     annulus_inner:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
+#       value: !astropy.table.SerializedColumn {name: annulus_inner}
+#     annulus_outer:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
+#       value: !astropy.table.SerializedColumn {name: annulus_outer}
+#     annulus_sum:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: &id002 !astropy.units.Unit {unit: adu}
+#       value: !astropy.table.SerializedColumn {name: annulus_sum}
+#     aperture:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
+#       value: !astropy.table.SerializedColumn {name: aperture}
+#     aperture_area:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
+#       value: !astropy.table.SerializedColumn {name: aperture_area}
+#     aperture_net_cnts:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id002
+#       value: !astropy.table.SerializedColumn {name: aperture_net_cnts}
+#     aperture_sum:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id002
+#       value: !astropy.table.SerializedColumn {name: aperture_sum}
+#     date-obs:
+#       __class__: astropy.time.core.Time
+#       format: isot
+#       in_subfmt: '*'
+#       out_subfmt: '*'
+#       precision: 3
+#       scale: utc
+#       value: !astropy.table.SerializedColumn {name: date-obs}
+#     dec:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: &id003 !astropy.units.Unit {unit: deg}
+#       value: !astropy.table.SerializedColumn {name: dec}
+#     exposure:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: !astropy.units.Unit {unit: s}
+#       value: !astropy.table.SerializedColumn {name: exposure}
+#     fwhm_x:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
+#       value: !astropy.table.SerializedColumn {name: fwhm_x}
+#     fwhm_y:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
+#       value: !astropy.table.SerializedColumn {name: fwhm_y}
+#     mag_error:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: !astropy.units.Unit {unit: 1 / adu}
+#       value: !astropy.table.SerializedColumn {name: mag_error}
+#     noise_cnts:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id002
+#       value: !astropy.table.SerializedColumn {name: noise_cnts}
+#     noise_electrons:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: !astropy.units.Unit {unit: electron}
+#       value: !astropy.table.SerializedColumn {name: noise_electrons}
+#     ra:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id003
+#       value: !astropy.table.SerializedColumn {name: ra}
+#     sky_per_pix_avg:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: !astropy.units.Unit {unit: adu / pix}
+#       value: !astropy.table.SerializedColumn {name: sky_per_pix_avg}
+#     sky_per_pix_med:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: !astropy.units.Unit {unit: adu / pix}
+#       value: !astropy.table.SerializedColumn {name: sky_per_pix_med}
+#     sky_per_pix_std:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: !astropy.units.Unit {unit: adu / pix}
+#       value: !astropy.table.SerializedColumn {name: sky_per_pix_std}
+#     snr:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id002
+#       value: !astropy.table.SerializedColumn {name: snr}
+#     width:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
+#       value: !astropy.table.SerializedColumn {name: width}
+#     xcenter:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
+#       value: !astropy.table.SerializedColumn {name: xcenter}
+#     ycenter:
+#       __class__: astropy.units.quantity.Quantity
+#       unit: *id001
+#       value: !astropy.table.SerializedColumn {name: ycenter}
+# schema: astropy-2.0
+star_id ra dec xcenter ycenter fwhm_x fwhm_y width aperture aperture_area annulus_inner annulus_outer annulus_area aperture_sum annulus_sum sky_per_pix_avg sky_per_pix_med sky_per_pix_std aperture_net_cnts noise_cnts noise_electrons snr mag_inst mag_error exposure date-obs airmass passband file night
+1 135.5865 49.819219999999994 2029.8898444547717 2045.1559408357011 15.931211008153868 15.931211008153868 15.931211008153868 15.550228511743159 759.6672841879943 19.13780570902222 34.13780570902222 2510.554041696493 49146.09609427086 148261.31016694912 59.06037033178206 59.0954704284668 10.914959736989974 4279.864961188796 293.72187818200626 440.5828172730094 14.571148011442155 -4.633197039835649 0.07451274286332234 90.0 2024-04-21T02:51:24.710 1.029 B ey-uma-S001-R001-C001-B.fit 60420
+2 135.67484 49.75601000000002 2349.923558760222 2485.915683728551 10.373714248658155 10.373714248658155 10.373714248658155 15.550228511743159 759.6672841879943 19.13780570902222 34.13780570902222 2510.554041696493 46462.47751252768 147646.0703634851 58.785633483638065 58.836652755737305 11.558623057413266 1804.9549747415294 290.5879568203915 435.88193523058726 6.21138946875609 -3.6957878058982803 0.17479763754331643 90.0 2024-04-21T02:51:24.710 1.029 B ey-uma-S001-R001-C001-B.fit 60420
+3 135.43134 49.72583 2746.9955328052047 1539.9964115040716 12.76457601595675 12.76457601595675 12.76457601595675 15.550228511743159 759.6672841879943 19.13780570902222 34.13780570902222 2510.554041696493 60940.62537795063 150655.4703293193 59.99318820484101 59.65180015563965 11.451705966646644 15365.763024599844 307.04805946538926 460.5720891980839 50.04351127101614 -6.021007201751213 0.021695843825187966 90.0 2024-04-21T02:51:24.710 1.029 B ey-uma-S001-R001-C001-B.fit 60420
+4 135.80694 49.82916000000002 1778.9151089097559 2921.940818047054 14.208801237778225 14.208801237778225 14.208801237778225 15.550228511743159 759.6672841879943 19.13780570902222 34.13780570902222 2510.554041696493 51539.01348953139 149117.5717030383 59.387648812264096 59.1103630065918 11.288159696714077 6424.15960200836 296.5096520222909 444.7644780334363 21.66593754433804 -5.0741626791144405 0.05011258814801372 90.0 2024-04-21T02:51:24.710 1.029 B ey-uma-S001-R001-C001-B.fit 60420
+5 135.82792 49.86515000000001 1535.0196834174487 2958.033290289324 15.832645367072086 15.832645367072086 15.832645367072086 15.550228511743159 759.6672841879943 19.13780570902222 34.13780570902222 2510.554041696493 46111.17647218476 147689.216916568 58.735905376912115 58.702701568603516 11.173675114412102 1491.4307501829244 290.1715688640687 435.2573532961031 5.139823849805173 -3.488629606768106 0.21123996400015835 90.0 2024-04-21T02:51:24.710 1.029 B ey-uma-S001-R001-C001-B.fit 60420
