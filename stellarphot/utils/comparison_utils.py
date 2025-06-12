@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 from astropy import units as u
 from astropy.coordinates import SkyCoord
@@ -61,6 +62,11 @@ def set_up(ccd):
         ra = vsx["ra"]
         dec = vsx["dec"]
         vsx["coords"] = SkyCoord(ra=ra, dec=dec, unit=u.degree)
+
+    # Restrict to just the stars in the field of view
+    if vsx:
+        good_stars = np.ones(len(vsx), dtype=bool)
+        vsx = in_field(vsx["coords"], ccd, vsx, good_stars)
 
     return vsx
 
@@ -193,8 +199,8 @@ def in_field(apass_good_coord, ccd, apass, good_stars):
     apass : `astropy.table.Table`
         Table with APASS stars in the field of view.
 
-    good_stars : `astropy.table.Table`
-        Table with the comparison stars.
+    good_stars : bool array
+        Boolean array indicating which stars are good.
 
     Returns
     -------
