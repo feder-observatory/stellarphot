@@ -1068,12 +1068,11 @@ class CatalogData(BaseEnhancedTable):
 
         magnitude_limit : float, optional
             If provided, only return items with magnitudes less than or equal
-            to this value.
+            to this value, and `magnitude_limit_passband` must also be provided.
 
         magnitude_limit_passband : str, optional
-            If provided, the passband to use for the magnitude limit. The name of
-            the passband must be the name native to the catalog. If not
-            provided, the first passband in the catalog will be used. If this
+            If provided, the passband column to use for the magnitude limit. The name of
+            the passband must be the name native to the catalog. If this
             is provided then the `magnitude_limit` must also be provided.
 
         colname_map : dict, optional
@@ -1127,6 +1126,17 @@ class CatalogData(BaseEnhancedTable):
         Tidy data formats are those where each row is a single observation of a
         single object in a single passband.
         """
+
+        if magnitude_limit_passband is not None and magnitude_limit is None:
+            raise ValueError(
+                "If you provide a magnitude_limit_passband, you must also "
+                "provide a magnitude_limit."
+            )
+        if magnitude_limit is not None and magnitude_limit_passband is None:
+            raise ValueError(
+                "If you provide a magnitude_limit, you must also "
+                "provide a magnitude_limit_passband."
+            )
 
         if isinstance(field_center, SkyCoord):
             # Center was passed in, just use it.

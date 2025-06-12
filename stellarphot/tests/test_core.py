@@ -1205,6 +1205,49 @@ test_sl_data = ascii.read(
 )
 
 
+@pytest.mark.parametrize("catalog", [apass_dr9, refcat2, vsx_vizier])
+def test_catalog_errors(catalog):
+    # Check some of the errors expected in catalog classes
+
+    # Giving a bad band should raise an error
+    error_msg = (
+        "magnitude_limit_passband must be one of"
+        if catalog is not vsx_vizier
+        else "no straightforward way to limit the VSX catalog by passband"
+    )
+    with pytest.raises(ValueError, match=error_msg):
+        catalog(
+            {},  # Dummy header
+            radius=0.1 * u.arcmin,
+            magnitude_limit=13,
+            magnitude_limit_passband="not a band, more like an ensemble",
+        )
+
+    # Giving a band but not a magnitude limit should raise an error except
+    # for vsx_vizier, which has weird settings because the VSX catalog mag
+    # column has a bunch of different passbands in it.
+    if catalog is not vsx_vizier:
+        # Need to provide a valid passband for each catalog
+        passband = "SR"
+        with pytest.raises(ValueError, match="you provide a .* you must also provide"):
+            catalog(
+                {},  # Dummy header
+                radius=0.1 * u.arcmin,
+                magnitude_limit_passband=passband,
+            )
+
+    # Giving a magnitude limit but not a band should raise an error except
+    # for vsx_vizier.
+    if catalog is not vsx_vizier:
+        with pytest.raises(ValueError, match="you provide a .* you must also provide"):
+            catalog(
+                {},  # Dummy header
+                radius=0.1 * u.arcmin,
+                magnitude_limit=13,
+                magnitude_limit_passband=None,  # Force there to be no passband
+            )
+
+
 def test_sourcelist():
     sl_test = SourceListData(input_data=test_sl_data, colname_map=None)
     assert sl_test["star_id"][0] == 0
