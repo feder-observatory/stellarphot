@@ -64,7 +64,7 @@ def set_up(ccd):
         vsx["coords"] = SkyCoord(ra=ra, dec=dec, unit=u.degree)
 
     # Restrict to just the stars in the field of view
-    if vsx:
+    if len(vsx):
         good_stars = np.ones(len(vsx), dtype=bool)
         vsx = in_field(vsx["coords"], ccd, vsx, good_stars)
 
