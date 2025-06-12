@@ -1317,7 +1317,7 @@ def apass_dr9(
     clip_by_frame=False,
     padding=100,
     magnitude_limit=None,
-    magnitude_limit_passband="V",
+    magnitude_limit_passband=None,
 ):
     """
     Return the items from APASS DR9 that are within the search radius and
@@ -1347,7 +1347,7 @@ def apass_dr9(
         If provided, only return items with magnitudes less than or equal
         to this value.
 
-    magnitude_limit_passband : str, optional
+    magnitude_limit_passband : str, optional, default is "V"
         If provided, the passband to use for the magnitude limit. The name of
         the passband must be one of the AAVSO standard passband names.
 
@@ -1374,6 +1374,14 @@ def apass_dr9(
         "DEJ2000": "dec",
     }
 
+    if magnitude_limit is None and magnitude_limit_passband is not None:
+        raise ValueError(
+            "If you provide a magnitude_limit_passband, you must also "
+            "provide a magnitude_limit."
+        )
+    if magnitude_limit is not None and magnitude_limit_passband is None:
+        magnitude_limit_passband = "V"
+
     aavso_passband_to_aavso_colnames = dict(
         B="Bmag",
         V="Vmag",
@@ -1393,6 +1401,11 @@ def apass_dr9(
             magnitude_limit_passband = aavso_passband_to_aavso_colnames[
                 magnitude_limit_passband
             ]
+
+    if not magnitude_limit:
+        # If no magnitude limit is provided, then we will not filter the catalog
+        # by magnitude.
+        magnitude_limit_passband = None
 
     raw_catalog = CatalogData.from_vizier(
         field_center,
@@ -1529,7 +1542,7 @@ def refcat2(
     clip_by_frame=False,
     padding=100,
     magnitude_limit=None,
-    magnitude_limit_passband="SR",
+    magnitude_limit_passband=None,
 ):
     """
     Return the items from Refcat2 that are within the search radius and
@@ -1559,7 +1572,7 @@ def refcat2(
         If provided, only return items with magnitudes less than or equal
         to this value.
 
-    magnitude_limit_passband : str, optional
+    magnitude_limit_passband : str, optional, default is "SR"
         If provided, the passband to use for the magnitude limit. The name of
         the passband must be one of the AAVSO standard passband names.
 
@@ -1587,6 +1600,9 @@ def refcat2(
         "DE_ICRS": "dec",
     }
 
+    if magnitude_limit and not magnitude_limit_passband:
+        magnitude_limit_passband = "SR"
+
     aavso_passband_to_refcat_colnames = dict(
         SG="gmag",
         SR="rmag",
@@ -1605,6 +1621,11 @@ def refcat2(
             magnitude_limit_passband = aavso_passband_to_refcat_colnames[
                 magnitude_limit_passband
             ]
+
+    # if not magnitude_limit:
+    #     # If no magnitude limit is provided, then we will not filter the catalog
+    #     # by magnitude.
+    #     magnitude_limit_passband = None
 
     def process_refcat2(catalog):
         """

@@ -1099,6 +1099,7 @@ def test_vsx_results(clip, data_file, mag_limit):
             13,
             "V",
         ),  # Limit chosen so that some of the expected data will be filtered out
+        (13, None),  # Default passband for apass_dr9 is V
     ],
 )
 def test_find_apass(mag_limit, mag_limit_band):
@@ -1132,7 +1133,7 @@ def test_find_apass(mag_limit, mag_limit_band):
     )
 
     # Impose the magnitude limit on the expected result, if any
-    if mag_limit_band is not None:
+    if mag_limit is not None:
         expected_all = expected_all[expected_all["Vmag"] <= mag_limit]
         # Apparently there are also some masked entries 🙄
         expected_all = expected_all[~expected_all["Vmag"].mask]
@@ -1156,6 +1157,7 @@ def test_find_apass(mag_limit, mag_limit_band):
             13,
             "SR",
         ),  # Limit chosen so that some of the expected data will be filtered out
+        (13, None),  # Default passband for refcat2 is SR
     ],
 )
 def test_find_refcat2(mag_limit, mag_limit_band):
@@ -1187,7 +1189,7 @@ def test_find_refcat2(mag_limit, mag_limit_band):
     )
 
     # Impose the magnitude limit on the expected result, if any
-    if mag_limit_band is not None:
+    if mag_limit is not None:
         expected_all = expected_all[expected_all["rmag"] <= mag_limit]
 
     # # It is hard to imagine the RAs matching and other entries not matching,
@@ -1236,16 +1238,10 @@ def test_catalog_errors(catalog):
                 magnitude_limit_passband=passband,
             )
 
-    # Giving a magnitude limit but not a band should raise an error except
-    # for vsx_vizier.
-    if catalog is not vsx_vizier:
-        with pytest.raises(ValueError, match="you provide a .* you must also provide"):
-            catalog(
-                {},  # Dummy header
-                radius=0.1 * u.arcmin,
-                magnitude_limit=13,
-                magnitude_limit_passband=None,  # Force there to be no passband
-            )
+    # Giving a magnitude limit but not a band should not raise an error because each
+    # catalog has a default passband.
+    #
+    # Since magnitude limit functionality is test elsewhere, we don't test it here.
 
 
 def test_sourcelist():
