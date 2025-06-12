@@ -1489,9 +1489,10 @@ def vsx_vizier(
         If provided, only return items with a brightest magnitudes less than or equal
         to this value.
 
-    magnitude_limit_passband : str, optional
+    magnitude_limit_passband : str, optional, default is "max"
         There is no straightforward way to limit the VSX catalog by passband. The
-        magnitude limit will be applied to the variable star's magnitude at maximum.
+        magnitude limit will be applied to the variable star's magnitude at maximum
+        brightness, and the only valid value for this parameter is "max".
 
     Returns
     -------
