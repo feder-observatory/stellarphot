@@ -610,7 +610,10 @@ def single_image_photometry(
     photom["noise_cnts"].unit = ccd_image.unit
 
     # Compute and save SNR
-    snr = camera.gain.value * photom["aperture_net_cnts"] / noise
+    snr = camera.gain * photom["aperture_net_cnts"] / photom["noise_electrons"]
+    # If the SNR is dimensionless, convert it to a plain number
+    if snr.unit.physical_type == "dimensionless":
+        snr = snr.value
     photom["snr"] = snr
     photom["mag_error"] = 1.085736205 / snr
     msg += "DONE."

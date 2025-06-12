@@ -295,6 +295,9 @@ class TestAperturePhotometry:
                 np.abs(expected_flux - out["aperture_net_cnts"].value / scale_factor)
                 < np.pi * aperture**2 * fake_CCDimage.noise_dev
             )
+        # Finally, check the units on the magnitude columns
+        assert phot["mag_inst"].unit is None
+        assert phot["mag_error"].unit is None
 
     @pytest.mark.parametrize("reject", [True, False])
     def test_aperture_photometry_with_outlier_rejection(
