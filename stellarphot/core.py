@@ -1029,6 +1029,8 @@ class CatalogData(BaseEnhancedTable):
         radius=0.5 * u.degree,
         clip_by_frame=False,
         padding=100,
+        magnitude_limit=None,
+        magnitude_limit_passband=None,
         colname_map=None,
         mag_column_regex=r"^([a-zA-Z]+'?|[a-zA-Z]+'?-[a-zA-Z]+'?)_?mag$",
         color_column_regex=r"^([a-zA-Z]+-[a-zA-Z]+)$",
@@ -1063,6 +1065,15 @@ class CatalogData(BaseEnhancedTable):
             Coordinates need to be at least this many pixels in from the edge
             of the frame to be considered in the field of view. Default value
             is 100.
+
+        magnitude_limit : float, optional
+            If provided, only return items with magnitudes less than or equal
+            to this value, and `magnitude_limit_passband` must also be provided.
+
+        magnitude_limit_passband : str, optional
+            If provided, the passband column to use for the magnitude limit. The name of
+            the passband must be the name native to the catalog. If this
+            is provided then the `magnitude_limit` must also be provided.
 
         colname_map : dict, optional
             Dictionary mapping column names in the catalog to column names in
@@ -1116,6 +1127,17 @@ class CatalogData(BaseEnhancedTable):
         single object in a single passband.
         """
 
+        if magnitude_limit_passband is not None and magnitude_limit is None:
+            raise ValueError(
+                "If you provide a magnitude_limit_passband, you must also "
+                "provide a magnitude_limit."
+            )
+        if magnitude_limit is not None and magnitude_limit_passband is None:
+            raise ValueError(
+                "If you provide a magnitude_limit, you must also "
+                "provide a magnitude_limit_passband."
+            )
+
         if isinstance(field_center, SkyCoord):
             # Center was passed in, just use it.
             center = field_center
@@ -1140,7 +1162,17 @@ class CatalogData(BaseEnhancedTable):
             center = SkyCoord(*wcs.wcs.crval, unit="deg")
 
         # Get catalog via cone search -- all columns, no limit on rows
-        vizier = Vizier(columns=["all"], row_limit=-1)
+        column_filter = (
+            {f"{magnitude_limit_passband}": f"<={magnitude_limit}"}
+            if magnitude_limit is not None
+            else {}
+        )
+        vizier = Vizier(
+            columns=["all"],
+            row_limit=-1,
+            column_filters=column_filter,
+            timeout=180,
+        )
         cat = vizier.query_region(center, radius=radius, catalog=desired_catalog)
 
         # Vizier always returns list even if there is only one element. Grab that
@@ -1279,7 +1311,14 @@ class CatalogData(BaseEnhancedTable):
         return return_table
 
 
-def apass_dr9(field_center, radius=1 * u.degree, clip_by_frame=False, padding=100):
+def apass_dr9(
+    field_center,
+    radius=1 * u.degree,
+    clip_by_frame=False,
+    padding=100,
+    magnitude_limit=None,
+    magnitude_limit_passband=None,
+):
     """
     Return the items from APASS DR9 that are within the search radius and
     (optionally) within the field of view of a frame.
@@ -1304,6 +1343,14 @@ def apass_dr9(field_center, radius=1 * u.degree, clip_by_frame=False, padding=10
         of the frame to be considered in the field of view. Default value
         is 100.
 
+    magnitude_limit : float, optional
+        If provided, only return items with magnitudes less than or equal
+        to this value.
+
+    magnitude_limit_passband : str, optional, default is "V"
+        If provided, the passband to use for the magnitude limit. The name of
+        the passband must be one of the AAVSO standard passband names.
+
     Returns
     -------
 
@@ -1327,6 +1374,39 @@ def apass_dr9(field_center, radius=1 * u.degree, clip_by_frame=False, padding=10
         "DEJ2000": "dec",
     }
 
+    if magnitude_limit is None and magnitude_limit_passband is not None:
+        raise ValueError(
+            "If you provide a magnitude_limit_passband, you must also "
+            "provide a magnitude_limit."
+        )
+    if magnitude_limit is not None and magnitude_limit_passband is None:
+        magnitude_limit_passband = "V"
+
+    aavso_passband_to_aavso_colnames = dict(
+        B="Bmag",
+        V="Vmag",
+        SG="g'mag",
+        SR="r'mag",
+        SI="i'mag",
+    )
+    # Make sure the magnitude limit passband is one of the AAVSO standard passband names
+    if magnitude_limit_passband:
+        if magnitude_limit_passband not in aavso_passband_to_aavso_colnames:
+            raise ValueError(
+                "magnitude_limit_passband must be one of "
+                f"{', '.join(aavso_passband_to_aavso_colnames.keys())}."
+            )
+        else:
+            # If it is valid, then use the refcat2 column name for the passband
+            magnitude_limit_passband = aavso_passband_to_aavso_colnames[
+                magnitude_limit_passband
+            ]
+
+    if not magnitude_limit:
+        # If no magnitude limit is provided, then we will not filter the catalog
+        # by magnitude.
+        magnitude_limit_passband = None
+
     raw_catalog = CatalogData.from_vizier(
         field_center,
         "II/336/apass9",
@@ -1334,6 +1414,8 @@ def apass_dr9(field_center, radius=1 * u.degree, clip_by_frame=False, padding=10
         clip_by_frame=clip_by_frame,
         padding=padding,
         colname_map=apass_colnames,
+        magnitude_limit=magnitude_limit,
+        magnitude_limit_passband=magnitude_limit_passband,
     )
 
     # IAU requires an acronym to star, so make it APASS plus SP for stellarphot
@@ -1371,7 +1453,14 @@ def apass_dr9(field_center, radius=1 * u.degree, clip_by_frame=False, padding=10
     return raw_catalog
 
 
-def vsx_vizier(field_center, radius=1 * u.degree, clip_by_frame=False, padding=100):
+def vsx_vizier(
+    field_center,
+    radius=1 * u.degree,
+    clip_by_frame=False,
+    padding=100,
+    magnitude_limit=None,
+    magnitude_limit_passband=None,
+):
     """
     Return the items from the copy of VSX on Vizier that are within the search
     radius and (optionally) within the field of view of a frame.
@@ -1396,6 +1485,15 @@ def vsx_vizier(field_center, radius=1 * u.degree, clip_by_frame=False, padding=1
         of the frame to be considered in the field of view. Default value
         is 100.
 
+    magnitude_limit : float, optional
+        If provided, only return items with a brightest magnitudes less than or equal
+        to this value.
+
+    magnitude_limit_passband : str, optional, default is "max"
+        There is no straightforward way to limit the VSX catalog by passband. The
+        magnitude limit will be applied to the variable star's magnitude at maximum
+        brightness, and the only valid value for this parameter is "max".
+
     Returns
     -------
     `stellarphot.CatalogData`
@@ -1406,6 +1504,16 @@ def vsx_vizier(field_center, radius=1 * u.degree, clip_by_frame=False, padding=1
         RAJ2000="ra",
         DEJ2000="dec",
     )
+
+    if magnitude_limit_passband is not None:
+        raise ValueError(
+            "There is no straightforward way to limit the VSX catalog by passband. "
+            "The magnitude limit will be applied to the variable star's magnitude "
+            "at maximum."
+        )
+
+    if magnitude_limit is not None:
+        magnitude_limit_passband = "max"
 
     # This one is easier -- it already has the passband in a column name.
     # We'll use the maximum magnitude as the magnitude column.
@@ -1424,10 +1532,19 @@ def vsx_vizier(field_center, radius=1 * u.degree, clip_by_frame=False, padding=1
         prepare_catalog=prepare_cat,
         no_catalog_error=True,
         tidy_catalog=False,
+        magnitude_limit=magnitude_limit,
+        magnitude_limit_passband=magnitude_limit_passband,
     )
 
 
-def refcat2(field_center, radius=1 * u.degree, clip_by_frame=False, padding=100):
+def refcat2(
+    field_center,
+    radius=1 * u.degree,
+    clip_by_frame=False,
+    padding=100,
+    magnitude_limit=None,
+    magnitude_limit_passband=None,
+):
     """
     Return the items from Refcat2 that are within the search radius and
     (optionally) within the field of view of a frame.
@@ -1452,6 +1569,14 @@ def refcat2(field_center, radius=1 * u.degree, clip_by_frame=False, padding=100)
         of the frame to be considered in the field of view. Default value
         is 100.
 
+    magnitude_limit : float, optional
+        If provided, only return items with magnitudes less than or equal
+        to this value.
+
+    magnitude_limit_passband : str, optional, default is "SR"
+        If provided, the passband to use for the magnitude limit. The name of
+        the passband must be one of the AAVSO standard passband names.
+
     Returns
     -------
 
@@ -1475,6 +1600,33 @@ def refcat2(field_center, radius=1 * u.degree, clip_by_frame=False, padding=100)
         "RA_ICRS": "ra",
         "DE_ICRS": "dec",
     }
+
+    if magnitude_limit and not magnitude_limit_passband:
+        magnitude_limit_passband = "SR"
+
+    aavso_passband_to_refcat_colnames = dict(
+        SG="gmag",
+        SR="rmag",
+        SI="imag",
+        SZ="zmag",
+    )
+    # Make sure the magnitude limit passband is one of the AAVSO standard passband names
+    if magnitude_limit_passband:
+        if magnitude_limit_passband not in aavso_passband_to_refcat_colnames:
+            raise ValueError(
+                "magnitude_limit_passband must be one of "
+                f"{', '.join(aavso_passband_to_refcat_colnames.keys())}."
+            )
+        else:
+            # If it is valid, then use the refcat2 column name for the passband
+            magnitude_limit_passband = aavso_passband_to_refcat_colnames[
+                magnitude_limit_passband
+            ]
+
+    # if not magnitude_limit:
+    #     # If no magnitude limit is provided, then we will not filter the catalog
+    #     # by magnitude.
+    #     magnitude_limit_passband = None
 
     def process_refcat2(catalog):
         """
@@ -1522,6 +1674,8 @@ def refcat2(field_center, radius=1 * u.degree, clip_by_frame=False, padding=100)
         padding=padding,
         colname_map=refcat2_colnames,
         prepare_catalog=process_refcat2,
+        magnitude_limit=magnitude_limit,
+        magnitude_limit_passband=magnitude_limit_passband,
     )
 
     # Translate the passbands to AAVSO standard names.

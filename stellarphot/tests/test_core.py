@@ -1045,10 +1045,13 @@ def test_from_vizier_with_header_no_wcs_raise_error():
 
 @pytest.mark.remote_data
 @pytest.mark.parametrize(
-    "clip, data_file",
-    [(True, "data/clipped_ey_uma_vsx.fits"), (False, "data/unclipped_ey_uma_vsx.fits")],
+    "clip, data_file, mag_limit",
+    [
+        (True, "data/clipped_ey_uma_vsx.fits", None),
+        (False, "data/unclipped_ey_uma_vsx.fits", 13),
+    ],
 )
-def test_vsx_results(clip, data_file):
+def test_vsx_results(clip, data_file, mag_limit):
     # Check that a catalog search of VSX gives us what we expect.
     # I suppose this really isn't future-proof, since more variables
     # could be discovered in the future....
@@ -1076,18 +1079,34 @@ def test_vsx_results(clip, data_file):
         ccd_im[0].header,
         radius=0.5 * u.degree,
         clip_by_frame=clip,
+        magnitude_limit=mag_limit,
     )
+
+    if mag_limit:
+        # If we have a magnitude limit, we need to filter the expected data
+        # to match.
+        expected = expected[expected["mag"] <= mag_limit]
+
     assert set(actual["OID"]) == set(expected["OID"])
 
 
 @pytest.mark.remote_data
-def test_find_apass():
+@pytest.mark.parametrize(
+    "mag_limit,mag_limit_band",
+    [
+        (None, None),
+        (
+            13,
+            "V",
+        ),  # Limit chosen so that some of the expected data will be filtered out
+        (13, None),  # Default passband for apass_dr9 is V
+    ],
+)
+def test_find_apass(mag_limit, mag_limit_band):
     CCD_SHAPE = [2048, 3073]
     # This is really checking from APASS DR9 on Vizier, or at least that
     # is where the "expected" data is drawn from.
-    expected_all = Table.read(
-        get_pkg_data_filename("data/all_apass_ey_uma_sorted_ra_first_20.fits")
-    )
+    expected_all = Table.read(get_pkg_data_filename("data/all_apass_ey_uma.ecsv"))
 
     wcs_file = get_pkg_data_filename("data/sample_wcs_ey_uma.fits")
     with fits.open(wcs_file) as hdulist:
@@ -1105,13 +1124,19 @@ def test_find_apass():
 
     # Turn this into an HDU to get the standard FITS image keywords
     ccd_im = ccd.to_hdu()
-    all_apass = apass_dr9(ccd_im[0].header, radius=1 * u.deg)
 
-    # Reference data was sorted by RA, first 20 entries kept
-    # There are 6 magnitude or color columns, so 6 * 20 = 120 rows
-    # in the resulting table.
-    all_apass.sort("ra")
-    all_apass = all_apass[:120]
+    all_apass = apass_dr9(
+        ccd_im[0].header,
+        radius=10 * u.arcmin,
+        magnitude_limit=mag_limit,
+        magnitude_limit_passband=mag_limit_band,
+    )
+
+    # Impose the magnitude limit on the expected result, if any
+    if mag_limit is not None:
+        expected_all = expected_all[expected_all["Vmag"] <= mag_limit]
+        # Apparently there are also some masked entries 🙄
+        expected_all = expected_all[~expected_all["Vmag"].mask]
 
     # It is hard to imagine the RAs matching and other entries not matching,
     # so just check the RAs.
@@ -1124,13 +1149,21 @@ def test_find_apass():
 
 
 @pytest.mark.remote_data
-def test_find_refcat2():
+@pytest.mark.parametrize(
+    "mag_limit,mag_limit_band",
+    [
+        (None, None),
+        (
+            13,
+            "SR",
+        ),  # Limit chosen so that some of the expected data will be filtered out
+        (13, None),  # Default passband for refcat2 is SR
+    ],
+)
+def test_find_refcat2(mag_limit, mag_limit_band):
     CCD_SHAPE = [2048, 3073]
-    # This test is for refcat2. The "expected" data used for comparison
-    # is derived from APASS DR9 on Vizier.
-    expected_all = Table.read(
-        get_pkg_data_filename("data/all_refcat2_ey_uma_sorted_ra_first_20.fits")
-    )
+    # The "expected" data used for comparison is derived from refcat2 on Vizier.
+    expected_all = Table.read(get_pkg_data_filename("data/all_refcat2_ey_uma.ecsv"))
 
     wcs_file = get_pkg_data_filename("data/sample_wcs_ey_uma.fits")
     with fits.open(wcs_file) as hdulist:
@@ -1148,13 +1181,16 @@ def test_find_refcat2():
 
     # Turn this into an HDU to get the standard FITS image keywords
     ccd_im = ccd.to_hdu()
-    all_refcat2 = refcat2(ccd_im[0].header, radius=10 * u.arcmin)
+    all_refcat2 = refcat2(
+        ccd_im[0].header,
+        radius=10 * u.arcmin,
+        magnitude_limit=mag_limit,
+        magnitude_limit_passband=mag_limit_band,
+    )
 
-    # # Reference data was sorted by RA, first 20 entries kept
-    # # There are 10 magnitude or color columns, so 10 * 20 = 200 rows
-    # # in the resulting table.
-    all_refcat2.sort("ra")
-    all_refcat2 = all_refcat2[:200]
+    # Impose the magnitude limit on the expected result, if any
+    if mag_limit is not None:
+        expected_all = expected_all[expected_all["rmag"] <= mag_limit]
 
     # # It is hard to imagine the RAs matching and other entries not matching,
     # # so just check the RAs.
@@ -1169,6 +1205,43 @@ def test_find_refcat2():
 test_sl_data = ascii.read(
     get_pkg_data_filename("data/test_sourcelist.ecsv"), format="ecsv", fast_reader=False
 )
+
+
+@pytest.mark.parametrize("catalog", [apass_dr9, refcat2, vsx_vizier])
+def test_catalog_errors(catalog):
+    # Check some of the errors expected in catalog classes
+
+    # Giving a bad band should raise an error
+    error_msg = (
+        "magnitude_limit_passband must be one of"
+        if catalog is not vsx_vizier
+        else "no straightforward way to limit the VSX catalog by passband"
+    )
+    with pytest.raises(ValueError, match=error_msg):
+        catalog(
+            {},  # Dummy header
+            radius=0.1 * u.arcmin,
+            magnitude_limit=13,
+            magnitude_limit_passband="not a band, more like an ensemble",
+        )
+
+    # Giving a band but not a magnitude limit should raise an error except
+    # for vsx_vizier, which has weird settings because the VSX catalog mag
+    # column has a bunch of different passbands in it.
+    if catalog is not vsx_vizier:
+        # Need to provide a valid passband for each catalog
+        passband = "SR"
+        with pytest.raises(ValueError, match="you provide a .* you must also provide"):
+            catalog(
+                {},  # Dummy header
+                radius=0.1 * u.arcmin,
+                magnitude_limit_passband=passband,
+            )
+
+    # Giving a magnitude limit but not a band should not raise an error because each
+    # catalog has a default passband.
+    #
+    # Since magnitude limit functionality is test elsewhere, we don't test it here.
 
 
 def test_sourcelist():
