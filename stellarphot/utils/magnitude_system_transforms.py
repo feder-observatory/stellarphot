@@ -349,11 +349,11 @@ def transform_apass_bands(table, apply_sdssdr7_transform: bool = False):
         # Prepare the data for the transformation
         input_mags = np.asarray([up, gp.data, rp.data, ip.data, zp, ones])
         # Transform the APASS g'r'i' to SDSS DR7
-        foo = transform(input_mags)
+        sdss_mags = transform(input_mags)
         new_columns = {
-            "mag_SG_tmp": foo[1, :],
-            "mag_SR_tmp": foo[2, :],
-            "mag_SI_tmp": foo[3, :],
+            "mag_SG_tmp": sdss_mags[1, :],
+            "mag_SR_tmp": sdss_mags[2, :],
+            "mag_SI_tmp": sdss_mags[3, :],
         }
         for k, v in new_columns.items():
             table[k] = v
