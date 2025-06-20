@@ -21,7 +21,7 @@
             "Ic"
         ]
     },
-    "transform_coefficients": {
+    "transform_information": {
         "gp1,B":{
             "name": "gp1 to B",
             "from_passband": "gp1",

@@ -1217,7 +1217,9 @@ class CatalogData(BaseEnhancedTable):
 
         return cat
 
-    def passband_columns(self, passbands=None, transformer=None):
+    def passband_columns(
+        self, passbands=None, transformer=None, transformer_kwargs=None
+    ):
         """
         Return an `astropy.table.Table` with passbands as column names instead
         of the default format, which has a single column for passbands.
@@ -1295,9 +1297,10 @@ class CatalogData(BaseEnhancedTable):
         # Add the metadata back to the table
         return_table.meta.update(metadata)
 
+        transformer_kwargs = transformer_kwargs or {}
         # If we have missing columns try feeding the table into the transformer
         if missing_passbands:
-            return_table = transformer(return_table)
+            return_table = transformer(return_table, **transformer_kwargs)
             still_missing = [
                 band
                 for band in missing_passbands

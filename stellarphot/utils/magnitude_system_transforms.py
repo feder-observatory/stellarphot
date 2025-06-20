@@ -9,7 +9,7 @@ from pydantic import BaseModel, BeforeValidator, Field
 __all__ = [
     "MagnitudeSystemNames",
     "MagnitudeSystem",
-    "MagnitudeTransform",
+    "MagnitudeTransformPolynomial",
     "MagnitudeSystemTransform",
     "PanStarrs1ToJohnsonCousins",
 ]
@@ -22,6 +22,7 @@ class MagnitudeSystemNames(StrEnum):
     Vega = "Vega"
     JC = "JC"
     SDSSDR7 = "SDSSDR7"
+    USNO_SDSS = "USNO_SDSS"
     GAIA = "GAIA"
     TESS = "TESS"
     PANSTARRS1 = "PANSTARRS1"
@@ -46,9 +47,10 @@ class MagnitudeSystem(BaseModel):
     ]
 
 
-class MagnitudeTransform(BaseModel):
+class MagnitudeTransformPolynomial(BaseModel):
     """
-    Class for magnitude transformation from one set of passbands to another.
+    Class for magnitude transformation from one set of passbands to another that is best
+    represented by a polynomial.
     """
 
     name: str
@@ -82,9 +84,42 @@ class MagnitudeTransform(BaseModel):
         return np.polynomial.Polynomial(self.polynomial_coefficients)
 
 
+class MagnitudeTransformMatrix(BaseModel):
+    """
+    Class for magnitude transformation from one set of passbands to another that is best
+    represented by a matrix.
+    """
+
+    name: str
+    from_passbands: Annotated[
+        list[str],
+        Field(description="Passbands to transform from."),
+    ]
+    to_passbands: Annotated[
+        list[str],
+        Field(description="Passbands to transform to."),
+    ]
+    transformation_matrix: Annotated[
+        list[list[float]],
+        Field(
+            description=(
+                "Transformation matrix for the transformation. "
+                "Shape should be (n_from, n_to)."
+            )
+        ),
+    ]
+
+    @property
+    def array(self) -> np.ndarray:
+        """
+        Transformation matrix.
+        """
+        return np.array(self.transformation_matrix)
+
+
 def _parse_transform_coefficients(
     input: Any,
-) -> dict[tuple[str, str], MagnitudeTransform]:
+) -> dict[tuple[str, str], MagnitudeTransformPolynomial]:
     """
     Parse the transform coefficients to ensure they are in the correct format.
     """
@@ -122,18 +157,29 @@ class MagnitudeSystemTransform(BaseModel):
     to_system: MagnitudeSystem = Field(
         description="The magnitude system to transform to."
     )
-    transform_coefficients: Annotated[
-        dict[tuple[str, str], MagnitudeTransform],
-        Field(
-            description=(
-                "Coefficients for the transformation. The "
-                "number of coefficients depends on the transformation."
-            )
-        ),
-        BeforeValidator(
-            _parse_transform_coefficients,
-        ),
-    ]
+    transform_information: (
+        Annotated[
+            dict[tuple[str, str], MagnitudeTransformPolynomial],
+            Field(
+                description=(
+                    "Coefficients for the transformation. The "
+                    "number of coefficients depends on the transformation."
+                )
+            ),
+            BeforeValidator(
+                _parse_transform_coefficients,
+            ),
+        ]
+        | Annotated[
+            MagnitudeTransformMatrix,
+            Field(
+                description=(
+                    "Transformation matrix for the transformation. "
+                    "Shape should be (n_from, n_to)."
+                )
+            ),
+        ]
+    )
 
 
 class PanStarrs1ToJohnsonCousinsMixin:
@@ -191,12 +237,44 @@ class PanStarrs1ToJohnsonCousinsMixin:
                     )
 
             to_mags[..., index] = (
-                self.transform_coefficients[(from_band_name, to_band_name)].polynomial(
+                self.transform_information[(from_band_name, to_band_name)].polynomial(
                     color
                 )
                 + from_magnitudes[..., from_band_index[from_band_name]]
             )
         return np.squeeze(to_mags)
+
+
+class MatrixTransformMixin:
+    """
+    Implementation of a matrix-based magnitude transformation.
+    """
+
+    def __call__(self, from_magnitudes: np.typing.ArrayLike) -> np.ndarray:
+        """
+        Transform magnitudes using a matrix transformation.
+
+        Parameters
+        ----------
+        from_magnitudes : np.ArrayLike
+            Magnitudes to transform. The shape should be (n, m), where n is the number
+            of magnitudes and m is the number of passbands in the from_system. There
+            must be an entry for each passband in the from_system, even if all of the
+            entries for a particular passband are zero.
+        """
+        # Convert to numpy array
+        from_magnitudes = np.asarray(from_magnitudes)
+
+        # Ensure the input shape matches the expected number of passbands. The
+        # +1 is for the constant term in the transforms
+        if from_magnitudes.shape[0] != len(self.from_system.passbands) + 1:
+            raise ValueError(
+                f"Input shape {from_magnitudes.shape} does not match the number "
+                f"of passbands in the from_system ({len(self.from_system.passbands)})."
+            )
+
+        # Perform the matrix multiplication
+        return self.transform_information.array @ from_magnitudes
 
 
 class PanStarrs1ToJohnsonCousins(
@@ -216,7 +294,22 @@ class PanStarrs1ToJohnsonCousins(
         return cls.model_validate_json(path.read_text())
 
 
-def transform_apass_bands(table):
+class USNOPrimeToSDSSDR7(MatrixTransformMixin, MagnitudeSystemTransform):
+    """
+    Class for transforming USNO Prime magnitudes to SDSS DR7 magnitudes.
+    """
+
+    @classmethod
+    def load(cls) -> "USNOPrimeToSDSSDR7":
+        """
+        Load the USNO Prime to SDSS DR7 transformation from a file.
+        """
+        # Load the transformation from a file
+        path = Path(get_pkg_data_path("data/USNO_SDSS_to_SDSS_DR7.json"))
+        return cls.model_validate_json(path.read_text())
+
+
+def transform_apass_bands(table, apply_sdssdr7_transform: bool = False):
     """
     A function for transforming from the native APASS bassbands to Johnson/Cousins
     R and I bands.
@@ -229,20 +322,58 @@ def transform_apass_bands(table):
     # Putting this here to avoid a circular import
     from .magnitude_transforms import filter_transform
 
-    table["mag_RC"] = filter_transform(
-        table,
-        output_filter="R",
+    # Set up for input to Jester transform
+    use_columns = dict(
         g="mag_SG",
         r="mag_SR",
         i="mag_SI",
+    )
+
+    # The Jester transformation really for transformation from the ugriz on the
+    # 2.5m SDSS telescope to the Johnson-Cousins system.
+    #
+    # APASS is using u'g'r'i'z' (well, only g'r'i' in APASS) and so I *think*
+    # that the right thing to do is to transform the APASS g'r'i' to the SDSS DR7
+    # system, and then apply jester.
+    if apply_sdssdr7_transform:
+        # Load the transformation
+        transform = USNOPrimeToSDSSDR7.load()
+
+        # Get the g', r', i' columns
+        gp = table["mag_SG"]
+        rp = table["mag_SR"]
+        ip = table["mag_SI"]
+        up = np.zeros_like(gp)  # Placeholder for u' band, not used in APASS
+        zp = np.zeros_like(gp)  # Placeholder for z' band, not used in APASS
+        ones = np.ones_like(gp)  # Placeholder for the constant term
+        # Prepare the data for the transformation
+        input_mags = np.asarray([up, gp.data, rp.data, ip.data, zp, ones])
+        # Transform the APASS g'r'i' to SDSS DR7
+        foo = transform(input_mags)
+        new_columns = {
+            "mag_SG_tmp": foo[1, :],
+            "mag_SR_tmp": foo[2, :],
+            "mag_SI_tmp": foo[3, :],
+        }
+        for k, v in new_columns.items():
+            table[k] = v
+
+        use_columns = dict(
+            g="mag_SG_tmp",
+            r="mag_SR_tmp",
+            i="mag_SI_tmp",
+        )
+
+    table["mag_RC"] = filter_transform(
+        table,
+        output_filter="R",
+        **use_columns,
         transform="jester",
     )
     table["mag_IC"] = filter_transform(
         table,
         output_filter="I",
-        g="mag_SG",
-        r="mag_SR",
-        i="mag_SI",
+        **use_columns,
         transform="jester",
     )
 
@@ -250,6 +381,10 @@ def transform_apass_bands(table):
     table["mag_R"] = table["mag_RC"]
     table["mag_I"] = table["mag_IC"]
     # The dumbness has ended for now
+
+    # Remove the temporary columns if they were created
+    if apply_sdssdr7_transform:
+        del table["mag_SG_tmp", "mag_SR_tmp", "mag_SI_tmp"]
 
     return table
 
