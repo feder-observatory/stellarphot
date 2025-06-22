@@ -738,7 +738,7 @@ def test_photometry_data_properties(feder_cg_16m, feder_obs):
     pd = PhotometryData(
         testphot_goodUnits.copy(), observatory=feder_obs, camera=feder_cg_16m
     )
-    # Check everything except the coordinates and mag install error
+    # Check everything except the coordinates and instrumental mag error
     for prop in ["bjd", "mag_inst", "passband"]:
         assert getattr(pd, prop) == pd[prop]
 
