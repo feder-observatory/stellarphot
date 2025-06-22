@@ -89,7 +89,10 @@ def deserialize_models_in_table_meta(table_meta):
 
     1. Directly in the table metadata.
     2. As a TableAttribute, which ends up in the table's meta under
-       the "``__attribute__``" key.
+       the "``__attributes__``" key.
+
+    This function checks subdictionaries recursively to properly handle this
+    case.
 
     Parameters
     ----------
