@@ -290,7 +290,7 @@ class BaseEnhancedTable(QTable):
         else:
             # If we got here, we can assume the table is a new one and has
             # models as dictionaries in the metadata.
-            deserialize_models_in_table_meta(table)
+            deserialize_models_in_table_meta(table.meta)
         return cls(table)
 
     def write(self, *args, **kwargs):

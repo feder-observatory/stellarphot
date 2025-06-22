@@ -85,6 +85,12 @@ def deserialize_models_in_table_meta(table_meta):
     This is used to ensure that the models are restored from simple
     dictionaries when read from disk.
 
+    There are two places a model might be stored:
+
+    1. Directly in the table metadata.
+    2. As a TableAttribute, which ends up in the table's meta under
+       the "``__attribute__``" key.
+
     Parameters
     ----------
     table_meta : dict
@@ -95,18 +101,20 @@ def deserialize_models_in_table_meta(table_meta):
     }
 
     model_keys_in_meta = []
-    for key, value in table_meta.meta.items():
+    for key, value in table_meta.items():
         # Check if the value is a dictionary and has a "_model_name" key
-        if isinstance(value, dict) and "_model_name" in value:
-            # Check if the model name is in the known models
-            if value["_model_name"] in known_models.keys():
-                model_keys_in_meta.append(key)
+        if isinstance(value, dict):
+            if "_model_name" in value:
+                # Check if the model name is in the known models
+                if value["_model_name"] in known_models.keys():
+                    model_keys_in_meta.append(key)
+            else:
+                # Time to recurse into the dictionary
+                deserialize_models_in_table_meta(value)
 
     for key in model_keys_in_meta:
-        model_name = table_meta.meta[key].pop("_model_name")
-        table_meta.meta[key] = known_models[model_name].model_validate(
-            table_meta.meta[key]
-        )
+        model_name = table_meta[key].pop("_model_name")
+        table_meta[key] = known_models[model_name].model_validate(table_meta[key])
 
 
 def _generate_old_table_representers():
