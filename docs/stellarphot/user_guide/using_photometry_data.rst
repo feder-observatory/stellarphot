@@ -9,7 +9,7 @@ Photometry data attributes
 
 + ``coord`` -- an astropy `~astropy.coordinates.SkyCoord` object with the coordinates for each star
 + ``mag_inst`` -- the instrumental magnitude
-+ ``mag_inst_err`` -- error in the instrument magnitude
++ ``mag_inst_error`` -- error in the instrument magnitude
 + ``passband`` -- the filter of the magnitude; required
 + ``bjd`` -- Barycentric Julian Date of the midpoint of the observation; may be missing/masked
 
