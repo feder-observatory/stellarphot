@@ -1,7 +1,12 @@
 import re
+import warnings
 from copy import deepcopy
 
-import lightkurve as lk
+# lightkurve 2.5.1 issues a warning about some functionality requiring a different
+# package that users just do not need to see when importing stellarphot.
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    import lightkurve as lk
 import numpy as np
 import pandas as pd
 from astropy import units as u
