@@ -14,6 +14,7 @@ from astropy.coordinates import SkyCoord
 from astropy.io.ascii import InconsistentTableError
 from astropy.table import Column, QTable, Table, TableAttribute
 from astropy.time import Time
+from astropy.utils.decorators import lazyproperty
 from astropy.wcs import WCS
 from astroquery.vizier import Vizier
 from astroquery.xmatch import XMatch
@@ -605,6 +606,36 @@ class PhotometryData(BaseEnhancedTable):
             if passband_map is not None:
                 self._passband_map = passband_map.model_copy()
                 self._update_passbands()
+
+    @lazyproperty
+    def coord(self):
+        """
+        Return the coordinates of the stars in the table as a `SkyCoord` object.
+        This is computed from the 'ra' and 'dec' columns in the table.
+        """
+        return SkyCoord(ra=self["ra"], dec=self["dec"])
+
+    @property
+    def mag_inst(self):
+        """Instrumental magnitude."""
+        return self["mag_inst"]
+
+    @property
+    def mag_inst_error(self):
+        """Error in the instrumental magnitude."""
+        return self["mag_error"]
+
+    @property
+    def passband(self):
+        """The passband of the observations."""
+        return self["passband"]
+
+    @property
+    def bjd(self):
+        """The barycentric julian date of the observation."""
+        if "bjd" not in self.colnames:
+            self.add_bjd_col()
+        return self["bjd"]
 
     def add_bjd_col(self, observatory=None, bjd_coordinates=None):
         """

@@ -734,6 +734,20 @@ def test_photometry_inconsistent_computed_col_exists(
     assert np.abs(phot_data["snr"][0].value - 46.795229859903905) < 1e-6
 
 
+def test_photometry_data_properties():
+    pd = PhotometryData(testphot_goodUnits.copy())
+    # Check everything except the coordinates and mag install error
+    for prop in ["bjd", "mag_inst", "passband"]:
+        assert getattr(pd, prop) == pd[prop]
+
+    # Check the coordinates
+    assert pd.coord.ra == pd["ra"]
+    assert pd.coord.dec == pd["dec"]
+
+    # Check the instrumental mag error
+    assert pd.mag_inst_error == pd["mag_error"]
+
+
 # Load test catalog
 test_cat = ascii.read(
     get_pkg_data_filename("data/test_vsx_table.ecsv"), format="ecsv", fast_reader=False
