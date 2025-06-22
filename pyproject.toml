@@ -31,6 +31,8 @@ dependencies = [
     "pydantic >=2",
     "pyyaml",
     "platformdirs",
+    "regions",  # stellarphot does not directly use regions, but
+                # astroquery.XMatch gripes on import if it is not installed
 ]
 
 [project.optional-dependencies]
@@ -153,7 +155,7 @@ skip = '*.svg'
 ignore-words = "ignore-words.txt"
 
 [tool.pytest.ini_options]
-minversion = 7.0
+minversion = "7.0"
 testpaths = [
     "stellarphot",
     "docs",
