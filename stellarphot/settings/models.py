@@ -4,7 +4,7 @@ import re
 from copy import deepcopy
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Any, Literal, Optional, TypeVar
+from typing import Annotated, Any, Literal, TypeVar
 
 from astropy.coordinates import EarthLocation, Latitude, Longitude, SkyCoord
 from astropy.time import Time
@@ -1146,7 +1146,7 @@ def _make_partial_model(model: type[BaseModelT], default=None) -> type[BaseModel
     for field_name, field_info in model.model_fields.items():
         new = deepcopy(field_info)
         new.default = default
-        new.annotation = Optional[field_info.annotation]  # type: ignore  # noqa: UP007
+        new.annotation = field_info.annotation | None  # type: ignore  # noqa: UP007
         new_fields[field_name] = (new.annotation, new)
     return create_model(  # type: ignore
         f"Partial{model.__name__}",

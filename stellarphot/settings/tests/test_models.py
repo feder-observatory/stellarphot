@@ -7,7 +7,7 @@ from pathlib import Path
 import astropy.units as u
 import pytest
 from astropy.coordinates import EarthLocation, Latitude, Longitude
-from astropy.table import Table
+from astropy.table import Table, TableAttribute
 from astropy.utils.data import get_pkg_data_path
 from pydantic import ValidationError
 
@@ -49,6 +49,12 @@ TEST_PASSBAND_MAP = deepcopy(TEST_PASSBAND_MAP)
 TEST_PHOTOMETRY_SETTINGS = deepcopy(TEST_PHOTOMETRY_SETTINGS)
 TEST_LOGGING_SETTINGS = deepcopy(TEST_LOGGING_SETTINGS)
 TEST_SOURCE_LOCATION_SETTINGS = deepcopy(TEST_SOURCE_LOCATION_SETTINGS)
+
+
+# Class below is used in testing roundtripping when a model is a
+# table attribute.
+class TableWithAttribute(BaseEnhancedTable):
+    model = TableAttribute()
 
 
 @pytest.mark.parametrize(
@@ -125,6 +131,19 @@ class TestModelAgnosticActions:
         table.write(table_path)
         new_table = Table.read(table_path)
         assert mod.__class__.__name__ == new_table.meta["model"]["_model_name"]
+
+    def test_table_roundtrip_model_as_attribute(self, model, settings, tmp_path):
+        # If a model is a table attribute it is saved in the meta in a
+        # dictionary whose key is __attributes__. The prior tests check
+        # that a model that is directly in the meta can round trip but
+        # does not check a model that is an attribute so we do that here.
+        the_table = TableWithAttribute()
+        the_table.model = model(**settings)
+        table_path = tmp_path / "test_table.ecsv"
+        the_table.write(table_path)
+        new_table = TableWithAttribute.read(table_path)
+        # Check that the model is the same
+        assert new_table.model == the_table.model
 
     def test_settings_ui_generation(self, model, settings):
         # Check a few things about the UI generation:
