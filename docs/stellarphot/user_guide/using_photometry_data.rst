@@ -8,10 +8,10 @@ Photometry data attributes
 `~stellarphot.PhotometryData` objects always have these attributes, also available dictionary-style:
 
 + ``coord`` -- an astropy `~astropy.coordinates.SkyCoord` object with the coordinates for each star
-+ ``mag_inst`` -- the instrumental magnitude
-+ ``mag_inst_error`` -- error in the instrument magnitude
-+ ``passband`` -- the filter of the magnitude; required
-+ ``bjd`` -- Barycentric Julian Date of the midpoint of the observation; may be missing/masked
++ ``mag_inst`` -- the instrumental magnitude for each star
++ ``mag_inst_error`` -- error in the instrumental magnitude for each star
++ ``passband`` -- the filter of the photometry
++ ``bjd`` -- Barycentric Julian Date of the midpoint of the observation
 
 These objects are also astropy tables, and there is much more information
 available in the table beyond these attributes.
