@@ -1,0 +1,40 @@
+{
+    "name": "USNO u'g'r'i'z' to SDSS DR7 ugriz",
+    "reference": "https://classic.sdss.org/dr7/algorithms/jeg_photometric_eq_dr1.php#usno2SDSS",
+    "from_system": {
+        "name": "USNO_SDSS",
+        "passbands": [
+            "u'",
+            "g'",
+            "r'",
+            "i'",
+            "z'"
+        ]
+    },
+    "to_system": {
+        "name": "SDSSDR7",
+        "passbands": [
+            "u",
+            "g",
+            "r",
+            "i",
+            "z"
+        ]
+    },
+
+
+    "transform_information": {
+        "name": "USNO_SDSS_to_SDSS_DR7",
+        "from_passbands": ["u'","g'","r'","i'","z'"],
+        "to_passbands": ["u","g","r","i","z"],
+        "transformation_matrix":
+        [
+            [ 1.0    ,  0.0    ,  0.0    ,  0.0    ,  0.0    ,  0.0    ],
+            [ 0.0    ,  1.06   , -0.06   ,  0.0    ,  0.0    , -0.0318 ],
+            [ 0.0    ,  0.0    ,  1.035  , -0.035  ,  0.0    , -0.00735],
+            [ 0.0    ,  0.0    ,  0.041  ,  0.959  ,  0.0    , -0.00861],
+            [ 0.0    ,  0.0    ,  0.0    , -0.03   ,  1.03   ,  0.0027 ],
+            [ 0.0    ,  0.0    ,  0.0    ,  0.0    ,  0.0    ,  1.0    ]
+        ]
+    }
+}

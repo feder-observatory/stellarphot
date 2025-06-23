@@ -12,8 +12,9 @@ from stellarphot.utils.magnitude_system_transforms import (
     MagnitudeSystem,
     MagnitudeSystemNames,
     MagnitudeSystemTransform,
-    MagnitudeTransform,
+    MagnitudeTransformPolynomial,
     PanStarrs1ToJohnsonCousins,
+    USNOPrimeToSDSSDR7,
     transform_apass_bands,
     transform_refcat2_bands,
 )
@@ -64,7 +65,7 @@ class TestMagnitudeTransform:
         fake_coeff = [0.1, 0.2, 0.3]
         # This is NOT a real transform....just making sure that
         # the transform can be made
-        my_transform = MagnitudeTransform(
+        my_transform = MagnitudeTransformPolynomial(
             name="test",
             from_passband="B",
             to_passband="gp1",
@@ -93,7 +94,7 @@ class TestMagnitudeSystemTransform:
         )
 
         fake_coeff = [0.1, 0.2, 0.3]
-        my_mag_trans1 = MagnitudeTransform(
+        my_mag_trans1 = MagnitudeTransformPolynomial(
             name="test",
             from_passband="B",
             to_passband="gp1",
@@ -101,7 +102,7 @@ class TestMagnitudeSystemTransform:
             residual=0.1,
         )
 
-        my_mag_trans2 = MagnitudeTransform(
+        my_mag_trans2 = MagnitudeTransformPolynomial(
             name="test",
             from_passband="V",
             to_passband="rp1",
@@ -114,15 +115,15 @@ class TestMagnitudeSystemTransform:
             reference="some paper I will never write",
             from_system=my_jc_system,
             to_system=my_ps1_system,
-            transform_coefficients={
+            transform_information={
                 ("B", "gp1"): my_mag_trans1,
                 ("V", "rp1"): my_mag_trans2,
             },
         )
 
         # Make sure we can access the transform coefficients as intended.
-        assert my_transform.transform_coefficients[("B", "gp1")] == my_mag_trans1
-        assert my_transform.transform_coefficients[("V", "rp1")] == my_mag_trans2
+        assert my_transform.transform_information[("B", "gp1")] == my_mag_trans1
+        assert my_transform.transform_information[("V", "rp1")] == my_mag_trans2
 
         # Serialize the model and make sure that the transform keys appear
         # as expected.
@@ -151,7 +152,7 @@ class TestPanStarrs1ToJohnsonCousins:
         # Spot check a couple of transform relationships
         # Expected polynomials from the paper
         gp1_B_poly = np.polynomial.Polynomial([0.212, 0.556, 0.034])
-        assert ps1_to_jc.transform_coefficients[("gp1", "B")].polynomial == gp1_B_poly
+        assert ps1_to_jc.transform_information[("gp1", "B")].polynomial == gp1_B_poly
 
         # Check that the transform works
         fake_gp1_mags = np.array(
@@ -194,6 +195,22 @@ class TestCatalogTransforms:
         assert "mag_I" in apass_trans.columns
 
     @pytest.mark.remote_data
+    def test_apass_can_apply_usno(self):
+        # Get some APASS data
+        apass = apass_dr9(SkyCoord(0, 0, unit="degree"), radius="1 arcmin")
+        assert "mag_R" not in apass.columns
+        assert "mag_I" not in apass.columns
+
+        # Transform the data to add R and I
+        apass_trans = apass.passband_columns(
+            ["R", "I"],
+            transformer=transform_apass_bands,
+            transformer_kwargs=dict(apply_sdssdr7_transform=True),
+        )
+        assert "mag_R" in apass_trans.columns
+        assert "mag_I" in apass_trans.columns
+
+    @pytest.mark.remote_data
     def test_refcats_adds_BVRI(self):
         # Get some APASS data
         refcat = refcat2(SkyCoord(0, 0, unit="degree"), radius="1 arcmin")
@@ -216,3 +233,21 @@ class TestCatalogTransforms:
             ValueError, match="Transformer did not add columns for passbands"
         ):
             refcat.passband_columns(["X"], transformer=transform_refcat2_bands)
+
+
+class TestUSNOPrimeToSDSSDR7:
+    def test_transform(self):
+        # Check that the zero point for ug is correct
+        inp_mag = np.asarray([1.39, 0.0, 0.0, 0.0, 0.0, 1.0])
+        # This should produce this output:
+        # u: same as u' so 1.39
+        # g: product of -b_g and -zp_gr, so -0.0318
+        # r: product of -b_r and -zp_ri, so -0.00735
+        # i: product of -b_i and -zp_ri, so -0.00861
+        # z: product of -b_z and -zp_iz, so 0.0027
+
+        # This effectively checks the whole matrix
+        expected = np.asarray([1.39, -0.0318, -0.00735, -0.00861, 0.0027, 1])
+        usno_to_sdss = USNOPrimeToSDSSDR7.load()
+        out_mag = usno_to_sdss(inp_mag)
+        assert np.allclose(out_mag, expected)

@@ -1,0 +1,10 @@
+{
+  "name": "USNO_SDSS",
+  "passbands": [
+    "u'",
+    "g'",
+    "r'",
+    "i'",
+    "z'"
+   ]
+}
