@@ -1,15 +1,28 @@
 Working with  Photometry Data
 #############################
 
-Photometry objects always have these attributes, also available dictionary-style:
 
-+ ``mag`` -- the calibrated magnitude; may be missing (e.g. your data prior to calibration)
-+ ``mag_err`` -- error in ``mag``
-+ ``inst_mag`` -- the instrumental magnitude; may be missing (e.g. catalog data)
-+ ``inst_mag_err`` -- error int the ``inst_mag``
-+ ``band`` -- the filter of the magnitude; required
-+ ``BJD`` -- Barycentric Julian Date of the midpoint of the observation; may be missing/masked
-+ ``RA2000`` -- right ascension in degrees, in the ICRS frame at epoch 2000
-+ ``DEC2000`` -- declination in degrees in the ICRS frame at epoch 2000
+Photometry data attributes
+--------------------------
 
-There may be additional fields.
+`~stellarphot.PhotometryData` objects always have these attributes, also available dictionary-style:
+
++ ``coord`` -- an astropy `~astropy.coordinates.SkyCoord` object with the coordinates for each star
++ ``mag_inst`` -- the instrumental magnitude for each star
++ ``mag_inst_error`` -- error in the instrumental magnitude for each star
++ ``passband`` -- the filter of the photometry
++ ``bjd`` -- Barycentric Julian Date of the midpoint of the observation
+
+These objects are also astropy tables, and there is much more information
+available in the table beyond these attributes.
+
+Generating a light curve from photometry data
+---------------------------------------------
+
+One of the more common tasks when performing photometry is generating a light curve
+for one or more of the objects in the field, i.e. magnitude or flux vs time for that
+object. The `~stellarphot.PhotometryData.lightcurve_for` method lets you generate a
+`lightkurve.LightCurve` object for any of the stars in your field. You can specify the
+name of the star, the coordinates of the star or the ``star_id`` assigned by stellarphot.
+See the lightkurve documentation for examples of how to plot a light curve,
+perform a periodogram on it, fold it, and more.

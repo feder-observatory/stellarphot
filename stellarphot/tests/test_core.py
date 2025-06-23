@@ -734,6 +734,27 @@ def test_photometry_inconsistent_computed_col_exists(
     assert np.abs(phot_data["snr"][0].value - 46.795229859903905) < 1e-6
 
 
+def test_photometry_data_properties(feder_cg_16m, feder_obs):
+    pd = PhotometryData(
+        testphot_goodUnits.copy(), observatory=feder_obs, camera=feder_cg_16m
+    )
+    # Check everything except the coordinates and instrumental mag error
+    for prop in ["bjd", "mag_inst", "passband"]:
+        assert getattr(pd, prop) == pd[prop]
+
+    # Check the coordinates
+    assert pd.coord.ra == pd["ra"]
+    assert pd.coord.dec == pd["dec"]
+
+    # Check the instrumental mag error
+    assert pd.mag_inst_error == pd["mag_error"]
+
+    # The bjd property should be generated if there is not a "bjd" column.
+    old_bjd = pd["bjd"].copy()
+    del pd["bjd"]
+    assert pd.bjd.value == pytest.approx(old_bjd)
+
+
 # Load test catalog
 test_cat = ascii.read(
     get_pkg_data_filename("data/test_vsx_table.ecsv"), format="ecsv", fast_reader=False
