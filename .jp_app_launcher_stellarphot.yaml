@@ -52,6 +52,14 @@
   type: notebook
   catalog: Stellarphot analysis and tools
 
+- title: Calibrate magnitudes
+  description: Calibrate magnitudes to APASS DR9
+  source: ../stellarphot/transform-to-appas-dr9.ipynb
+  icon: ../stellarphot/stellarphot-logo.svg
+  cwd: not_used
+  type: notebook
+  catalog: Stellarphot analysis and tools
+
 - title: Initial exoplanet model
   description: Do an initial fit to a transit
   source: ../stellarphot/tess-initial-model-fit.ipynb
