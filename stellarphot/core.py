@@ -1236,6 +1236,10 @@ class CatalogData(BaseEnhancedTable):
             column, and return the transformed data. If not provided, no
             transformation will be applied.
 
+        transformer_kwargs : dict, optional
+            Keyword arguments to pass to the transformer function. If not provided,
+            an empty dictionary will be used.
+
         Returns
         -------
         `astropy.table.Table`
