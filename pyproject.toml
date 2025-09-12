@@ -15,7 +15,8 @@ authors = [
 dependencies = [
     "astropy >=5",
     "astroquery",
-    "astrowidgets",
+    "astrowidgets <0.4.0",  # The astrowidgets API changed significantly in 0.4,
+                             # and stellarphot is not yet compatible with it.
     "bottleneck",
     "ccdproc",
     "ginga",
