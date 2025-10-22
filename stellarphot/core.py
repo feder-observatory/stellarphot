@@ -1701,7 +1701,7 @@ def refcat2(
         # the result is automatically cached by astroquery, which helps.
         result = XMatch.query(
             cat1=catalog,
-            cat2="gaia_dr2_j2015p5",  # "vizier:I/345/gaia2",
+            cat2="vizier:gaia_dr2_j2015p5",  # "vizier:I/345/gaia2",
             max_distance=0.01 * u.arcsec,
             colRA1="RA_ICRS",
             colDec1="DE_ICRS",
