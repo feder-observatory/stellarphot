@@ -30,7 +30,7 @@ jobs:
           # In the run on python 3.12 on ubuntu include running coverage
           # and remote data. Do both tests together to get best coverage
           # estimate.
-          - python-version: "3.12"
+          - python-version: "3.13"
             platform: ubuntu-latest
             coverage: true
             toxposargs: --remote-data=any
