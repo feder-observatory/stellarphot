@@ -105,6 +105,17 @@ def calc_aij_relative_flux(
 
     bad_comps = set(is_all_good["star_id"][~is_all_good["good"]])
 
+    # Check for comps that are only in some of the images
+    # Make a small table with just star IDs and date-obs
+    check_for_missing = Table(
+        data=[star_data[star_id_column], star_data["date-obs"]],
+        names=["star_id", "date-obs"],
+    ).group_by("date-obs")
+    star_id_sets = check_for_missing.groups.aggregate(set)["star_id"]
+    good_ids = set.intersection(*star_id_sets)
+    bad_comps_missing = set(is_all_good["star_id"]) - good_ids
+    bad_comps = bad_comps | bad_comps_missing
+
     # Check whether any of the comp stars have NaN values and,
     # if they do, exclude them from the comp set.
     check_for_nan = Table(

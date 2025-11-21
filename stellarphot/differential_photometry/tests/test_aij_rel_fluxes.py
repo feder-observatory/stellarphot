@@ -117,7 +117,7 @@ def test_relative_flux_calculation(
         assert "relative_flux" not in input_table.colnames
 
 
-@pytest.mark.parametrize("bad_thing", ["RA", "NaN"])
+@pytest.mark.parametrize("bad_thing", ["RA", "NaN", "missing"])
 def test_bad_comp_star(bad_thing):
     expected_flux, expected_error, input_table, comp_star = _raw_photometry_table()
     # We'll do modify the "bad" property for the last star in the last
@@ -138,6 +138,8 @@ def test_bad_comp_star(bad_thing):
         input_table["ra"][-1] = coord_bad_ra
     elif bad_thing == "NaN":
         input_table["aperture_net_cnts"][-1] = np.nan
+    elif bad_thing == "missing":
+        input_table.remove_row(-1)
 
     output_table = calc_aij_relative_flux(input_table, comp_star, in_place=False)
 
@@ -159,4 +161,8 @@ def test_bad_comp_star(bad_thing):
     if bad_thing == "NaN":
         new_expected_flux[3] = np.nan
 
-    np.testing.assert_allclose(new_expected_flux, output_table["relative_flux"][-4:])
+    comparison_start = -4 if bad_thing != "missing" else -3
+    np.testing.assert_allclose(
+        new_expected_flux[:-comparison_start],
+        output_table["relative_flux"][comparison_start:],
+    )
