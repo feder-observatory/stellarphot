@@ -196,6 +196,8 @@ filterwarnings = [
     'ignore:Using extra keyword arguments on `Field` is deprecated:',
     # ipywidgets is using something deprecated in traitlets
     'ignore:Deprecated in traitlets 4.1, use the instance:DeprecationWarning',
+    # ipyautoui is also using a deprecated traitlets feature
+    'ignore:Traits should be given as instances, not types:DeprecationWarning',
     # Some WCS headers are issuing warnings
     'ignore:RADECSYS=:',
     # papermill is using deprecated jupyter paths
