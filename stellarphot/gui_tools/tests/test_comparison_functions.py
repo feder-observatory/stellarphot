@@ -199,11 +199,12 @@ def test_loading_second_image_succeeds(tmp_path):
 
 
 @pytest.mark.remote_data
-def test_loading_input_source_list(tmp_path):
+@pytest.mark.parametrize("tic_id", [402828941, 367710318])
+def test_loading_input_source_list(tmp_path, tic_id):
     # Test that we can load a source list from a file
     comparison_widget = cf.ComparisonViewer()
     compressed_input_source_list = get_pkg_data_filename(
-        "tests/data/TIC-402828941-source-list-input.ecsv.gz", package="stellarphot"
+        f"tests/data/TIC-{tic_id}-source-list-input.ecsv.gz", package="stellarphot"
     )
     with gzip.open(compressed_input_source_list, "rb") as f:
         source_list_content = f.read()
@@ -211,7 +212,7 @@ def test_loading_input_source_list(tmp_path):
     input_source_list.write_text(source_list_content.decode("utf-8"))
     ccd = CCDData.read(
         get_pkg_data_filename(
-            "tests/data/TIC_402828941-tiny.fit.bz2", package="stellarphot"
+            f"tests/data/TIC-{tic_id}-tiny.fit.bz2", package="stellarphot"
         )
     )
     file_name = "TIC.fits"
@@ -239,3 +240,12 @@ def test_loading_input_source_list(tmp_path):
     num_tess = np.sum(comp_viewer_sources["marker name"] == "TESS Targets")
 
     assert num_tess == len(input_sources)
+
+    # Check that the star IDs match for the tess targets -- our star ID is one
+    # more than the input source IDs
+    assert np.all(
+        comp_viewer_sources["star_id"][
+            comp_viewer_sources["marker name"] == "TESS Targets"
+        ]
+        == input_sources["star_id"] + 1
+    )

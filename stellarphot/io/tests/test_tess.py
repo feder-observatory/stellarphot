@@ -102,7 +102,7 @@ def test_target_file():
         server_down = True
         tess_target = None  # Assure tess_target is defined so that we can delete it
     else:
-        # Check that the first thing in the list is the tick object
+        # Check that the first thing in the list is the TIC object
         check_coords = SkyCoord(
             ra=tess_target.table["RA"][0],
             dec=tess_target.table["Dec"][0],
