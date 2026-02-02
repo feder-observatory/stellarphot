@@ -522,24 +522,20 @@ class ComparisonViewer:
         self.source_and_title.decorate_title()
 
     def _viewer(self):
-        header = ipw.HTML(
-            value="""
+        header = ipw.HTML(value="""
         <h3>Click and drag or use arrow keys to pan, use +/- keys to zoom.</h3>
         <h3>Shift-left click (or Crtl-left click) to exclude star as target
         or comp. Click again to include.</h3>
-        """
-        )
+        """)
 
-        legend = ipw.HTML(
-            value="""
+        legend = ipw.HTML(value="""
         <ul>
         <li>Green circles -- Gaia stars within 2.5 arcmin of target</li>
         <li>Red triangles -- Comparison stars from APASS</li>
         <li>Blue squares -- VSX variables</li>
         <li>Red × -- Exclude as target or comp</li>
         </ul>
-        """
-        )
+        """)
 
         iw = ImageWidget()
         out = ipw.Output()

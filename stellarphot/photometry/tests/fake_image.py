@@ -135,7 +135,7 @@ class FakeCCDImage(CCDData):
             self.header["FILTER"] = "V"
 
             # Set up a  WCS header for the CCDData object.
-            (size_y, size_x) = base_data.image_shape
+            size_y, size_x = base_data.image_shape
             pixel_scale = 0.75  # arcseconds per pixel
             ra_center = 283.6165
             dec_center = 33.05857
