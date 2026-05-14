@@ -237,15 +237,16 @@ def test_loading_input_source_list(tmp_path, tic_id):
     comp_viewer_sources = SourceListData.read("source_locations.ecsv")
     input_sources = SourceListData.read(input_source_list)
 
-    num_tess = np.sum(comp_viewer_sources["marker name"] == "TESS Targets")
+    tess_targets = comp_viewer_sources["marker name"] == "TESS Targets"
+
+    num_tess = np.sum(tess_targets)
 
     assert num_tess == len(input_sources)
 
-    # Check that the star IDs match for the tess targets -- our star ID is one
-    # more than the input source IDs
-    assert np.all(
-        comp_viewer_sources["star_id"][
-            comp_viewer_sources["marker name"] == "TESS Targets"
-        ]
-        == input_sources["star_id"] + 1
+    # Check that the stars are in the correct order that TESS expects
+    comp_viewer_coords = SkyCoord(
+        comp_viewer_sources["ra"], comp_viewer_sources["dec"], unit="deg"
     )
+    input_coords = SkyCoord(input_sources["ra"], input_sources["dec"], unit="deg")
+    sep = comp_viewer_coords[tess_targets].separation(input_coords)
+    assert np.all(sep.arcsec < 1.0)
