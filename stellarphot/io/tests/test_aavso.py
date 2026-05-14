@@ -1,0 +1,321 @@
+import numpy as np
+import pytest
+from astropy.io import ascii as ap_ascii
+from astropy.time import Time
+from astropy.utils.data import get_pkg_data_filename
+
+from stellarphot import PhotometryData
+from stellarphot.io.aavso import (
+    DATA_COLUMNS,
+    write_aavso_extended,
+)
+from stellarphot.settings.aavso_submission import AAVSOSubmissionHeader
+
+# ---- fixtures ---------------------------------------------------------------
+
+
+@pytest.fixture
+def header():
+    return AAVSOSubmissionHeader(
+        type="EXTENDED",
+        obscode="ABC",
+        software="stellarphot test",
+        delim=",",
+        date_format="JD",
+    )
+
+
+@pytest.fixture
+def phot_table():
+    """The test photometry fixture, with no further modification.
+
+    The fixture has 8 stars, two files, passband ``SR`` (a valid AAVSO filter).
+    """
+    data_file = get_pkg_data_filename(
+        "data/test_photometry_data.ecsv", package="stellarphot.tests"
+    )
+    return PhotometryData.read(data_file)
+
+
+@pytest.fixture
+def writer_kwargs(header):
+    """Default kwargs for write_aavso_extended built against ``phot_table``.
+
+    Star 1 is the target, star 6 is the check star.
+    """
+    return dict(
+        header=header,
+        target_star_id=1,
+        target_name="V0533 Her",
+        check_star_id=6,
+        check_name="check1",
+        chart="X12345",
+        mag_column="mag_inst",
+        mag_error_column="mag_error",
+    )
+
+
+# ---- Step 2: skeleton + header --------------------------------------------
+
+
+class TestHeaderAndFileFormat:
+    def test_rejects_unknown_extensions(self, tmp_path, phot_table, writer_kwargs):
+        bad = tmp_path / "bad.foo"
+        with pytest.raises(ValueError, match="must have one of"):
+            write_aavso_extended(phot_table, bad, **writer_kwargs)
+
+    @pytest.mark.parametrize("ext", [".txt", ".csv", ".tsv"])
+    def test_accepts_allowed_extensions(self, tmp_path, phot_table, writer_kwargs, ext):
+        out = tmp_path / f"sub{ext}"
+        write_aavso_extended(phot_table, out, **writer_kwargs)
+        assert out.exists()
+
+    def test_first_six_lines_are_header(self, tmp_path, phot_table, writer_kwargs):
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(phot_table, out, **writer_kwargs)
+        lines = out.read_text().splitlines()
+        assert len(lines) >= 6
+        for line in lines[:6]:
+            assert line.startswith("#")
+        # Hardcoded OBSTYPE
+        assert lines[5] == "#OBSTYPE=CCD"
+
+    def test_data_uses_configured_delimiter(self, tmp_path, phot_table, writer_kwargs):
+        # Default delim=","
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(phot_table, out, **writer_kwargs)
+        lines = out.read_text().splitlines()
+        # First data row should have 14 commas (15 fields)
+        assert lines[6].count(",") == len(DATA_COLUMNS) - 1
+
+    def test_delim_comma_writes_comma_in_header_but_separates_with_commas(
+        self, tmp_path, phot_table, writer_kwargs
+    ):
+        writer_kwargs["header"] = AAVSOSubmissionHeader(
+            type="EXTENDED",
+            obscode="ABC",
+            software="stellarphot test",
+            delim="comma",
+            date_format="JD",
+        )
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(phot_table, out, **writer_kwargs)
+        lines = out.read_text().splitlines()
+        assert lines[3] == "#DELIM=comma"
+        # Data row still uses literal commas as separators
+        assert lines[6].count(",") == len(DATA_COLUMNS) - 1
+
+    def test_delim_tab_writes_tab_in_data(self, tmp_path, phot_table, writer_kwargs):
+        writer_kwargs["header"] = AAVSOSubmissionHeader(
+            type="EXTENDED",
+            obscode="ABC",
+            software="stellarphot test",
+            delim="tab",
+            date_format="JD",
+        )
+        out = tmp_path / "sub.tsv"
+        write_aavso_extended(phot_table, out, **writer_kwargs)
+        lines = out.read_text().splitlines()
+        assert lines[3] == "#DELIM=tab"
+        assert lines[6].count("\t") == len(DATA_COLUMNS) - 1
+
+    def test_non_jd_date_format_raises(self, tmp_path, phot_table, writer_kwargs):
+        writer_kwargs["header"] = AAVSOSubmissionHeader(
+            type="EXTENDED",
+            obscode="ABC",
+            software="stellarphot test",
+            delim=",",
+            date_format="HJD",
+        )
+        out = tmp_path / "sub.csv"
+        with pytest.raises(NotImplementedError, match="JD"):
+            write_aavso_extended(phot_table, out, **writer_kwargs)
+
+
+# ---- Step 3: target-star row construction ----------------------------------
+
+
+def _read_data_rows(path):
+    """Read the file and return the data rows as an astropy Table."""
+    return ap_ascii.read(
+        str(path),
+        format="no_header",
+        delimiter=",",
+        comment="#",
+        names=list(DATA_COLUMNS),
+    )
+
+
+class TestTargetRows:
+    def test_one_row_per_target_observation(self, tmp_path, phot_table, writer_kwargs):
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(phot_table, out, **writer_kwargs)
+        rows = _read_data_rows(out)
+        expected = (phot_table["star_id"] == writer_kwargs["target_star_id"]).sum()
+        assert len(rows) == expected
+
+    def test_starid_is_target_name(self, tmp_path, phot_table, writer_kwargs):
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(phot_table, out, **writer_kwargs)
+        rows = _read_data_rows(out)
+        assert set(rows["STARID"]) == {writer_kwargs["target_name"]}
+
+    def test_cname_and_cmag_are_ensemble_constants(
+        self, tmp_path, phot_table, writer_kwargs
+    ):
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(phot_table, out, **writer_kwargs)
+        rows = _read_data_rows(out)
+        assert set(rows["CNAME"]) == {"ENSEMBLE"}
+        assert set(rows["CMAG"]) == {"na"}
+
+    def test_chart_and_mtype(self, tmp_path, phot_table, writer_kwargs):
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(phot_table, out, **writer_kwargs)
+        rows = _read_data_rows(out)
+        assert set(rows["CHART"]) == {writer_kwargs["chart"]}
+        assert set(rows["MTYPE"]) == {"STD"}
+
+    def test_date_is_jd_at_mid_exposure(self, tmp_path, phot_table, writer_kwargs):
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(phot_table, out, **writer_kwargs)
+        rows = _read_data_rows(out)
+
+        target_rows = phot_table[
+            phot_table["star_id"] == writer_kwargs["target_star_id"]
+        ]
+        for written_jd, src in zip(rows["DATE"], target_rows, strict=True):
+            expected = (Time(src["date-obs"]) + src["exposure"] / 2).jd
+            assert abs(float(written_jd) - expected) < 1e-5
+
+    def test_magnitude_and_magerr_columns_used(
+        self, tmp_path, phot_table, writer_kwargs
+    ):
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(phot_table, out, **writer_kwargs)
+        rows = _read_data_rows(out)
+
+        target_rows = phot_table[
+            phot_table["star_id"] == writer_kwargs["target_star_id"]
+        ]
+        for mag_str, err_str, src in zip(
+            rows["MAGNITUDE"], rows["MAGERR"], target_rows, strict=True
+        ):
+            assert abs(float(mag_str) - float(src["mag_inst"])) < 1e-4
+            # mag_error in the fixture carries 1/adu units; .value strips them.
+            assert abs(float(err_str) - float(src["mag_error"].value)) < 1e-3
+
+    def test_filter_is_row_passband(self, tmp_path, phot_table, writer_kwargs):
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(phot_table, out, **writer_kwargs)
+        rows = _read_data_rows(out)
+        # All rows in fixture are SR
+        assert set(rows["FILTER"]) == {"SR"}
+
+    def test_invalid_filter_raises(self, tmp_path, phot_table, writer_kwargs):
+        bad = phot_table.copy()
+        # "XX" is not in AAVSOFilters; same width as the existing column so the
+        # assignment does not need a dtype change.
+        bad["passband"][:] = "XX"
+        out = tmp_path / "sub.csv"
+        with pytest.raises(ValueError, match="not a valid AAVSO filter"):
+            write_aavso_extended(bad, out, **writer_kwargs)
+
+    @pytest.mark.parametrize("trans,expected", [(False, "NO"), (True, "YES")])
+    def test_trans_reflects_kwarg(
+        self, tmp_path, phot_table, writer_kwargs, trans, expected
+    ):
+        writer_kwargs["trans"] = trans
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(phot_table, out, **writer_kwargs)
+        rows = _read_data_rows(out)
+        assert set(rows["TRANS"]) == {expected}
+
+    def test_group_default_is_na(self, tmp_path, phot_table, writer_kwargs):
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(phot_table, out, **writer_kwargs)
+        rows = _read_data_rows(out)
+        assert set(rows["GROUP"]) == {"na"}
+
+    def test_group_integer(self, tmp_path, phot_table, writer_kwargs):
+        writer_kwargs["group"] = 7
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(phot_table, out, **writer_kwargs)
+        rows = _read_data_rows(out)
+        assert set(rows["GROUP"]) == {7}
+
+    def test_airmass_truncates(self, tmp_path, phot_table, writer_kwargs):
+        # Force a very long airmass value
+        long_data = phot_table.copy()
+        long_data["airmass"] = 1.123456789
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(long_data, out, **writer_kwargs)
+        rows = _read_data_rows(out)
+        for value in rows["AIRMASS"]:
+            assert len(str(value)) <= 7
+
+    def test_field_too_long_raises(self, tmp_path, phot_table, writer_kwargs):
+        writer_kwargs["target_name"] = "x" * 31  # exceeds STARID limit of 30
+        out = tmp_path / "sub.csv"
+        with pytest.raises(ValueError, match="STARID"):
+            write_aavso_extended(phot_table, out, **writer_kwargs)
+
+
+# ---- Step 4: check-star pairing -------------------------------------------
+
+
+class TestCheckStarPairing:
+    def test_kmag_comes_from_check_star_row(self, tmp_path, phot_table, writer_kwargs):
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(phot_table, out, **writer_kwargs)
+        rows = _read_data_rows(out)
+
+        # Build lookup of (file, passband) -> check mag
+        check_rows = phot_table[phot_table["star_id"] == writer_kwargs["check_star_id"]]
+        check_lookup = {
+            (r["file"], r["passband"]): float(r["mag_inst"]) for r in check_rows
+        }
+
+        target_rows = phot_table[
+            phot_table["star_id"] == writer_kwargs["target_star_id"]
+        ]
+        for written_kmag, src in zip(rows["KMAG"], target_rows, strict=True):
+            expected = check_lookup[(src["file"], src["passband"])]
+            assert abs(float(written_kmag) - expected) < 1e-4
+
+    def test_kname_is_check_name_kwarg(self, tmp_path, phot_table, writer_kwargs):
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(phot_table, out, **writer_kwargs)
+        rows = _read_data_rows(out)
+        assert set(rows["KNAME"]) == {writer_kwargs["check_name"]}
+
+    def test_missing_check_row_raises(self, tmp_path, phot_table, writer_kwargs):
+        # Drop one of the check-star observations to break pairing.
+        check_id = writer_kwargs["check_star_id"]
+        mask_check = phot_table["star_id"] == check_id
+        bad = phot_table[
+            ~mask_check | (np.arange(len(phot_table)) != np.where(mask_check)[0][0])
+        ]
+        # Sanity: target still has 2 files, but check star is now missing
+        # one (file, passband) pair.
+        out = tmp_path / "sub.csv"
+        with pytest.raises(ValueError, match="No check-star row"):
+            write_aavso_extended(bad, out, **writer_kwargs)
+
+    def test_missing_target_raises(self, tmp_path, phot_table, writer_kwargs):
+        writer_kwargs["target_star_id"] = 9999
+        out = tmp_path / "sub.csv"
+        with pytest.raises(ValueError, match="No rows in phot_data"):
+            write_aavso_extended(phot_table, out, **writer_kwargs)
+
+
+# ---- Step 5: PhotometryData convenience method -----------------------------
+
+
+class TestPhotometryDataMethod:
+    def test_method_matches_function(self, tmp_path, phot_table, writer_kwargs):
+        func_out = tmp_path / "func.csv"
+        meth_out = tmp_path / "meth.csv"
+        write_aavso_extended(phot_table, func_out, **writer_kwargs)
+        phot_table.write_aavso_extended(meth_out, **writer_kwargs)
+        assert func_out.read_bytes() == meth_out.read_bytes()

@@ -782,6 +782,18 @@ class PhotometryData(BaseEnhancedTable):
 
         return lk.LightCurve(star_data)
 
+    def write_aavso_extended(self, path, **kwargs):
+        """Write this photometry table in the AAVSO Extended File Format.
+
+        See `stellarphot.io.write_aavso_extended` for the full signature and
+        behavior. All keyword arguments are forwarded to that function.
+        """
+        # Lazy import to avoid a circular dependency: stellarphot.io imports
+        # from stellarphot.settings, which is loaded before core.
+        from .io.aavso import write_aavso_extended
+
+        return write_aavso_extended(self, path, **kwargs)
+
 
 class CatalogData(BaseEnhancedTable):
     """
