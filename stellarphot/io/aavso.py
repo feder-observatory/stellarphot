@@ -12,9 +12,11 @@ v1 limitations:
 - ``OBSTYPE`` is hardcoded to ``CCD``.
 """
 
+import io
 import math
 from pathlib import Path
 
+from astropy.table import Column, QTable, Table, join
 from astropy.time import Time
 
 from stellarphot.settings.aavso_models import AAVSOFilters
@@ -25,7 +27,8 @@ __all__ = ["write_aavso_extended"]
 
 ALLOWED_EXTENSIONS = frozenset({".txt", ".csv", ".tsv"})
 
-# AAVSO data column order, in the sequence the spec requires.
+# AAVSO data column order, in the sequence the spec requires. The AAVSO
+# sample files prepend a row of these names with "#" before the data.
 DATA_COLUMNS = (
     "STARID",
     "DATE",
@@ -86,27 +89,29 @@ def _enforce_limit(name, value):
     )
 
 
-def _format_jd(date_obs, exposure):
-    """JD at mid-exposure in UT. ``exposure`` carries seconds units."""
-    midpoint = Time(date_obs) + exposure / 2
-    return f"{midpoint.jd:.5f}"
-
-
 def _to_float(value):
-    """Coerce a table cell (possibly an astropy ``Quantity``) to a plain float.
-
-    Columns in ``PhotometryData`` may carry units (e.g. ``mag_error`` has
-    ``1/adu`` in the test fixture, ``exposure`` has seconds). For string
-    formatting we only need the numeric magnitude, so strip the unit.
-    """
+    """Coerce a value (possibly an astropy ``Quantity``) to a plain float."""
     try:
         return float(value.value)
     except AttributeError:
         return float(value)
 
 
-def _format_float(value, decimals):
-    return f"{_to_float(value):.{decimals}f}"
+def _format_mag(value):
+    return f"{_to_float(value):.4f}"
+
+
+def _format_magerr(value):
+    if value is None:
+        return "na"
+    f = _to_float(value)
+    if math.isnan(f):
+        return "na"
+    return f"{f:.3f}"
+
+
+def _format_airmass(value):
+    return f"{_to_float(value):.4f}"
 
 
 def write_aavso_extended(
@@ -191,7 +196,6 @@ def write_aavso_extended(
 
     delimiter = header.data_delimiter()
 
-    # Split the table into target and check-star rows.
     target_mask = phot_data["star_id"] == target_star_id
     check_mask = phot_data["star_id"] == check_star_id
 
@@ -200,21 +204,8 @@ def write_aavso_extended(
     if not check_mask.any():
         raise ValueError(f"No rows in phot_data have star_id={check_star_id!r}.")
 
-    target_rows = phot_data[target_mask]
-    check_rows = phot_data[check_mask]
-
-    # Index check star rows by (file, passband) for fast lookup.
-    check_index = {}
-    for row in check_rows:
-        key = (row["file"], row["passband"])
-        check_index[key] = row
-
-    group_field = "na" if group is None else str(group)
-    trans_field = "YES" if trans else "NO"
-
-    data_lines = []
-    for row in target_rows:
-        passband = row["passband"]
+    # Reject invalid filters before doing any heavier work.
+    for passband in phot_data["passband"][target_mask]:
         if not _is_valid_filter(passband):
             raise ValueError(
                 f"Row passband {passband!r} is not a valid AAVSO filter. "
@@ -222,65 +213,108 @@ def write_aavso_extended(
                 "before exporting."
             )
 
-        key = (row["file"], passband)
-        if key not in check_index:
-            raise ValueError(
-                "No check-star row found for "
-                f"(file={row['file']!r}, passband={passband!r}); "
-                f"check_star_id={check_star_id!r} must have a matching "
-                "observation for every target observation."
-            )
-        check_row = check_index[key]
+    # Pull just the columns we need from each side so the join result is small
+    # and the renamed columns are unambiguous.
+    target_cols = [
+        "file",
+        "passband",
+        "date-obs",
+        "exposure",
+        "airmass",
+        mag_column,
+        mag_error_column,
+    ]
+    check_cols = ["file", "passband", mag_column]
 
-        starid = _enforce_limit("STARID", str(target_name))
-        date = _enforce_limit("DATE", _format_jd(row["date-obs"], row["exposure"]))
-        magnitude = _enforce_limit("MAGNITUDE", _format_float(row[mag_column], 4))
+    target_subset = QTable(phot_data[target_mask][target_cols], copy=True)
+    check_subset = QTable(phot_data[check_mask][check_cols], copy=True)
 
-        err_value = row[mag_error_column]
-        if err_value is None:
-            magerr = "na"
-        else:
-            err_float = _to_float(err_value)
-            if math.isnan(err_float):
-                magerr = "na"
-            else:
-                magerr = _enforce_limit("MAGERR", _format_float(err_float, 3))
+    # Join on (file, passband) — this replaces the manual lookup dictionary
+    # and naturally drops target rows that have no matching check observation.
+    paired = join(
+        target_subset,
+        check_subset,
+        keys=["file", "passband"],
+        table_names=["target", "check"],
+        join_type="left",
+    )
 
-        filter_field = _enforce_limit("FILTER", str(passband))
-        cname = _enforce_limit("CNAME", "ENSEMBLE")
-        cmag = _enforce_limit("CMAG", "na")
-        kname = _enforce_limit("KNAME", str(check_name))
-        kmag = _enforce_limit("KMAG", _format_float(check_row[mag_column], 4))
-        airmass = _enforce_limit("AIRMASS", f"{_to_float(row['airmass']):.4f}")
-        group_value = _enforce_limit("GROUP", group_field)
-        chart_field = _enforce_limit("CHART", str(chart))
-        notes_field = str(notes) if notes is not None else "na"
-        if not notes_field:
-            notes_field = "na"
+    # Detect target rows without a matching check observation. After a left
+    # join those rows have the check magnitude masked.
+    check_mag_col = f"{mag_column}_check"
+    if hasattr(paired[check_mag_col], "mask") and paired[check_mag_col].mask.any():
+        missing = paired[paired[check_mag_col].mask][["file", "passband"]]
+        first = missing[0]
+        raise ValueError(
+            "No check-star row found for "
+            f"(file={first['file']!r}, passband={first['passband']!r}); "
+            f"check_star_id={check_star_id!r} must have a matching "
+            "observation for every target observation."
+        )
 
-        fields = [
-            starid,
-            date,
-            magnitude,
-            magerr,
-            filter_field,
-            trans_field,
-            "STD",
-            cname,
-            cmag,
-            kname,
-            kmag,
-            airmass,
-            group_value,
-            chart_field,
-            notes_field,
-        ]
-        data_lines.append(delimiter.join(fields))
+    # Preserve the original target row order so the output is stable and easy
+    # to compare against the input table.
+    paired.sort(["file", "passband"])
+
+    group_field = "na" if group is None else str(group)
+    trans_field = "YES" if trans else "NO"
+    notes_field = str(notes) if notes else "na"
+
+    n = len(paired)
+    target_mag_col = f"{mag_column}_target"
+
+    # Build per-row string columns in AAVSO order.
+    date_values = [
+        f"{(Time(row['date-obs']) + row['exposure'] / 2).jd:.5f}" for row in paired
+    ]
+    mag_values = [_format_mag(v) for v in paired[target_mag_col]]
+    err_values = [_format_magerr(v) for v in paired[mag_error_column]]
+    kmag_values = [_format_mag(v) for v in paired[check_mag_col]]
+    airmass_values = [_format_airmass(v) for v in paired["airmass"]]
+    filter_values = [str(p) for p in paired["passband"]]
+
+    columns = {
+        "STARID": [str(target_name)] * n,
+        "DATE": date_values,
+        "MAGNITUDE": mag_values,
+        "MAGERR": err_values,
+        "FILTER": filter_values,
+        "TRANS": [trans_field] * n,
+        "MTYPE": ["STD"] * n,
+        "CNAME": ["ENSEMBLE"] * n,
+        "CMAG": ["na"] * n,
+        "KNAME": [str(check_name)] * n,
+        "KMAG": kmag_values,
+        "AIRMASS": [_enforce_limit("AIRMASS", v) for v in airmass_values],
+        "GROUP": [group_field] * n,
+        "CHART": [str(chart)] * n,
+        "NOTES": [notes_field] * n,
+    }
+
+    # Enforce length limits on every column that has one (AIRMASS already
+    # truncated above). Validation fires before any I/O.
+    out_table = Table()
+    for name in DATA_COLUMNS:
+        values = columns[name]
+        if name in FIELD_LIMITS and name != "AIRMASS":
+            values = [_enforce_limit(name, v) for v in values]
+        out_table[name] = Column(values, dtype=str)
+
+    # Write the data rows to a string buffer via astropy's ascii writer, then
+    # assemble the final file with the parameter header and the
+    # column-name row prefixed with "#".
+    buf = io.StringIO()
+    out_table.write(buf, format="ascii.no_header", delimiter=delimiter)
+    data_text = buf.getvalue()
+
+    column_header = "#" + delimiter.join(DATA_COLUMNS)
 
     with open(path, "w") as f:
         for line in header.header_lines():
             f.write(line + "\n")
-        for line in data_lines:
-            f.write(line + "\n")
+        f.write(column_header + "\n")
+        f.write(data_text)
+        if not data_text.endswith("\n"):
+            f.write("\n")
 
     return path

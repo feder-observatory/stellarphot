@@ -80,13 +80,22 @@ class TestHeaderAndFileFormat:
         # Hardcoded OBSTYPE
         assert lines[5] == "#OBSTYPE=CCD"
 
+    def test_column_header_row_follows_parameter_header(
+        self, tmp_path, phot_table, writer_kwargs
+    ):
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(phot_table, out, **writer_kwargs)
+        lines = out.read_text().splitlines()
+        assert lines[6] == "#" + ",".join(DATA_COLUMNS)
+
     def test_data_uses_configured_delimiter(self, tmp_path, phot_table, writer_kwargs):
         # Default delim=","
         out = tmp_path / "sub.csv"
         write_aavso_extended(phot_table, out, **writer_kwargs)
         lines = out.read_text().splitlines()
-        # First data row should have 14 commas (15 fields)
-        assert lines[6].count(",") == len(DATA_COLUMNS) - 1
+        # First data row (line 7, after 6 parameter lines + column header) has
+        # 14 commas (15 fields).
+        assert lines[7].count(",") == len(DATA_COLUMNS) - 1
 
     def test_delim_comma_writes_comma_in_header_but_separates_with_commas(
         self, tmp_path, phot_table, writer_kwargs
@@ -103,7 +112,7 @@ class TestHeaderAndFileFormat:
         lines = out.read_text().splitlines()
         assert lines[3] == "#DELIM=comma"
         # Data row still uses literal commas as separators
-        assert lines[6].count(",") == len(DATA_COLUMNS) - 1
+        assert lines[7].count(",") == len(DATA_COLUMNS) - 1
 
     def test_delim_tab_writes_tab_in_data(self, tmp_path, phot_table, writer_kwargs):
         writer_kwargs["header"] = AAVSOSubmissionHeader(
@@ -117,7 +126,7 @@ class TestHeaderAndFileFormat:
         write_aavso_extended(phot_table, out, **writer_kwargs)
         lines = out.read_text().splitlines()
         assert lines[3] == "#DELIM=tab"
-        assert lines[6].count("\t") == len(DATA_COLUMNS) - 1
+        assert lines[7].count("\t") == len(DATA_COLUMNS) - 1
 
     def test_non_jd_date_format_raises(self, tmp_path, phot_table, writer_kwargs):
         writer_kwargs["header"] = AAVSOSubmissionHeader(

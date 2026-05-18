@@ -1,15 +1,18 @@
 """Pydantic model for the AAVSO Extended File Format submission header.
 
-The structure is driven by ``stellarphot/io/aavso_submission_schema.yml``,
-which mirrors the AAVSO specification. The yaml is loaded once at import
-time and used to derive the allowed values, length limits and forbidden
-characters.
+The structure mirrors ``stellarphot/io/aavso_submission_schema.yml``, which
+is a snapshot of the AAVSO specification. The yaml is loaded once at
+import time and used to check that the constants below stay in sync with
+the spec — the type annotations themselves use ``Literal`` so the
+allowed values are visible to static analysis and to the pydantic-
+generated JSON schema.
 """
 
 from pathlib import Path
+from typing import Annotated, Literal
 
 import yaml
-from pydantic import Field, field_validator
+from pydantic import AfterValidator, Field
 
 from .models import MODEL_DEFAULT_CONFIGURATION, BaseModelWithTableRep, NonEmptyStr
 
@@ -22,10 +25,20 @@ _SCHEMA_PATH = (
 _SCHEMA = yaml.safe_load(_SCHEMA_PATH.read_text())
 _COMMENTS = _SCHEMA["comments"]
 
-# Allowed values pulled from the schema so they stay in sync with the spec.
-TYPE_OPTIONS = tuple(_COMMENTS["TYPE"]["options"])
-DATE_OPTIONS = tuple(_COMMENTS["DATE"]["options"])
+# Values pulled from the schema and checked against the Literal annotations
+# below so the two cannot silently drift apart.
+_TYPE_OPTIONS = tuple(_COMMENTS["TYPE"]["options"])
+_DATE_OPTIONS = tuple(_COMMENTS["DATE"]["options"])
 SOFTWARE_LIMIT = int(_COMMENTS["SOFTWARE"]["limit"])
+
+assert _TYPE_OPTIONS == (
+    "EXTENDED",
+), f"TYPE options drift: schema={_TYPE_OPTIONS!r} model=('EXTENDED',)"
+assert _DATE_OPTIONS == (
+    "JD",
+    "HJD",
+    "EXCEL",
+), f"DATE options drift: schema={_DATE_OPTIONS!r} model=('JD','HJD','EXCEL')"
 
 # DELIM rules from the schema: cannot use pipe, hash, or space; the literal
 # words "comma" and "tab" are allowed as escapes for Excel users and tab
@@ -35,6 +48,25 @@ DELIM_KEYWORDS = frozenset({"comma", "tab"})
 
 # The writer always emits OBSTYPE=CCD; it is not user-settable.
 OBSTYPE = "CCD"
+
+
+def _validate_delim(value: str) -> str:
+    if value in DELIM_KEYWORDS:
+        return value
+    if len(value) != 1:
+        raise ValueError(
+            "delim must be a single character or one of 'comma'/'tab'; "
+            f"got {value!r}"
+        )
+    if value in DELIM_FORBIDDEN_CHARS:
+        raise ValueError(
+            f"delim cannot be one of {sorted(DELIM_FORBIDDEN_CHARS)}; got {value!r}"
+        )
+    if not (32 <= ord(value) <= 126):
+        raise ValueError(
+            f"delim must be an ASCII character with code 32-126; got {value!r}"
+        )
+    return value
 
 
 class AAVSOSubmissionHeader(BaseModelWithTableRep):
@@ -48,61 +80,30 @@ class AAVSOSubmissionHeader(BaseModelWithTableRep):
 
     model_config = MODEL_DEFAULT_CONFIGURATION
 
-    type: str = Field(
-        default="EXTENDED", description="Always EXTENDED for this format."
-    )
-    obscode: NonEmptyStr = Field(description="Official AAVSO observer code.")
-    software: NonEmptyStr = Field(description="Name and version of the software used.")
-    delim: str = Field(
-        description="Field delimiter character or the word 'comma'/'tab'."
-    )
-    date_format: str = Field(
-        default="JD",
-        description="Date format: JD, HJD, or EXCEL.",
-    )
-
-    @field_validator("type")
-    @classmethod
-    def _validate_type(cls, v):
-        if v not in TYPE_OPTIONS:
-            raise ValueError(f"type must be one of {TYPE_OPTIONS}; got {v!r}")
-        return v
-
-    @field_validator("date_format")
-    @classmethod
-    def _validate_date_format(cls, v):
-        if v not in DATE_OPTIONS:
-            raise ValueError(f"date_format must be one of {DATE_OPTIONS}; got {v!r}")
-        return v
-
-    @field_validator("software")
-    @classmethod
-    def _validate_software(cls, v):
-        if len(v) > SOFTWARE_LIMIT:
-            raise ValueError(
-                f"software must be at most {SOFTWARE_LIMIT} characters; got {len(v)}"
-            )
-        return v
-
-    @field_validator("delim")
-    @classmethod
-    def _validate_delim(cls, v):
-        if v in DELIM_KEYWORDS:
-            return v
-        if len(v) != 1:
-            raise ValueError(
-                "delim must be a single character or one of 'comma'/'tab'; "
-                f"got {v!r}"
-            )
-        if v in DELIM_FORBIDDEN_CHARS:
-            raise ValueError(
-                f"delim cannot be one of {sorted(DELIM_FORBIDDEN_CHARS)}; got {v!r}"
-            )
-        if not (32 <= ord(v) <= 126):
-            raise ValueError(
-                f"delim must be an ASCII character with code 32-126; got {v!r}"
-            )
-        return v
+    type: Annotated[
+        Literal["EXTENDED"],
+        Field(description="Always EXTENDED for this format."),
+    ] = "EXTENDED"
+    obscode: Annotated[
+        NonEmptyStr,
+        Field(description="Official AAVSO observer code."),
+    ]
+    software: Annotated[
+        NonEmptyStr,
+        Field(
+            description="Name and version of the software used.",
+            max_length=SOFTWARE_LIMIT,
+        ),
+    ]
+    delim: Annotated[
+        str,
+        AfterValidator(_validate_delim),
+        Field(description="Field delimiter character or the word 'comma'/'tab'."),
+    ]
+    date_format: Annotated[
+        Literal["JD", "HJD", "EXCEL"],
+        Field(description="Date format: JD, HJD, or EXCEL."),
+    ] = "JD"
 
     def header_lines(self) -> list[str]:
         """Return the six AAVSO ``#`` header lines in spec order.
