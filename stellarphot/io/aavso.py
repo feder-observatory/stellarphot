@@ -214,27 +214,29 @@ def write_aavso_extended(
             )
 
     # Pull just the columns we need from each side so the join result is small
-    # and the renamed columns are unambiguous.
+    # and the renamed columns are unambiguous. Pairing is on (date-obs,
+    # passband) rather than (file, passband) so that submissions covering
+    # multiple nights still pair correctly when filenames are reused across
+    # nights.
     target_cols = [
-        "file",
-        "passband",
         "date-obs",
+        "passband",
         "exposure",
         "airmass",
         mag_column,
         mag_error_column,
     ]
-    check_cols = ["file", "passband", mag_column]
+    check_cols = ["date-obs", "passband", mag_column]
 
     target_subset = QTable(phot_data[target_mask][target_cols], copy=True)
     check_subset = QTable(phot_data[check_mask][check_cols], copy=True)
 
-    # Join on (file, passband) — this replaces the manual lookup dictionary
+    # Join on (date-obs, passband) — this replaces the manual lookup dictionary
     # and naturally drops target rows that have no matching check observation.
     paired = join(
         target_subset,
         check_subset,
-        keys=["file", "passband"],
+        keys=["date-obs", "passband"],
         table_names=["target", "check"],
         join_type="left",
     )
@@ -243,18 +245,17 @@ def write_aavso_extended(
     # join those rows have the check magnitude masked.
     check_mag_col = f"{mag_column}_check"
     if hasattr(paired[check_mag_col], "mask") and paired[check_mag_col].mask.any():
-        missing = paired[paired[check_mag_col].mask][["file", "passband"]]
+        missing = paired[paired[check_mag_col].mask][["date-obs", "passband"]]
         first = missing[0]
         raise ValueError(
             "No check-star row found for "
-            f"(file={first['file']!r}, passband={first['passband']!r}); "
+            f"(date-obs={first['date-obs']!r}, passband={first['passband']!r}); "
             f"check_star_id={check_star_id!r} must have a matching "
             "observation for every target observation."
         )
 
-    # Preserve the original target row order so the output is stable and easy
-    # to compare against the input table.
-    paired.sort(["file", "passband"])
+    # Preserve a stable, easy-to-compare row order.
+    paired.sort(["date-obs", "passband"])
 
     group_field = "na" if group is None else str(group)
     trans_field = "YES" if trans else "NO"

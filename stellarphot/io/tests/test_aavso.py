@@ -305,8 +305,8 @@ class TestCheckStarPairing:
         bad = phot_table[
             ~mask_check | (np.arange(len(phot_table)) != np.where(mask_check)[0][0])
         ]
-        # Sanity: target still has 2 files, but check star is now missing
-        # one (file, passband) pair.
+        # Sanity: target still has 2 observations, but check star is now
+        # missing one (date-obs, passband) pair.
         out = tmp_path / "sub.csv"
         with pytest.raises(ValueError, match="No check-star row"):
             write_aavso_extended(bad, out, **writer_kwargs)
