@@ -128,16 +128,27 @@ class TestHeaderAndFileFormat:
         assert lines[3] == "#DELIM=tab"
         assert lines[7].count("\t") == len(DATA_COLUMNS) - 1
 
-    def test_non_jd_date_format_raises(self, tmp_path, phot_table, writer_kwargs):
+    @pytest.mark.parametrize("date_format", ["HJD", "EXCEL"])
+    def test_non_jd_date_format_raises(
+        self, tmp_path, phot_table, writer_kwargs, date_format
+    ):
         writer_kwargs["header"] = AAVSOSubmissionHeader(
             type="EXTENDED",
             obscode="ABC",
             software="stellarphot test",
             delim=",",
-            date_format="HJD",
+            date_format=date_format,
         )
         out = tmp_path / "sub.csv"
         with pytest.raises(NotImplementedError, match="JD"):
+            write_aavso_extended(phot_table, out, **writer_kwargs)
+
+    def test_header_must_be_submission_header_instance(
+        self, tmp_path, phot_table, writer_kwargs
+    ):
+        writer_kwargs["header"] = {"obscode": "ABC", "delim": ","}
+        out = tmp_path / "sub.csv"
+        with pytest.raises(TypeError, match="header"):
             write_aavso_extended(phot_table, out, **writer_kwargs)
 
 
@@ -254,19 +265,38 @@ class TestTargetRows:
         assert set(rows["GROUP"]) == {7}
 
     def test_airmass_truncates(self, tmp_path, phot_table, writer_kwargs):
-        # Force a very long airmass value
+        # Format is {f:.4f}; 1234.56789 → "1234.5679" (9 chars), truncated to 7.
         long_data = phot_table.copy()
-        long_data["airmass"] = 1.123456789
+        long_data["airmass"] = 1234.56789
         out = tmp_path / "sub.csv"
         write_aavso_extended(long_data, out, **writer_kwargs)
-        rows = _read_data_rows(out)
-        for value in rows["AIRMASS"]:
-            assert len(str(value)) <= 7
+        lines = out.read_text().splitlines()
+        airmass_idx = DATA_COLUMNS.index("AIRMASS")
+        # Data rows begin after 6 parameter lines + 1 column-header line.
+        for line in lines[7:]:
+            fields = line.split(",")
+            assert fields[airmass_idx] == "1234.56"
 
     def test_field_too_long_raises(self, tmp_path, phot_table, writer_kwargs):
         writer_kwargs["target_name"] = "x" * 31  # exceeds STARID limit of 30
         out = tmp_path / "sub.csv"
         with pytest.raises(ValueError, match="STARID"):
+            write_aavso_extended(phot_table, out, **writer_kwargs)
+
+    @pytest.mark.parametrize(
+        "field,value,column",
+        [
+            ("check_name", "x" * 21, "KNAME"),  # KNAME limit 20
+            ("chart", "x" * 21, "CHART"),  # CHART limit 20
+            ("group", 123456, "GROUP"),  # GROUP limit 5
+        ],
+    )
+    def test_field_too_long_raises_other_fields(
+        self, tmp_path, phot_table, writer_kwargs, field, value, column
+    ):
+        writer_kwargs[field] = value
+        out = tmp_path / "sub.csv"
+        with pytest.raises(ValueError, match=column):
             write_aavso_extended(phot_table, out, **writer_kwargs)
 
 
@@ -320,6 +350,12 @@ class TestCheckStarPairing:
         with pytest.raises(ValueError, match="No rows in phot_data"):
             write_aavso_extended(phot_table, out, **writer_kwargs)
 
+    def test_missing_check_star_raises(self, tmp_path, phot_table, writer_kwargs):
+        writer_kwargs["check_star_id"] = 9999
+        out = tmp_path / "sub.csv"
+        with pytest.raises(ValueError, match="No rows in phot_data"):
+            write_aavso_extended(phot_table, out, **writer_kwargs)
+
 
 # ---- Step 5: PhotometryData convenience method -----------------------------
 
@@ -343,11 +379,12 @@ class TestInputValidation:
         with pytest.raises(ValueError, match="must be different"):
             write_aavso_extended(phot_table, out, **writer_kwargs)
 
+    @pytest.mark.parametrize("value", ["   ", None])
     @pytest.mark.parametrize("field", ["target_name", "check_name", "chart"])
     def test_blank_required_identifier_rejected(
-        self, tmp_path, phot_table, writer_kwargs, field
+        self, tmp_path, phot_table, writer_kwargs, field, value
     ):
-        writer_kwargs[field] = "   "
+        writer_kwargs[field] = value
         out = tmp_path / "sub.csv"
         with pytest.raises(ValueError, match=field):
             write_aavso_extended(phot_table, out, **writer_kwargs)
@@ -380,6 +417,22 @@ class TestInputValidation:
         writer_kwargs["notes"] = "line1\nline2"
         out = tmp_path / "sub.csv"
         with pytest.raises(ValueError, match="newline"):
+            write_aavso_extended(phot_table, out, **writer_kwargs)
+
+    def test_delim_in_group_field_rejected(self, tmp_path, phot_table, writer_kwargs):
+        # "-" is a legal AAVSO delim but appears in str(-7). The default
+        # target/check/chart/notes strings contain no "-", so the writer
+        # reaches the group-field check before the per-column sweep.
+        writer_kwargs["header"] = AAVSOSubmissionHeader(
+            type="EXTENDED",
+            obscode="ABC",
+            software="stellarphot test",
+            delim="-",
+            date_format="JD",
+        )
+        writer_kwargs["group"] = -7
+        out = tmp_path / "sub.csv"
+        with pytest.raises(ValueError, match="group"):
             write_aavso_extended(phot_table, out, **writer_kwargs)
 
     @pytest.mark.parametrize("delim", [".", "n", "a", "A"])
@@ -524,3 +577,23 @@ class TestKwargTypeValidation:
         out = tmp_path / "sub.csv"
         with pytest.raises(TypeError, match="group"):
             write_aavso_extended(phot_table, out, **writer_kwargs)
+
+
+# ---- Private helper coverage ----------------------------------------------
+
+
+class TestPrivateHelpers:
+    """The None branches in these helpers aren't reachable from typical
+    PhotometryData inputs (astropy columns yield masked sentinels, not None),
+    but the writer keeps them as a defensive fallback. Cover them directly so
+    the contract is asserted."""
+
+    def test_format_magerr_none_returns_na(self):
+        from stellarphot.io.aavso import _format_magerr
+
+        assert _format_magerr(None) == "na"
+
+    def test_format_airmass_none_returns_na(self):
+        from stellarphot.io.aavso import _format_airmass
+
+        assert _format_airmass(None) == "na"

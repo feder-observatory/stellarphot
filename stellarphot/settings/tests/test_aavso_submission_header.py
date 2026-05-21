@@ -48,7 +48,9 @@ class TestAAVSOSubmissionHeader:
         h = AAVSOSubmissionHeader(**_good_kwargs(delim=delim))
         assert h.delim == delim
 
-    @pytest.mark.parametrize("bad", ["|", "#", " ", "", ",,"])
+    @pytest.mark.parametrize(
+        "bad", ["|", "#", " ", "", ",,", "\x00", "\x1f", "\x7f", "\xff"]
+    )
     def test_delim_rejects_forbidden_values(self, bad):
         with pytest.raises(ValidationError):
             AAVSOSubmissionHeader(**_good_kwargs(delim=bad))
@@ -86,6 +88,10 @@ class TestAAVSOSubmissionHeader:
         del kw["obscode"]
         with pytest.raises(ValidationError):
             AAVSOSubmissionHeader(**kw)
+
+    def test_obscode_rejects_empty(self):
+        with pytest.raises(ValidationError):
+            AAVSOSubmissionHeader(**_good_kwargs(obscode=""))
 
     def test_software_required(self):
         kw = _good_kwargs()
