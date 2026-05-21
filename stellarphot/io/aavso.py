@@ -13,9 +13,9 @@ v1 limitations:
 """
 
 import io
-import math
 from pathlib import Path
 
+import numpy as np
 from astropy.table import Column, QTable, Table, join
 from astropy.time import Time
 
@@ -89,6 +89,31 @@ def _enforce_limit(name, value):
     )
 
 
+def _require_nonblank(name, value):
+    """Strip ``value`` and reject empty/whitespace-only required identifiers."""
+    if value is None:
+        raise ValueError(f"AAVSO field {name} is required; got None.")
+    stripped = str(value).strip()
+    if not stripped:
+        raise ValueError(
+            f"AAVSO field {name} is required; got an empty/whitespace value."
+        )
+    return stripped
+
+
+def _reject_delimiter_or_newline(name, value, delimiter):
+    if delimiter in value:
+        raise ValueError(
+            f"AAVSO field {name}={value!r} contains the configured delimiter "
+            f"{delimiter!r}; choose a delimiter that does not appear in the data."
+        )
+    if "\n" in value or "\r" in value:
+        raise ValueError(
+            f"AAVSO field {name}={value!r} contains a newline; "
+            "AAVSO rows must be a single line."
+        )
+
+
 def _to_float(value):
     """Coerce a value (possibly an astropy ``Quantity``) to a plain float."""
     try:
@@ -97,21 +122,33 @@ def _to_float(value):
         return float(value)
 
 
-def _format_mag(value):
-    return f"{_to_float(value):.4f}"
+def _format_mag(value, field_name):
+    """Format a required magnitude field. Non-finite values raise."""
+    f = _to_float(value)
+    if not np.isfinite(f):
+        raise ValueError(
+            f"AAVSO field {field_name} is required but the value is "
+            f"non-finite ({value!r}). Drop these rows before exporting."
+        )
+    return f"{f:.4f}"
 
 
 def _format_magerr(value):
     if value is None:
         return "na"
     f = _to_float(value)
-    if math.isnan(f):
+    if not np.isfinite(f):
         return "na"
     return f"{f:.3f}"
 
 
 def _format_airmass(value):
-    return f"{_to_float(value):.4f}"
+    if value is None:
+        return "na"
+    f = _to_float(value)
+    if not np.isfinite(f):
+        return "na"
+    return f"{f:.4f}"
 
 
 def write_aavso_extended(
@@ -187,6 +224,12 @@ def write_aavso_extended(
             f"got date_format={header.date_format!r}."
         )
 
+    if target_star_id == check_star_id:
+        raise ValueError(
+            "target_star_id and check_star_id must be different; "
+            f"got {target_star_id!r} for both."
+        )
+
     path = Path(path)
     if path.suffix.lower() not in ALLOWED_EXTENSIONS:
         raise ValueError(
@@ -195,6 +238,29 @@ def write_aavso_extended(
         )
 
     delimiter = header.data_delimiter()
+
+    # Required identifier fields supplied by the caller. The AAVSO spec
+    # forbids leading/trailing whitespace and empty values; we strip and
+    # then refuse to write a row with a blank required field.
+    target_name = _require_nonblank("target_name", target_name)
+    check_name = _require_nonblank("check_name", check_name)
+    chart = _require_nonblank("chart", chart)
+
+    # NOTES is optional; "na" is the spec's missing value. Strip then fall
+    # back to "na" so users can pass " " without producing a blank field.
+    notes = str(notes).strip() if notes is not None else ""
+    if not notes:
+        notes = "na"
+
+    # Reject values that would collide with the delimiter or break the row
+    # structure. Applies to every user-controlled string field.
+    for field_name, field_value in (
+        ("target_name", target_name),
+        ("check_name", check_name),
+        ("chart", chart),
+        ("notes", notes),
+    ):
+        _reject_delimiter_or_newline(field_name, field_value, delimiter)
 
     target_mask = phot_data["star_id"] == target_star_id
     check_mask = phot_data["star_id"] == check_star_id
@@ -258,8 +324,10 @@ def write_aavso_extended(
     paired.sort(["date-obs", "passband"])
 
     group_field = "na" if group is None else str(group)
+    if group is not None:
+        _reject_delimiter_or_newline("group", group_field, delimiter)
     trans_field = "YES" if trans else "NO"
-    notes_field = str(notes) if notes else "na"
+    notes_field = notes
 
     n = len(paired)
     target_mag_col = f"{mag_column}_target"
@@ -268,9 +336,9 @@ def write_aavso_extended(
     date_values = [
         f"{(Time(row['date-obs']) + row['exposure'] / 2).jd:.5f}" for row in paired
     ]
-    mag_values = [_format_mag(v) for v in paired[target_mag_col]]
+    mag_values = [_format_mag(v, "MAGNITUDE") for v in paired[target_mag_col]]
     err_values = [_format_magerr(v) for v in paired[mag_error_column]]
-    kmag_values = [_format_mag(v) for v in paired[check_mag_col]]
+    kmag_values = [_format_mag(v, "KMAG") for v in paired[check_mag_col]]
     airmass_values = [_format_airmass(v) for v in paired["airmass"]]
     filter_values = [str(p) for p in paired["passband"]]
 

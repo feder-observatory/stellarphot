@@ -9,7 +9,7 @@ write a file in the `AAVSO Extended File Format
 <https://www.aavso.org/aavso-extended-file-format>`_ that the AAVSO WebObs
 loader accepts. Stellarphot's writer produces an *ensemble* submission
 (``CNAME=ENSEMBLE``, ``CMAG=na``) with one target star and one check star,
-paired observation-by-observation by ``(file, passband)``.
+paired observation-by-observation by ``(date-obs, passband)``.
 
 The writer expects the ``passband`` column to already contain valid AAVSO
 filter names. If you started from instrumental filter names, use a
@@ -45,9 +45,8 @@ Example
     )
 
 The ``mag_column`` and ``mag_error_column`` arguments name the calibrated
-magnitude columns to read; the
-:class:`~stellarphot.photometry.transform.TransformApplier` workflow produces
-``mag_inst_cal`` and ``mag_inst_cal_error``.
+magnitude column and its uncertainty column to read for the target and the
+check star.
 
 .. note::
 

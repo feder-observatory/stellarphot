@@ -328,3 +328,107 @@ class TestPhotometryDataMethod:
         write_aavso_extended(phot_table, func_out, **writer_kwargs)
         phot_table.write_aavso_extended(meth_out, **writer_kwargs)
         assert func_out.read_bytes() == meth_out.read_bytes()
+
+
+# ---- Input validation ------------------------------------------------------
+
+
+class TestInputValidation:
+    def test_target_and_check_must_differ(self, tmp_path, phot_table, writer_kwargs):
+        writer_kwargs["check_star_id"] = writer_kwargs["target_star_id"]
+        out = tmp_path / "sub.csv"
+        with pytest.raises(ValueError, match="must be different"):
+            write_aavso_extended(phot_table, out, **writer_kwargs)
+
+    @pytest.mark.parametrize("field", ["target_name", "check_name", "chart"])
+    def test_blank_required_identifier_rejected(
+        self, tmp_path, phot_table, writer_kwargs, field
+    ):
+        writer_kwargs[field] = "   "
+        out = tmp_path / "sub.csv"
+        with pytest.raises(ValueError, match=field):
+            write_aavso_extended(phot_table, out, **writer_kwargs)
+
+    def test_identifiers_are_stripped(self, tmp_path, phot_table, writer_kwargs):
+        writer_kwargs["target_name"] = "  V0533 Her  "
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(phot_table, out, **writer_kwargs)
+        rows = _read_data_rows(out)
+        assert set(rows["STARID"]) == {"V0533 Her"}
+
+    def test_blank_notes_becomes_na(self, tmp_path, phot_table, writer_kwargs):
+        writer_kwargs["notes"] = "   "
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(phot_table, out, **writer_kwargs)
+        rows = _read_data_rows(out)
+        assert set(rows["NOTES"]) == {"na"}
+
+    @pytest.mark.parametrize("field", ["target_name", "check_name", "chart", "notes"])
+    def test_delimiter_in_field_rejected(
+        self, tmp_path, phot_table, writer_kwargs, field
+    ):
+        # Default delim is comma; injecting one would create an extra column.
+        writer_kwargs[field] = "bad,value"
+        out = tmp_path / "sub.csv"
+        with pytest.raises(ValueError, match="delimiter"):
+            write_aavso_extended(phot_table, out, **writer_kwargs)
+
+    def test_newline_in_field_rejected(self, tmp_path, phot_table, writer_kwargs):
+        writer_kwargs["notes"] = "line1\nline2"
+        out = tmp_path / "sub.csv"
+        with pytest.raises(ValueError, match="newline"):
+            write_aavso_extended(phot_table, out, **writer_kwargs)
+
+
+# ---- Non-finite numeric handling -------------------------------------------
+
+
+class TestNonFiniteValues:
+    def test_nan_target_magnitude_raises(self, tmp_path, phot_table, writer_kwargs):
+        bad = phot_table.copy()
+        target_mask = bad["star_id"] == writer_kwargs["target_star_id"]
+        idx = np.where(target_mask)[0][0]
+        bad["mag_inst"][idx] = float("nan")
+        out = tmp_path / "sub.csv"
+        with pytest.raises(ValueError, match="MAGNITUDE"):
+            write_aavso_extended(bad, out, **writer_kwargs)
+
+    def test_nan_check_magnitude_raises(self, tmp_path, phot_table, writer_kwargs):
+        bad = phot_table.copy()
+        check_mask = bad["star_id"] == writer_kwargs["check_star_id"]
+        idx = np.where(check_mask)[0][0]
+        bad["mag_inst"][idx] = float("nan")
+        out = tmp_path / "sub.csv"
+        with pytest.raises(ValueError, match="KMAG"):
+            write_aavso_extended(bad, out, **writer_kwargs)
+
+    def test_nan_magerr_becomes_na(self, tmp_path, phot_table, writer_kwargs):
+        bad = phot_table.copy()
+        target_mask = bad["star_id"] == writer_kwargs["target_star_id"]
+        idx = np.where(target_mask)[0][0]
+        bad["mag_error"][idx] = float("nan")
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(bad, out, **writer_kwargs)
+        rows = _read_data_rows(out)
+        # At least one MAGERR cell should read "na"; the rest are numeric.
+        assert "na" in {str(v) for v in rows["MAGERR"]}
+
+    def test_inf_magerr_becomes_na(self, tmp_path, phot_table, writer_kwargs):
+        bad = phot_table.copy()
+        target_mask = bad["star_id"] == writer_kwargs["target_star_id"]
+        idx = np.where(target_mask)[0][0]
+        bad["mag_error"][idx] = float("inf")
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(bad, out, **writer_kwargs)
+        rows = _read_data_rows(out)
+        assert "na" in {str(v) for v in rows["MAGERR"]}
+
+    def test_nan_airmass_becomes_na(self, tmp_path, phot_table, writer_kwargs):
+        bad = phot_table.copy()
+        target_mask = bad["star_id"] == writer_kwargs["target_star_id"]
+        idx = np.where(target_mask)[0][0]
+        bad["airmass"][idx] = float("nan")
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(bad, out, **writer_kwargs)
+        rows = _read_data_rows(out)
+        assert "na" in {str(v) for v in rows["AIRMASS"]}
