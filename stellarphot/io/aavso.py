@@ -206,7 +206,7 @@ def write_aavso_extended(
     ----------
     phot_data : `stellarphot.PhotometryData`
         Table of photometry results. Must contain at least the target star
-        and the check star, paired by ``(file, passband)``.
+        and the check star, paired by ``(date-obs, passband)``.
 
     path : str or `pathlib.Path`
         Destination file. Must have a ``.txt``, ``.csv`` or ``.tsv`` suffix.
@@ -404,6 +404,27 @@ def write_aavso_extended(
         if name in FIELD_LIMITS and name != "AIRMASS":
             values = [_enforce_limit(name, v) for v in values]
         out_table[name] = Column(values, dtype=str)
+
+    # Final sweep: the configured delimiter must not appear anywhere in the
+    # rendered data table or in the AAVSO column names. The header model
+    # permits any printable ASCII except |/#/space, but values like "."
+    # collide with every formatted numeric field and an uppercase letter
+    # such as "A" appears in the AAVSO column names — both pass header
+    # validation and the per-field user-input checks above (which only
+    # cover string fields supplied by the caller) but would produce a
+    # mis-parseable file.
+    for col_name in DATA_COLUMNS:
+        if delimiter in col_name:
+            raise ValueError(
+                f"AAVSO column name {col_name!r} contains the configured "
+                f"delimiter {delimiter!r}; choose a different delimiter."
+            )
+        for value in out_table[col_name]:
+            if delimiter in value:
+                raise ValueError(
+                    f"AAVSO field {col_name}={value!r} contains the configured "
+                    f"delimiter {delimiter!r}; choose a different delimiter."
+                )
 
     # Write the data rows to a string buffer via astropy's ascii writer, then
     # assemble the final file with the parameter header and the

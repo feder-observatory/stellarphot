@@ -31,14 +31,17 @@ _TYPE_OPTIONS = tuple(_COMMENTS["TYPE"]["options"])
 _DATE_OPTIONS = tuple(_COMMENTS["DATE"]["options"])
 SOFTWARE_LIMIT = int(_COMMENTS["SOFTWARE"]["limit"])
 
-assert _TYPE_OPTIONS == (
-    "EXTENDED",
-), f"TYPE options drift: schema={_TYPE_OPTIONS!r} model=('EXTENDED',)"
-assert _DATE_OPTIONS == (
-    "JD",
-    "HJD",
-    "EXCEL",
-), f"DATE options drift: schema={_DATE_OPTIONS!r} model=('JD','HJD','EXCEL')"
+# These are drift guards between the schema YAML and the Literal annotations
+# below. They must run even under ``python -O`` (where ``assert`` is stripped),
+# so use explicit ``raise`` instead.
+if _TYPE_OPTIONS != ("EXTENDED",):
+    raise RuntimeError(
+        f"TYPE options drift: schema={_TYPE_OPTIONS!r} model=('EXTENDED',)"
+    )
+if _DATE_OPTIONS != ("JD", "HJD", "EXCEL"):
+    raise RuntimeError(
+        f"DATE options drift: schema={_DATE_OPTIONS!r} model=('JD','HJD','EXCEL')"
+    )
 
 # DELIM rules from the schema: cannot use pipe, hash, or space; the literal
 # words "comma" and "tab" are allowed as escapes for Excel users and tab

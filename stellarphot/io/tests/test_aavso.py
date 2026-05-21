@@ -279,17 +279,20 @@ class TestCheckStarPairing:
         write_aavso_extended(phot_table, out, **writer_kwargs)
         rows = _read_data_rows(out)
 
-        # Build lookup of (file, passband) -> check mag
+        # Build lookup of (date-obs, passband) -> check mag, matching the
+        # writer's join key. Using (file, passband) would silently pass even
+        # if the writer regressed for fixtures with reused filenames.
         check_rows = phot_table[phot_table["star_id"] == writer_kwargs["check_star_id"]]
         check_lookup = {
-            (r["file"], r["passband"]): float(r["mag_inst"]) for r in check_rows
+            (str(r["date-obs"]), r["passband"]): float(r["mag_inst"])
+            for r in check_rows
         }
 
         target_rows = phot_table[
             phot_table["star_id"] == writer_kwargs["target_star_id"]
         ]
         for written_kmag, src in zip(rows["KMAG"], target_rows, strict=True):
-            expected = check_lookup[(src["file"], src["passband"])]
+            expected = check_lookup[(str(src["date-obs"]), src["passband"])]
             assert abs(float(written_kmag) - expected) < 1e-4
 
     def test_kname_is_check_name_kwarg(self, tmp_path, phot_table, writer_kwargs):
@@ -377,6 +380,26 @@ class TestInputValidation:
         writer_kwargs["notes"] = "line1\nline2"
         out = tmp_path / "sub.csv"
         with pytest.raises(ValueError, match="newline"):
+            write_aavso_extended(phot_table, out, **writer_kwargs)
+
+    @pytest.mark.parametrize("delim", [".", "n", "a", "A"])
+    def test_delimiter_collides_with_rendered_field(
+        self, tmp_path, phot_table, writer_kwargs, delim
+    ):
+        # "." appears in every formatted numeric field (DATE, MAGNITUDE,
+        # MAGERR, KMAG, AIRMASS); "n"/"a" appear in the literal missing value
+        # "na"; "A" appears in AAVSO column names (STARID, DATE, ...). All
+        # pass the header model's character check but produce mis-parseable
+        # output and must be rejected before any I/O.
+        writer_kwargs["header"] = AAVSOSubmissionHeader(
+            type="EXTENDED",
+            obscode="ABC",
+            software="stellarphot test",
+            delim=delim,
+            date_format="JD",
+        )
+        out = tmp_path / "sub.txt"
+        with pytest.raises(ValueError, match="delimiter"):
             write_aavso_extended(phot_table, out, **writer_kwargs)
 
 
