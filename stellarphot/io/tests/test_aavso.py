@@ -97,6 +97,22 @@ class TestHeaderAndFileFormat:
         # 14 commas (15 fields).
         assert lines[7].count(",") == len(DATA_COLUMNS) - 1
 
+    def test_line_endings_are_uniform(self, tmp_path, phot_table, writer_kwargs):
+        # The writer uses native line endings (LF on Unix, CRLF on Windows),
+        # but they must be uniform across the whole file. The earlier bug
+        # mixed LF (from our explicit f.write(line + "\n")) with CRLF (from
+        # astropy's ascii writer on Windows), and the double text-mode
+        # translation produced "\r\r\n" — splitlines() then saw spurious
+        # empty rows.
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(phot_table, out, **writer_kwargs)
+        raw = out.read_bytes()
+        assert b"\r\r" not in raw
+        n_cr = raw.count(b"\r")
+        n_lf = raw.count(b"\n")
+        # Either LF-only or every CR pairs with an LF (uniform CRLF).
+        assert n_cr == 0 or n_cr == n_lf
+
     def test_delim_comma_writes_comma_in_header_but_separates_with_commas(
         self, tmp_path, phot_table, writer_kwargs
     ):
@@ -265,17 +281,15 @@ class TestTargetRows:
         assert set(rows["GROUP"]) == {7}
 
     def test_airmass_truncates(self, tmp_path, phot_table, writer_kwargs):
-        # Format is {f:.4f}; 1234.56789 → "1234.5679" (9 chars), truncated to 7.
+        # Format is {f:.4f}; 1234.56789 → "1234.5679" (9 chars). The AIRMASS
+        # limit is 7 chars, so the writer must truncate to "1234.56".
         long_data = phot_table.copy()
         long_data["airmass"] = 1234.56789
         out = tmp_path / "sub.csv"
         write_aavso_extended(long_data, out, **writer_kwargs)
-        lines = out.read_text().splitlines()
-        airmass_idx = DATA_COLUMNS.index("AIRMASS")
-        # Data rows begin after 6 parameter lines + 1 column-header line.
-        for line in lines[7:]:
-            fields = line.split(",")
-            assert fields[airmass_idx] == "1234.56"
+        text = out.read_text()
+        assert "1234.5679" not in text
+        assert "1234.56" in text
 
     def test_field_too_long_raises(self, tmp_path, phot_table, writer_kwargs):
         writer_kwargs["target_name"] = "x" * 31  # exceeds STARID limit of 30

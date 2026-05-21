@@ -431,11 +431,18 @@ def write_aavso_extended(
     # column-name row prefixed with "#".
     buf = io.StringIO()
     out_table.write(buf, format="ascii.no_header", delimiter=delimiter)
-    data_text = buf.getvalue()
+    # astropy's ascii writer can emit os.linesep into the StringIO on
+    # Windows, mixing with the LF terminators we use for the header lines.
+    # Normalize to LF here so the open() below sees a uniform "\n" stream
+    # and translates the whole file to the platform's native terminator.
+    data_text = buf.getvalue().replace("\r\n", "\n").replace("\r", "\n")
 
     column_header = "#" + delimiter.join(DATA_COLUMNS)
 
-    with open(path, "w") as f:
+    # utf-8 because user-supplied notes/software fields can contain
+    # non-ASCII characters; default newline=None translates "\n" → os.linesep
+    # so the file uses native line endings (LF on Unix, CRLF on Windows).
+    with open(path, "w", encoding="utf-8") as f:
         for line in header.header_lines():
             f.write(line + "\n")
         f.write(column_header + "\n")
