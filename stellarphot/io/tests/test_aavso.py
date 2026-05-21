@@ -432,3 +432,72 @@ class TestNonFiniteValues:
         write_aavso_extended(bad, out, **writer_kwargs)
         rows = _read_data_rows(out)
         assert "na" in {str(v) for v in rows["AIRMASS"]}
+
+
+# ---- Kwarg type validation -------------------------------------------------
+
+
+class TestKwargTypeValidation:
+    @pytest.mark.parametrize("value", ["False", "NO", "YES", "yes", "", 0, 1])
+    def test_trans_rejects_non_bool(self, tmp_path, phot_table, writer_kwargs, value):
+        writer_kwargs["trans"] = value
+        out = tmp_path / "sub.csv"
+        with pytest.raises(TypeError, match="trans"):
+            write_aavso_extended(phot_table, out, **writer_kwargs)
+
+    @pytest.mark.parametrize("value", [True, False])
+    def test_trans_accepts_bool(self, tmp_path, phot_table, writer_kwargs, value):
+        writer_kwargs["trans"] = value
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(phot_table, out, **writer_kwargs)
+        rows = _read_data_rows(out)
+        assert set(rows["TRANS"]) == {"YES" if value else "NO"}
+
+    @pytest.mark.parametrize(
+        "value,expected",
+        [
+            (7, 7),
+            ("5", 5),
+            (5.0, 5),
+        ],
+    )
+    def test_group_accepts_int_like(
+        self, tmp_path, phot_table, writer_kwargs, value, expected
+    ):
+        writer_kwargs["group"] = value
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(phot_table, out, **writer_kwargs)
+        rows = _read_data_rows(out)
+        assert set(rows["GROUP"]) == {expected}
+
+    def test_group_accepts_numpy_int(self, tmp_path, phot_table, writer_kwargs):
+        writer_kwargs["group"] = np.int64(42)
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(phot_table, out, **writer_kwargs)
+        rows = _read_data_rows(out)
+        assert set(rows["GROUP"]) == {42}
+
+    @pytest.mark.parametrize("value", ["abc", "5.5", [], {}, object()])
+    def test_group_rejects_non_int_like(
+        self, tmp_path, phot_table, writer_kwargs, value
+    ):
+        writer_kwargs["group"] = value
+        out = tmp_path / "sub.csv"
+        with pytest.raises((TypeError, ValueError), match="group"):
+            write_aavso_extended(phot_table, out, **writer_kwargs)
+
+    @pytest.mark.parametrize("value", [5.5, 0.1, float("inf"), float("nan")])
+    def test_group_rejects_non_integer_float(
+        self, tmp_path, phot_table, writer_kwargs, value
+    ):
+        writer_kwargs["group"] = value
+        out = tmp_path / "sub.csv"
+        with pytest.raises(ValueError, match="group"):
+            write_aavso_extended(phot_table, out, **writer_kwargs)
+
+    @pytest.mark.parametrize("value", [True, False])
+    def test_group_rejects_bool(self, tmp_path, phot_table, writer_kwargs, value):
+        writer_kwargs["group"] = value
+        out = tmp_path / "sub.csv"
+        with pytest.raises(TypeError, match="group"):
+            write_aavso_extended(phot_table, out, **writer_kwargs)

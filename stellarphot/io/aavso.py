@@ -142,6 +142,39 @@ def _format_magerr(value):
     return f"{f:.3f}"
 
 
+def _validate_trans(value):
+    """``trans`` controls a required YES/NO field; truthiness would silently
+    flip a caller's intent (e.g. the string ``"False"`` is truthy)."""
+    if not isinstance(value, bool):
+        raise TypeError(
+            f"trans must be a bool (True or False); got "
+            f"{type(value).__name__} ({value!r})."
+        )
+    return value
+
+
+def _coerce_group(value):
+    """Coerce ``value`` to a non-bool ``int`` or ``None`` for the GROUP field.
+
+    Accepts Python ints, numpy integers, integer-valued floats (``5.0``) and
+    numeric strings (``"5"``). Rejects ``bool``, non-integer floats, and
+    anything that doesn't convert cleanly to a number.
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise TypeError(f"group must be an int or None; got bool ({value!r}).")
+    try:
+        as_float = float(value)
+    except (TypeError, ValueError) as exc:
+        raise TypeError(
+            f"group must be an int or None; got {type(value).__name__} ({value!r})."
+        ) from exc
+    if not np.isfinite(as_float) or as_float != int(as_float):
+        raise ValueError(f"group must be an integer value; got {value!r}.")
+    return int(as_float)
+
+
 def _format_airmass(value):
     if value is None:
         return "na"
@@ -229,6 +262,9 @@ def write_aavso_extended(
             "target_star_id and check_star_id must be different; "
             f"got {target_star_id!r} for both."
         )
+
+    _validate_trans(trans)
+    group = _coerce_group(group)
 
     path = Path(path)
     if path.suffix.lower() not in ALLOWED_EXTENSIONS:
