@@ -1,17 +1,16 @@
 """Pydantic model for the AAVSO Extended File Format submission header.
 
 The structure mirrors ``stellarphot/io/aavso_submission_schema.yml``, which
-is a snapshot of the AAVSO specification. The yaml is loaded once at
-import time and used to check that the constants below stay in sync with
-the spec — the type annotations themselves use ``Literal`` so the
-allowed values are visible to static analysis and to the pydantic-
-generated JSON schema.
+is a snapshot of the AAVSO specification. The allowed values for ``TYPE``
+and ``DATE`` are encoded directly as ``Literal`` annotations so they are
+visible to static analysis and to the pydantic-generated JSON schema, and
+``SOFTWARE_LIMIT`` is hardcoded below. The YAML is not read at runtime;
+consistency with the spec snapshot is verified by
+``test_schema_matches_hardcoded_constants`` in the tests for this module.
 """
 
-from pathlib import Path
 from typing import Annotated, Literal
 
-import yaml
 from pydantic import AfterValidator, Field
 
 from .models import MODEL_DEFAULT_CONFIGURATION, BaseModelWithTableRep, NonEmptyStr
@@ -19,29 +18,9 @@ from .models import MODEL_DEFAULT_CONFIGURATION, BaseModelWithTableRep, NonEmpty
 __all__ = ["AAVSOSubmissionHeader"]
 
 
-_SCHEMA_PATH = (
-    Path(__file__).resolve().parent.parent / "io" / "aavso_submission_schema.yml"
-)
-_SCHEMA = yaml.safe_load(_SCHEMA_PATH.read_text())
-_COMMENTS = _SCHEMA["comments"]
-
-# Values pulled from the schema and checked against the Literal annotations
-# below so the two cannot silently drift apart.
-_TYPE_OPTIONS = tuple(_COMMENTS["TYPE"]["options"])
-_DATE_OPTIONS = tuple(_COMMENTS["DATE"]["options"])
-SOFTWARE_LIMIT = int(_COMMENTS["SOFTWARE"]["limit"])
-
-# These are drift guards between the schema YAML and the Literal annotations
-# below. They must run even under ``python -O`` (where ``assert`` is stripped),
-# so use explicit ``raise`` instead.
-if _TYPE_OPTIONS != ("EXTENDED",):
-    raise RuntimeError(
-        f"TYPE options drift: schema={_TYPE_OPTIONS!r} model=('EXTENDED',)"
-    )
-if _DATE_OPTIONS != ("JD", "HJD", "EXCEL"):
-    raise RuntimeError(
-        f"DATE options drift: schema={_DATE_OPTIONS!r} model=('JD','HJD','EXCEL')"
-    )
+# Mirrors ``comments.SOFTWARE.limit`` in aavso_submission_schema.yml;
+# drift-checked in the tests for this module.
+SOFTWARE_LIMIT = 255
 
 # DELIM rules from the schema: cannot use pipe, hash, or space; the literal
 # words "comma" and "tab" are allowed as escapes for Excel users and tab

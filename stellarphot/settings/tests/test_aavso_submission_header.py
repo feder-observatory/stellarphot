@@ -1,9 +1,31 @@
 import json
+from pathlib import Path
 
 import pytest
+import yaml
 from pydantic import ValidationError
 
-from stellarphot.settings.aavso_submission import AAVSOSubmissionHeader
+from stellarphot.settings.aavso_submission import (
+    SOFTWARE_LIMIT,
+    AAVSOSubmissionHeader,
+)
+
+
+def test_schema_matches_hardcoded_constants():
+    # The YAML in stellarphot/io/ is the canonical AAVSO spec snapshot. The
+    # Literal annotations on AAVSOSubmissionHeader and SOFTWARE_LIMIT are
+    # hardcoded copies; this test fails if the two ever drift apart.
+    schema_path = (
+        Path(__file__).resolve().parents[3]
+        / "stellarphot"
+        / "io"
+        / "aavso_submission_schema.yml"
+    )
+    comments = yaml.safe_load(schema_path.read_text())["comments"]
+
+    assert tuple(comments["TYPE"]["options"]) == ("EXTENDED",)
+    assert tuple(comments["DATE"]["options"]) == ("JD", "HJD", "EXCEL")
+    assert int(comments["SOFTWARE"]["limit"]) == SOFTWARE_LIMIT
 
 
 def _good_kwargs(**overrides):
