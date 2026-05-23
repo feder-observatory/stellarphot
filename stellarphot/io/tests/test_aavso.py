@@ -434,9 +434,9 @@ class TestInputValidation:
             write_aavso_extended(phot_table, out, **writer_kwargs)
 
     def test_delim_in_group_field_rejected(self, tmp_path, phot_table, writer_kwargs):
-        # "-" is a legal AAVSO delim but appears in str(-7). The default
-        # target/check/chart/notes strings contain no "-", so the writer
-        # reaches the group-field check before the per-column sweep.
+        # "-" is a legal AAVSO delim but appears in str(-7) (and in any
+        # negative rendered numeric field). The per-column sweep catches the
+        # collision before any I/O.
         writer_kwargs["header"] = AAVSOSubmissionHeader(
             type="EXTENDED",
             obscode="ABC",
@@ -446,7 +446,7 @@ class TestInputValidation:
         )
         writer_kwargs["group"] = -7
         out = tmp_path / "sub.csv"
-        with pytest.raises(ValueError, match="group"):
+        with pytest.raises(ValueError, match="delimiter"):
             write_aavso_extended(phot_table, out, **writer_kwargs)
 
     @pytest.mark.parametrize("delim", [".", "n", "a", "A"])
@@ -591,23 +591,3 @@ class TestKwargTypeValidation:
         out = tmp_path / "sub.csv"
         with pytest.raises(TypeError, match="group"):
             write_aavso_extended(phot_table, out, **writer_kwargs)
-
-
-# ---- Private helper coverage ----------------------------------------------
-
-
-class TestPrivateHelpers:
-    """The None branches in these helpers aren't reachable from typical
-    PhotometryData inputs (astropy columns yield masked sentinels, not None),
-    but the writer keeps them as a defensive fallback. Cover them directly so
-    the contract is asserted."""
-
-    def test_format_magerr_none_returns_na(self):
-        from stellarphot.io.aavso import _format_magerr
-
-        assert _format_magerr(None) == "na"
-
-    def test_format_airmass_none_returns_na(self):
-        from stellarphot.io.aavso import _format_airmass
-
-        assert _format_airmass(None) == "na"

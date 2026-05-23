@@ -116,10 +116,7 @@ def _reject_delimiter_or_newline(name, value, delimiter):
 
 def _to_float(value):
     """Coerce a value (possibly an astropy ``Quantity``) to a plain float."""
-    try:
-        return float(value.value)
-    except AttributeError:
-        return float(value)
+    return float(getattr(value, "value", value))
 
 
 def _format_mag(value, field_name):
@@ -134,8 +131,6 @@ def _format_mag(value, field_name):
 
 
 def _format_magerr(value):
-    if value is None:
-        return "na"
     f = _to_float(value)
     if not np.isfinite(f):
         return "na"
@@ -150,7 +145,6 @@ def _validate_trans(value):
             f"trans must be a bool (True or False); got "
             f"{type(value).__name__} ({value!r})."
         )
-    return value
 
 
 def _coerce_group(value):
@@ -176,8 +170,6 @@ def _coerce_group(value):
 
 
 def _format_airmass(value):
-    if value is None:
-        return "na"
     f = _to_float(value)
     if not np.isfinite(f):
         return "na"
@@ -360,8 +352,6 @@ def write_aavso_extended(
     paired.sort(["date-obs", "passband"])
 
     group_field = "na" if group is None else str(group)
-    if group is not None:
-        _reject_delimiter_or_newline("group", group_field, delimiter)
     trans_field = "YES" if trans else "NO"
     notes_field = notes
 
@@ -369,9 +359,8 @@ def write_aavso_extended(
     target_mag_col = f"{mag_column}_target"
 
     # Build per-row string columns in AAVSO order.
-    date_values = [
-        f"{(Time(row['date-obs']) + row['exposure'] / 2).jd:.5f}" for row in paired
-    ]
+    mid_jd = (Time(paired["date-obs"]) + paired["exposure"] / 2).jd
+    date_values = [f"{jd:.5f}" for jd in mid_jd]
     mag_values = [_format_mag(v, "MAGNITUDE") for v in paired[target_mag_col]]
     err_values = [_format_magerr(v) for v in paired[mag_error_column]]
     kmag_values = [_format_mag(v, "KMAG") for v in paired[check_mag_col]]
