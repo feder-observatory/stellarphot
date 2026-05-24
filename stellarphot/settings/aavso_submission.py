@@ -11,9 +11,14 @@ consistency with the spec snapshot is verified by
 
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, Field
+from pydantic import AfterValidator, BaseModel, BeforeValidator, Field
 
-from .models import MODEL_DEFAULT_CONFIGURATION, BaseModelWithTableRep, NonEmptyStr
+try:
+    from stellarphot.version import version as __version__
+except ImportError:
+    __version__ = ""
+
+from .models import MODEL_DEFAULT_CONFIGURATION, NonEmptyStr
 
 __all__ = ["AAVSOSubmissionHeader"]
 
@@ -30,6 +35,13 @@ DELIM_KEYWORDS = frozenset({"comma", "tab"})
 
 # The writer always emits OBSTYPE=CCD; it is not user-settable.
 OBSTYPE = "CCD"
+
+# Map header DELIM keywords to the literal character used between data fields.
+_DELIM_CHAR_MAP = {"comma": ",", "tab": "\t"}
+
+
+def _upper_if_str(value):
+    return value.upper() if isinstance(value, str) else value
 
 
 def _validate_delim(value: str) -> str:
@@ -51,7 +63,7 @@ def _validate_delim(value: str) -> str:
     return value
 
 
-class AAVSOSubmissionHeader(BaseModelWithTableRep):
+class AAVSOSubmissionHeader(BaseModel):
     """Header parameters for an AAVSO Extended File Format submission.
 
     Five fields map 1:1 to the ``#``-prefixed parameter lines required by the
@@ -64,6 +76,7 @@ class AAVSOSubmissionHeader(BaseModelWithTableRep):
 
     type: Annotated[
         Literal["EXTENDED"],
+        BeforeValidator(_upper_if_str),
         Field(description="Always EXTENDED for this format."),
     ] = "EXTENDED"
     obscode: Annotated[
@@ -76,14 +89,15 @@ class AAVSOSubmissionHeader(BaseModelWithTableRep):
             description="Name and version of the software used.",
             max_length=SOFTWARE_LIMIT,
         ),
-    ]
+    ] = f"stellarphot {__version__}"
     delim: Annotated[
         str,
         AfterValidator(_validate_delim),
         Field(description="Field delimiter character or the word 'comma'/'tab'."),
-    ]
+    ] = ","
     date_format: Annotated[
         Literal["JD", "HJD", "EXCEL"],
+        BeforeValidator(_upper_if_str),
         Field(description="Date format: JD, HJD, or EXCEL."),
     ] = "JD"
 
@@ -102,14 +116,11 @@ class AAVSOSubmissionHeader(BaseModelWithTableRep):
             f"#OBSTYPE={OBSTYPE}",
         ]
 
+    @property
     def data_delimiter(self) -> str:
         """Return the actual character used to separate data fields.
 
         The header writes ``comma`` and ``tab`` literally, but the data rows
         use ``,`` and ``\\t`` respectively.
         """
-        if self.delim == "comma":
-            return ","
-        if self.delim == "tab":
-            return "\t"
-        return self.delim
+        return _DELIM_CHAR_MAP.get(self.delim, self.delim)

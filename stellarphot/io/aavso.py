@@ -27,34 +27,19 @@ __all__ = ["write_aavso_extended"]
 
 ALLOWED_EXTENSIONS = frozenset({".txt", ".csv", ".tsv"})
 
-# AAVSO data column order, in the sequence the spec requires. The AAVSO
-# sample files prepend a row of these names with "#" before the data.
-DATA_COLUMNS = (
-    "STARID",
-    "DATE",
-    "MAGNITUDE",
-    "MAGERR",
-    "FILTER",
-    "TRANS",
-    "MTYPE",
-    "CNAME",
-    "CMAG",
-    "KNAME",
-    "KMAG",
-    "AIRMASS",
-    "GROUP",
-    "CHART",
-    "NOTES",
-)
-
-# Per-field maximum character counts pulled from the spec. Fields not listed
-# (FILTER, TRANS, MTYPE, NOTES) have no length limit. AIRMASS is special: the
-# spec says it should be truncated rather than rejected.
+# AAVSO data columns in spec order with their max character counts. ``None``
+# means the field has no length limit. The AAVSO sample files prepend a row
+# of these names with "#" before the data. AIRMASS is special: the spec says
+# it should be truncated rather than rejected; ``_enforce_limit`` handles
+# that.
 FIELD_LIMITS = {
     "STARID": 30,
     "DATE": 16,
     "MAGNITUDE": 8,
     "MAGERR": 6,
+    "FILTER": None,
+    "TRANS": None,
+    "MTYPE": None,
     "CNAME": 20,
     "CMAG": 8,
     "KNAME": 20,
@@ -62,6 +47,7 @@ FIELD_LIMITS = {
     "AIRMASS": 7,
     "GROUP": 5,
     "CHART": 20,
+    "NOTES": None,
 }
 
 
@@ -131,6 +117,7 @@ def _format_mag(value, field_name):
 
 
 def _format_magerr(value):
+    """Format magnitude error as a 3-decimal float; 'na' for non-finite values."""
     f = _to_float(value)
     if not np.isfinite(f):
         return "na"
@@ -170,6 +157,7 @@ def _coerce_group(value):
 
 
 def _format_airmass(value):
+    """Format an airmass as a 4-decimal float; return 'na' for non-finite values."""
     f = _to_float(value)
     if not np.isfinite(f):
         return "na"
@@ -265,7 +253,7 @@ def write_aavso_extended(
             f"extensions; got {path.suffix!r}."
         )
 
-    delimiter = header.data_delimiter()
+    delimiter = header.data_delimiter
 
     # Required identifier fields supplied by the caller. The AAVSO spec
     # forbids leading/trailing whitespace and empty values; we strip and
@@ -379,7 +367,7 @@ def write_aavso_extended(
         "CMAG": ["na"] * n,
         "KNAME": [str(check_name)] * n,
         "KMAG": kmag_values,
-        "AIRMASS": [_enforce_limit("AIRMASS", v) for v in airmass_values],
+        "AIRMASS": airmass_values,
         "GROUP": [group_field] * n,
         "CHART": [str(chart)] * n,
         "NOTES": [notes_field] * n,
@@ -388,9 +376,9 @@ def write_aavso_extended(
     # Enforce length limits on every column that has one (AIRMASS already
     # truncated above). Validation fires before any I/O.
     out_table = Table()
-    for name in DATA_COLUMNS:
+    for name, limit in FIELD_LIMITS.items():
         values = columns[name]
-        if name in FIELD_LIMITS and name != "AIRMASS":
+        if limit is not None:
             values = [_enforce_limit(name, v) for v in values]
         out_table[name] = Column(values, dtype=str)
 
@@ -402,7 +390,7 @@ def write_aavso_extended(
     # validation and the per-field user-input checks above (which only
     # cover string fields supplied by the caller) but would produce a
     # mis-parseable file.
-    for col_name in DATA_COLUMNS:
+    for col_name in FIELD_LIMITS:
         if delimiter in col_name:
             raise ValueError(
                 f"AAVSO column name {col_name!r} contains the configured "
@@ -426,7 +414,7 @@ def write_aavso_extended(
     # and translates the whole file to the platform's native terminator.
     data_text = buf.getvalue().replace("\r\n", "\n").replace("\r", "\n")
 
-    column_header = "#" + delimiter.join(DATA_COLUMNS)
+    column_header = "#" + delimiter.join(FIELD_LIMITS)
 
     # utf-8 because user-supplied notes/software fields can contain
     # non-ASCII characters; default newline=None translates "\n" → os.linesep

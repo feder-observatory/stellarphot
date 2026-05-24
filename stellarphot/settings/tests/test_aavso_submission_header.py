@@ -41,6 +41,13 @@ def _good_kwargs(**overrides):
 
 
 class TestAAVSOSubmissionHeader:
+    def test_defaults(self):
+        h = AAVSOSubmissionHeader(obscode="ABC")
+        assert h.type == "EXTENDED"
+        assert h.delim == ","
+        assert h.date_format == "JD"
+        assert h.software.startswith("stellarphot")
+
     def test_create_and_round_trip(self):
         h = AAVSOSubmissionHeader(**_good_kwargs())
         as_json = h.model_dump_json()
@@ -48,19 +55,32 @@ class TestAAVSOSubmissionHeader:
         again = AAVSOSubmissionHeader(**json.loads(as_json))
         assert again == h
 
-    def test_type_must_be_extended(self):
+    def test_type_rejects_non_spec_values(self):
         with pytest.raises(ValidationError):
             AAVSOSubmissionHeader(**_good_kwargs(type="VISUAL"))
-        # Lowercase is also wrong
-        with pytest.raises(ValidationError):
-            AAVSOSubmissionHeader(**_good_kwargs(type="extended"))
 
-    @pytest.mark.parametrize("good", ["JD", "HJD", "EXCEL"])
-    def test_date_format_accepts_spec_values(self, good):
-        h = AAVSOSubmissionHeader(**_good_kwargs(date_format=good))
-        assert h.date_format == good
+    @pytest.mark.parametrize("variant", ["EXTENDED", "extended", "Extended"])
+    def test_type_normalizes_case(self, variant):
+        h = AAVSOSubmissionHeader(**_good_kwargs(type=variant))
+        assert h.type == "EXTENDED"
 
-    @pytest.mark.parametrize("bad", ["jd", "hjd", "MJD", ""])
+    @pytest.mark.parametrize(
+        "given,expected",
+        [
+            ("JD", "JD"),
+            ("HJD", "HJD"),
+            ("EXCEL", "EXCEL"),
+            ("jd", "JD"),
+            ("hjd", "HJD"),
+            ("excel", "EXCEL"),
+            ("Hjd", "HJD"),
+        ],
+    )
+    def test_date_format_accepts_spec_values(self, given, expected):
+        h = AAVSOSubmissionHeader(**_good_kwargs(date_format=given))
+        assert h.date_format == expected
+
+    @pytest.mark.parametrize("bad", ["MJD", ""])
     def test_date_format_rejects_others(self, bad):
         with pytest.raises(ValidationError):
             AAVSOSubmissionHeader(**_good_kwargs(date_format=bad))
@@ -114,9 +134,3 @@ class TestAAVSOSubmissionHeader:
     def test_obscode_rejects_empty(self):
         with pytest.raises(ValidationError):
             AAVSOSubmissionHeader(**_good_kwargs(obscode=""))
-
-    def test_software_required(self):
-        kw = _good_kwargs()
-        del kw["software"]
-        with pytest.raises(ValidationError):
-            AAVSOSubmissionHeader(**kw)

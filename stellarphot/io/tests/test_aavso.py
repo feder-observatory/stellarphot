@@ -6,7 +6,7 @@ from astropy.utils.data import get_pkg_data_filename
 
 from stellarphot import PhotometryData
 from stellarphot.io.aavso import (
-    DATA_COLUMNS,
+    FIELD_LIMITS,
     write_aavso_extended,
 )
 from stellarphot.settings.aavso_submission import AAVSOSubmissionHeader
@@ -81,12 +81,12 @@ class TestHeaderAndFileFormat:
         assert lines[5] == "#OBSTYPE=CCD"
 
     def test_column_header_row_follows_parameter_header(
-        self, tmp_path, phot_table, writer_kwargs
+        self, tmp_path, phot_table, writer_kwargs, header
     ):
         out = tmp_path / "sub.csv"
         write_aavso_extended(phot_table, out, **writer_kwargs)
         lines = out.read_text().splitlines()
-        assert lines[6] == "#" + ",".join(DATA_COLUMNS)
+        assert lines[6] == "#" + header.data_delimiter.join(FIELD_LIMITS)
 
     def test_data_uses_configured_delimiter(self, tmp_path, phot_table, writer_kwargs):
         # Default delim=","
@@ -95,7 +95,7 @@ class TestHeaderAndFileFormat:
         lines = out.read_text().splitlines()
         # First data row (line 7, after 6 parameter lines + column header) has
         # 14 commas (15 fields).
-        assert lines[7].count(",") == len(DATA_COLUMNS) - 1
+        assert lines[7].count(",") == len(FIELD_LIMITS) - 1
 
     def test_line_endings_are_uniform(self, tmp_path, phot_table, writer_kwargs):
         # The writer uses native line endings (LF on Unix, CRLF on Windows),
@@ -128,7 +128,7 @@ class TestHeaderAndFileFormat:
         lines = out.read_text().splitlines()
         assert lines[3] == "#DELIM=comma"
         # Data row still uses literal commas as separators
-        assert lines[7].count(",") == len(DATA_COLUMNS) - 1
+        assert lines[7].count(",") == len(FIELD_LIMITS) - 1
 
     def test_delim_tab_writes_tab_in_data(self, tmp_path, phot_table, writer_kwargs):
         writer_kwargs["header"] = AAVSOSubmissionHeader(
@@ -142,7 +142,7 @@ class TestHeaderAndFileFormat:
         write_aavso_extended(phot_table, out, **writer_kwargs)
         lines = out.read_text().splitlines()
         assert lines[3] == "#DELIM=tab"
-        assert lines[7].count("\t") == len(DATA_COLUMNS) - 1
+        assert lines[7].count("\t") == len(FIELD_LIMITS) - 1
 
     @pytest.mark.parametrize("date_format", ["HJD", "EXCEL"])
     def test_non_jd_date_format_raises(
@@ -178,7 +178,7 @@ def _read_data_rows(path):
         format="no_header",
         delimiter=",",
         comment="#",
-        names=list(DATA_COLUMNS),
+        names=list(FIELD_LIMITS),
     )
 
 
