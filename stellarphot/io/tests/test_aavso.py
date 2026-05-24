@@ -393,6 +393,15 @@ class TestInputValidation:
         with pytest.raises(ValueError, match="must be different"):
             write_aavso_extended(phot_table, out, **writer_kwargs)
 
+    @pytest.mark.parametrize("kwarg", ["mag_column", "mag_error_column"])
+    def test_missing_mag_column_raises(
+        self, tmp_path, phot_table, writer_kwargs, kwarg
+    ):
+        writer_kwargs[kwarg] = "no_such_column"
+        out = tmp_path / "sub.csv"
+        with pytest.raises(ValueError, match="no_such_column"):
+            write_aavso_extended(phot_table, out, **writer_kwargs)
+
     @pytest.mark.parametrize("value", ["   ", None])
     @pytest.mark.parametrize("field", ["target_name", "check_name", "chart"])
     def test_blank_required_identifier_rejected(

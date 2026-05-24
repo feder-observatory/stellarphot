@@ -91,6 +91,14 @@ class TestAAVSOSubmissionHeader:
         assert h.delim == delim
 
     @pytest.mark.parametrize(
+        "given,expected",
+        [("COMMA", "comma"), ("Comma", "comma"), ("TAB", "tab"), ("Tab", "tab")],
+    )
+    def test_delim_keyword_normalizes_case(self, given, expected):
+        h = AAVSOSubmissionHeader(**_good_kwargs(delim=given))
+        assert h.delim == expected
+
+    @pytest.mark.parametrize(
         "bad", ["|", "#", " ", "", ",,", "\x00", "\x1f", "\x7f", "\xff"]
     )
     def test_delim_rejects_forbidden_values(self, bad):

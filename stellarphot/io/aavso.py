@@ -243,6 +243,13 @@ def write_aavso_extended(
             f"got {target_star_id!r} for both."
         )
 
+    for col in (mag_column, mag_error_column):
+        if col not in phot_data.colnames:
+            raise ValueError(
+                f"Column {col!r} is not in phot_data; "
+                f"available columns: {phot_data.colnames}"
+            )
+
     _validate_trans(trans)
     group = _coerce_group(group)
 

@@ -45,8 +45,10 @@ def _upper_if_str(value):
 
 
 def _validate_delim(value: str) -> str:
-    if value in DELIM_KEYWORDS:
-        return value
+    # The "comma"/"tab" keywords are case-insensitive per the schema; normalize
+    # to lowercase so the header line always emits the canonical form.
+    if value.lower() in DELIM_KEYWORDS:
+        return value.lower()
     if len(value) != 1:
         raise ValueError(
             "delim must be a single character or one of 'comma'/'tab'; "
