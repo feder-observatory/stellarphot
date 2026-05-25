@@ -16,7 +16,7 @@ from pydantic import AfterValidator, BaseModel, BeforeValidator, Field
 try:
     from stellarphot.version import version as __version__
 except ImportError:
-    __version__ = ""
+    __version__ = "unknown"
 
 from .models import MODEL_DEFAULT_CONFIGURATION, NonEmptyStr
 

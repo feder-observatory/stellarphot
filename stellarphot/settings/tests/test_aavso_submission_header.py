@@ -28,6 +28,29 @@ def test_schema_matches_hardcoded_constants():
     assert int(comments["SOFTWARE"]["limit"]) == SOFTWARE_LIMIT
 
 
+def test_default_software_valid_when_version_import_fails(monkeypatch):
+    # The ImportError fallback for __version__ must still yield a default
+    # `software` value that passes NonEmptyStr validation; otherwise simply
+    # constructing AAVSOSubmissionHeader(obscode=...) raises in environments
+    # where stellarphot.version cannot be imported.
+    import importlib
+    import sys
+
+    import stellarphot.settings.aavso_submission as aavso_mod
+
+    # Setting sys.modules[name] = None makes `from name import ...` raise
+    # ModuleNotFoundError (subclass of ImportError).
+    monkeypatch.setitem(sys.modules, "stellarphot.version", None)
+    try:
+        reloaded = importlib.reload(aavso_mod)
+        h = reloaded.AAVSOSubmissionHeader(obscode="ABC")
+        assert h.software
+        assert h.software.strip() == h.software
+    finally:
+        monkeypatch.undo()
+        importlib.reload(aavso_mod)
+
+
 def _good_kwargs(**overrides):
     base = dict(
         type="EXTENDED",
