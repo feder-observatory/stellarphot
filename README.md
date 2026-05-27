@@ -15,6 +15,7 @@ useful photometry, with a focus on variable star and exoplanet transit observati
   - calculate relative flux (like [AstroImageJ](https://www.astro.louisville.edu/software/astroimagej/)),
   - calculate calibrated magnitudes by transforming to a catalog (e.g. APASS DR9), and/or
   - calculate calibrated magnitudes with a user-provided set of comparison stars (as is done in AAVSO submissions).
+  - export ensemble photometry results in the AAVSO Extended File Format for direct upload to WebObs.
 - If you are working with exoplanet transit observations, `stellarphot` can turns the photometry into exoplanet transit light curves (see installation notes below).
 
 ## Installation

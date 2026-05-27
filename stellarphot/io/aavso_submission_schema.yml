@@ -1,3 +1,24 @@
+file_format:
+  case_sensitive: false
+  allowed_extensions:
+    - .txt
+    - .csv
+    - .tsv
+  parameter_prefix: |
+    Header parameters must begin with a "#" at the start of the line.
+    Personal comments may also be added after a "#"; they are ignored by
+    the AAVSO loader but retained in the permanent archive. Blank lines
+    between header and data are not allowed unless commented with "#".
+  field_whitespace: |
+    Do not put a space at the beginning or end of a field.
+  missing_value: |
+    Optional fields with no value must be written as the literal string "na".
+  notes:
+    - The format has two components: parameters (header) and data.
+    - One observation per line; fields separated by the DELIM character.
+    - OBSCODE and DATE may also appear inline within the data; subsequent
+      observations are then attributed to the new value.
+
 comments:
   TYPE:
     summary: |
@@ -201,7 +222,7 @@ data:
   AIRMASS:
     summary: |
       Airmass of observation Limit 7 characters - entry will be truncated
-      if longer than that. If not present, use "na".\
+      if longer than that. If not present, use "na".
     limit: 7
   GROUP:
     summary: |
