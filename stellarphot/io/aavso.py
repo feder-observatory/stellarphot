@@ -88,6 +88,7 @@ def _require_nonblank(name, value):
 
 
 def _reject_delimiter_or_newline(name, value, delimiter):
+    """Reject string fields that contain the configured delimiter or a newline."""
     if delimiter in value:
         raise ValueError(
             f"AAVSO field {name}={value!r} contains the configured delimiter "
@@ -294,7 +295,7 @@ def write_aavso_extended(
         raise ValueError(f"No rows in phot_data have star_id={check_star_id!r}.")
 
     # Reject invalid filters before doing any heavier work.
-    for passband in phot_data["passband"][target_mask]:
+    for passband in set(phot_data["passband"][target_mask]):
         if not _is_valid_filter(passband):
             raise ValueError(
                 f"Row passband {passband!r} is not a valid AAVSO filter. "
@@ -380,8 +381,7 @@ def write_aavso_extended(
         "NOTES": [notes_field] * n,
     }
 
-    # Enforce length limits on every column that has one (AIRMASS already
-    # truncated above). Validation fires before any I/O.
+    # Enforce length limits on every column that has one. Validation fires before I/O.
     out_table = Table()
     for name, limit in FIELD_LIMITS.items():
         values = columns[name]
