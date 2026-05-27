@@ -356,6 +356,55 @@ class TestCheckStarPairing:
         # missing one (date-obs, passband) pair.
         out = tmp_path / "sub.csv"
         with pytest.raises(ValueError, match="No check-star row"):
+            write_aavso_extended(bad, out, drop_missing_check=False, **writer_kwargs)
+
+    def test_drop_missing_check_is_default_and_keeps_matched_rows(
+        self, tmp_path, phot_table, writer_kwargs
+    ):
+        # Same setup as test_missing_check_row_raises, but rely on the default
+        # drop_missing_check=True: the unmatched target row is dropped silently
+        # and the remaining matched row is written.
+        check_id = writer_kwargs["check_star_id"]
+        target_id = writer_kwargs["target_star_id"]
+        mask_check = phot_table["star_id"] == check_id
+        # Index of the first check-star row, plus its (date-obs, passband).
+        first_check_idx = int(np.where(mask_check)[0][0])
+        dropped_date = phot_table["date-obs"][first_check_idx]
+        dropped_passband = phot_table["passband"][first_check_idx]
+        bad = phot_table[~mask_check | (np.arange(len(phot_table)) != first_check_idx)]
+        out = tmp_path / "sub.csv"
+        write_aavso_extended(bad, out, **writer_kwargs)
+        rows = _read_data_rows(out)
+        # The number of target observations that still have a matching check
+        # observation in `bad`.
+        target_rows = bad[bad["star_id"] == target_id]
+        check_rows = bad[bad["star_id"] == check_id]
+        check_keys = {(str(r["date-obs"]), r["passband"]) for r in check_rows}
+        expected_kept = sum(
+            (str(r["date-obs"]), r["passband"]) in check_keys for r in target_rows
+        )
+        assert len(rows) == expected_kept
+        # The (date-obs, passband) we dropped from the check star should not
+        # appear in the output's DATE column as a written JD. Sanity-check
+        # that the kept rows do not correspond to the dropped check row.
+        dropped_jd = (Time(dropped_date) + target_rows["exposure"][0] / 2).jd
+        assert all(
+            abs(float(written) - dropped_jd) > 1e-5 for written in rows["DATE"]
+        ) or dropped_passband not in set(rows["FILTER"])
+
+    def test_drop_missing_check_empty_raises(self, tmp_path, phot_table, writer_kwargs):
+        # Break pairing for every target row by moving all check-star rows
+        # to a passband no target row uses. The check star still has rows
+        # (so the early "no check rows" guard does not fire), and target
+        # passband validation (which runs only on target rows) is unaffected,
+        # so the join produces zero matches.
+        check_id = writer_kwargs["check_star_id"]
+        bad = phot_table.copy()
+        mask_check = bad["star_id"] == check_id
+        # Target fixture is "SR"; "B" is a valid AAVSO filter that differs.
+        bad["passband"][mask_check] = "B"
+        out = tmp_path / "sub.csv"
+        with pytest.raises(ValueError, match="removed every target row"):
             write_aavso_extended(bad, out, **writer_kwargs)
 
     def test_missing_target_raises(self, tmp_path, phot_table, writer_kwargs):

@@ -180,6 +180,7 @@ def write_aavso_extended(
     trans=False,
     group=None,
     notes="na",
+    drop_missing_check=True,
 ):
     """Write an AAVSO Extended File Format submission for ensemble photometry.
 
@@ -225,6 +226,12 @@ def write_aavso_extended(
 
     notes : str, optional
         Text written into the ``NOTES`` column. Defaults to ``"na"``.
+
+    drop_missing_check : bool, optional
+        How to handle target rows that have no check-star observation at the
+        same ``(date-obs, passband)``. ``True`` (default) silently drops
+        those target rows; ``False`` raises ``ValueError``. If dropping
+        leaves no rows to write, ``ValueError`` is raised regardless.
     """
     if not isinstance(header, AAVSOSubmissionHeader):
         raise TypeError(
@@ -334,15 +341,27 @@ def write_aavso_extended(
     # Detect target rows without a matching check observation. After a left
     # join those rows have the check magnitude masked.
     check_mag_col = f"{mag_column}_check"
-    if hasattr(paired[check_mag_col], "mask") and paired[check_mag_col].mask.any():
-        missing = paired[paired[check_mag_col].mask][["date-obs", "passband"]]
-        first = missing[0]
-        raise ValueError(
-            "No check-star row found for "
-            f"(date-obs={first['date-obs']!r}, passband={first['passband']!r}); "
-            f"check_star_id={check_star_id!r} must have a matching "
-            "observation for every target observation."
-        )
+    has_mask = hasattr(paired[check_mag_col], "mask")
+    if has_mask and paired[check_mag_col].mask.any():
+        unmatched = paired[check_mag_col].mask
+        if drop_missing_check:
+            paired = paired[~unmatched]
+            if len(paired) == 0:
+                raise ValueError(
+                    f"drop_missing_check=True removed every target row; no "
+                    f"target observations have a matching check-star "
+                    f"observation for check_star_id={check_star_id!r}."
+                )
+        else:
+            missing = paired[unmatched][["date-obs", "passband"]]
+            first = missing[0]
+            raise ValueError(
+                "No check-star row found for "
+                f"(date-obs={first['date-obs']!r}, passband={first['passband']!r}); "
+                f"check_star_id={check_star_id!r} must have a matching "
+                "observation for every target observation. Pass "
+                "drop_missing_check=True to drop unmatched target rows."
+            )
 
     # Preserve a stable, easy-to-compare row order.
     paired.sort(["date-obs", "passband"])
