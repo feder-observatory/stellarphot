@@ -141,7 +141,7 @@ def test_loading_second_image_succeeds(tmp_path):
     comparison_widget = cf.ComparisonViewer()
     ccd = CCDData.read(
         get_pkg_data_filename(
-            "tests/data/TIC_402828941-tiny.fit.bz2", package="stellarphot"
+            "tests/data/TIC-402828941-tiny.fit.bz2", package="stellarphot"
         )
     )
     file_name = "TIC.fits"
