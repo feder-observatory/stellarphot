@@ -381,9 +381,16 @@ class ComparisonViewer:
         # We have a name, try to get coordinates from it
         try:
             self.target_coord = SkyCoord.from_name(self._object)
+            return
         except NameResolveError:
-            # If there are no coordinations so far then use the center of the frame. The
-            # generation of  the source list table depends on the target coordinates.
+            pass
+
+        # If there are no coordinations so far then use the first object in the
+        # input source list aka target file, if there is one, otherwise use
+        # the center of the image.
+        if self.targets_from_file:
+            self.target_coord = self.targets_from_file["coords"][0]
+        else:
             self.target_coord = self.ccd.wcs.pixel_to_world(
                 self.ccd.shape[0] / 2, self.ccd.shape[1] / 2
             )
@@ -636,9 +643,17 @@ class ComparisonViewer:
             comp_table["separation"] < 0.3 * u.arcsec
         )
 
-        comp_table["sort"][apass_mark] = 2
-        comp_table["sort"][vsx_mark] = 1
-        comp_table["sort"][tess_mark] = 0
+        # Although the radec input sources lists generated for TESS are supposed to be
+        # sorted by distance from the TESS target, they are not always. To ensure that
+        # the TESS order is preserved we add a column here that assigns a temporary
+        # star ID used for sorting, which we later delete.
+        if tess_mark.sum() > 0:
+            # If there are multiple TESS targets then assign their sort value so that
+            # order is not changed.
+            comp_table["sort"][tess_mark] = np.arange(tess_mark.sum())
+
+        comp_table["sort"][apass_mark] = 3 * tess_mark.sum()
+        comp_table["sort"][vsx_mark] = 2 * tess_mark.sum()
 
         # Sort the table
         comp_table.sort(["sort", "separation"])

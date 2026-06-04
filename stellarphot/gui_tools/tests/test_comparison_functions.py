@@ -102,9 +102,12 @@ def test_comparison_properties(tmp_path, has_object, source_file_name):
             message="Marker set named.*is empty",
             category=UserWarning,
         )
-        label_markers = comparison_widget.iw.get_markers(
-            marker_name=comparison_widget._label_name
-        )
+        try:
+            marker_getter = comparison_widget.iw.get_markers
+        except AttributeError:
+            marker_getter = comparison_widget.iw.get_markers_by_name
+
+        label_markers = marker_getter(marker_name=comparison_widget._label_name)
     # There should be a label for each star, so check that the number of labels matches
     # the length of the table of stars excluding the labels.
     table = comparison_widget.generate_table()
@@ -141,7 +144,7 @@ def test_loading_second_image_succeeds(tmp_path):
     comparison_widget = cf.ComparisonViewer()
     ccd = CCDData.read(
         get_pkg_data_filename(
-            "tests/data/TIC_402828941-tiny.fit.bz2", package="stellarphot"
+            "tests/data/TIC-402828941-tiny.fit.bz2", package="stellarphot"
         )
     )
     file_name = "TIC.fits"
@@ -199,11 +202,12 @@ def test_loading_second_image_succeeds(tmp_path):
 
 
 @pytest.mark.remote_data
-def test_loading_input_source_list(tmp_path):
+@pytest.mark.parametrize("tic_id", [402828941, 367710318])
+def test_loading_input_source_list(tmp_path, tic_id):
     # Test that we can load a source list from a file
     comparison_widget = cf.ComparisonViewer()
     compressed_input_source_list = get_pkg_data_filename(
-        "tests/data/TIC-402828941-source-list-input.ecsv.gz", package="stellarphot"
+        f"tests/data/TIC-{tic_id}-source-list-input.ecsv.gz", package="stellarphot"
     )
     with gzip.open(compressed_input_source_list, "rb") as f:
         source_list_content = f.read()
@@ -211,7 +215,7 @@ def test_loading_input_source_list(tmp_path):
     input_source_list.write_text(source_list_content.decode("utf-8"))
     ccd = CCDData.read(
         get_pkg_data_filename(
-            "tests/data/TIC_402828941-tiny.fit.bz2", package="stellarphot"
+            f"tests/data/TIC-{tic_id}-tiny.fit.bz2", package="stellarphot"
         )
     )
     file_name = "TIC.fits"
@@ -236,6 +240,16 @@ def test_loading_input_source_list(tmp_path):
     comp_viewer_sources = SourceListData.read("source_locations.ecsv")
     input_sources = SourceListData.read(input_source_list)
 
-    num_tess = np.sum(comp_viewer_sources["marker name"] == "TESS Targets")
+    tess_targets = comp_viewer_sources["marker name"] == "TESS Targets"
+
+    num_tess = np.sum(tess_targets)
 
     assert num_tess == len(input_sources)
+
+    # Check that the stars are in the correct order that TESS expects
+    comp_viewer_coords = SkyCoord(
+        comp_viewer_sources["ra"], comp_viewer_sources["dec"], unit="deg"
+    )
+    input_coords = SkyCoord(input_sources["ra"], input_sources["dec"], unit="deg")
+    sep = comp_viewer_coords[tess_targets].separation(input_coords)
+    assert np.all(sep.arcsec < 1.0)
