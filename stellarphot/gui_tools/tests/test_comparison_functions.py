@@ -102,9 +102,12 @@ def test_comparison_properties(tmp_path, has_object, source_file_name):
             message="Marker set named.*is empty",
             category=UserWarning,
         )
-        label_markers = comparison_widget.iw.get_markers(
-            marker_name=comparison_widget._label_name
-        )
+        try:
+            marker_getter = comparison_widget.iw.get_markers
+        except AttributeError:
+            marker_getter = comparison_widget.iw.get_markers_by_name
+
+        label_markers = marker_getter(marker_name=comparison_widget._label_name)
     # There should be a label for each star, so check that the number of labels matches
     # the length of the table of stars excluding the labels.
     table = comparison_widget.generate_table()
