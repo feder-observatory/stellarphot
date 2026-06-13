@@ -101,6 +101,20 @@ These typically need to be done every time you make a contribution.
     you need to make additional commits, make sure you push them to your
     fork on GitHub. The pull request will be updated automatically.
 
+Architecture and design diagrams
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+These pages map the package structure, entry points, example user flows, and
+per-file call graphs.
+
+.. toctree::
+    :maxdepth: 1
+
+    /diagrams-01-package-overview
+    /diagrams-02-entry-points
+    /diagrams-03-user-flows
+    /diagrams-04-call-graphs
+
 Some specific examples
 ~~~~~~~~~~~~~~~~~~~~~~
 
