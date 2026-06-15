@@ -25,6 +25,7 @@
 # be accessible, and the documentation will not build correctly.
 
 import datetime
+import re
 import sys
 import tomllib
 from importlib import import_module
@@ -68,7 +69,23 @@ rst_epilog += """
 extensions += [
     "sphinx_design",
     "sphinx_gallery.gen_gallery",
+    "myst_parser",
+    "sphinxcontrib.mermaid",
 ]
+
+# Render ```mermaid fences (in the diagram Markdown pages) as the mermaid
+# directive. 'antiscript' keeps the diagrams' click-through href links working
+# while stripping any scripts.
+myst_fence_as_directive = ["mermaid"]
+# 'antiscript' keeps the diagrams' click-through href links working while
+# stripping any scripts. startOnLoad stays False -- sphinxcontrib-mermaid runs
+# the diagrams itself.
+mermaid_init_config = {"startOnLoad": False, "securityLevel": "antiscript"}
+# The only Markdown pages are docs/diagrams-*.md, whose links are either
+# external (GitHub) or rewritten below to point at the rendered API docs.
+# Emit them verbatim rather than trying to resolve them as Sphinx cross
+# references (which mangles the rewritten ``.html#anchor`` targets).
+myst_all_links_external = True
 # -- Project information ------------------------------------------------------
 
 # This does not *have* to match the package name, but typically does
@@ -206,3 +223,102 @@ man_pages = [("index", project.lower(), project + " Documentation", [author], 1)
 #     dtype, target = line.split(None, 1)
 #     target = target.strip()
 #     nitpick_ignore.append((dtype, six.u(target)))
+
+# -- Rewrite in-repo source links in the diagram pages -----------------------
+#
+# The docs/diagrams-*.md pages link to source files/directories with paths that
+# are relative to the repo (e.g. ``../stellarphot/core.py``) so they remain
+# browsable on GitHub. When Sphinx builds those pages we instead point each
+# link at the rendered API documentation, at module-section granularity. The
+# Markdown files themselves are left untouched -- the rewrite happens only on
+# the in-memory source via the ``source-read`` event.
+
+# Modules that have an automodapi section on the API Reference page (see
+# stellarphot/api_reference.rst). A referenced file resolves to its nearest
+# documented ancestor module.
+_DOCUMENTED_MODULES = {
+    "stellarphot",
+    "stellarphot.core",
+    "stellarphot.table_representations",
+    "stellarphot.differential_photometry",
+    "stellarphot.gui_tools",
+    "stellarphot.io",
+    "stellarphot.photometry.photometry",
+    "stellarphot.photometry.source_detection",
+    "stellarphot.photometry.profiles",
+    "stellarphot.plotting",
+    "stellarphot.settings",
+    "stellarphot.transit_fitting",
+    "stellarphot.transit_fitting.gui",
+    "stellarphot.transit_fitting.io",
+    "stellarphot.transit_fitting.plotting",
+    "stellarphot.utils",
+}
+# Diagram pages live at the docs root; the API page is one level down.
+_API_PAGE = "stellarphot/api_reference.html"
+# Modules documented on a different page than the API Reference. The settings
+# package is documented on the settings user-guide page.
+_MODULE_PAGES = {
+    "stellarphot.settings": "stellarphot/settings.html",
+}
+_GH_BLOB = "https://github.com/feder-observatory/stellarphot/blob/main/"
+_GH_TREE = "https://github.com/feder-observatory/stellarphot/tree/main/"
+
+_DIAGRAM_DOCS = {
+    "diagrams-01-package-overview",
+    "diagrams-02-entry-points",
+    "diagrams-03-user-flows",
+    "diagrams-04-call-graphs",
+}
+
+# Packages with no automodapi section of their own -- point references at them
+# to their primary documented submodule instead.
+_MODULE_ALIASES = {
+    "stellarphot.photometry": "stellarphot.photometry.photometry",
+}
+
+
+def _github_fallback(path):
+    # ``path`` is what follows ``../stellarphot/``.
+    base = _GH_TREE if path.endswith("/") else _GH_BLOB
+    return base + "stellarphot/" + path
+
+
+def _resolve_link(path):
+    # Notebooks are not importable Python, so they have no API page -- send
+    # them to GitHub, which renders .ipynb files natively.
+    if path.startswith("notebooks") or path.endswith(".ipynb"):
+        return _github_fallback(path)
+    # Build a dotted module name from the path and walk up to the nearest
+    # documented module.
+    stem = path.rstrip("/")
+    if stem.endswith(".py"):
+        stem = stem[:-3]
+    if stem in ("", "__init__"):
+        dotted = "stellarphot"
+    else:
+        dotted = "stellarphot." + stem.replace("/", ".")
+    parts = dotted.split(".")
+    while parts:
+        candidate = ".".join(parts)
+        candidate = _MODULE_ALIASES.get(candidate, candidate)
+        if candidate in _DOCUMENTED_MODULES:
+            page = _MODULE_PAGES.get(candidate, _API_PAGE)
+            return f"{page}#module-{candidate}"
+        parts.pop()
+    # Shouldn't happen, but fall back to GitHub rather than emit a broken link.
+    return _github_fallback(path)
+
+
+def _rewrite_repo_links(app, docname, source):
+    if docname not in _DIAGRAM_DOCS:
+        return
+    source[0] = re.sub(
+        r'\.\./stellarphot/([^\s)"]*)',
+        lambda m: _resolve_link(m.group(1)),
+        source[0],
+    )
+
+
+def setup(app):
+    app.connect("source-read", _rewrite_repo_links)

@@ -7,6 +7,8 @@ All of the classes and functions defined in `stellarphot` are listed below, grou
 
 .. automodapi:: stellarphot
 .. automodapi:: stellarphot.core
+.. automodapi:: stellarphot.table_representations
+.. automodapi:: stellarphot.photometry.profiles
 .. automodapi:: stellarphot.differential_photometry
 .. automodapi:: stellarphot.gui_tools
 .. automodapi:: stellarphot.io

@@ -42,6 +42,8 @@ docs = [
     "sphinx-astropy[confv2]",
     "sphinx-design",
     "graphviz",
+    "myst-parser",
+    "sphinxcontrib-mermaid",
 ]
 exo_fitting = [
     "batman-package",
@@ -149,10 +151,12 @@ select = [
 # Ignore `E402` and `F403` (import violations) in all `__init__.py` files.
 "__init__.py" = ["E402", "F403"]
 # Ignore F405 (variable may be from star imports) in docs/conf.py
-"docs/conf.py" = ["F405"]
+"docs/conf.py" = ["F405", "ARG001"]
 
 [tool.codespell]
-skip = '*.svg'
+# The diagrams-*.md files use short Mermaid node ids that codespell
+# misreads as typos.
+skip = '*.svg,docs/diagrams-*.md'
 ignore-words = "ignore-words.txt"
 
 [tool.pytest.ini_options]
