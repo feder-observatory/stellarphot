@@ -16,6 +16,11 @@ from stellarphot.io.tess import (
     tess_photometry_setup,
 )
 
+# Errors raised when the external TESS/GAIA target-file service is down or
+# misbehaving (e.g. returns HTTP 200 with no usable download link, which now
+# surfaces as a ValueError). Remote-data tests xfail rather than fail on these.
+SERVER_DOWN_ERRORS = (ConnectionError, ReadTimeout, ValueError)
+
 GOOD_HEADER = {
     "date-obs": "2022-06-04T05:44:28.010",
     "filter": "ip",
@@ -136,6 +141,30 @@ def test_target_file():
             pytest.xfail("TESS/gaia Server down")
 
 
+def test_target_file_no_download_link_raises(monkeypatch, tmp_path):
+    # When the GAIA aperture service returns HTTP 200 but a body with no
+    # download link (i.e. the server is "back but producing garbage"), we
+    # should raise a clear, catchable ValueError instead of an opaque
+    # ``TypeError: 'NoneType' object is not subscriptable``.
+    class FakeResponse:
+        status_code = 200
+        text = "<html>The server is having a bad day -- no link here.</html>"
+
+    def fake_get(*args, **kwargs):  # noqa: ARG001
+        return FakeResponse()
+
+    monkeypatch.setattr("stellarphot.io.tess.requests.get", fake_get)
+
+    coord = SkyCoord(ra=104.733225, dec=49.968739, unit="degree")
+    # Provide a file we manage ourselves so TessTargetFile does not create a
+    # NamedTemporaryFile that would be left open when construction fails. A
+    # leaked open handle raises an unclosed-file ResourceWarning, which is
+    # promoted to an error on Windows CI.
+    with open(tmp_path / "gaia_targets.dat", "w") as target_file:
+        with pytest.raises(ValueError, match="no download link"):
+            TessTargetFile(coord, magnitude=12, depth=10, file=target_file)
+
+
 class TestTOI:
     @pytest.fixture
     def sample_toi(self):
@@ -235,11 +264,14 @@ class TestTessPhotometrySetup:
         # Check that we can create the necessary files for TESS photometry
         # from a TIC ID.
         tic_id = tess_tic_expected_values["tic_id"]
-        if creation_method == "tic_id":
-            tess_photometry_setup(tic_id=tic_id)
-        else:
-            toi_info = TOI.from_tic_id(tic_id)
-            tess_photometry_setup(TOI_object=toi_info)
+        try:
+            if creation_method == "tic_id":
+                tess_photometry_setup(tic_id=tic_id)
+            else:
+                toi_info = TOI.from_tic_id(tic_id)
+                tess_photometry_setup(TOI_object=toi_info)
+        except SERVER_DOWN_ERRORS as e:
+            pytest.xfail(f"TESS/GAIA server down or misbehaving: {e}")
 
         p_info = Path(f"TIC-{tic_id}-info.json")
         assert p_info.exists()
@@ -252,8 +284,13 @@ class TestTessPhotometrySetup:
         # Check to see that an error is raised if the files already exist
         # and the overwrite flag is not set.
         tic_id = tess_tic_expected_values["tic_id"]
-        tess_photometry_setup(tic_id=tic_id)
+        try:
+            tess_photometry_setup(tic_id=tic_id)
+        except SERVER_DOWN_ERRORS as e:
+            pytest.xfail(f"TESS/GAIA server down or misbehaving: {e}")
 
+        # The first call succeeded, so the server is up and the remaining
+        # calls below should reach the FileExistsError checks.
         # Try re-running with both files present, where we hit the error from
         # the source list file first
         with pytest.raises(FileExistsError):

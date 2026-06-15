@@ -536,6 +536,15 @@ class TessTargetFile:
             'href="(.+)"',
             result.text.replace("\n", ""),
         )
+        if links is None:
+            # The server responded (status 200) but the body contains no
+            # download link, which happens when the service is up but
+            # misbehaving. Raise a clear, catchable error rather than letting
+            # the subsequent subscript fail with an opaque TypeError.
+            raise ValueError(
+                "GAIA target-file service returned no download link; the "
+                f"server may be misbehaving. Response was: {result.text!r}"
+            )
         download_link = self.aperture_server + links[1]
         target_file_contents = requests.get(download_link)
         # Write GAIA data to local file
