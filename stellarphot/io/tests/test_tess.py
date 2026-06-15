@@ -141,7 +141,7 @@ def test_target_file():
             pytest.xfail("TESS/gaia Server down")
 
 
-def test_target_file_no_download_link_raises(monkeypatch):
+def test_target_file_no_download_link_raises(monkeypatch, tmp_path):
     # When the GAIA aperture service returns HTTP 200 but a body with no
     # download link (i.e. the server is "back but producing garbage"), we
     # should raise a clear, catchable ValueError instead of an opaque
@@ -156,8 +156,13 @@ def test_target_file_no_download_link_raises(monkeypatch):
     monkeypatch.setattr("stellarphot.io.tess.requests.get", fake_get)
 
     coord = SkyCoord(ra=104.733225, dec=49.968739, unit="degree")
-    with pytest.raises(ValueError, match="no download link"):
-        TessTargetFile(coord, magnitude=12, depth=10)
+    # Provide a file we manage ourselves so TessTargetFile does not create a
+    # NamedTemporaryFile that would be left open when construction fails. A
+    # leaked open handle raises an unclosed-file ResourceWarning, which is
+    # promoted to an error on Windows CI.
+    with open(tmp_path / "gaia_targets.dat", "w") as target_file:
+        with pytest.raises(ValueError, match="no download link"):
+            TessTargetFile(coord, magnitude=12, depth=10, file=target_file)
 
 
 class TestTOI:
