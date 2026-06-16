@@ -19,6 +19,9 @@ from astropy.wcs import WCS
 from astroquery.vizier import Vizier
 from astroquery.xmatch import XMatch
 
+# Imported under a private alias so the module-level name does not collide with
+# the PhotometryData.write_aavso_extended method that delegates to it, and so it
+# is not exposed as a public stellarphot.core attribute.
 from .io.aavso import write_aavso_extended as _write_aavso_extended
 from .settings import Camera, Observatory, PassbandMap
 from .table_representations import (
