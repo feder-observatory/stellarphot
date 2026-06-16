@@ -21,7 +21,6 @@ from stellarphot.settings import (
     SavedSettings,
     SourceLocationSettings,
     settings_files,
-    ui_generator,
 )
 from stellarphot.settings.constants import (
     TEST_CAMERA_VALUES,
@@ -38,6 +37,7 @@ from stellarphot.settings.custom_widgets import (
     Spinner,
     _add_saving_to_widget,
 )
+from stellarphot.settings.views import ui_generator
 
 # Make sure we only use copies of the test settings
 TEST_CAMERA_VALUES = deepcopy(TEST_CAMERA_VALUES)
