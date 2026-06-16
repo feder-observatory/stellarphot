@@ -93,10 +93,11 @@ flowchart LR
     uts --> corem
     uts --> sett
     plt --> sett
-    iop --> corem
+    iop -.->|"core (lazy, io.tess)"| corem
     iop --> sett
     iop -->|"get_tic_info"| tfit
 
+    corem -->|"io.aavso"| iop
     corem --> sett
     corem --> trep
     trep --> sett
@@ -121,10 +122,13 @@ Notes:
 - The notebooks also import `differential_photometry`, `transit_fitting`,
   `io`, `plotting`, `utils`, and the top-level `stellarphot` package directly;
   only the two main dashed edges are drawn to keep the diagram readable.
-- There is an intentional cycle at the package level:
-  `core.py → settings → io → core.py`. It is harmless because the individual
-  files involved do not form a cycle (`settings/custom_widgets.py` imports
-  `io/tess.py`, which imports `core.py`, which imports `settings/models.py`).
+- `core.py` and `io` reference each other, but the import order is one-way at
+  load time. `core.py` imports `io/aavso.py` (for `write_aavso_extended`) at the
+  top of the file, and `io/aavso.py` does **not** import `core.py`. The only
+  `io` module that imports `core.py` is `io/tess.py`, which is exposed lazily by
+  `io/__init__.py` (a module-level `__getattr__`), so it is loaded only on first
+  use — after `core.py` has finished importing. This replaces the previous
+  in-method lazy import that worked around a genuine `core ↔ io` cycle.
 
 ## Core + pipeline cluster (file level)
 
@@ -227,7 +231,15 @@ Key contents of each file:
 The widget layer is built from pydantic models (`models.py`), auto-generated
 UIs (`views.py`), and persistent storage (`settings_files.py`).
 
-*Arrows: **solid** = an import (importer → imported); **dashed** = a notebook driving a UI layer, or a looser link.*
+`stellarphot.settings` is **data-only at import time**: importing it (and hence
+`import stellarphot` and the core data layer) loads only the pydantic models and
+file handling, not the GUI stack. The widget layer (`views.py`,
+`custom_widgets.py`, `fits_opener.py`) pulls in `ipywidgets`/`ipyautoui` and is
+imported on demand — `ui_generator` is re-exported lazily from the package via a
+module-level `__getattr__`, so `from stellarphot.settings import ui_generator`
+keeps working without loading widgets eagerly.
+
+*Arrows: **solid** = an import (importer → imported); **dashed** = a notebook driving a UI layer, a lazy import, or a looser link.*
 
 ```mermaid
 flowchart LR
@@ -283,7 +295,7 @@ flowchart LR
 
     cw_py --> models_py
     cw_py --> sf_py
-    cw_py -->|"ui_generator"| views_py
+    cw_py -.->|"ui_generator (lazy)"| views_py
     cw_py --> fo_py
     cw_py -->|"tess_photometry_setup"| io_ext
     sf_py --> models_py
@@ -417,9 +429,9 @@ Key contents of each file:
 
 | Component | Major external dependencies |
 |---|---|
-| Core data layer | astropy (QTable, SkyCoord, Time, units), astroquery (Vizier, XMatch), pandas, lightkurve |
+| Core data layer | astropy (QTable, SkyCoord, Time, units), astroquery (Vizier, XMatch), pandas, lightkurve — no GUI stack at import time |
 | Photometry engine | photutils (apertures, DAOStarFinder, centroids, profiles), astropy, ccdproc |
-| Settings | pydantic, ipywidgets, ipyautoui, papermill |
+| Settings | pydantic (eager); ipywidgets, ipyautoui, papermill (lazy — widget layer `views`/`custom_widgets`/`fits_opener` only) |
 | Transit fitting | batman-package, astropy.modeling, scipy, astroquery (MAST) |
 | GUI tools | ipywidgets, astrowidgets, matplotlib |
 | Plotting | matplotlib |
