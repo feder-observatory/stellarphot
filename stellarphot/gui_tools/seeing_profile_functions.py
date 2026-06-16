@@ -21,10 +21,10 @@ from stellarphot.settings import (
     PhotometryApertures,
     PhotometryWorkingDirSettings,
     SavedSettings,
-    ui_generator,
 )
 from stellarphot.settings.custom_widgets import ChooseOrMakeNew
 from stellarphot.settings.fits_opener import FitsOpener
+from stellarphot.settings.views import ui_generator
 
 __all__ = [
     "set_keybindings",

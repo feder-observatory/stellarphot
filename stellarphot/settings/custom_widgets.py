@@ -22,9 +22,9 @@ from stellarphot.settings import (
     PhotometryRunSettings,
     PhotometryWorkingDirSettings,
     SavedSettings,
-    ui_generator,
 )
 from stellarphot.settings.fits_opener import FitsOpener
+from stellarphot.settings.views import ui_generator
 
 __all__ = ["ChooseOrMakeNew", "Confirm", "SettingWithTitle"]
 

@@ -21,10 +21,10 @@ from stellarphot.settings import (
     PartialPhotometrySettings,
     PhotometryWorkingDirSettings,
     SourceLocationSettings,
-    ui_generator,
 )
 from stellarphot.settings.custom_widgets import SettingWithTitle, Spinner
 from stellarphot.settings.fits_opener import FitsOpener
+from stellarphot.settings.views import ui_generator
 from stellarphot.utils.comparison_utils import (
     crossmatch_APASS2VSX,
     in_field,
