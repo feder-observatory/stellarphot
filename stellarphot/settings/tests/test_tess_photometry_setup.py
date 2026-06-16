@@ -6,7 +6,7 @@ from astropy.coordinates import SkyCoord
 from astropy.io import fits
 
 from stellarphot import SourceListData
-from stellarphot.io import TOI
+from stellarphot.io.tess import TOI
 from stellarphot.settings.custom_widgets import TessPhotometrySetup
 
 

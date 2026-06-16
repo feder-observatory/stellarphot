@@ -786,7 +786,7 @@ class PhotometryData(BaseEnhancedTable):
     def write_aavso_extended(self, path, **kwargs):
         """Write this photometry table in the AAVSO Extended File Format.
 
-        See `stellarphot.io.write_aavso_extended` for the full signature and
+        See `stellarphot.io.aavso.write_aavso_extended` for the full signature and
         behavior. All keyword arguments are forwarded to that function.
         """
         return _write_aavso_extended(self, path, **kwargs)

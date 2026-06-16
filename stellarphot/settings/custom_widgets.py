@@ -12,8 +12,7 @@ from ipyautoui.custom.iterable import ItemBox
 from pydantic import ValidationError
 from pydantic.alias_generators import to_snake
 
-from stellarphot.io import tess_photometry_setup
-from stellarphot.io.tess import TIC_regex
+from stellarphot.io.tess import TIC_regex, tess_photometry_setup
 from stellarphot.settings import (
     Camera,
     Observatory,

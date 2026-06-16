@@ -3,8 +3,7 @@ from astropy.coordinates import SkyCoord
 from astropy.table import Table
 from astropy.utils.data import get_pkg_data_filename
 
-from stellarphot.io import ApertureFileAIJ
-from stellarphot.io.aij import ApertureAIJ
+from stellarphot.io.aij import ApertureAIJ, ApertureFileAIJ
 
 
 def test_aperture_eq():

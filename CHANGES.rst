@@ -16,6 +16,12 @@ Other Changes and Additions
 + Now requires Python 3.10 or later. [#147]
 + Use pydantic for aperture settings. [#154]
 + Stomped bug in handling of ``NaN``s in ``single_image_photometry``. [#157]
++ The core data structures can now be imported without pulling in the
+  ``ipywidgets``/``ipyautoui`` GUI stack. As part of this, ``stellarphot.io`` no
+  longer re-exports the contents of its submodules: import directly from
+  ``stellarphot.io.aavso``, ``stellarphot.io.aij``, or ``stellarphot.io.tess``.
+  ``ui_generator`` is no longer importable from ``stellarphot.settings``; import
+  it from ``stellarphot.settings.views``. [#567]
 
 Bug Fixes
 ^^^^^^^^^
