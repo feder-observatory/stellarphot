@@ -661,6 +661,10 @@ class ComparisonViewer:
         # Assign the IDs
         comp_table["star_id"] = range(1, len(comp_table) + 1)
 
+        # Remove the helper columns that were only added to control the sort order
+        # so they do not end up in the aperture file (issue #34).
+        comp_table.remove_columns(["separation", "sort"])
+
         return comp_table
 
     def show_labels(self):

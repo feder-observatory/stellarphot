@@ -91,6 +91,11 @@ def test_comparison_properties(tmp_path, has_object, source_file_name):
     table = comparison_widget.generate_table()
     assert "APASS comparison" in table["marker name"]
 
+    # The "separation" and "sort" columns are only used to order the table and
+    # should not be present in the table returned by generate_table (issue #34).
+    assert "separation" not in table.colnames
+    assert "sort" not in table.colnames
+
     # Check that if we show labels then the label names we expect show up in
     # the astrowidgets marker table.
     comparison_widget.show_labels()
@@ -239,6 +244,11 @@ def test_loading_input_source_list(tmp_path, tic_id):
 
     comp_viewer_sources = SourceListData.read("source_locations.ecsv")
     input_sources = SourceListData.read(input_source_list)
+
+    # The "separation" and "sort" columns are only used to order the table and
+    # should not be written to the aperture file (issue #34).
+    assert "separation" not in comp_viewer_sources.colnames
+    assert "sort" not in comp_viewer_sources.colnames
 
     tess_targets = comp_viewer_sources["marker name"] == "TESS Targets"
 
