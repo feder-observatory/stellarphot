@@ -1,7 +1,6 @@
 from .aavso_submission import *
 from .models import *
 from .settings_files import *
-from .views import *
 
 # For conveniences, provide the JSON schema and an example of PhotometrySettings.
 photometry_settings_schema = PhotometrySettings.model_json_schema()  # noqa: F405

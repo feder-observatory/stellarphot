@@ -13,7 +13,7 @@ from astropy.time import Time
 from astropy.utils.data import download_file
 from pydantic import BaseModel, ConfigDict
 
-from stellarphot import SourceListData
+from stellarphot.core import SourceListData
 from stellarphot.settings.astropy_pydantic import (
     AstropyValidator,
     QuantityType,

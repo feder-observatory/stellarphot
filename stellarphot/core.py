@@ -19,6 +19,10 @@ from astropy.wcs import WCS
 from astroquery.vizier import Vizier
 from astroquery.xmatch import XMatch
 
+# Imported under a private alias so the module-level name does not collide with
+# the PhotometryData.write_aavso_extended method that delegates to it, and so it
+# is not exposed as a public stellarphot.core attribute.
+from .io.aavso import write_aavso_extended as _write_aavso_extended
 from .settings import Camera, Observatory, PassbandMap
 from .table_representations import (
     _generate_old_table_representers,
@@ -785,14 +789,10 @@ class PhotometryData(BaseEnhancedTable):
     def write_aavso_extended(self, path, **kwargs):
         """Write this photometry table in the AAVSO Extended File Format.
 
-        See `stellarphot.io.write_aavso_extended` for the full signature and
+        See `stellarphot.io.aavso.write_aavso_extended` for the full signature and
         behavior. All keyword arguments are forwarded to that function.
         """
-        # Lazy import to avoid a circular dependency: stellarphot.io imports
-        # from stellarphot.settings, which is loaded before core.
-        from .io.aavso import write_aavso_extended
-
-        return write_aavso_extended(self, path, **kwargs)
+        return _write_aavso_extended(self, path, **kwargs)
 
 
 class CatalogData(BaseEnhancedTable):

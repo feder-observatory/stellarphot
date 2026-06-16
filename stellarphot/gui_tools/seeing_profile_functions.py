@@ -12,7 +12,7 @@ except ImportError:
 
 import matplotlib.pyplot as plt
 
-from stellarphot.io import TessSubmission
+from stellarphot.io.tess import TessSubmission
 from stellarphot.photometry import CenterAndProfile
 from stellarphot.photometry.photometry import EXPOSURE_KEYWORDS
 from stellarphot.plotting import seeing_plot
@@ -21,10 +21,10 @@ from stellarphot.settings import (
     PhotometryApertures,
     PhotometryWorkingDirSettings,
     SavedSettings,
-    ui_generator,
 )
 from stellarphot.settings.custom_widgets import ChooseOrMakeNew
 from stellarphot.settings.fits_opener import FitsOpener
+from stellarphot.settings.views import ui_generator
 
 __all__ = [
     "set_keybindings",
