@@ -101,15 +101,15 @@ flowchart LR
     click nb_fit1 href "../stellarphot/notebooks/tess-initial-model-fit.ipynb" "tess-initial-model-fit.ipynb"
     click nb_fit2 href "../stellarphot/notebooks/tess-second-model-fit.ipynb" "tess-second-model-fit.ipynb"
     click nb_exotic href "../stellarphot/notebooks/tess-EXOTIC-fit.ipynb" "tess-EXOTIC-fit.ipynb"
-    click review1 href "../stellarphot/settings/custom_widgets.py" "custom_widgets.py"
-    click cas href "../stellarphot/gui_tools/profile_and_comps.py" "profile_and_comps.py"
-    click review3 href "../stellarphot/settings/custom_widgets.py" "custom_widgets.py"
-    click runner href "../stellarphot/settings/custom_widgets.py" "custom_widgets.py"
-    click tps href "../stellarphot/settings/custom_widgets.py" "custom_widgets.py"
+    click review1 href "../stellarphot/gui/custom_widgets.py" "custom_widgets.py"
+    click cas href "../stellarphot/gui/profile_and_comps.py" "profile_and_comps.py"
+    click review3 href "../stellarphot/gui/custom_widgets.py" "custom_widgets.py"
+    click runner href "../stellarphot/gui/custom_widgets.py" "custom_widgets.py"
+    click tps href "../stellarphot/gui/custom_widgets.py" "custom_widgets.py"
     click addflux href "../stellarphot/differential_photometry/aij_rel_fluxes.py" "aij_rel_fluxes.py"
     click calib href "../stellarphot/utils/magnitude_transforms.py" "magnitude_transforms.py"
     click fitstack href "../stellarphot/transit_fitting/core.py" "transit_fitting/core.py"
-    click exotic href "../stellarphot/transit_fitting/gui.py" "transit_fitting/gui.py"
+    click exotic href "../stellarphot/gui/transit_fitting_gui.py" "gui/transit_fitting_gui.py"
     click apphot href "../stellarphot/photometry/photometry.py" "photometry.py"
 ```
 
@@ -167,8 +167,8 @@ flowchart LR
         apphot["stellarphot.photometry<br/>AperturePhotometry"]:::api
         tmf["stellarphot.transit_fitting<br/>TransitModelFit"]:::api
         relflux["stellarphot.differential_photometry<br/>calc_aij_relative_flux()"]:::api
-        cview["stellarphot.gui_tools<br/>ComparisonViewer, SeeingProfileWidget"]:::widget
-        rsw["stellarphot.settings.custom_widgets<br/>ReviewSettings, PhotometryRunner"]:::widget
+        cview["stellarphot.gui<br/>ComparisonViewer, SeeingProfileWidget"]:::widget
+        rsw["stellarphot.gui.custom_widgets<br/>ReviewSettings, PhotometryRunner"]:::widget
         waavso["stellarphot.io<br/>write_aavso_extended(), TOI"]:::api
     end
 
@@ -187,8 +187,8 @@ flowchart LR
     click apphot href "../stellarphot/photometry/photometry.py" "photometry.py"
     click tmf href "../stellarphot/transit_fitting/core.py" "transit_fitting/core.py"
     click relflux href "../stellarphot/differential_photometry/aij_rel_fluxes.py" "aij_rel_fluxes.py"
-    click cview href "../stellarphot/gui_tools/" "gui_tools/"
-    click rsw href "../stellarphot/settings/custom_widgets.py" "custom_widgets.py"
+    click cview href "../stellarphot/gui/" "gui/"
+    click rsw href "../stellarphot/gui/custom_widgets.py" "custom_widgets.py"
     click waavso href "../stellarphot/io/" "io/"
 ```
 

@@ -87,15 +87,15 @@ flowchart LR
     srclist -.->|"reads"| w_apphot
     w_apphot -.->|"writes"| photecsv
 
-    click w_review1 href "../stellarphot/settings/custom_widgets.py" "custom_widgets.py"
-    click w_seeing href "../stellarphot/gui_tools/seeing_profile_functions.py" "seeing_profile_functions.py"
-    click w_comp href "../stellarphot/gui_tools/comparison_functions.py" "comparison_functions.py"
-    click w_review3 href "../stellarphot/settings/custom_widgets.py" "custom_widgets.py"
-    click w_runner href "../stellarphot/settings/custom_widgets.py" "custom_widgets.py"
+    click w_review1 href "../stellarphot/gui/custom_widgets.py" "custom_widgets.py"
+    click w_seeing href "../stellarphot/gui/seeing_profile_functions.py" "seeing_profile_functions.py"
+    click w_comp href "../stellarphot/gui/comparison_functions.py" "comparison_functions.py"
+    click w_review3 href "../stellarphot/gui/custom_widgets.py" "custom_widgets.py"
+    click w_runner href "../stellarphot/gui/custom_widgets.py" "custom_widgets.py"
     click w_apphot href "../stellarphot/photometry/photometry.py" "photometry.py"
 ```
 
-*Source: [seeing_profile_functions.py](../stellarphot/gui_tools/seeing_profile_functions.py), [comparison_functions.py](../stellarphot/gui_tools/comparison_functions.py), [custom_widgets.py](../stellarphot/settings/custom_widgets.py), [photometry.py](../stellarphot/photometry/photometry.py)*
+*Source: [seeing_profile_functions.py](../stellarphot/gui/seeing_profile_functions.py), [comparison_functions.py](../stellarphot/gui/comparison_functions.py), [custom_widgets.py](../stellarphot/gui/custom_widgets.py), [photometry.py](../stellarphot/photometry/photometry.py)*
 
 ## Flow 2 — Exoplanet transit analysis
 
@@ -157,15 +157,15 @@ flowchart LR
     aavso -.->|"writes"| aavsofile
 
     click w_flux href "../stellarphot/differential_photometry/aij_rel_fluxes.py" "aij_rel_fluxes.py"
-    click w_inputs1 href "../stellarphot/gui_tools/photometry_widget_functions.py" "photometry_widget_functions.py"
+    click w_inputs1 href "../stellarphot/gui/photometry_widget_functions.py" "photometry_widget_functions.py"
     click w_fit1 href "../stellarphot/transit_fitting/core.py" "transit_fitting/core.py"
     click w_plot1 href "../stellarphot/plotting/transit_plots.py" "transit_plots.py"
     click w_fit2 href "../stellarphot/transit_fitting/core.py" "transit_fitting/core.py"
-    click w_exotic href "../stellarphot/transit_fitting/gui.py" "transit_fitting/gui.py"
+    click w_exotic href "../stellarphot/gui/transit_fitting_gui.py" "gui/transit_fitting_gui.py"
     click aavso href "../stellarphot/core.py" "core.py"
 ```
 
-*Source: [aij_rel_fluxes.py](../stellarphot/differential_photometry/aij_rel_fluxes.py), [photometry_widget_functions.py](../stellarphot/gui_tools/photometry_widget_functions.py), [transit_fitting/core.py](../stellarphot/transit_fitting/core.py), [transit_plots.py](../stellarphot/plotting/transit_plots.py), [transit_fitting/gui.py](../stellarphot/transit_fitting/gui.py)*
+*Source: [aij_rel_fluxes.py](../stellarphot/differential_photometry/aij_rel_fluxes.py), [photometry_widget_functions.py](../stellarphot/gui/photometry_widget_functions.py), [transit_fitting/core.py](../stellarphot/transit_fitting/core.py), [transit_plots.py](../stellarphot/plotting/transit_plots.py), [gui/transit_fitting_gui.py](../stellarphot/gui/transit_fitting_gui.py)*
 
 ## Flow 3 — Supporting flows
 
@@ -199,11 +199,11 @@ flowchart LR
     f_setup -.->|"writes"| info
     f_setup -.->|"writes"| srclist
 
-    click w_tps href "../stellarphot/settings/custom_widgets.py" "custom_widgets.py"
+    click w_tps href "../stellarphot/gui/custom_widgets.py" "custom_widgets.py"
     click f_setup href "../stellarphot/io/tess.py" "io/tess.py"
 ```
 
-*Source: [custom_widgets.py](../stellarphot/settings/custom_widgets.py), [io/tess.py](../stellarphot/io/tess.py)*
+*Source: [custom_widgets.py](../stellarphot/gui/custom_widgets.py), [io/tess.py](../stellarphot/io/tess.py)*
 
 ### Calibrate magnitudes to a catalog (APASS DR9)
 

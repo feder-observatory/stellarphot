@@ -11,12 +11,12 @@ The modules group into these logical components:
 | Component | Modules | Role |
 |---|---|---|
 | **Core data layer** | `core.py`, `table_representations.py` | Validated astropy `QTable` subclasses (`PhotometryData`, `CatalogData`, `SourceListData`) and catalog fetchers; YAML (de)serialization of settings stored in table metadata |
-| **Settings & configuration** | `settings/` | Pydantic models for all configuration, saved-settings file management, widget generation |
+| **Settings & configuration** | `settings/` | Pydantic models for all configuration and saved-settings file management — pure Pydantic, no GUI imports |
 | **Photometry engine** | `photometry/` | Source detection, FWHM measurement, aperture photometry pipeline |
 | **Differential photometry** | `differential_photometry/` | Relative flux (AIJ-style) and variable-star magnitude calculations |
-| **Transit fitting** | `transit_fitting/` | Exoplanet transit modeling (batman), EXOTIC helper GUI, TIC queries |
+| **Transit fitting** | `transit_fitting/` | Exoplanet transit modeling (batman), TIC/MAST queries (the EXOTIC helper GUI moved to `gui/`) |
 | **Input/output** | `io/` | AstroImageJ, AAVSO extended format, TESS/TFOP files |
-| **GUI tools** | `gui_tools/` | Interactive notebook widgets (seeing profile, comparison-star selection) |
+| **GUI layer** | `gui/` | All notebook/widget UI, consolidated here so the rest of the package stays headless: the settings-form generator (`views.py`), settings widgets (`custom_widgets.py`), file chooser (`fits_opener.py`), seeing-profile/comparison-star widgets, and the EXOTIC helper. Requires the optional `[gui]` extra |
 | **Plotting** | `plotting/` | Seeing, transit, and multi-night light-curve plots |
 | **Utilities** | `utils/` | Magnitude calibration/transforms, comparison-star helpers, version migration |
 | **Notebooks** | `notebooks/` | Shipped workflow notebooks (the user-facing entry points) |
@@ -64,7 +64,7 @@ flowchart LR
     classDef output fill:#f3e5f5,stroke:#7b1fa2,color:#212121
 
     nb["notebooks/<br/>(10 launcher notebooks)"]:::ui
-    gui["gui_tools/"]:::ui
+    gui["gui/"]:::ui
     sett["settings/"]:::ui
     phot["photometry/"]:::engine
     diff["differential_photometry/"]:::engine
@@ -84,8 +84,7 @@ flowchart LR
     gui --> iop
     gui --> uts
     gui --> corem
-
-    sett -->|"custom_widgets uses io.tess"| iop
+    gui -->|"transit_fitting_gui uses get_tic_info"| tfit
 
     phot --> corem
     phot --> sett
@@ -103,7 +102,7 @@ flowchart LR
     trep --> sett
 
     click nb href "../stellarphot/notebooks/" "notebooks/"
-    click gui href "../stellarphot/gui_tools/" "gui_tools/"
+    click gui href "../stellarphot/gui/" "gui/"
     click sett href "../stellarphot/settings/" "settings/"
     click phot href "../stellarphot/photometry/" "photometry/"
     click diff href "../stellarphot/differential_photometry/" "differential_photometry/"
@@ -226,20 +225,22 @@ Key contents of each file:
   `mag_scale()`, `in_field()`, `read_file()`.
 - [`utils/version_migrator.py`](../stellarphot/utils/version_migrator.py) — `VersionMigrator` (stellarphot 1 → 2 data).
 
-## UI cluster (settings + gui_tools, file level)
+## UI cluster (gui + settings, file level)
 
-The widget layer is built from pydantic models (`models.py`), auto-generated
-UIs (`views.py`), and persistent storage (`settings_files.py`).
+The entire widget layer now lives in `stellarphot.gui`: the auto-generated
+settings forms (`views.py`, `ui_generator`), the settings widgets
+(`custom_widgets.py`), the file chooser (`fits_opener.py`), and the
+seeing-profile/comparison-star widgets. It is built on top of the pure-Pydantic
+`stellarphot.settings` package (`models.py`, `settings_files.py`).
 
-`stellarphot.settings` is **data-only at import time**: importing it (and hence
+`stellarphot.settings` is **data-only**: importing it (and hence
 `import stellarphot` and the core data layer) loads only the pydantic models and
-file handling, not the GUI stack. The widget layer (`views.py`,
-`custom_widgets.py`, `fits_opener.py`) pulls in `ipywidgets`/`ipyautoui` and is
-imported on demand — `ui_generator` is re-exported lazily from the package via a
-module-level `__getattr__`, so `from stellarphot.settings import ui_generator`
-keeps working without loading widgets eagerly.
+file handling, never the GUI stack. The GUI libraries
+(`ipywidgets`/`ipyautoui`/`astrowidgets`/`ginga`) are confined to
+`stellarphot.gui` and ship only with the optional `[gui]` extra, so a base
+install stays headless; importing `stellarphot.gui` is what pulls them in.
 
-*Arrows: **solid** = an import (importer → imported); **dashed** = a notebook driving a UI layer, a lazy import, or a looser link.*
+*Arrows: **solid** = an import (importer → imported); **dashed** = a notebook driving a UI layer, or a looser link.*
 
 ```mermaid
 flowchart LR
@@ -248,21 +249,21 @@ flowchart LR
 
     nb["notebooks/<br/>(launcher)"]:::nbstyle
 
-    subgraph sg_gui["stellarphot.gui_tools"]
+    subgraph sg_gui["stellarphot.gui (the [gui] extra)"]
         direction TB
         pac_py["profile_and_comps.py<br/>ComparisonAndSeeing"]
         comp_py["comparison_functions.py<br/>ComparisonViewer"]
         seeing_py["seeing_profile_functions.py<br/>SeeingProfileWidget"]
         photwidg_py["photometry_widget_functions.py<br/>TessAnalysisInputControls"]
-    end
-
-    subgraph sg_set["stellarphot.settings"]
-        direction TB
         cw_py["custom_widgets.py<br/>ReviewSettings, ChooseOrMakeNew,<br/>PhotometryRunner, TessPhotometrySetup"]
         views_py["views.py<br/>ui_generator"]
+        fo_py["fits_opener.py<br/>FitsOpener"]
+    end
+
+    subgraph sg_set["stellarphot.settings (pure Pydantic)"]
+        direction TB
         sf_py["settings_files.py<br/>SavedSettings,<br/>PhotometryWorkingDirSettings"]
         models_py["models.py<br/>PhotometrySettings, Camera,<br/>Observatory, ..."]
-        fo_py["fits_opener.py<br/>FitsOpener"]
         ap_py["astropy_pydantic.py"]
         aavsom_py["aavso_models.py"]
         aavsos_py["aavso_submission.py"]
@@ -295,7 +296,7 @@ flowchart LR
 
     cw_py --> models_py
     cw_py --> sf_py
-    cw_py -.->|"ui_generator (lazy)"| views_py
+    cw_py -->|"ui_generator"| views_py
     cw_py --> fo_py
     cw_py -->|"tess_photometry_setup"| io_ext
     sf_py --> models_py
@@ -305,15 +306,15 @@ flowchart LR
     aavsos_py --> models_py
 
     click nb href "../stellarphot/notebooks/" "notebooks/"
-    click pac_py href "../stellarphot/gui_tools/profile_and_comps.py" "profile_and_comps.py"
-    click comp_py href "../stellarphot/gui_tools/comparison_functions.py" "comparison_functions.py"
-    click seeing_py href "../stellarphot/gui_tools/seeing_profile_functions.py" "seeing_profile_functions.py"
-    click photwidg_py href "../stellarphot/gui_tools/photometry_widget_functions.py" "photometry_widget_functions.py"
-    click cw_py href "../stellarphot/settings/custom_widgets.py" "custom_widgets.py"
-    click views_py href "../stellarphot/settings/views.py" "views.py"
+    click pac_py href "../stellarphot/gui/profile_and_comps.py" "profile_and_comps.py"
+    click comp_py href "../stellarphot/gui/comparison_functions.py" "comparison_functions.py"
+    click seeing_py href "../stellarphot/gui/seeing_profile_functions.py" "seeing_profile_functions.py"
+    click photwidg_py href "../stellarphot/gui/photometry_widget_functions.py" "photometry_widget_functions.py"
+    click cw_py href "../stellarphot/gui/custom_widgets.py" "custom_widgets.py"
+    click views_py href "../stellarphot/gui/views.py" "views.py"
     click sf_py href "../stellarphot/settings/settings_files.py" "settings_files.py"
     click models_py href "../stellarphot/settings/models.py" "models.py"
-    click fo_py href "../stellarphot/settings/fits_opener.py" "fits_opener.py"
+    click fo_py href "../stellarphot/gui/fits_opener.py" "fits_opener.py"
     click ap_py href "../stellarphot/settings/astropy_pydantic.py" "astropy_pydantic.py"
     click aavsom_py href "../stellarphot/settings/aavso_models.py" "aavso_models.py"
     click aavsos_py href "../stellarphot/settings/aavso_submission.py" "aavso_submission.py"
@@ -332,20 +333,20 @@ Key contents of each file:
 - [`settings/settings_files.py`](../stellarphot/settings/settings_files.py) — `SavedSettings` (per-user storage of
   cameras/observatories/passband maps), `PhotometryWorkingDirSettings`
   (loads/saves `photometry_settings.json` in the working directory).
-- [`settings/views.py`](../stellarphot/settings/views.py) — `ui_generator()` (builds an `ipyautoui` widget from
+- [`gui/views.py`](../stellarphot/gui/views.py) — `ui_generator()` (builds an `ipyautoui` widget from
   any pydantic model).
-- [`settings/custom_widgets.py`](../stellarphot/settings/custom_widgets.py) — `ChooseOrMakeNew`, `Confirm`,
+- [`gui/custom_widgets.py`](../stellarphot/gui/custom_widgets.py) — `ChooseOrMakeNew`, `Confirm`,
   `SettingWithTitle`, `ReviewSettings`, `PhotometryRunner`,
   `TessPhotometrySetup`, `Spinner`.
-- [`settings/fits_opener.py`](../stellarphot/settings/fits_opener.py) — `FitsOpener` (file chooser + lazy
+- [`gui/fits_opener.py`](../stellarphot/gui/fits_opener.py) — `FitsOpener` (file chooser + lazy
   `CCDData`/header access).
-- [`gui_tools/seeing_profile_functions.py`](../stellarphot/gui_tools/seeing_profile_functions.py) — `SeeingProfileWidget`,
+- [`gui/seeing_profile_functions.py`](../stellarphot/gui/seeing_profile_functions.py) — `SeeingProfileWidget`,
   `set_keybindings()`.
-- [`gui_tools/comparison_functions.py`](../stellarphot/gui_tools/comparison_functions.py) — `ComparisonViewer`,
+- [`gui/comparison_functions.py`](../stellarphot/gui/comparison_functions.py) — `ComparisonViewer`,
   `make_markers()`.
-- [`gui_tools/photometry_widget_functions.py`](../stellarphot/gui_tools/photometry_widget_functions.py) — `TessAnalysisInputControls`,
+- [`gui/photometry_widget_functions.py`](../stellarphot/gui/photometry_widget_functions.py) — `TessAnalysisInputControls`,
   `filter_by_dates()`.
-- [`gui_tools/profile_and_comps.py`](../stellarphot/gui_tools/profile_and_comps.py) — `ComparisonAndSeeing` (combines the
+- [`gui/profile_and_comps.py`](../stellarphot/gui/profile_and_comps.py) — `ComparisonAndSeeing` (combines the
   seeing and comparison widgets).
 
 ## Output / IO cluster (file level)
@@ -366,10 +367,11 @@ flowchart LR
     subgraph sg_tf["stellarphot.transit_fitting"]
         direction TB
         tf_core["core.py<br/>TransitModelFit"]
-        tf_gui["gui.py<br/>exotic_settings_widget"]
         tf_io["io.py<br/>get_tic_info"]
         tf_plot["plotting.py<br/>plot_predict_ingress_egress"]
     end
+
+    tf_gui["gui/transit_fitting_gui.py<br/>exotic_settings_widget<br/>(stellarphot.gui)"]:::external
 
     subgraph sg_plot["stellarphot.plotting"]
         direction TB
@@ -396,7 +398,7 @@ flowchart LR
     click aavso_py href "../stellarphot/io/aavso.py" "io/aavso.py"
     click tess_py href "../stellarphot/io/tess.py" "io/tess.py"
     click tf_core href "../stellarphot/transit_fitting/core.py" "transit_fitting/core.py"
-    click tf_gui href "../stellarphot/transit_fitting/gui.py" "transit_fitting/gui.py"
+    click tf_gui href "../stellarphot/gui/transit_fitting_gui.py" "gui/transit_fitting_gui.py"
     click tf_io href "../stellarphot/transit_fitting/io.py" "transit_fitting/io.py"
     click tf_plot href "../stellarphot/transit_fitting/plotting.py" "transit_fitting/plotting.py"
     click aijplots_py href "../stellarphot/plotting/aij_plots.py" "plotting/aij_plots.py"
@@ -416,7 +418,7 @@ Key contents of each file:
   `tess_photometry_setup()`.
 - [`transit_fitting/core.py`](../stellarphot/transit_fitting/core.py) — `TransitModelFit`, `TransitModelOptions`,
   `VariableArgsFitter`.
-- [`transit_fitting/gui.py`](../stellarphot/transit_fitting/gui.py) — EXOTIC settings widget and TIC/TOI
+- [`gui/transit_fitting_gui.py`](../stellarphot/gui/transit_fitting_gui.py) — EXOTIC settings widget and TIC/TOI
   population helpers.
 - [`transit_fitting/io.py`](../stellarphot/transit_fitting/io.py) — `get_tic_info()` (MAST catalog query).
 - [`transit_fitting/plotting.py`](../stellarphot/transit_fitting/plotting.py) — `plot_predict_ingress_egress()`.
@@ -431,7 +433,7 @@ Key contents of each file:
 |---|---|
 | Core data layer | astropy (QTable, SkyCoord, Time, units), astroquery (Vizier, XMatch), pandas, lightkurve — no GUI stack at import time |
 | Photometry engine | photutils (apertures, DAOStarFinder, centroids, profiles), astropy, ccdproc |
-| Settings | pydantic (eager); ipywidgets, ipyautoui, papermill (lazy — widget layer `views`/`custom_widgets`/`fits_opener` only) |
+| Settings | pydantic only — no GUI dependencies (the widget layer moved to `stellarphot.gui`) |
 | Transit fitting | batman-package, astropy.modeling, scipy, astroquery (MAST) |
-| GUI tools | ipywidgets, astrowidgets, matplotlib |
+| GUI layer | the optional `[gui]` extra: ipywidgets, ipyautoui, ipyfilechooser, astrowidgets, ginga, jupyter-app-launcher, papermill (plus matplotlib from the base install) — not installed by a base `pip install stellarphot` |
 | Plotting | matplotlib |
