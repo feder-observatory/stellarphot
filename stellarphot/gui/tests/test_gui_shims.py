@@ -2,13 +2,14 @@
 """
 The widget code moved from ``stellarphot.gui_tools`` / ``stellarphot.settings`` /
 ``stellarphot.transit_fitting.gui`` into ``stellarphot.gui``. The old import paths
-still work via compatibility shims that emit a ``DeprecationWarning``. These tests
-check that the shims forward attributes and warn.
+still work via compatibility shims that emit an ``AstropyDeprecationWarning``. These
+tests check that the shims forward attributes and warn.
 """
 
 import importlib
 
 import pytest
+from astropy.utils.exceptions import AstropyDeprecationWarning
 
 # (old module path, attribute that should resolve through the shim)
 SHIMS = [
@@ -27,7 +28,7 @@ SHIMS = [
 @pytest.mark.parametrize("module_path, attribute", SHIMS)
 def test_old_import_path_warns_and_forwards(module_path, attribute):
     pytest.importorskip("ipywidgets")
-    with pytest.warns(DeprecationWarning, match="has moved to stellarphot.gui"):
+    with pytest.warns(AstropyDeprecationWarning, match="has moved to stellarphot.gui"):
         module = importlib.import_module(module_path)
         # Force a fresh import so the warning fires even if cached.
         module = importlib.reload(module)

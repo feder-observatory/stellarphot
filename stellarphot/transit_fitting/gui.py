@@ -3,13 +3,16 @@
 # Backwards-compatibility shim: moved to ``stellarphot.gui.transit_fitting_gui``.
 import warnings
 
+from astropy.utils.exceptions import AstropyDeprecationWarning
+
 from stellarphot.gui import transit_fitting_gui as _moved
 
 warnings.warn(
     "stellarphot.transit_fitting.gui has moved to "
-    "stellarphot.gui.transit_fitting_gui; update your imports. This "
-    "compatibility shim will be removed in a future release.",
-    DeprecationWarning,
+    "stellarphot.gui.transit_fitting_gui; update your imports. Deprecated since "
+    "stellarphot 2.1.0; this compatibility shim will be removed in stellarphot "
+    "3.0.0.",
+    AstropyDeprecationWarning,
     stacklevel=2,
 )
 

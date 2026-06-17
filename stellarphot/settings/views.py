@@ -4,12 +4,15 @@
 # ``stellarphot.settings`` stays pure Pydantic (no GUI imports).
 import warnings
 
+from astropy.utils.exceptions import AstropyDeprecationWarning
+
 from stellarphot.gui import views as _moved
 
 warnings.warn(
     "stellarphot.settings.views has moved to stellarphot.gui.views; update your "
-    "imports. This compatibility shim will be removed in a future release.",
-    DeprecationWarning,
+    "imports. Deprecated since stellarphot 2.1.0; this compatibility shim will be "
+    "removed in stellarphot 3.0.0.",
+    AstropyDeprecationWarning,
     stacklevel=2,
 )
 
