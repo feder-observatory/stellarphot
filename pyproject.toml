@@ -12,21 +12,17 @@ requires-python = ">=3.11"
 authors = [
     { name = "Matt Craig", email = "mattwcraig@gmail.com" },
 ]
+# Base install is headless/scriptable: the science + data layer only. The
+# Jupyter/ipywidgets GUI stack is an optional `[gui]` extra (see below), so
+# `pip install stellarphot` can be used in a plain script without pulling in
+# ipywidgets/ipyautoui/astrowidgets/ginga.
 dependencies = [
     "astropy >=5",
     "astroquery",
-    "astrowidgets <0.4.0",  # The astrowidgets API changed significantly in 0.4,
-                             # and stellarphot is not yet compatible with it.
     "bottleneck",
     "ccdproc",
-    "ginga",
-    "ipyautoui >=0.7.19",
-    "ipyfilechooser",
-    "ipywidgets",
-    "jupyter-app-launcher >=0.3.0",
     "lightkurve",
     "matplotlib",
-    "papermill",
     "pandas",
     "photutils >=2,<3",
     "pydantic >=2",
@@ -37,7 +33,33 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# The Jupyter notebook / widget stack. All of stellarphot's GUIs run in
+# notebooks, so a single `gui` extra covers the whole interactive experience.
+gui = [
+    "astrowidgets <0.4.0",  # The astrowidgets API changed significantly in 0.4,
+                             # and stellarphot is not yet compatible with it.
+    "ginga",
+    "ipyautoui >=0.7.19",
+    "ipyfilechooser",
+    "ipywidgets",
+    "jupyter-app-launcher >=0.3.0",
+    "papermill",
+]
+exoplanet = [
+    "batman-package",
+]
+# Deprecated alias for `exoplanet`, kept for backwards compatibility. Will be
+# removed in a future release; use `stellarphot[exoplanet]` instead.
+exo_fitting = [
+    "stellarphot[exoplanet]",
+]
+# Everything a user needs for the full interactive experience.
+all = [
+    "stellarphot[gui]",
+    "stellarphot[exoplanet]",
+]
 docs = [
+    "stellarphot[gui]",  # API docs autodoc the GUI modules
     "sphinx",
     "sphinx-astropy[confv2]",
     "sphinx-design",
@@ -45,10 +67,8 @@ docs = [
     "myst-parser",
     "sphinxcontrib-mermaid",
 ]
-exo_fitting = [
-    "batman-package",
-]
 test = [
+    "stellarphot[gui]",  # the test suite exercises the GUI widgets
     "black",
     "pre-commit",
     "pytest-astropy",
