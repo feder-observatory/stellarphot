@@ -1,7 +1,10 @@
 from ipyautoui import AutoUi
 from ipywidgets import Layout
 
-from .models import SourceLocationSettings, _extract_short_description
+from stellarphot.settings.models import (
+    SourceLocationSettings,
+    _extract_short_description,
+)
 
 __all__ = ["ui_generator"]
 

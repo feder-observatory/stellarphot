@@ -4,7 +4,7 @@ import ipywidgets as ipw
 from ipyautoui.custom import FileChooser
 
 from stellarphot import PhotometryData
-from stellarphot.settings.custom_widgets import Spinner
+from stellarphot.gui.custom_widgets import Spinner
 
 __all__ = ["TessAnalysisInputControls"]
 

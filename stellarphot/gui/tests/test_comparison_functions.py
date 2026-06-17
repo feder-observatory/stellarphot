@@ -16,7 +16,7 @@ from astropy.wcs import WCS
 from astropy.wcs.wcs import FITSFixedWarning
 
 from stellarphot import SourceListData
-from stellarphot.gui_tools import comparison_functions as cf
+from stellarphot.gui import comparison_functions as cf
 from stellarphot.settings import PhotometryWorkingDirSettings
 
 CCD_SHAPE = [2048, 3073]

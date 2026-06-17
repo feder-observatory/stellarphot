@@ -28,12 +28,16 @@ to_fill = {}
 
 for template in template_types:
     template_name = get_pkg_data_filename(
-        "data/tic-template-for-exotic-" f"{template}.json"
+        "data/tic-template-for-exotic-" f"{template}.json",
+        package="stellarphot.transit_fitting",
     )
     with open(template_name) as f:
         template_json[template] = json.load(f)
 
-    template_name = get_pkg_data_filename(f"data/exotic-to-mod-{template}.json")
+    template_name = get_pkg_data_filename(
+        f"data/exotic-to-mod-{template}.json",
+        package="stellarphot.transit_fitting",
+    )
     with open(Path(template_name)) as f:
         to_fill[template] = json.load(f)
 
@@ -95,7 +99,7 @@ def make_checker(indicator_widget, value_widget):
     Parameters
     ----------
 
-    indicator_widget : `~stellarphot.transit_fitting.gui.MyValid` widget
+    indicator_widget : `~stellarphot.gui.transit_fitting_gui.MyValid` widget
         The widget that indicates to the user whether or not the value is
         reasonable.
 
@@ -142,7 +146,7 @@ def validate_exposure_time(
 
     Parameters
     ----------
-    indicator_widget : `~stellarphot.transit_fitting.gui.MyValid` widget
+    indicator_widget : `~stellarphot.gui.transit_fitting_gui.MyValid` widget
         The widget that indicates to the user whether or not the value is
         reasonable.
 

@@ -12,6 +12,8 @@ from ipyautoui.custom.iterable import ItemBox
 from pydantic import ValidationError
 from pydantic.alias_generators import to_snake
 
+from stellarphot.gui.fits_opener import FitsOpener
+from stellarphot.gui.views import ui_generator
 from stellarphot.io.tess import TIC_regex, tess_photometry_setup
 from stellarphot.settings import (
     Camera,
@@ -22,8 +24,6 @@ from stellarphot.settings import (
     PhotometryWorkingDirSettings,
     SavedSettings,
 )
-from stellarphot.settings.fits_opener import FitsOpener
-from stellarphot.settings.views import ui_generator
 
 __all__ = ["ChooseOrMakeNew", "Confirm", "SettingWithTitle"]
 

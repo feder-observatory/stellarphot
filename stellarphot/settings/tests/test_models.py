@@ -12,6 +12,7 @@ from astropy.utils.data import get_pkg_data_path
 from pydantic import ValidationError
 
 from stellarphot import BaseEnhancedTable
+from stellarphot.gui.views import ui_generator
 from stellarphot.settings.constants import (
     TEST_APERTURE_SETTINGS,
     TEST_CAMERA_VALUES,
@@ -37,7 +38,6 @@ from stellarphot.settings.models import (
     PhotometrySettings,
     SourceLocationSettings,
 )
-from stellarphot.settings.views import ui_generator
 
 # NOTE: ALWAYS USE DEEPCOPY ON THESE DICTS SO TESTS DO NOT MODIFY THEM
 TEST_CAMERA_VALUES = deepcopy(TEST_CAMERA_VALUES)

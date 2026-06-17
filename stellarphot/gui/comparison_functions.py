@@ -16,15 +16,15 @@ except ImportError:
     from astrowidgets.ginga import ImageWidget
 
 from stellarphot import SourceListData
-from stellarphot.gui_tools.seeing_profile_functions import set_keybindings
+from stellarphot.gui.custom_widgets import SettingWithTitle, Spinner
+from stellarphot.gui.fits_opener import FitsOpener
+from stellarphot.gui.seeing_profile_functions import set_keybindings
+from stellarphot.gui.views import ui_generator
 from stellarphot.settings import (
     PartialPhotometrySettings,
     PhotometryWorkingDirSettings,
     SourceLocationSettings,
 )
-from stellarphot.settings.custom_widgets import SettingWithTitle, Spinner
-from stellarphot.settings.fits_opener import FitsOpener
-from stellarphot.settings.views import ui_generator
 from stellarphot.utils.comparison_utils import (
     crossmatch_APASS2VSX,
     in_field,
