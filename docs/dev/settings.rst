@@ -14,7 +14,7 @@ new code for that.
 
 For example, the `stellarphot.settings.ApertureSettings` class defines the settings
 related to the aperture photometry. It is used in
-`stellarphot.gui_tools.SeeingProfileWidget`. The relevant lines are:
+`stellarphot.gui.SeeingProfileWidget`. The relevant lines are:
 
 .. code-block:: python
 

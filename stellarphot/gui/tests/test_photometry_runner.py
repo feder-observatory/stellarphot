@@ -6,13 +6,13 @@ import ipywidgets as ipw
 import pytest
 from astropy.io import fits
 
+from stellarphot.gui.custom_widgets import PhotometryRunner
 from stellarphot.settings import (
     PhotometrySettings,
     PhotometryWorkingDirSettings,
     settings_files,
 )
 from stellarphot.settings.constants import TEST_PHOTOMETRY_SETTINGS
-from stellarphot.settings.custom_widgets import PhotometryRunner
 
 TEST_PHOTOMETRY_SETTINGS = deepcopy(TEST_PHOTOMETRY_SETTINGS)
 

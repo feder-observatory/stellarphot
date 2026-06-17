@@ -10,13 +10,13 @@ All of the classes and functions defined in `stellarphot` are listed below, grou
 .. automodapi:: stellarphot.table_representations
 .. automodapi:: stellarphot.photometry.profiles
 .. automodapi:: stellarphot.differential_photometry
-.. automodapi:: stellarphot.gui_tools
+.. automodapi:: stellarphot.gui
 .. automodapi:: stellarphot.io
 .. automodapi:: stellarphot.photometry.photometry
 .. automodapi:: stellarphot.photometry.source_detection
 .. automodapi:: stellarphot.plotting
 .. automodapi:: stellarphot.transit_fitting
-.. automodapi:: stellarphot.transit_fitting.gui
+.. automodapi:: stellarphot.gui.transit_fitting_gui
 .. automodapi:: stellarphot.transit_fitting.io
 .. automodapi:: stellarphot.transit_fitting.plotting
 .. automodapi:: stellarphot.utils

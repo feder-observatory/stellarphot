@@ -184,6 +184,9 @@ log_cli_level = "info"
 xfail_strict = true
 filterwarnings = [
     "error",
+    # Back-compat shims for GUI code that moved to stellarphot.gui emit this on
+    # import; it is intentional and covered by gui/tests/test_gui_shims.py.
+    'ignore:.*has moved to stellarphot\.gui.*:astropy.utils.exceptions.AstropyDeprecationWarning',
     # Apparently bqplot is using deprecated traitlets APIs
     'ignore:\s+Sentinel is not a public part of the traitlets API:DeprecationWarning',
     # ginga is using something from asdf that has been deprecated

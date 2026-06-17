@@ -1,4 +1,4 @@
-from stellarphot.transit_fitting.gui import (
+from stellarphot.gui.transit_fitting_gui import (
     exotic_settings_widget,
     get_values_from_widget,
 )

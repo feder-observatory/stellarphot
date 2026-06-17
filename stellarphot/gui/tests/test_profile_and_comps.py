@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from astropy.utils.data import get_pkg_data_filename
 
-from stellarphot.gui_tools import ComparisonAndSeeing
+from stellarphot.gui import ComparisonAndSeeing
 
 
 class TestComparisonAndSeeing:

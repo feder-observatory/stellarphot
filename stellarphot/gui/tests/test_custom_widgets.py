@@ -9,6 +9,16 @@ from ipyautoui.custom.iterable import ItemBox, ItemControl
 from pydantic import ValidationError
 from pydantic.alias_generators import to_snake
 
+from stellarphot.gui.custom_widgets import (
+    ChooseOrMakeNew,
+    Confirm,
+    ReviewSettings,
+    SaveStatus,
+    SettingWithTitle,
+    Spinner,
+    _add_saving_to_widget,
+)
+from stellarphot.gui.views import ui_generator
 from stellarphot.settings import (
     Camera,
     LoggingSettings,
@@ -28,16 +38,6 @@ from stellarphot.settings.constants import (
     TEST_PASSBAND_MAP,
     TEST_PHOTOMETRY_SETTINGS,
 )
-from stellarphot.settings.custom_widgets import (
-    ChooseOrMakeNew,
-    Confirm,
-    ReviewSettings,
-    SaveStatus,
-    SettingWithTitle,
-    Spinner,
-    _add_saving_to_widget,
-)
-from stellarphot.settings.views import ui_generator
 
 # Make sure we only use copies of the test settings
 TEST_CAMERA_VALUES = deepcopy(TEST_CAMERA_VALUES)

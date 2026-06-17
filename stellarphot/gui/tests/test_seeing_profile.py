@@ -10,10 +10,10 @@ from astropy.nddata import CCDData
 from astrowidgets import ImageWidget
 from photutils.datasets import make_noise_image
 
-from stellarphot.gui_tools import (
+from stellarphot.gui import (
     seeing_profile_functions as spf,
 )
-from stellarphot.gui_tools.seeing_profile_functions import (
+from stellarphot.gui.seeing_profile_functions import (
     AP_SETTING_NEEDS_SAVE,
     AP_SETTING_SAVED,
 )

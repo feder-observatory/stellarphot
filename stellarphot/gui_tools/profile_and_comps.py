@@ -1,43 +1,25 @@
-import ipywidgets as ipw
+# Licensed under a 3-clause BSD style license - see LICENSE.rst
 
-from stellarphot.gui_tools.comparison_functions import ComparisonViewer
-from stellarphot.gui_tools.seeing_profile_functions import SeeingProfileWidget
+# Backwards-compatibility shim: moved to ``stellarphot.gui.profile_and_comps``.
+import warnings
 
-__all__ = ["ComparisonAndSeeing"]
+from astropy.utils.exceptions import AstropyDeprecationWarning
+
+from stellarphot.gui import profile_and_comps as _moved
+
+warnings.warn(
+    "stellarphot.gui_tools.profile_and_comps has moved to "
+    "stellarphot.gui.profile_and_comps; update your imports. Deprecated since "
+    "stellarphot 2.1.0; this compatibility shim will be removed in stellarphot "
+    "3.0.0.",
+    AstropyDeprecationWarning,
+    stacklevel=2,
+)
 
 
-class ComparisonAndSeeing(ipw.VBox):
-    """
-    Combined viewer for seeing profile and comparison stars.
-    """
+def __getattr__(name):
+    return getattr(_moved, name)
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.seeing = SeeingProfileWidget()
-        self.comparison = ComparisonViewer()
-        self.tabs = ipw.Tab(
-            children=[self.seeing.box, self.comparison.box],
-            titles=["Seeing Profile", "Comparison Stars"],
-        )
-        self.children = [self.tabs]
-        self.comparison.fits_file.file_chooser.observe(
-            self._make_observer(
-                self.comparison.fits_file.file_chooser,
-                self.seeing.fits_file.file_chooser,
-            ),
-            "_value",
-        )
-        self.seeing.fits_file.file_chooser.observe(
-            self._make_observer(
-                self.seeing.fits_file.file_chooser,
-                self.comparison.fits_file.file_chooser,
-            ),
-            "_value",
-        )
 
-    @staticmethod
-    def _make_observer(source, target):
-        def observer(_):
-            target.value = source._value
-
-        return observer
+def __dir__():
+    return dir(_moved)
