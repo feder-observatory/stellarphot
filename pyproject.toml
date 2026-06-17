@@ -219,7 +219,10 @@ filterwarnings = [
     # Apparently some change in pytest or coverage or pytest-cov exposes warnings
     # that were previously ignored.
     'ignore:.*:coverage.exceptions.CoverageWarning',
-    # We are currently stuck on an old version of astrowidgets, which uses
-    # the deprecated astropy test runner, so suppress that warning for now.
-    'ignore:The TestRunner.* class will be deprecated in a future version:astropy.utils.exceptions.AstropyPendingDeprecationWarning'
+    # We are currently stuck on an old version of astrowidgets, which imports
+    # astropy's deprecated TestRunner on import. astropy has changed both the
+    # wording and the category of this warning over time (AstropyPendingDeprecation
+    # -> AstropyDeprecation), so match any "TestRunner ... deprecated" message
+    # regardless of category.
+    'ignore:The TestRunner.*deprecated:'
 ]
