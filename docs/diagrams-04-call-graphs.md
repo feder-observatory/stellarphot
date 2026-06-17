@@ -314,7 +314,7 @@ flowchart LR
     click tabrep href "../stellarphot/table_representations.py" "table_representations.py"
 ```
 
-## [settings/custom_widgets.py](../stellarphot/settings/custom_widgets.py) — widget layer
+## [gui/custom_widgets.py](../stellarphot/gui/custom_widgets.py) — widget layer
 
 *Arrows: **solid** = a direct call or instantiation; **dashed** = file or network I/O, or an optional path.*
 
@@ -359,24 +359,24 @@ flowchart LR
     tps --> spinner
     tps -->|"watch_confirmation()"| tpsetup
 
-    click review href "../stellarphot/settings/custom_widgets.py" "custom_widgets.py"
-    click swt href "../stellarphot/settings/custom_widgets.py" "custom_widgets.py"
-    click cmn href "../stellarphot/settings/custom_widgets.py" "custom_widgets.py"
-    click confirm href "../stellarphot/settings/custom_widgets.py" "custom_widgets.py"
-    click addsave href "../stellarphot/settings/custom_widgets.py" "custom_widgets.py"
-    click runner href "../stellarphot/settings/custom_widgets.py" "custom_widgets.py"
-    click tps href "../stellarphot/settings/custom_widgets.py" "custom_widgets.py"
-    click spinner href "../stellarphot/settings/custom_widgets.py" "custom_widgets.py"
+    click review href "../stellarphot/gui/custom_widgets.py" "custom_widgets.py"
+    click swt href "../stellarphot/gui/custom_widgets.py" "custom_widgets.py"
+    click cmn href "../stellarphot/gui/custom_widgets.py" "custom_widgets.py"
+    click confirm href "../stellarphot/gui/custom_widgets.py" "custom_widgets.py"
+    click addsave href "../stellarphot/gui/custom_widgets.py" "custom_widgets.py"
+    click runner href "../stellarphot/gui/custom_widgets.py" "custom_widgets.py"
+    click tps href "../stellarphot/gui/custom_widgets.py" "custom_widgets.py"
+    click spinner href "../stellarphot/gui/custom_widgets.py" "custom_widgets.py"
     click saved href "../stellarphot/settings/settings_files.py" "settings_files.py"
     click pwds href "../stellarphot/settings/settings_files.py" "settings_files.py"
-    click uigen href "../stellarphot/settings/views.py" "views.py"
-    click fo href "../stellarphot/settings/fits_opener.py" "fits_opener.py"
+    click uigen href "../stellarphot/gui/views.py" "views.py"
+    click fo href "../stellarphot/gui/fits_opener.py" "fits_opener.py"
     click tpsetup href "../stellarphot/io/tess.py" "io/tess.py"
     click runsettings href "../stellarphot/settings/models.py" "models.py"
     click papermill href "../stellarphot/notebooks/photometry_runner.ipynb" "photometry_runner.ipynb"
 ```
 
-## [settings/settings_files.py](../stellarphot/settings/settings_files.py) + [settings/fits_opener.py](../stellarphot/settings/fits_opener.py)
+## [settings/settings_files.py](../stellarphot/settings/settings_files.py) + [gui/fits_opener.py](../stellarphot/gui/fits_opener.py)
 
 *Arrows: **solid** = a direct call or instantiation; **dashed** = file or network I/O, or an optional path.*
 
@@ -449,9 +449,9 @@ flowchart LR
     click pwds_load href "../stellarphot/settings/settings_files.py" "settings_files.py"
     click pwds_partial href "../stellarphot/settings/settings_files.py" "settings_files.py"
     click pwds_conflict href "../stellarphot/settings/settings_files.py" "settings_files.py"
-    click fo href "../stellarphot/settings/fits_opener.py" "fits_opener.py"
-    click fo_ccd href "../stellarphot/settings/fits_opener.py" "fits_opener.py"
-    click fo_load href "../stellarphot/settings/fits_opener.py" "fits_opener.py"
+    click fo href "../stellarphot/gui/fits_opener.py" "fits_opener.py"
+    click fo_ccd href "../stellarphot/gui/fits_opener.py" "fits_opener.py"
+    click fo_load href "../stellarphot/gui/fits_opener.py" "fits_opener.py"
     click models href "../stellarphot/settings/models.py" "models.py"
 ```
 
@@ -638,7 +638,7 @@ flowchart LR
         opts["TransitModelOptions"]:::cls
     end
 
-    subgraph sg_gui["gui.py"]
+    subgraph sg_gui["gui/transit_fitting_gui.py<br/>(stellarphot.gui)"]
         direction TB
         exotic["exotic_settings_widget()"]:::fn
         pop_tic["populate_TIC_boxes()"]:::fn
@@ -678,18 +678,18 @@ flowchart LR
     click tmf_bic href "../stellarphot/transit_fitting/core.py" "transit_fitting/core.py"
     click fitter href "../stellarphot/transit_fitting/core.py" "transit_fitting/core.py"
     click opts href "../stellarphot/transit_fitting/core.py" "transit_fitting/core.py"
-    click exotic href "../stellarphot/transit_fitting/gui.py" "transit_fitting/gui.py"
-    click pop_tic href "../stellarphot/transit_fitting/gui.py" "transit_fitting/gui.py"
-    click pop_toi href "../stellarphot/transit_fitting/gui.py" "transit_fitting/gui.py"
-    click checker href "../stellarphot/transit_fitting/gui.py" "transit_fitting/gui.py"
-    click getvals href "../stellarphot/transit_fitting/gui.py" "transit_fitting/gui.py"
-    click genjson href "../stellarphot/transit_fitting/gui.py" "transit_fitting/gui.py"
-    click setjson href "../stellarphot/transit_fitting/gui.py" "transit_fitting/gui.py"
+    click exotic href "../stellarphot/gui/transit_fitting_gui.py" "gui/transit_fitting_gui.py"
+    click pop_tic href "../stellarphot/gui/transit_fitting_gui.py" "gui/transit_fitting_gui.py"
+    click pop_toi href "../stellarphot/gui/transit_fitting_gui.py" "gui/transit_fitting_gui.py"
+    click checker href "../stellarphot/gui/transit_fitting_gui.py" "gui/transit_fitting_gui.py"
+    click getvals href "../stellarphot/gui/transit_fitting_gui.py" "gui/transit_fitting_gui.py"
+    click genjson href "../stellarphot/gui/transit_fitting_gui.py" "gui/transit_fitting_gui.py"
+    click setjson href "../stellarphot/gui/transit_fitting_gui.py" "gui/transit_fitting_gui.py"
     click gettic href "../stellarphot/transit_fitting/io.py" "transit_fitting/io.py"
     click ingress href "../stellarphot/transit_fitting/plotting.py" "transit_fitting/plotting.py"
 ```
 
-## [gui_tools/comparison_functions.py](../stellarphot/gui_tools/comparison_functions.py)
+## [gui/comparison_functions.py](../stellarphot/gui/comparison_functions.py)
 
 *Arrows: **solid** = a direct call or instantiation; **dashed** = file or network I/O, or an optional path.*
 
@@ -732,24 +732,24 @@ flowchart LR
     cv_saveap --> cv_table
     cv_tess --> markers
 
-    click cv_init href "../stellarphot/gui_tools/comparison_functions.py" "comparison_functions.py"
-    click cv_setup href "../stellarphot/gui_tools/comparison_functions.py" "comparison_functions.py"
-    click cv_viewer href "../stellarphot/gui_tools/comparison_functions.py" "comparison_functions.py"
-    click cv_table href "../stellarphot/gui_tools/comparison_functions.py" "comparison_functions.py"
-    click cv_saveloc href "../stellarphot/gui_tools/comparison_functions.py" "comparison_functions.py"
-    click cv_saveap href "../stellarphot/gui_tools/comparison_functions.py" "comparison_functions.py"
-    click cv_tess href "../stellarphot/gui_tools/comparison_functions.py" "comparison_functions.py"
-    click markers href "../stellarphot/gui_tools/comparison_functions.py" "comparison_functions.py"
-    click wrapfn href "../stellarphot/gui_tools/comparison_functions.py" "comparison_functions.py"
-    click fo href "../stellarphot/settings/fits_opener.py" "fits_opener.py"
+    click cv_init href "../stellarphot/gui/comparison_functions.py" "comparison_functions.py"
+    click cv_setup href "../stellarphot/gui/comparison_functions.py" "comparison_functions.py"
+    click cv_viewer href "../stellarphot/gui/comparison_functions.py" "comparison_functions.py"
+    click cv_table href "../stellarphot/gui/comparison_functions.py" "comparison_functions.py"
+    click cv_saveloc href "../stellarphot/gui/comparison_functions.py" "comparison_functions.py"
+    click cv_saveap href "../stellarphot/gui/comparison_functions.py" "comparison_functions.py"
+    click cv_tess href "../stellarphot/gui/comparison_functions.py" "comparison_functions.py"
+    click markers href "../stellarphot/gui/comparison_functions.py" "comparison_functions.py"
+    click wrapfn href "../stellarphot/gui/comparison_functions.py" "comparison_functions.py"
+    click fo href "../stellarphot/gui/fits_opener.py" "fits_opener.py"
     click setup_ext href "../stellarphot/utils/comparison_utils.py" "comparison_utils.py"
     click xmatch_ext href "../stellarphot/utils/comparison_utils.py" "comparison_utils.py"
     click magscale_ext href "../stellarphot/utils/comparison_utils.py" "comparison_utils.py"
-    click keybind href "../stellarphot/gui_tools/seeing_profile_functions.py" "seeing_profile_functions.py"
+    click keybind href "../stellarphot/gui/seeing_profile_functions.py" "seeing_profile_functions.py"
     click sld href "../stellarphot/core.py" "core.py"
 ```
 
-## [gui_tools](../stellarphot/gui_tools/) — seeing profile and TESS analysis widgets
+## [gui](../stellarphot/gui/) — seeing profile and TESS analysis widgets
 
 *Arrows: **solid** = a direct call or instantiation; **dashed** = file or network I/O, or an optional path.*
 
@@ -806,23 +806,23 @@ flowchart LR
     taic --> pdata
     taic -.-> fbd
 
-    click spw_init href "../stellarphot/gui_tools/seeing_profile_functions.py" "seeing_profile_functions.py"
-    click spw_show href "../stellarphot/gui_tools/seeing_profile_functions.py" "seeing_profile_functions.py"
-    click spw_plots href "../stellarphot/gui_tools/seeing_profile_functions.py" "seeing_profile_functions.py"
-    click spw_save href "../stellarphot/gui_tools/seeing_profile_functions.py" "seeing_profile_functions.py"
-    click spw_tess href "../stellarphot/gui_tools/seeing_profile_functions.py" "seeing_profile_functions.py"
-    click keybind href "../stellarphot/gui_tools/seeing_profile_functions.py" "seeing_profile_functions.py"
-    click cas href "../stellarphot/gui_tools/profile_and_comps.py" "profile_and_comps.py"
-    click taic href "../stellarphot/gui_tools/photometry_widget_functions.py" "photometry_widget_functions.py"
-    click fbd href "../stellarphot/gui_tools/photometry_widget_functions.py" "photometry_widget_functions.py"
-    click fo href "../stellarphot/settings/fits_opener.py" "fits_opener.py"
-    click cmn href "../stellarphot/settings/custom_widgets.py" "custom_widgets.py"
+    click spw_init href "../stellarphot/gui/seeing_profile_functions.py" "seeing_profile_functions.py"
+    click spw_show href "../stellarphot/gui/seeing_profile_functions.py" "seeing_profile_functions.py"
+    click spw_plots href "../stellarphot/gui/seeing_profile_functions.py" "seeing_profile_functions.py"
+    click spw_save href "../stellarphot/gui/seeing_profile_functions.py" "seeing_profile_functions.py"
+    click spw_tess href "../stellarphot/gui/seeing_profile_functions.py" "seeing_profile_functions.py"
+    click keybind href "../stellarphot/gui/seeing_profile_functions.py" "seeing_profile_functions.py"
+    click cas href "../stellarphot/gui/profile_and_comps.py" "profile_and_comps.py"
+    click taic href "../stellarphot/gui/photometry_widget_functions.py" "photometry_widget_functions.py"
+    click fbd href "../stellarphot/gui/photometry_widget_functions.py" "photometry_widget_functions.py"
+    click fo href "../stellarphot/gui/fits_opener.py" "fits_opener.py"
+    click cmn href "../stellarphot/gui/custom_widgets.py" "custom_widgets.py"
     click pwds href "../stellarphot/settings/settings_files.py" "settings_files.py"
     click cap href "../stellarphot/photometry/profiles.py" "profiles.py"
     click splot href "../stellarphot/plotting/aij_plots.py" "aij_plots.py"
     click apert href "../stellarphot/settings/models.py" "models.py"
     click tsub href "../stellarphot/io/tess.py" "io/tess.py"
-    click cviewer href "../stellarphot/gui_tools/comparison_functions.py" "comparison_functions.py"
+    click cviewer href "../stellarphot/gui/comparison_functions.py" "comparison_functions.py"
     click pdata href "../stellarphot/core.py" "core.py"
 ```
 
