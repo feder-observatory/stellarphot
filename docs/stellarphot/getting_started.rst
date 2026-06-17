@@ -7,23 +7,36 @@ Installation
 If you are testing a pre-release version of stellarphot we recommend setting up
 a virtual environment and installing stellarphot in this environment.
 
+The commands below install ``stellarphot[all]``, which includes the Jupyter
+notebook/widget interface used throughout this guide plus exoplanet light-curve
+fitting. The optional dependencies are grouped into extras so you can install
+only what you need:
+
+- ``pip install stellarphot`` — base install. The headless/scriptable science
+  engine (data structures, photometry, catalog access). Does **not** include the
+  Jupyter/widget GUI described below.
+- ``pip install stellarphot[gui]`` — adds the notebook/widget interface.
+- ``pip install stellarphot[exoplanet]`` — adds exoplanet transit light-curve
+  fitting (``batman``).
+- ``pip install stellarphot[all]`` — everything above.
+
 Only use one of the methods below for making a virtual environment.
 
 Creating an environment with `conda` or `mamba` (use whichever one you have installed)::
 
     mamba create -n stellarphot-test python=3.11
     mamba activate stellarphot-test
-    pip install --pre stellarphot
+    pip install --pre stellarphot[all]
 
 Creating an environment with `virtualenv`::
 
     python -m venv stellarphot-test
     source stellarphot-test/bin/activate
-    pip install --pre stellarphot
+    pip install --pre stellarphot[all]
 
 To install stellarphot without creating an environment, use::
 
-    pip install --pre stellarphot
+    pip install --pre stellarphot[all]
 
 You can remove stellarphot with::
 
