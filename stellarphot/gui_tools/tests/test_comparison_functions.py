@@ -62,7 +62,7 @@ def test_fits_file_property():
 def test_comparison_properties(tmp_path, has_object, source_file_name):
     # Test that we can load a file...
     ccd = make_ey_uma_image(with_object=has_object)
-
+    ccd.header["filter"] = "V"
     file_name = "test.fits"
     ccd.write(tmp_path / file_name, overwrite=True)
     # Change working directory for remainder of test so that the save does not pollute
@@ -146,7 +146,9 @@ def test_loading_second_image_succeeds(tmp_path):
     # Regression test for #384
 
     # Make a comparison viewer and load EY UMa
-    comparison_widget = cf.ComparisonViewer()
+    comparison_widget = cf.ComparisonViewer(
+        passband_map={"gp": "SG", "rp": "SR", "ip": "SI", "r": "SR"}
+    )
     ccd = CCDData.read(
         get_pkg_data_filename(
             "tests/data/TIC-402828941-tiny.fit.bz2", package="stellarphot"
@@ -210,7 +212,9 @@ def test_loading_second_image_succeeds(tmp_path):
 @pytest.mark.parametrize("tic_id", [402828941, 367710318])
 def test_loading_input_source_list(tmp_path, tic_id):
     # Test that we can load a source list from a file
-    comparison_widget = cf.ComparisonViewer()
+    comparison_widget = cf.ComparisonViewer(
+        passband_map={"gp": "SG", "rp": "SR", "ip": "SI", "r": "SR"}
+    )
     compressed_input_source_list = get_pkg_data_filename(
         f"tests/data/TIC-{tic_id}-source-list-input.ecsv.gz", package="stellarphot"
     )
