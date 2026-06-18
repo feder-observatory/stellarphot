@@ -30,6 +30,8 @@ Other Changes and Additions
   back-compat shim that raises an ``AstropyDeprecationWarning``. [#194]
 + The ``change_to_tmp_dir`` test fixture, previously duplicated in four test
   modules, is now defined once in the top-level ``conftest.py``. [#426]
++ The duplicated logging setup in ``single_image_photometry`` and
+  ``multi_image_photometry`` has been factored into a shared helper. [#152]
 
 Bug Fixes
 ^^^^^^^^^

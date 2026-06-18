@@ -107,6 +107,53 @@ class AperturePhotometry(BaseModel):
         return photom_data
 
 
+def _add_log_handlers(logger, logfile, console_log):
+    """
+    Attach the handlers used by the photometry functions to ``logger``.
+
+    A file handler is added when ``logfile`` is not ``None`` and a console
+    handler (a `~logging.StreamHandler` if ``console_log`` is true, otherwise a
+    `~logging.NullHandler` that suppresses output) is always added. This is the
+    handler-construction shared by ``single_image_photometry`` and
+    ``multi_image_photometry``; the decision of *when* to call it (and any
+    rewriting of the log file path) is left to the callers.
+
+    Parameters
+    ----------
+    logger : `logging.Logger`
+        Logger to which the handlers are added.
+
+    logfile : str or None
+        Path to the log file. If ``None`` no file handler is created.
+
+    console_log : bool
+        If true, log to the console; otherwise console output is suppressed.
+
+    Returns
+    -------
+    file_handler : `logging.FileHandler` or None
+        The file handler that was created, or ``None`` if ``logfile`` was
+        ``None``. Callers use this to flush/close the file when finished.
+    """
+    logger.setLevel(logging.INFO)
+
+    file_handler = None
+    if logfile is not None:
+        # by default this appends to existing logfile
+        file_handler = logging.FileHandler(logfile)
+        file_handler.setFormatter(logging.Formatter("%(levelname)s - %(message)s"))
+        file_handler.setLevel(logging.INFO)
+        logger.addHandler(file_handler)
+
+    # Set up logging to console if requested, otherwise effectively suppress output
+    console_handler = logging.StreamHandler() if console_log else logging.NullHandler()
+    console_handler.setFormatter(logging.Formatter("%(message)s"))
+    console_handler.setLevel(logging.INFO)
+    logger.addHandler(console_handler)
+
+    return file_handler
+
+
 def single_image_photometry(
     ccd_image,
     photometry_settings,
@@ -225,28 +272,10 @@ def single_image_photometry(
     # from multi_image_photometry before creating new log file handler
     # (Warning: This actually just catches if the logger has any handlers.
     # Probably not the best way to do this.)
-    fh_exists = False  # Default to filehandler not existing
+    fh = None  # Default to file handler not existing
     if logger.hasHandlers() is False:
-        logger.setLevel(logging.INFO)
-        # Set up logging to a file (in addition to any logging below)
-        if logfile is not None:
-            # by default this appends to existing logfile
-            fh = logging.FileHandler(logfile)
-            log_format = logging.Formatter("%(levelname)s - %(message)s")
-            fh.setFormatter(log_format)
-            fh.setLevel(logging.INFO)
-            logger.addHandler(fh)
-            fh_exists = True
-
-        # Set up logging to console if requested
-        if console_log:
-            ch = logging.StreamHandler()
-        else:  # otherwise effectively suppress output
-            ch = logging.NullHandler()
-        console_format = logging.Formatter("%(message)s")
-        ch.setFormatter(console_format)
-        ch.setLevel(logging.INFO)
-        logger.addHandler(ch)
+        fh = _add_log_handlers(logger, logfile, console_log)
+    fh_exists = fh is not None
 
     #
     # Check CCDData headers before proceeding
@@ -703,8 +732,6 @@ def multi_image_photometry(
 
     # Set up logging (retrieve a logger but purge any existing handlers)
     multilogger = logging.getLogger("multi_image_photometry")
-    multilogger.setLevel(logging.INFO)
-    console_format = logging.Formatter("%(message)s")
     # Remove all other existing handlers from the logger
     # (Kind of brute force, but works for our purposes
     for handler in multilogger.handlers[:]:
@@ -713,41 +740,19 @@ def multi_image_photometry(
     logfile = photometry_settings.logging_settings.logfile
     console_log = photometry_settings.logging_settings.console_log
 
-    # Set up logging:
-    # Check if logfile is not None, set up logging to be written to the logfile.
-    # Next check if console_log is True, if it is, set up logging to be written
-    #    to the console.
-    # If neither of these are true, set up logging to be written to NullHandler
-    #    which effectively suppresses the logging output.
-
-    # Set up logging to a file (in addition to any logging below)
+    # If logging to a file, redirect the logfile into the image directory and
+    # update the settings so single_image_photometry writes to the same file.
+    logfile_name = None
     if logfile is not None:
-        # Get the name of the logfile without the path
-        logfile = Path(logfile).name
-        # Redirect the logfile to the directory_with_images
-        logfile = Path(directory_with_images) / logfile
+        # Redirect the logfile (keeping just its name) to directory_with_images
+        logfile = Path(directory_with_images) / Path(logfile).name
         # Change the settings so when they are passed to single_image_photometry
         # the logging will be written to the same logfile
         photometry_settings.logging_settings.logfile = str(logfile)
-
         # Keep original name without path
         logfile_name = str(Path(logfile).name)
 
-        # by default this appends to existing logfile
-        fh = logging.FileHandler(logfile)
-        log_format = logging.Formatter("%(levelname)s - %(message)s")
-        fh.setFormatter(log_format)
-        fh.setLevel(logging.INFO)
-        multilogger.addHandler(fh)
-
-    # Set up logging to console if requested
-    if console_log:
-        ch = logging.StreamHandler()
-    else:  # otherwise effectively suppress output
-        ch = logging.NullHandler()
-    ch.setFormatter(console_format)
-    ch.setLevel(logging.INFO)
-    multilogger.addHandler(ch)
+    fh = _add_log_handlers(multilogger, logfile, console_log)
 
     ##
     ## Process all the individual files
