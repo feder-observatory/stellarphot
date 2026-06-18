@@ -4,7 +4,7 @@ from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astropy.table import Table
 
-from stellarphot import apass_dr9, vsx_vizier
+from stellarphot.catalogs import apass_dr9, vsx_vizier
 
 __all__ = ["read_file", "set_up", "crossmatch_APASS2VSX", "mag_scale", "in_field"]
 

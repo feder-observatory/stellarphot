@@ -8,6 +8,10 @@ try:
 except ImportError:
     __version__ = ""
 
+# ``catalogs`` provides the catalog-fetcher factory functions (apass_dr9,
+# vsx_vizier, refcat2) as public, un-deprecated top-level names, e.g.
+# ``from stellarphot import apass_dr9``.
+from .catalogs import *
 from .core import *
 
 # We load this for its side effect of adding YAML representations for the models

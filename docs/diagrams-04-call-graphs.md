@@ -21,11 +21,11 @@ flowchart LR
 - **Solid arrows** — a direct call or instantiation.
 - **Dashed arrows** — file or network I/O, or an optional path.
 
-## [core.py](../stellarphot/core.py) — data classes and catalog fetchers
+## [core.py](../stellarphot/core.py) — data classes — and [catalogs.py](../stellarphot/catalogs.py) — catalog fetchers
 
 `BaseEnhancedTable` is a validated `astropy.table.QTable`; the three public
-table classes inherit from it. The catalog fetcher functions all funnel
-through `CatalogData.from_vizier()`.
+table classes inherit from it. The catalog fetcher functions live in
+`catalogs.py` and all funnel through `CatalogData.from_vizier()`.
 
 *Arrows: **solid** = a direct call or instantiation; **dashed** = file or network I/O, or an optional path.*
 
@@ -54,7 +54,7 @@ flowchart LR
         sld_cls["SourceListData"]:::cls
     end
 
-    subgraph sg_catalogs["catalog fetchers"]
+    subgraph sg_catalogs["catalog fetchers (catalogs.py)"]
         direction TB
         apass_fn["apass_dr9()"]:::fn
         refcat_fn["refcat2()"]:::fn
@@ -98,9 +98,9 @@ flowchart LR
     click pd_cls href "../stellarphot/core.py" "core.py"
     click cd_cls href "../stellarphot/core.py" "core.py"
     click sld_cls href "../stellarphot/core.py" "core.py"
-    click apass_fn href "../stellarphot/core.py" "core.py"
-    click refcat_fn href "../stellarphot/core.py" "core.py"
-    click vsx_fn href "../stellarphot/core.py" "core.py"
+    click apass_fn href "../stellarphot/catalogs.py" "catalogs.py"
+    click refcat_fn href "../stellarphot/catalogs.py" "catalogs.py"
+    click vsx_fn href "../stellarphot/catalogs.py" "catalogs.py"
     click pd_bjd href "../stellarphot/core.py" "core.py"
     click pd_lc href "../stellarphot/core.py" "core.py"
     click pd_aavso href "../stellarphot/core.py" "core.py"
@@ -913,9 +913,9 @@ flowchart LR
         readfile["read_file()"]:::fn
     end
 
-    apass["core.apass_dr9()"]:::external
-    refcat["core.refcat2()"]:::external
-    vsx["core.vsx_vizier()"]:::external
+    apass["catalogs.apass_dr9()"]:::external
+    refcat["catalogs.refcat2()"]:::external
+    vsx["catalogs.vsx_vizier()"]:::external
     curvefit["scipy curve_fit"]:::external
 
     t2c --> apass
@@ -951,9 +951,9 @@ flowchart LR
     click magscale href "../stellarphot/utils/comparison_utils.py" "comparison_utils.py"
     click infield href "../stellarphot/utils/comparison_utils.py" "comparison_utils.py"
     click readfile href "../stellarphot/utils/comparison_utils.py" "comparison_utils.py"
-    click apass href "../stellarphot/core.py" "core.py"
-    click refcat href "../stellarphot/core.py" "core.py"
-    click vsx href "../stellarphot/core.py" "core.py"
+    click apass href "../stellarphot/catalogs.py" "catalogs.py"
+    click refcat href "../stellarphot/catalogs.py" "catalogs.py"
+    click vsx href "../stellarphot/catalogs.py" "catalogs.py"
 ```
 
 ## [table_representations.py](../stellarphot/table_representations.py) + [utils/version_migrator.py](../stellarphot/utils/version_migrator.py)

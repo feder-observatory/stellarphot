@@ -10,7 +10,7 @@ The modules group into these logical components:
 
 | Component | Modules | Role |
 |---|---|---|
-| **Core data layer** | `core.py`, `table_representations.py` | Validated astropy `QTable` subclasses (`PhotometryData`, `CatalogData`, `SourceListData`) and catalog fetchers; YAML (de)serialization of settings stored in table metadata |
+| **Core data layer** | `core.py`, `catalogs.py`, `table_representations.py` | Validated astropy `QTable` subclasses (`PhotometryData`, `CatalogData`, `SourceListData`) in `core.py`; catalog-fetcher functions (`apass_dr9`, `vsx_vizier`, `refcat2`) in `catalogs.py`; YAML (de)serialization of settings stored in table metadata |
 | **Settings & configuration** | `settings/` | Pydantic models for all configuration and saved-settings file management — pure Pydantic, no GUI imports |
 | **Photometry engine** | `photometry/` | Source detection, FWHM measurement, aperture photometry pipeline |
 | **Differential photometry** | `differential_photometry/` | Relative flux (AIJ-style) and variable-star magnitude calculations |
@@ -73,6 +73,7 @@ flowchart LR
     plt["plotting/"]:::output
     iop["io/"]:::output
     corem["core.py"]:::data
+    catm["catalogs.py"]:::data
     trep["table_representations.py"]:::data
 
     nb -.->|"drives"| gui
@@ -90,6 +91,7 @@ flowchart LR
     phot --> sett
     diff --> corem
     uts --> corem
+    uts -->|"apass_dr9, vsx_vizier, refcat2"| catm
     uts --> sett
     plt --> sett
     iop -.->|"core (lazy, io.tess)"| corem
@@ -99,6 +101,8 @@ flowchart LR
     corem -->|"io.aavso"| iop
     corem --> sett
     corem --> trep
+    catm -->|"CatalogData"| corem
+    catm -->|"PassbandMap"| sett
     trep --> sett
 
     click nb href "../stellarphot/notebooks/" "notebooks/"
@@ -111,6 +115,7 @@ flowchart LR
     click plt href "../stellarphot/plotting/" "plotting/"
     click iop href "../stellarphot/io/" "io/"
     click corem href "../stellarphot/core.py" "core.py"
+    click catm href "../stellarphot/catalogs.py" "catalogs.py"
     click trep href "../stellarphot/table_representations.py" "table_representations.py"
 ```
 
@@ -164,6 +169,7 @@ flowchart LR
     subgraph sg_core["core data layer"]
         direction TB
         core_py["core.py<br/>PhotometryData, CatalogData,<br/>SourceListData"]
+        catalogs_py["catalogs.py<br/>apass_dr9, vsx_vizier, refcat2"]
         tabrep_py["table_representations.py"]
     end
 
@@ -176,13 +182,15 @@ flowchart LR
     srcdet_py --> core_py
     srcdet_py --> settings_ext
     relflux_py --> core_py
-    magtrans_py -->|"apass_dr9, refcat2"| core_py
+    magtrans_py -->|"apass_dr9, refcat2"| catalogs_py
     magtrans_py --> magsys_py
-    computil_py -->|"apass_dr9, vsx_vizier"| core_py
+    computil_py -->|"apass_dr9, vsx_vizier"| catalogs_py
     vermig_py --> core_py
     vermig_py --> settings_ext
     core_py --> settings_ext
     core_py --> tabrep_py
+    catalogs_py -->|"CatalogData"| core_py
+    catalogs_py -->|"PassbandMap"| settings_ext
     tabrep_py --> settings_ext
 
     click phot_py href "../stellarphot/photometry/photometry.py" "photometry.py"
@@ -195,14 +203,17 @@ flowchart LR
     click computil_py href "../stellarphot/utils/comparison_utils.py" "comparison_utils.py"
     click vermig_py href "../stellarphot/utils/version_migrator.py" "version_migrator.py"
     click core_py href "../stellarphot/core.py" "core.py"
+    click catalogs_py href "../stellarphot/catalogs.py" "catalogs.py"
     click tabrep_py href "../stellarphot/table_representations.py" "table_representations.py"
 ```
 
 Key contents of each file:
 
 - [`core.py`](../stellarphot/core.py) — `BaseEnhancedTable` (validated `QTable`) and its subclasses
-  `PhotometryData`, `CatalogData`, `SourceListData`; catalog fetchers
-  `apass_dr9()`, `refcat2()`, `vsx_vizier()`.
+  `PhotometryData`, `CatalogData`, `SourceListData` (table data structures only).
+- [`catalogs.py`](../stellarphot/catalogs.py) — catalog-fetcher functions
+  `apass_dr9()`, `refcat2()`, `vsx_vizier()` that build a `CatalogData` from
+  Vizier/astroquery. Still importable from `stellarphot.core` via a deprecated shim.
 - [`table_representations.py`](../stellarphot/table_representations.py) — `generate_table_representers()`,
   `serialize_models_in_table_meta()`, `deserialize_models_in_table_meta()`
   (round-trips pydantic settings models stored in table metadata).

@@ -22,6 +22,12 @@ Other Changes and Additions
   ``stellarphot.io.aavso``, ``stellarphot.io.aij``, or ``stellarphot.io.tess``.
   ``ui_generator`` is no longer importable from ``stellarphot.settings``; import
   it from ``stellarphot.settings.views``. [#567]
++ The catalog-fetcher functions ``apass_dr9``, ``vsx_vizier`` and ``refcat2``
+  have moved out of ``stellarphot.core`` into the new ``stellarphot.catalogs``
+  module; ``stellarphot.core`` now holds the table data-structure classes only.
+  They remain available as top-level names (``from stellarphot import
+  apass_dr9``) and, for one or two releases, from ``stellarphot.core`` via a
+  back-compat shim that raises an ``AstropyDeprecationWarning``. [#194]
 
 Bug Fixes
 ^^^^^^^^^
