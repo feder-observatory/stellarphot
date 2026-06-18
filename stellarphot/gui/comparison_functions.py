@@ -312,7 +312,9 @@ class ComparisonViewer:
         self._legend_spinner_box.children = [spinner]
         self.help_stuff.selected_index = 1
 
-        self.vsx = set_up(self.ccd)
+        # Apply the same dim magnitude limit to the VSX lookup that is used for
+        # the comparison stars so faint variables are not included (issue #43).
+        self.vsx = set_up(self.ccd, magnitude_limit=self.dim_mag_limit)
 
         apass, vsx_apass_angle, targets_apass_angle = crossmatch_APASS2VSX(
             self.ccd, self.targets_from_file, self.vsx

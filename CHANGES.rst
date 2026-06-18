@@ -33,6 +33,9 @@ Bug Fixes
 ^^^^^^^^^
 + Fixed dependence on non-release version of astrowidgets for overwrite capability on output images. [#108]
 + Fixed computation of FWHM when fitting to data that includes NaNs. [#164]
++ The comparison-star viewer now applies its dim magnitude limit to the VSX
+  variable-star lookup, so variables fainter than the limit are no longer
+  marked. [#43]
 
 1.4.15 (2024-08-16)
 -------------------
