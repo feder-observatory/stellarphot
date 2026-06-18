@@ -69,8 +69,8 @@ def apass_dr9(
 
     Notes
     -----
-    APASS DR9 does not include an identifier column. Thought Vizier does provide
-    a ``recno`` column, it is does not stay the same over time. This function generates
+    APASS DR9 does not include an identifier column. Though Vizier does provide
+    a ``recno`` column, it does not stay the same over time. This function generates
     an ID based on the coordinates of the APASS star, following the guidelines in
     `IAU designation specification <https://cds.unistra.fr/Dic/iau-spec.html>`_.
 
@@ -112,7 +112,7 @@ def apass_dr9(
                 magnitude_limit_passband
             ]
 
-    if not magnitude_limit:
+    if magnitude_limit is None:
         # If no magnitude limit is provided, then we will not filter the catalog
         # by magnitude.
         magnitude_limit_passband = None
@@ -311,7 +311,7 @@ def refcat2(
         "DE_ICRS": "dec",
     }
 
-    if magnitude_limit and not magnitude_limit_passband:
+    if magnitude_limit is not None and magnitude_limit_passband is None:
         magnitude_limit_passband = "SR"
 
     aavso_passband_to_refcat_colnames = dict(
@@ -349,7 +349,7 @@ def refcat2(
         # 1.
         # The refcat2 paper says that "Virtually all galaxies can be rejected by
         # selecting objects for which Gaia provides a nonzero proper-motion
-        # uncertainty," which in the Vizer download are called e_pmRA and e_pmDE,
+        # uncertainty," which in the Vizier download are called e_pmRA and e_pmDE,
         # "at the cost of about 0.7% of all real stars." Seems like a reasonable
         # trade-off. Vizier omits the zero entries and astroquery returns a mask for the
         # zero entries, so galaxies are the masked ones.
