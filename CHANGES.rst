@@ -38,6 +38,8 @@ Bug Fixes
 + The comparison-star viewer now applies its dim magnitude limit to the VSX
   variable-star lookup, so variables fainter than the limit are no longer
   marked. [#43]
++ Fixed ``TypeError`` in ``multi_image_photometry`` when exactly one source was
+  missing from at least one image and ``reject_unmatched`` was enabled. [#474]
 
 1.4.15 (2024-08-16)
 -------------------

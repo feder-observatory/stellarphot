@@ -818,10 +818,7 @@ def multi_image_photometry(
     # If requested, eliminate source not detected on every image by building
     # a set of all the unique star_ids that were missing on at least one image.
     if reject_unmatched and len(missing_sources) > 0:
-        if len(missing_sources) > 1:
-            uniques = set(missing_sources)
-        else:
-            uniques = set([missing_sources])
+        uniques = set(missing_sources)
 
         msg = f"  Removing {len(uniques)} sources not observed in every image ... "
         # Purge the photometry table of all sources that were eliminated
