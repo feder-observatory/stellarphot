@@ -301,15 +301,19 @@ def single_image_photometry(
     logfile = logging_options.logfile
     console_log = logging_options.console_log
 
-    # If we have no handlers, set up logging
     logger = logging.getLogger("single_image_photometry")
 
-    # Use this to catch if logging was already set up by a call
-    # from multi_image_photometry before creating new log file handler
-    # (Warning: This actually just catches if the logger has any handlers.
-    # Probably not the best way to do this.)
+    # Only add our handlers if we have not already added them to *this* logger
+    # on an earlier call. We deliberately look at this logger's own handlers
+    # rather than logger.hasHandlers() (which walks up to the root logger), so
+    # that handlers configured elsewhere -- e.g. the root logger in a notebook
+    # or test session -- do not stop us from setting up our own log file. See
+    # issues #152 and #153.
+    we_set_up_logging = any(
+        getattr(handler, _STELLARPHOT_HANDLER, False) for handler in logger.handlers
+    )
     fh = None  # Default to file handler not existing
-    if logger.hasHandlers() is False:
+    if not we_set_up_logging:
         fh = _add_log_handlers(logger, logfile, console_log)
     fh_exists = fh is not None
 

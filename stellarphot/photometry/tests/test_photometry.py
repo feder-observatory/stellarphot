@@ -575,6 +575,13 @@ class TestAperturePhotometry:
         # root logger's handlers (and remove every handler from its own logger),
         # which destroyed logging configuration that stellarphot did not set up.
         # It must now leave handlers it did not add in place.
+        #
+        # The foreign root handler added below also guards against a subtler
+        # regression: single_image_photometry must still write to the log file
+        # even when the root logger already has handlers. It used to rely on
+        # multi_image_photometry clearing the root handlers and skipped its own
+        # setup (via logger.hasHandlers(), which walks up to root) when any were
+        # present.
         num_files = 3
         fake_images = self.list_of_fakes(num_files)
 
@@ -619,6 +626,14 @@ class TestAperturePhotometry:
                 source_locations.use_coordinates = "sky"
                 source_locations.source_list_file = str(source_list_file)
 
+                logging_settings = (
+                    photometry_settings_for_test.logging_settings.model_copy()
+                )
+                logging_settings.logfile = "test.log"
+                photometry_settings_for_test.logging_settings = logging_settings
+                # multi_image_photometry writes the log file into the image dir.
+                full_logfile = Path(temp_dir) / "test.log"
+
                 with warnings.catch_warnings():
                     warnings.filterwarnings(
                         "ignore",
@@ -627,6 +642,12 @@ class TestAperturePhotometry:
                     )
                     ap_phot = AperturePhotometry(settings=photometry_settings_for_test)
                     ap_phot(temp_dir, object_of_interest=object_name)
+
+                # single_image_photometry must still write to the log file even
+                # though the root logger already has a handler.
+                assert full_logfile.exists()
+                log_content = full_logfile.read_text()
+                assert "Calculating noise for all sources" in log_content
 
             # Handlers stellarphot did not add must still be present.
             assert foreign_root_handler in root_logger.handlers
