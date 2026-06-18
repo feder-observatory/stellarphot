@@ -28,6 +28,8 @@ Other Changes and Additions
   They remain available as top-level names (``from stellarphot import
   apass_dr9``) and, for one or two releases, from ``stellarphot.core`` via a
   back-compat shim that raises an ``AstropyDeprecationWarning``. [#194]
++ The ``change_to_tmp_dir`` test fixture, previously duplicated in four test
+  modules, is now defined once in the top-level ``conftest.py``. [#426]
 
 Bug Fixes
 ^^^^^^^^^
