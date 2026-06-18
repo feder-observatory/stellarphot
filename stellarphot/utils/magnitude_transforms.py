@@ -8,7 +8,7 @@ from astropy.stats import sigma_clip
 from astropy.table import MaskedColumn
 from scipy.optimize import curve_fit
 
-from ..core import apass_dr9, refcat2
+from ..catalogs import apass_dr9, refcat2
 from .magnitude_system_transforms import transform_apass_bands, transform_refcat2_bands
 
 __all__ = [

@@ -147,7 +147,7 @@ flowchart LR
         sldata["SourceListData"]:::api
     end
 
-    subgraph sg_cats["catalog fetchers (core.py)"]
+    subgraph sg_cats["catalog fetchers (catalogs.py)"]
         direction TB
         apass["apass_dr9()"]:::api
         refcat["refcat2()"]:::api
@@ -181,9 +181,9 @@ flowchart LR
     click pdata href "../stellarphot/core.py" "core.py"
     click cdata href "../stellarphot/core.py" "core.py"
     click sldata href "../stellarphot/core.py" "core.py"
-    click apass href "../stellarphot/core.py" "core.py"
-    click refcat href "../stellarphot/core.py" "core.py"
-    click vsx href "../stellarphot/core.py" "core.py"
+    click apass href "../stellarphot/catalogs.py" "catalogs.py"
+    click refcat href "../stellarphot/catalogs.py" "catalogs.py"
+    click vsx href "../stellarphot/catalogs.py" "catalogs.py"
     click apphot href "../stellarphot/photometry/photometry.py" "photometry.py"
     click tmf href "../stellarphot/transit_fitting/core.py" "transit_fitting/core.py"
     click relflux href "../stellarphot/differential_photometry/aij_rel_fluxes.py" "aij_rel_fluxes.py"
@@ -192,7 +192,7 @@ flowchart LR
     click waavso href "../stellarphot/io/" "io/"
 ```
 
-*Source: [__init__.py](../stellarphot/__init__.py) (the re-exports), [core.py](../stellarphot/core.py) (the data classes and catalog fetchers).*
+*Source: [__init__.py](../stellarphot/__init__.py) (the re-exports), [core.py](../stellarphot/core.py) (the data classes), [catalogs.py](../stellarphot/catalogs.py) (the catalog fetchers).*
 
 ## The main programmatic entry point: `AperturePhotometry`
 

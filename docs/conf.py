@@ -239,6 +239,7 @@ man_pages = [("index", project.lower(), project + " Documentation", [author], 1)
 _DOCUMENTED_MODULES = {
     "stellarphot",
     "stellarphot.core",
+    "stellarphot.catalogs",
     "stellarphot.table_representations",
     "stellarphot.differential_photometry",
     "stellarphot.gui",
