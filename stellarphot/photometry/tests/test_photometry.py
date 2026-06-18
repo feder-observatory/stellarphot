@@ -568,6 +568,73 @@ class TestAperturePhotometry:
                     or np.abs(expected_flux - obs_avg_net_cnts) > expected_deviation
                 )
 
+    def test_multi_image_photometry_preserves_foreign_log_handlers(
+        self, photometry_settings_for_test
+    ):
+        # Regression test for #153. multi_image_photometry used to clear the
+        # root logger's handlers (and remove every handler from its own logger),
+        # which destroyed logging configuration that stellarphot did not set up.
+        # It must now leave handlers it did not add in place.
+        num_files = 3
+        fake_images = self.list_of_fakes(num_files)
+
+        noise_unit = photometry_settings_for_test.camera.read_noise.unit
+        photometry_settings_for_test.camera.read_noise = (
+            fake_images[0].noise_dev * noise_unit
+        )
+
+        root_logger = logging.getLogger()
+        multilogger = logging.getLogger("multi_image_photometry")
+        foreign_root_handler = logging.NullHandler()
+        foreign_named_handler = logging.NullHandler()
+        root_logger.addHandler(foreign_root_handler)
+        multilogger.addHandler(foreign_named_handler)
+
+        try:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp_dir:
+                temp_file_names = [
+                    Path(temp_dir) / f"tempfile_{i:02d}.fit"
+                    for i in range(1, num_files + 1)
+                ]
+                for i, image in enumerate(fake_images):
+                    image.write(temp_file_names[i])
+                object_name = fake_images[0].header["OBJECT"]
+
+                found_sources = source_detection(
+                    fake_images[0],
+                    fwhm=fake_images[0].sources["x_stddev"].mean(),
+                    threshold=10,
+                )
+                source_list_file = Path(temp_dir) / "source_list.ecsv"
+                found_sources.write(
+                    source_list_file, format="ascii.ecsv", overwrite=True
+                )
+
+                phot_options = (
+                    photometry_settings_for_test.photometry_optional_settings.model_copy()
+                )
+                phot_options.fwhm_method = FwhmMethods.FIT
+                photometry_settings_for_test.photometry_optional_settings = phot_options
+                source_locations = photometry_settings_for_test.source_location_settings
+                source_locations.use_coordinates = "sky"
+                source_locations.source_list_file = str(source_list_file)
+
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        "ignore",
+                        message="Cannot merge meta key",
+                        category=MergeConflictWarning,
+                    )
+                    ap_phot = AperturePhotometry(settings=photometry_settings_for_test)
+                    ap_phot(temp_dir, object_of_interest=object_name)
+
+            # Handlers stellarphot did not add must still be present.
+            assert foreign_root_handler in root_logger.handlers
+            assert foreign_named_handler in multilogger.handlers
+        finally:
+            root_logger.removeHandler(foreign_root_handler)
+            multilogger.removeHandler(foreign_named_handler)
+
     def test_photometry_on_directory_with_no_ra_dec(self, photometry_settings_for_test):
         # Create list of fake CCDData objects
         num_files = 5
