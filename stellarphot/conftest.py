@@ -43,6 +43,22 @@ def pytest_unconfigure():
 
 
 @pytest.fixture
+def change_to_tmp_dir(tmp_path):
+    # Change the working directory to the temporary directory and then change
+    # back to the original directory after the test is done. This fixture is
+    # not autouse; tests (or a small autouse wrapper) that need it should
+    # request it explicitly.
+    original_dir = os.getcwd()
+    os.chdir(tmp_path)
+    # Yielding here is important. It means that when the test is done, the remainder
+    # of the function will be executed. This is important because the test is run in
+    # a temporary directory and we want to change back to the original directory
+    # when the test is done.
+    yield
+    os.chdir(original_dir)
+
+
+@pytest.fixture
 def profile_stars():
     # Make a few round stars
     return Table(

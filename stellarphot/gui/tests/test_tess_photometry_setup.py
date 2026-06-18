@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 import pytest
@@ -11,18 +10,11 @@ from stellarphot.io.tess import TOI
 
 
 class TestTessPhotometrySetup:
-    # This auto-used fixture changes the working directory to the temporary directory
-    # and then changes back to the original directory after the test is done.
+    # Auto-use the shared change_to_tmp_dir fixture (defined in the top-level
+    # conftest) so every test in this class runs in a temporary directory.
     @pytest.fixture(autouse=True)
-    def change_to_tmp_dir(self, tmp_path):
-        original_dir = os.getcwd()
-        os.chdir(tmp_path)
-        # Yielding here is important. It means that when the test is done, the remainder
-        # of the function will be executed. This is important because the test is run in
-        # a temporary directory and we want to change back to the original directory
-        # when the test is done.
-        yield
-        os.chdir(original_dir)
+    def _change_to_tmp_dir(self, change_to_tmp_dir):
+        pass
 
     def test_creation(self):
         widget = TessPhotometrySetup()
