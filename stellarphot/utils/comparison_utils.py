@@ -36,7 +36,7 @@ def read_file(radec_file):
     return target_table
 
 
-def set_up(ccd):
+def set_up(ccd, magnitude_limit=None):
     """
     Read in sample image and find known variables in the field of view.
 
@@ -45,6 +45,12 @@ def set_up(ccd):
 
     ccd: `astropy.nddata.CCDData`
         Sample image.
+
+    magnitude_limit : float, optional (Default: None)
+        Faint magnitude limit applied to the VSX variable-star lookup. When
+        ``None`` (the default) no limit is applied. Pass the same dim magnitude
+        limit used for the comparison stars so that variable stars fainter than
+        that limit are not included (see issue #43).
 
     Returns
     -------
@@ -55,7 +61,9 @@ def set_up(ccd):
     """
 
     try:
-        vsx = vsx_vizier(ccd.wcs, radius=0.5 * u.degree)
+        vsx = vsx_vizier(
+            ccd.wcs, radius=0.5 * u.degree, magnitude_limit=magnitude_limit
+        )
     except RuntimeError:
         vsx = []
     else:
