@@ -666,6 +666,77 @@ class TestAperturePhotometry:
             root_logger.removeHandler(foreign_root_handler)
             multilogger.removeHandler(foreign_named_handler)
 
+    def test_reject_unmatched_single_missing_source(
+        self, monkeypatch, tmp_path, photometry_settings_for_test
+    ):
+        # Regression test for #474. When exactly one source is missing from at
+        # least one image, reject_unmatched must not raise. The old code did
+        # ``set([missing_sources])`` in the length-one case, which wraps the
+        # list and raises ``TypeError: unhashable type: 'list'``.
+        from stellarphot.photometry import photometry as photometry_mod
+
+        # Two images are enough: one source is forced missing on the first image
+        # only (see ``fake_single`` below), so the accumulated missing_sources
+        # list has length exactly one -- the case that triggered #474 -- while
+        # the second image lets us check the source is rejected from every image.
+        num_files = 2
+        fake_images = self.list_of_fakes(num_files)
+
+        noise_unit = photometry_settings_for_test.camera.read_noise.unit
+        photometry_settings_for_test.camera.read_noise = (
+            fake_images[0].noise_dev * noise_unit
+        )
+
+        temp_file_names = [
+            tmp_path / f"tempfile_{i:02d}.fit" for i in range(1, num_files + 1)
+        ]
+        for i, image in enumerate(fake_images):
+            image.write(temp_file_names[i])
+        object_name = fake_images[0].header["OBJECT"]
+
+        found_sources = source_detection(
+            fake_images[0],
+            fwhm=fake_images[0].sources["x_stddev"].mean(),
+            threshold=10,
+        )
+        source_list_file = tmp_path / "source_list.ecsv"
+        found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
+
+        photometry_settings_for_test.source_location_settings.source_list_file = str(
+            source_list_file
+        )
+
+        # Force exactly one source to be reported missing, and only on the
+        # first image processed, so the accumulated missing_sources list has
+        # length exactly one -- the case that triggered #474. With the default
+        # settings no sources are dropped naturally (see
+        # test_photometry_on_directory), so this mock is the only source missing.
+        missing_id = int(found_sources["star_id"][0])
+        real_single = photometry_mod.single_image_photometry
+        state = {"calls": 0}
+
+        def fake_single(*args, **kwargs):
+            phot, missing = real_single(*args, **kwargs)
+            state["calls"] += 1
+            if state["calls"] == 1:
+                missing = list(missing) + [missing_id]
+            return phot, missing
+
+        monkeypatch.setattr(photometry_mod, "single_image_photometry", fake_single)
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="Cannot merge meta key",
+                category=MergeConflictWarning,
+            )
+            ap_phot = AperturePhotometry(settings=photometry_settings_for_test)
+            # Before the #474 fix this raised TypeError: unhashable type: 'list'
+            phot_data = ap_phot(str(tmp_path), object_of_interest=object_name)
+
+        # The single missing source must have been rejected from every image.
+        assert missing_id not in set(phot_data["star_id"])
+
     def test_photometry_on_directory_with_no_ra_dec(self, photometry_settings_for_test):
         # Create list of fake CCDData objects
         num_files = 5
