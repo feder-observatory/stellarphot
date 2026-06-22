@@ -204,6 +204,10 @@ log_cli_level = "info"
 xfail_strict = true
 filterwarnings = [
     "error",
+    # photutils' covariance_eigvals casts complex (zero-imaginary) eigenvalues to
+    # real; numpy >= 2.5 returns complex eigvals even for a real symmetric
+    # covariance matrix, triggering a benign ComplexWarning.
+    'ignore:Casting complex values to real discards the imaginary part:numpy.exceptions.ComplexWarning:photutils.segmentation.catalog',
     # Back-compat shims for GUI code that moved to stellarphot.gui emit this on
     # import; it is intentional and covered by gui/tests/test_gui_shims.py.
     'ignore:.*has moved to stellarphot\.gui.*:astropy.utils.exceptions.AstropyDeprecationWarning',
