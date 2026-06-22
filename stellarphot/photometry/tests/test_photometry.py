@@ -590,6 +590,12 @@ class TestAperturePhotometry:
             fake_images[0].noise_dev * noise_unit
         )
 
+        # Add "foreign" handlers -- handlers added by something other than
+        # stellarphot -- to both the root logger and the multi_image_photometry
+        # logger. These stand in for handlers a downstream app or user might have
+        # installed. The asserts at the end of the test check that running
+        # photometry leaves these handlers in place instead of nuking handlers it
+        # did not create.
         root_logger = logging.getLogger()
         multilogger = logging.getLogger("multi_image_photometry")
         foreign_root_handler = logging.NullHandler()
@@ -641,6 +647,10 @@ class TestAperturePhotometry:
                         category=MergeConflictWarning,
                     )
                     ap_phot = AperturePhotometry(settings=photometry_settings_for_test)
+                    # Calling AperturePhotometry on a directory (rather than a
+                    # single file) dispatches to multi_image_photometry, which in
+                    # turn calls single_image_photometry once per image. That is
+                    # how this test exercises the multi-image logging path.
                     ap_phot(temp_dir, object_of_interest=object_name)
 
                 # single_image_photometry must still write to the log file even
