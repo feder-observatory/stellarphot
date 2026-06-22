@@ -7,6 +7,7 @@ from astropy.nddata.utils import Cutout2D
 from astropy.stats import sigma_clipped_stats
 from astropy.table import Table
 from astropy.utils.exceptions import AstropyUserWarning
+from numpy.exceptions import ComplexWarning
 from photutils.detection import DAOStarFinder
 from photutils.morphology import data_properties
 from photutils.profiles import RadialProfile
@@ -147,7 +148,13 @@ def compute_fwhm(
             case FwhmMethods.MOMENTS:
                 sc = data_properties(cutout.data)
 
-                fwhm_xm = sc.fwhm.value
+                with warnings.catch_warnings():
+                    # photutils' covariance_eigvals casts complex (zero-imaginary)
+                    # eigenvalues to real; numpy >= 2.5 returns complex eigvals
+                    # even for a real symmetric covariance matrix, which triggers
+                    # a (benign) ComplexWarning here.
+                    warnings.simplefilter("ignore", ComplexWarning)
+                    fwhm_xm = sc.fwhm.value
                 fwhm_ym = fwhm_xm
                 fwhm_x.append(fwhm_xm)
                 fwhm_y.append(fwhm_ym)
