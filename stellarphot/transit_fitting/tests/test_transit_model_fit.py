@@ -79,6 +79,34 @@ def test_pytransit_matches_batman_reference():
         )
 
 
+def test_transit_model_fit_requires_pytransit(monkeypatch):
+    # If pytransit is not installed, constructing a TransitModelFit should fail
+    # with a clear, actionable error rather than a cryptic one.
+    from stellarphot.transit_fitting import core
+
+    monkeypatch.setattr(core, "RoadRunnerModel", None)
+    with pytest.raises(ImportError, match="install pytransit"):
+        TransitModelFit()
+
+
+def test_model_light_curve_at_times_restores_original_times():
+    # Evaluating the model at a different set of times should not disturb the
+    # model's configured times (the pytransit model is temporarily repointed
+    # and then restored).
+    tmod = _make_transit_model_with_data(
+        noise_dev=0, with_airmass=False, with_width=False, with_spp=False
+    )
+
+    baseline = tmod.model_light_curve()
+
+    at_times = np.linspace(tmod.times[0], tmod.times[-1], len(tmod.times))
+    shifted = tmod.model_light_curve(at_times=at_times)
+    assert len(shifted) == len(at_times)
+
+    # The original times are restored, so a subsequent call matches the baseline.
+    np.testing.assert_allclose(tmod.model_light_curve(), baseline)
+
+
 def test_transit_fit_value_length_check():
     # Check that setting inconsistent lengths raises an error
     tmod = TransitModelFit()

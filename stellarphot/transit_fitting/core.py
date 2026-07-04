@@ -24,7 +24,7 @@ from astropy.utils.exceptions import AstropyUserWarning
 
 try:
     from pytransit import RoadRunnerModel
-except ImportError:
+except ImportError:  # pragma: no cover
     # pytransit is an optional dependency (the ``exoplanet`` extra). Importing
     # this module must still succeed without it so the rest of stellarphot can
     # be imported; instantiating TransitModelFit without pytransit raises a
