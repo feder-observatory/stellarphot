@@ -48,9 +48,9 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip tox
-      - name: Install batman
+      - name: Install pytransit
         run: |
-          pip install batman-package
+          pip install pytransit
       - if: ${{ ! matrix.coverage }}
         name: Run tests
         run: |
@@ -107,9 +107,9 @@ jobs:
         run: |
           pip install .
 
-      - name: Install batman
+      - name: Install pytransit
         run: |
-          pip install batman-package
+          pip install pytransit
 
       - name: Setup Graphviz
         uses: ts-graphviz/setup-graphviz@v2

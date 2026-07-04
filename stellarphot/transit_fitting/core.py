@@ -23,14 +23,14 @@ except ImportError:
 from astropy.utils.exceptions import AstropyUserWarning
 
 try:
-    import batman
-except ImportError:
-    ImportError(
-        "You must install the batman exoplanet package. Try:\n"
-        "conda install batman-package\n"
+    from pytransit import RoadRunnerModel
+except ImportError as e:
+    raise ImportError(
+        "You must install pytransit. Try:\n"
+        "  conda install -c conda-forge pytransit\n"
         "or\n"
-        "pip install batman-package"
-    )
+        "  pip install pytransit"
+    ) from e
 
 __all__ = ["VariableArgsFitter", "TransitModelOptions", "TransitModelFit"]
 
@@ -137,11 +137,9 @@ class TransitModelFit:
     """
     Transit model fits to observed light curves.
 
-    Parameters
-    ----------
-    batman_params : batman.TransitParams
-        Parameters for the batman transit model. If not provided, the
-        default parameters will be used.
+    The underlying transit light curve is computed with pytransit's
+    ``RoadRunnerModel`` using a quadratic limb-darkening law and a circular
+    orbit.
 
     Attributes
     ----------
@@ -159,15 +157,17 @@ class TransitModelFit:
     """
 
     def __init__(self):
-        self._batman_params = batman.TransitParams()
-        self._set_default_batman_params()
+        # pytransit's RoadRunnerModel with the quadratic limb-darkening law is
+        # parameterized at evaluation time via ``evaluate(...)``, so no separate
+        # parameter container is needed. The time array is supplied later via
+        # ``set_data`` (see the ``times`` setter).
+        self._transit_model = RoadRunnerModel("quadratic")
         self._times = None
         self._airmass = None
         self._spp = None
         self._width = None
         self._fitter = VariableArgsFitter()
         self._model = None
-        self._batman_mod_for_fit = None
         self.weights = None
         self._detrend_parameters = set()
         self._all_detrend_params = ["airmass", "width", "spp"]
@@ -208,11 +208,8 @@ class TransitModelFit:
             )
         self._times = value
 
-        try:
-            if self._batman_mod_for_fit is None:
-                self._set_up_batman_model_for_fitting()
-        except ValueError:
-            pass
+        if value is not None:
+            self._transit_model.set_data(np.asarray(value, dtype=float))
 
     @property
     def airmass(self):
@@ -298,49 +295,11 @@ class TransitModelFit:
     def model(self):
         """
         model : `astropy.modeling.Model`
-            The model used for fitting. This is a combination of the batman
+            The model used for fitting. This is a combination of the pytransit
             transit model and any other trends that are included in the fit.
             This is set up when the ``setup_model`` method is called.
         """
         return self._model
-
-    def _set_default_batman_params(self):
-        """
-        Initialize batman parameters to some not nonsensical values. These
-        will need to be adjusted before fitting.
-        """
-        # time of inferior conjunction --> THE MIDPOINT of the transit
-        self._batman_params.t0 = 59028.723
-
-        # orbital period
-        self._batman_params.per = 5.72
-
-        # planet radius (in units of stellar radii)  --> DETERMINES DEPTH
-        # (affects duration)
-        self._batman_params.rp = 0.035
-
-        # semi-major axis (in units of stellar radii) --> DETERMINES DURATION
-        self._batman_params.a = 12.2
-
-        # orbital inclination (in degrees)
-        self._batman_params.inc = 90.0
-
-        # eccentricity
-        self._batman_params.ecc = 0.0
-
-        # longitude of periastron (in degrees)
-        self._batman_params.w = 90.0
-
-        # limb darkening model
-        self._batman_params.limb_dark = "quadratic"
-
-        # limb darkening coefficients [u1, u2]
-        self._batman_params.u = [0.3, 0.3]
-
-    def _set_up_batman_model_for_fitting(self):
-        if self._times is None:
-            raise ValueError("times need to be set before setting up " "transit model.")
-        self._batman_mod_for_fit = batman.TransitModel(self._batman_params, self.times)
 
     def _setup_transit_model(self):
         """
@@ -359,22 +318,26 @@ class TransitModelFit:
             rp=0.1,
             a=10.0,
             inclination=90.0,
-            eccentricity=0.0,
+            eccentricity=0.0,  # noqa: ARG001  (kept as a fixed model parameter; orbit is circular)
             limb_u1=0.3,
             limb_u2=0.3,
             airmass_trend=0.0,
             width_trend=0.0,
             spp_trend=0.0,
         ):
-            self._batman_params.t0 = t0
-            self._batman_params.per = period
-            self._batman_params.rp = rp
-            self._batman_params.a = a
-            self._batman_params.inc = inclination
-            self._batman_params.ecc = eccentricity
-            self._batman_params.u = [limb_u1, limb_u2]
-
-            flux = self._batman_mod_for_fit.light_curve(self._batman_params)
+            # pytransit uses inclination in radians. The orbit is circular
+            # (eccentricity is always fixed at 0 in this model), so ``evaluate``
+            # is left with its default ``e=0``; the ``eccentricity`` argument is
+            # retained in the signature for API stability but is unused, matching
+            # the previous behavior where batman's ``ecc`` was fixed at 0.
+            flux = self._transit_model.evaluate(
+                k=rp,
+                ldc=[limb_u1, limb_u2],
+                t0=t0,
+                p=period,
+                a=a,
+                i=np.radians(inclination),
+            )
             flux += airmass_trend * (airmass)
             flux += width_trend * width
             flux += spp_trend * sky_per_pix
@@ -469,7 +432,7 @@ class TransitModelFit:
         self._setup_transit_model()
 
         # rp is related to depth in a straightforward way
-        self._model.rp.value = self._batman_params.rp = np.sqrt(depth / 1000)
+        self._model.rp.value = np.sqrt(depth / 1000)
 
         # The estimate below assumes a circular orbit and inclination of
         # 90 degrees (edge on). This should be fine as a starting point
@@ -478,20 +441,14 @@ class TransitModelFit:
         # See Kipping, eq. 16 at
         # https://doi.org/10.1111/j.1365-2966.2010.16894.x
         estimated_a = 1 / np.sin(duration * np.pi / period)
-        self._model.a.value = self._batman_params.a = estimated_a
+        self._model.a.value = estimated_a
 
-        self._model.period.value = self._batman_params.per = period
-        self._model.inclination.value = self._batman_params.inc = inclination
-        self._model.t0.value = self._batman_params.t0 = t0
+        self._model.period.value = period
+        self._model.inclination.value = inclination
+        self._model.t0.value = t0
         self._model.airmass_trend.value = airmass_trend
         self._model.width_trend.value = width_trend
         self._model.spp_trend.value = spp_trend
-
-        try:
-            if self._batman_mod_for_fit is None:
-                self._set_up_batman_model_for_fitting()
-        except ValueError:
-            pass
 
         if model_options is not None:
             # Setup the model more 🙄
@@ -517,8 +474,8 @@ class TransitModelFit:
         if self._model is None:
             raise ValueError("Run setup_model() before trying to fit.")
 
-        if self._batman_mod_for_fit is None:
-            self._set_up_batman_model_for_fitting()
+        # The pytransit model already has its time array (set via the ``times``
+        # setter), so no additional model setup is needed here.
 
         # Check whether any data bits are None and fix those
         # parameters.
@@ -636,15 +593,11 @@ class TransitModelFit:
         spp = self.spp if self.spp is not None else zeros
 
         if at_times is not None:
-            # temporarily reset the batman model to the new times,
-            # then restore it.
-            original_model = self._batman_mod_for_fit
-
-            self._batman_mod_for_fit = batman.TransitModel(
-                self._batman_params, at_times
-            )
+            # temporarily point the transit model at the new times,
+            # then restore the original times.
+            self._transit_model.set_data(np.asarray(at_times, dtype=float))
             model = self.model(at_times, airmass, width, spp)
-            self._batman_mod_for_fit = original_model
+            self._transit_model.set_data(np.asarray(self.times, dtype=float))
         else:
             model = self.model(self.times, airmass, width, spp)
 
