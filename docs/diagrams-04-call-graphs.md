@@ -629,7 +629,7 @@ flowchart LR
     subgraph sg_core["core.py"]
         direction TB
         tmf_setup["TransitModelFit.setup_model()"]:::cls
-        tmf_internal["_setup_transit_model() /<br/>_set_default_batman_params()"]:::cls
+        tmf_internal["_setup_transit_model()"]:::cls
         tmf_fit["TransitModelFit.fit()"]:::cls
         tmf_lc["model_light_curve() /<br/>data_light_curve()"]:::cls
         tmf_detrend["_detrend()"]:::cls
@@ -652,7 +652,7 @@ flowchart LR
     gettic["io.py — get_tic_info()"]:::fn
     ingress["plotting.py —<br/>plot_predict_ingress_egress()"]:::fn
 
-    batman["batman TransitModel"]:::external
+    batman["pytransit RoadRunnerModel"]:::external
     leastsq["scipy.optimize.leastsq"]:::external
     mast["astroquery MAST Catalogs"]:::external
 

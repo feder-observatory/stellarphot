@@ -17,7 +17,7 @@ only what you need:
   Jupyter/widget GUI described below.
 - ``pip install stellarphot[gui]`` — adds the notebook/widget interface.
 - ``pip install stellarphot[exoplanet]`` — adds exoplanet transit light-curve
-  fitting (``batman``).
+  fitting (``pytransit``).
 - ``pip install stellarphot[all]`` — everything above.
 
 Only use one of the methods below for making a virtual environment.

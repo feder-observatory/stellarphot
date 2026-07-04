@@ -14,7 +14,7 @@ The modules group into these logical components:
 | **Settings & configuration** | `settings/` | Pydantic models for all configuration and saved-settings file management — pure Pydantic, no GUI imports |
 | **Photometry engine** | `photometry/` | Source detection, FWHM measurement, aperture photometry pipeline |
 | **Differential photometry** | `differential_photometry/` | Relative flux (AIJ-style) and variable-star magnitude calculations |
-| **Transit fitting** | `transit_fitting/` | Exoplanet transit modeling (batman), TIC/MAST queries (the EXOTIC helper GUI moved to `gui/`) |
+| **Transit fitting** | `transit_fitting/` | Exoplanet transit modeling (pytransit), TIC/MAST queries (the EXOTIC helper GUI moved to `gui/`) |
 | **Input/output** | `io/` | AstroImageJ, AAVSO extended format, TESS/TFOP files |
 | **GUI layer** | `gui/` | All notebook/widget UI, consolidated here so the rest of the package stays headless: the settings-form generator (`views.py`), settings widgets (`custom_widgets.py`), file chooser (`fits_opener.py`), seeing-profile/comparison-star widgets, and the EXOTIC helper. Requires the optional `[gui]` extra |
 | **Plotting** | `plotting/` | Seeing, transit, and multi-night light-curve plots |
@@ -393,7 +393,7 @@ flowchart LR
 
     core_ext["core.py"]:::external
     settings_ext["settings/"]:::external
-    batman_ext["batman<br/>(transit models)"]:::external
+    batman_ext["pytransit<br/>(transit models)"]:::external
     mast_ext["astroquery MAST"]:::external
 
     tess_py -->|"get_tic_info"| tf_io
@@ -445,6 +445,6 @@ Key contents of each file:
 | Core data layer | astropy (QTable, SkyCoord, Time, units), astroquery (Vizier, XMatch), pandas, lightkurve — no GUI stack at import time |
 | Photometry engine | photutils (apertures, DAOStarFinder, centroids, profiles), astropy, ccdproc |
 | Settings | pydantic only — no GUI dependencies (the widget layer moved to `stellarphot.gui`) |
-| Transit fitting | batman-package, astropy.modeling, scipy, astroquery (MAST) |
+| Transit fitting | pytransit, astropy.modeling, scipy, astroquery (MAST) |
 | GUI layer | the optional `[gui]` extra: ipywidgets, ipyautoui, ipyfilechooser, astrowidgets, ginga, jupyter-app-launcher, papermill (plus matplotlib from the base install) — not installed by a base `pip install stellarphot` |
 | Plotting | matplotlib |

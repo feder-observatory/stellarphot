@@ -47,7 +47,7 @@ the dev environment, you may need to delete it and start over.
 
         # The couple of packages listed below take care of some dependencies
         # that would otherwise need to be compiled.
-        mamba create -n stellarphot-dev python=3.11 ccdproc batman-package
+        mamba create -n stellarphot-dev python=3.11 ccdproc pytransit
 
 2.  Activate the environment:
 

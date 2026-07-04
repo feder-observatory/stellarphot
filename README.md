@@ -28,10 +28,10 @@ You can install `stellarphot` with either `pip` or `conda`.  If you are interest
   ```
   conda install -c conda-forge stellarphot
   ```
-  If you are interested in exoplanet light curve fitting, also install `batman` using
+  If you are interested in exoplanet light curve fitting, also install `pytransit` using
 
   ```
-  conda install -c conda-forge batman-package
+  conda install -c conda-forge pytransit
   ```
 
 - Install with `pip`. Most people want the full interactive experience (the
@@ -47,7 +47,7 @@ You can install `stellarphot` with either `pip` or `conda`.  If you are interest
     Jupyter/widget GUI.
   - `pip install stellarphot[gui]` — adds the notebook/widget interface.
   - `pip install stellarphot[exoplanet]` — adds exoplanet transit light-curve
-    fitting (`batman`).
+    fitting (`pytransit`).
   - `pip install stellarphot[all]` — everything above.
 
 ## Getting started with stellarphot
