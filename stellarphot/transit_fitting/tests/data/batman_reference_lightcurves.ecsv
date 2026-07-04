@@ -5,8 +5,8 @@
 # - {name: time, datatype: float64}
 # - {name: flux, datatype: float64}
 # meta: !!omap
-# - {description: 'Reference exoplanet transit light curves generated with batman-package (quadratic limb darkening, circular orbits).
-#     Used to regression-test the pytransit replacement. Regenerate with generate_batman_reference.py.'}
+# - {description: 'Reference exoplanet transit light curves generated once with batman-package (quadratic limb darkening, circular orbits with ecc=0, w=90),
+#     used to regression-test the pytransit replacement. Each case has 400 points spanning t0 +/- 0.12*period; the per-case parameters are in the cases meta below.'}
 # - cases:
 #   - {a: 12.2, inc: 90.0, name: central_shallow, period: 5.72, rp: 0.035, t0: 0.0, u1: 0.3, u2: 0.3}
 #   - {a: 8.0, inc: 87.0, name: deep_grazing, period: 3.5, rp: 0.12, t0: 0.0, u1: 0.4, u2: 0.1}

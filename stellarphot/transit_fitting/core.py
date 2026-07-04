@@ -584,7 +584,10 @@ class TransitModelFit:
         ----------
         at_times : array-like
             Times at which to calculate the model. If not provided, the
-            times used for fitting will be used.
+            times used for fitting will be used. Because the airmass/width/spp
+            trend covariates are reused as-is, ``at_times`` must have the same
+            length as the model's times; a mismatched length raises
+            ``ValueError``.
 
         detrend_by : str or list of str
             Parameter(s) to detrend by. If ``None``, no detrending is
@@ -602,11 +605,24 @@ class TransitModelFit:
         spp = self.spp if self.spp is not None else zeros
 
         if at_times is not None:
-            # temporarily point the transit model at the new times,
-            # then restore the original times.
-            self._transit_model.set_data(np.asarray(at_times, dtype=float))
-            model = self.model(at_times, airmass, width, spp)
-            self._transit_model.set_data(np.asarray(self.times, dtype=float))
+            at_times = np.asarray(at_times, dtype=float)
+            # The trend covariates (airmass/width/spp) are the ones supplied for
+            # the model's own times, so at_times must line up with them. Check
+            # before repointing the pytransit model so a bad call cannot leave
+            # the instance in a corrupted state.
+            if len(at_times) != len(self.times):
+                raise ValueError(
+                    "at_times must have the same length as the model times "
+                    f"({len(self.times)}) so the airmass/width/spp trend "
+                    f"covariates line up; got length {len(at_times)}."
+                )
+            # Temporarily point the transit model at the new times, restoring
+            # the original times even if evaluation fails.
+            self._transit_model.set_data(at_times)
+            try:
+                model = self.model(at_times, airmass, width, spp)
+            finally:
+                self._transit_model.set_data(np.asarray(self.times, dtype=float))
         else:
             model = self.model(self.times, airmass, width, spp)
 
@@ -655,7 +671,9 @@ class TransitModelFit:
 
 # my_model.model_light_curve(detrend_by=['airmass', 'spp'])
 
-# my_model.model_light_curve(at_times=np.linspace(start - 0.1, end + 0.1, num=1000),
+# at_times reuses the stored trend covariates, so it must match len(times):
+# my_model.model_light_curve(at_times=np.linspace(start - 0.1, end + 0.1,
+#                                                  num=len(my_model.times)),
 #                            detrend_by=['airmass'])
 
 # my_model.model

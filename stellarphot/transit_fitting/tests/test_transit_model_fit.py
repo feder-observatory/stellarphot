@@ -42,9 +42,9 @@ def _create_data_from_model_with_trends(transit_model, noise_dev=0.01):
 def test_pytransit_matches_batman_reference():
     # pytransit replaced batman-package as the transit light-curve engine. This
     # checks that pytransit reproduces a set of reference light curves that were
-    # generated once with batman (see generate_batman_reference.py). Running
-    # this test only requires the committed fixture and pytransit -- batman
-    # itself is not a test dependency.
+    # generated once with batman (the fixture header records the parameters).
+    # Running this test only requires the committed fixture and pytransit --
+    # batman itself is not a test dependency.
     from pytransit import RoadRunnerModel
 
     reference = Table.read(REFERENCE_FILE)
@@ -104,6 +104,26 @@ def test_model_light_curve_at_times_restores_original_times():
     assert len(shifted) == len(at_times)
 
     # The original times are restored, so a subsequent call matches the baseline.
+    np.testing.assert_allclose(tmod.model_light_curve(), baseline)
+
+
+def test_model_light_curve_at_times_length_mismatch_raises():
+    # at_times reuses the stored airmass/width/spp covariates, so it must match
+    # the model's time length. A mismatched length is a clear error rather than
+    # a numpy broadcasting crash, and it must be raised *before* the pytransit
+    # model is repointed so the instance is not left corrupted.
+    tmod = _make_transit_model_with_data(
+        noise_dev=0, with_airmass=True, with_width=True, with_spp=True
+    )
+
+    baseline = tmod.model_light_curve()
+
+    bad_times = np.linspace(tmod.times[0], tmod.times[-1], len(tmod.times) + 5)
+    with pytest.raises(ValueError, match="same length"):
+        tmod.model_light_curve(at_times=bad_times)
+
+    # The failed call must not corrupt the model: a normal call still works and
+    # returns the same result as before.
     np.testing.assert_allclose(tmod.model_light_curve(), baseline)
 
 
