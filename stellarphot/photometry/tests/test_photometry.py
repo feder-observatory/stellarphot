@@ -568,6 +568,104 @@ class TestAperturePhotometry:
                     or np.abs(expected_flux - obs_avg_net_cnts) > expected_deviation
                 )
 
+    def test_multi_image_photometry_preserves_foreign_log_handlers(
+        self, photometry_settings_for_test
+    ):
+        # Regression test for #153. multi_image_photometry used to clear the
+        # root logger's handlers (and remove every handler from its own logger),
+        # which destroyed logging configuration that stellarphot did not set up.
+        # It must now leave handlers it did not add in place.
+        #
+        # The foreign root handler added below also guards against a subtler
+        # regression: single_image_photometry must still write to the log file
+        # even when the root logger already has handlers. It used to rely on
+        # multi_image_photometry clearing the root handlers and skipped its own
+        # setup (via logger.hasHandlers(), which walks up to root) when any were
+        # present.
+        num_files = 3
+        fake_images = self.list_of_fakes(num_files)
+
+        noise_unit = photometry_settings_for_test.camera.read_noise.unit
+        photometry_settings_for_test.camera.read_noise = (
+            fake_images[0].noise_dev * noise_unit
+        )
+
+        # Add "foreign" handlers -- handlers added by something other than
+        # stellarphot -- to both the root logger and the multi_image_photometry
+        # logger. These stand in for handlers a downstream app or user might have
+        # installed. The asserts at the end of the test check that running
+        # photometry leaves these handlers in place instead of nuking handlers it
+        # did not create.
+        root_logger = logging.getLogger()
+        multilogger = logging.getLogger("multi_image_photometry")
+        foreign_root_handler = logging.NullHandler()
+        foreign_named_handler = logging.NullHandler()
+        root_logger.addHandler(foreign_root_handler)
+        multilogger.addHandler(foreign_named_handler)
+
+        try:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp_dir:
+                temp_file_names = [
+                    Path(temp_dir) / f"tempfile_{i:02d}.fit"
+                    for i in range(1, num_files + 1)
+                ]
+                for i, image in enumerate(fake_images):
+                    image.write(temp_file_names[i])
+                object_name = fake_images[0].header["OBJECT"]
+
+                found_sources = source_detection(
+                    fake_images[0],
+                    fwhm=fake_images[0].sources["x_stddev"].mean(),
+                    threshold=10,
+                )
+                source_list_file = Path(temp_dir) / "source_list.ecsv"
+                found_sources.write(
+                    source_list_file, format="ascii.ecsv", overwrite=True
+                )
+
+                phot_options = (
+                    photometry_settings_for_test.photometry_optional_settings.model_copy()
+                )
+                phot_options.fwhm_method = FwhmMethods.FIT
+                photometry_settings_for_test.photometry_optional_settings = phot_options
+                source_locations = photometry_settings_for_test.source_location_settings
+                source_locations.use_coordinates = "sky"
+                source_locations.source_list_file = str(source_list_file)
+
+                logging_settings = (
+                    photometry_settings_for_test.logging_settings.model_copy()
+                )
+                logging_settings.logfile = "test.log"
+                photometry_settings_for_test.logging_settings = logging_settings
+                # multi_image_photometry writes the log file into the image dir.
+                full_logfile = Path(temp_dir) / "test.log"
+
+                with warnings.catch_warnings():
+                    warnings.filterwarnings(
+                        "ignore",
+                        message="Cannot merge meta key",
+                        category=MergeConflictWarning,
+                    )
+                    ap_phot = AperturePhotometry(settings=photometry_settings_for_test)
+                    # Calling AperturePhotometry on a directory (rather than a
+                    # single file) dispatches to multi_image_photometry, which in
+                    # turn calls single_image_photometry once per image. That is
+                    # how this test exercises the multi-image logging path.
+                    ap_phot(temp_dir, object_of_interest=object_name)
+
+                # single_image_photometry must still write to the log file even
+                # though the root logger already has a handler.
+                assert full_logfile.exists()
+                log_content = full_logfile.read_text()
+                assert "Calculating noise for all sources" in log_content
+
+            # Handlers stellarphot did not add must still be present.
+            assert foreign_root_handler in root_logger.handlers
+            assert foreign_named_handler in multilogger.handlers
+        finally:
+            root_logger.removeHandler(foreign_root_handler)
+            multilogger.removeHandler(foreign_named_handler)
+
     def test_photometry_on_directory_with_no_ra_dec(self, photometry_settings_for_test):
         # Create list of fake CCDData objects
         num_files = 5

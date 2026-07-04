@@ -45,6 +45,11 @@ __all__ = [
 # Allowed FITS header keywords for exposure values
 EXPOSURE_KEYWORDS = ["EXPOSURE", "EXPTIME", "TELAPSE", "ELAPTIME", "ONTIME", "LIVETIME"]
 
+# Attribute used to tag logging handlers that stellarphot itself created, so
+# that we can later remove only those and leave any caller-supplied handlers
+# (and the root logger's handlers) untouched. See issue #153.
+_STELLARPHOT_HANDLER = "_stellarphot_handler"
+
 
 class AperturePhotometry(BaseModel):
     """Class to perform aperture photometry on one or more images"""
@@ -134,8 +139,19 @@ def _add_log_handlers(logger, logfile, console_log):
     file_handler : `logging.FileHandler` or None
         The file handler that was created, or ``None`` if ``logfile`` was
         ``None``. Callers use this to flush/close the file when finished.
+
+    Notes
+    -----
+    Handlers created here are tagged with ``_STELLARPHOT_HANDLER`` so that
+    `_remove_our_handlers` can later remove only the handlers stellarphot
+    added. Propagation is also disabled on ``logger`` so its messages are not
+    duplicated by handlers attached to ancestor loggers (such as the root
+    logger), which means we never need to touch handlers we did not create.
     """
     logger.setLevel(logging.INFO)
+    # Do not propagate to ancestor loggers; the handlers added below fully
+    # handle our output, so there is no need to clear the root logger's handlers.
+    logger.propagate = False
 
     file_handler = None
     if logfile is not None:
@@ -143,15 +159,35 @@ def _add_log_handlers(logger, logfile, console_log):
         file_handler = logging.FileHandler(logfile)
         file_handler.setFormatter(logging.Formatter("%(levelname)s - %(message)s"))
         file_handler.setLevel(logging.INFO)
+        setattr(file_handler, _STELLARPHOT_HANDLER, True)
         logger.addHandler(file_handler)
 
     # Set up logging to console if requested, otherwise effectively suppress output
     console_handler = logging.StreamHandler() if console_log else logging.NullHandler()
     console_handler.setFormatter(logging.Formatter("%(message)s"))
     console_handler.setLevel(logging.INFO)
+    setattr(console_handler, _STELLARPHOT_HANDLER, True)
     logger.addHandler(console_handler)
 
     return file_handler
+
+
+def _remove_our_handlers(logger):
+    """
+    Remove only the handlers stellarphot added to ``logger``.
+
+    Handlers created by `_add_log_handlers` are tagged with
+    ``_STELLARPHOT_HANDLER``; any other handlers (added by the caller or by
+    other libraries) are left in place.
+
+    Parameters
+    ----------
+    logger : `logging.Logger`
+        Logger to clean up.
+    """
+    for handler in logger.handlers[:]:
+        if getattr(handler, _STELLARPHOT_HANDLER, False):
+            logger.removeHandler(handler)
 
 
 def single_image_photometry(
@@ -265,15 +301,19 @@ def single_image_photometry(
     logfile = logging_options.logfile
     console_log = logging_options.console_log
 
-    # If we have no handlers, set up logging
     logger = logging.getLogger("single_image_photometry")
 
-    # Use this to catch if logging was already set up by a call
-    # from multi_image_photometry before creating new log file handler
-    # (Warning: This actually just catches if the logger has any handlers.
-    # Probably not the best way to do this.)
+    # Only add our handlers if we have not already added them to *this* logger
+    # on an earlier call. We deliberately look at this logger's own handlers
+    # rather than logger.hasHandlers() (which walks up to the root logger), so
+    # that handlers configured elsewhere -- e.g. the root logger in a notebook
+    # or test session -- do not stop us from setting up our own log file. See
+    # issues #152 and #153.
+    we_set_up_logging = any(
+        getattr(handler, _STELLARPHOT_HANDLER, False) for handler in logger.handlers
+    )
     fh = None  # Default to file handler not existing
-    if logger.hasHandlers() is False:
+    if not we_set_up_logging:
         fh = _add_log_handlers(logger, logfile, console_log)
     fh_exists = fh is not None
 
@@ -653,8 +693,8 @@ def single_image_photometry(
         fh.flush()
         fh.close()
 
-    # Remove logger handler
-    logger.handlers.clear()
+    # Remove only the handlers we added
+    _remove_our_handlers(logger)
 
     # Create PhotometryData object to return
     photom_data = PhotometryData(
@@ -730,12 +770,10 @@ def multi_image_photometry(
             "coordinates to use this function."
         )
 
-    # Set up logging (retrieve a logger but purge any existing handlers)
+    # Set up logging. Remove any handlers we added on a previous call but leave
+    # handlers the caller (or other libraries) installed in place.
     multilogger = logging.getLogger("multi_image_photometry")
-    # Remove all other existing handlers from the logger
-    # (Kind of brute force, but works for our purposes
-    for handler in multilogger.handlers[:]:
-        multilogger.removeHandler(handler)
+    _remove_our_handlers(multilogger)
 
     logfile = photometry_settings.logging_settings.logfile
     console_log = photometry_settings.logging_settings.console_log
@@ -760,12 +798,6 @@ def multi_image_photometry(
 
     # Build image file collection
     ifc = ImageFileCollection(directory_with_images)
-
-    # Disable any root logger handlers that are active before using
-    # logging (must be done here because ImageFileCollection() creates
-    # a logger)
-    if logging.root.hasHandlers():
-        logging.root.handlers.clear()
 
     n_files_processed = 0
 
@@ -858,8 +890,8 @@ def multi_image_photometry(
     if logfile is not None:
         fh.flush()
         fh.close()
-    # Remove logger handler
-    multilogger.handlers.clear()
+    # Remove only the handlers we added
+    _remove_our_handlers(multilogger)
 
     return all_phot
 

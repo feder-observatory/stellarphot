@@ -37,6 +37,10 @@ Bug Fixes
 ^^^^^^^^^
 + Fixed dependence on non-release version of astrowidgets for overwrite capability on output images. [#108]
 + Fixed computation of FWHM when fitting to data that includes NaNs. [#164]
++ The photometry logging no longer clears the root logger's handlers or removes
+  handlers it did not add. Stellarphot now tags its own handlers, removes only
+  those, and disables propagation so its messages are not duplicated by the
+  root logger. [#153]
 + The comparison-star viewer now applies its dim magnitude limit to the VSX
   variable-star lookup, so variables fainter than the limit are no longer
   marked. [#43]
