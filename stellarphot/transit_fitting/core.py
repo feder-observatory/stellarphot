@@ -24,13 +24,19 @@ from astropy.utils.exceptions import AstropyUserWarning
 
 try:
     from pytransit import RoadRunnerModel
-except ImportError as e:
-    raise ImportError(
-        "You must install pytransit. Try:\n"
-        "  conda install -c conda-forge pytransit\n"
-        "or\n"
-        "  pip install pytransit"
-    ) from e
+except ImportError:
+    # pytransit is an optional dependency (the ``exoplanet`` extra). Importing
+    # this module must still succeed without it so the rest of stellarphot can
+    # be imported; instantiating TransitModelFit without pytransit raises a
+    # clear error (see __init__).
+    RoadRunnerModel = None
+
+_PYTRANSIT_INSTALL_MESSAGE = (
+    "You must install pytransit to use TransitModelFit. Try:\n"
+    "  conda install -c conda-forge pytransit\n"
+    "or\n"
+    "  pip install pytransit"
+)
 
 __all__ = ["VariableArgsFitter", "TransitModelOptions", "TransitModelFit"]
 
@@ -157,6 +163,9 @@ class TransitModelFit:
     """
 
     def __init__(self):
+        if RoadRunnerModel is None:
+            raise ImportError(_PYTRANSIT_INSTALL_MESSAGE)
+
         # pytransit's RoadRunnerModel with the quadratic limb-darkening law is
         # parameterized at evaluation time via ``evaluate(...)``, so no separate
         # parameter container is needed. The time array is supplied later via
