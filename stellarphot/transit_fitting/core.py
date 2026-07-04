@@ -144,8 +144,9 @@ class TransitModelFit:
     Transit model fits to observed light curves.
 
     The underlying transit light curve is computed with pytransit's
-    ``RoadRunnerModel`` using a quadratic limb-darkening law and a circular
-    orbit.
+    `RoadRunnerModel
+    <https://pytransit.readthedocs.io/en/latest/notebooks/models/roadrunner/roadrunner_model_example_1.html>`_
+    using a quadratic limb-darkening law and a circular orbit.
 
     Attributes
     ----------
@@ -599,6 +600,13 @@ class TransitModelFit:
         model : array-like
             Model light curve.
         """
+        if self.times is None:
+            raise ValueError(
+                "The times must be set before computing a model light curve."
+            )
+        if self._model is None:
+            raise ValueError("Run setup_model() before computing a model light curve.")
+
         zeros = np.zeros_like(self.times)
         airmass = self.airmass if self.airmass is not None else zeros
         width = self.width if self.width is not None else zeros

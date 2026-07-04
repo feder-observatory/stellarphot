@@ -1,15 +1,13 @@
-from pathlib import Path
-
 import numpy as np
 import pytest
 from astropy.table import Table
+from astropy.utils.data import get_pkg_data_filename
 
 from stellarphot.transit_fitting import TransitModelFit
 
 pytest.importorskip("pytransit")
 
-DATA_DIR = Path(__file__).parent / "data"
-REFERENCE_FILE = DATA_DIR / "batman_reference_lightcurves.ecsv"
+REFERENCE_FILE = get_pkg_data_filename("data/batman_reference_lightcurves.ecsv")
 
 DEFAULT_TESTING_PARAMS = dict(
     t0=2,
@@ -125,6 +123,22 @@ def test_model_light_curve_at_times_length_mismatch_raises():
     # The failed call must not corrupt the model: a normal call still works and
     # returns the same result as before.
     np.testing.assert_allclose(tmod.model_light_curve(), baseline)
+
+
+def test_model_light_curve_requires_times_and_model():
+    # model_light_curve() is public API; if called before times/setup_model it
+    # should fail fast with a clear ValueError (mirroring fit()) rather than a
+    # cryptic TypeError from dereferencing an unset model.
+    tmod = TransitModelFit()
+
+    # Neither times nor the model have been set yet.
+    with pytest.raises(ValueError, match="times must be set"):
+        tmod.model_light_curve()
+
+    # Set times but not the model -> still fails, now on the missing model.
+    tmod.times = np.linspace(0, 1, 10)
+    with pytest.raises(ValueError, match="setup_model"):
+        tmod.model_light_curve()
 
 
 def test_transit_fit_value_length_check():
