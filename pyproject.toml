@@ -221,6 +221,9 @@ filterwarnings = [
     'ignore:Passing unrecognized arguments to super:DeprecationWarning',
     # pandas will require pyarrow at some point, which is good to know, I guess...
     'ignore:[.\n]*Pyarrow will become a required dependency of pandas[.\n]*:DeprecationWarning',
+    # pytransit eagerly imports arviz, which emits this on import (seen with
+    # arviz 0.23.x). It is a third-party notice, not something we can act on.
+    'ignore:[.\n]*ArviZ is undergoing a major refactor[.\n]*:FutureWarning',
     # ipyautoui is generating this on import because they still have some pydantic changes to make
     'ignore:Using extra keyword arguments on `Field` is deprecated:',
     # ipyautoui is generating another new traitlets warning
