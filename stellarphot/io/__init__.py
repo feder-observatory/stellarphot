@@ -20,13 +20,11 @@
 import importlib
 import warnings
 
-from astropy.utils.exceptions import AstropyDeprecationWarning
-
 # Keep ``from stellarphot.io import *`` a no-op. Without an explicit ``__all__``,
 # star-import would fall back to this module's non-underscore globals and leak the
-# shim internals (importlib, warnings, AstropyDeprecationWarning); an empty list
-# restores the pre-2.1.0 empty-package behavior. The deprecated names remain
-# reachable by explicit access through ``__getattr__`` below.
+# shim internals (importlib, warnings); an empty list restores the pre-2.1.0
+# empty-package behavior. The deprecated names remain reachable by explicit access
+# through ``__getattr__`` below.
 __all__ = []
 
 # Submodules whose public (``__all__``) names used to be exposed here. aavso and
@@ -41,6 +39,11 @@ def __getattr__(name):
     for submodule in _MOVED_SUBMODULES:
         module = importlib.import_module(f".{submodule}", __name__)
         if name in getattr(module, "__all__", ()):
+            # Imported here (not at module level) to mirror the sibling shim in
+            # stellarphot/core.py and keep the deprecation machinery out of the
+            # module namespace.
+            from astropy.utils.exceptions import AstropyDeprecationWarning
+
             warnings.warn(
                 f"Importing {name!r} from stellarphot.io is deprecated; import it "
                 f"from stellarphot.io.{submodule} instead. Deprecated since "

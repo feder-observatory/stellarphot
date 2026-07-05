@@ -48,7 +48,11 @@ def test_private_probe_does_not_warn_or_import_tess():
     # touching a submodule, so this holds regardless of test order.
     io = importlib.import_module("stellarphot.io")
     private = "_some_private_probe"
+    # Clear both sys.modules and the parent-package attribute so the "not imported"
+    # check keys off a genuine (re)import, not a module left over from an earlier
+    # test, and so we don't leave the two in an inconsistent state on teardown.
     sys.modules.pop("stellarphot.io.tess", None)
+    io.__dict__.pop("tess", None)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         with pytest.raises(AttributeError):
