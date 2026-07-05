@@ -116,6 +116,95 @@ def test_wrap_toggles_elim_marker():
     assert not any(label.startswith("elim") for label in iw.catalog_labels)
 
 
+def test_combining_catalogs_with_conflicting_meta_does_not_warn():
+    # Catalog tables keep the metadata of the table they were loaded from
+    # (e.g. the Vizier catalog name), which differs between catalogs.
+    # Combining them for the source table should not warn about the conflict.
+    ccd = make_ey_uma_image()
+    iw = ImageWidget()
+    iw.load_image(ccd)
+
+    style = {"shape": "circle", "color": "green", "size": 20}
+    vsx = Table({"coord": [ccd.wcs.pixel_to_world(500.0, 700.0)]})
+    vsx.meta["catalog_name"] = "B/vsx/vsx"
+    iw.load_catalog(vsx, use_skycoord=True, catalog_label="VSX", catalog_style=style)
+
+    apass = Table({"coord": [ccd.wcs.pixel_to_world(600.0, 800.0)]})
+    apass.meta["catalog_name"] = "II/336/apass9"
+    iw.load_catalog(
+        apass, use_skycoord=True, catalog_label="APASS comparison", catalog_style=style
+    )
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        all_entries = cf._all_catalog_entries(iw)
+
+    assert len(all_entries) == 2
+
+
+def test_all_catalog_entries_minimal_columns_and_mixed_frames():
+    # The combined catalog table should contain only the columns the viewer
+    # manages, even if a catalog was loaded from a table with extra columns
+    # (e.g. an input source list, which already has xcenter/ycenter columns
+    # that collide with the aperture-file column names). Coordinates should
+    # combine even if the catalogs' SkyCoord frames differ, which happens
+    # because coordinates computed from a WCS are typically FK5 while
+    # catalog coordinates are ICRS.
+    ccd = make_ey_uma_image()
+    iw = ImageWidget()
+    iw.load_image(ccd)
+
+    style = {"shape": "circle", "color": "green", "size": 20}
+
+    targets = Table(
+        {
+            "coord": SkyCoord([135.5], [49.8], unit="deg"),
+            "xcenter": [10.0],
+            "ycenter": [20.0],
+            "star_id": [1],
+        }
+    )
+    iw.load_catalog(
+        targets, use_skycoord=True, catalog_label="TESS Targets", catalog_style=style
+    )
+
+    apass = Table({"coord": SkyCoord([135.6], [49.9], unit="deg", frame="fk5")})
+    iw.load_catalog(
+        apass,
+        use_skycoord=True,
+        catalog_label="APASS comparison",
+        catalog_style=style,
+    )
+
+    entries = cf._all_catalog_entries(iw)
+
+    assert sorted(entries.colnames) == sorted(["x", "y", "coord", "marker name"])
+    assert len(entries) == 2
+
+
+def test_make_markers_with_masked_coordinates():
+    # Catalogs fetched through astroquery come back as masked tables, so the
+    # SkyCoord coords column built from them holds Masked arrays, which the
+    # high-level WCS API refuses to transform. make_markers should cope.
+    from astropy.utils.masked import Masked
+
+    ccd = make_ey_uma_image()
+    iw = ImageWidget()
+    iw.load_image(ccd)
+
+    plain = ccd.wcs.pixel_to_world([500.0, 600.0], [700.0, 800.0])
+    masked_coords = SkyCoord(
+        ra=Masked(plain.ra.deg, mask=[False, False]),
+        dec=Masked(plain.dec.deg, mask=[False, False]),
+        unit="deg",
+    )
+    apass = Table({"coords": masked_coords})
+
+    cf.make_markers(iw, [], [], apass, name_or_coord=None)
+
+    assert len(iw.get_catalog(catalog_label="APASS comparison")) == 2
+
+
 def test_make_markers_shapes_and_colors():
     # Check that each catalog gets the marker style the legend says it has.
     ccd = make_ey_uma_image()

@@ -7,6 +7,7 @@ from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astropy.coordinates.name_resolve import NameResolveError
 from astropy.table import Table, vstack
+from astropy.utils.masked import Masked
 from astrowidgets.bqplot import ImageWidget
 from bqplot import Label
 from ipyautoui.custom import FileChooser
@@ -53,6 +54,21 @@ def _coord_catalog_table(table):
     """
     out = Table(table)
     out.rename_column("coords", "coord")
+
+    # Catalogs fetched through astroquery are masked tables, so a SkyCoord
+    # built from their columns holds Masked arrays, which the high-level WCS
+    # API used by the image widget refuses to transform. Rebuild the
+    # coordinates from unmasked data.
+    coord_col = out["coord"]
+    ra = coord_col.ra.deg
+    dec = coord_col.dec.deg
+    if isinstance(ra, Masked) or isinstance(dec, Masked):
+        out["coord"] = SkyCoord(
+            ra=getattr(ra, "unmasked", ra),
+            dec=getattr(dec, "unmasked", dec),
+            unit="deg",
+            frame=coord_col.frame.name,
+        )
     return out
 
 
@@ -76,14 +92,28 @@ def _all_catalog_entries(iw):
     """
     tables = []
     for label in iw.catalog_labels:
-        entries = iw.get_catalog(catalog_label=label).copy()
+        # Keep only the columns the viewer manages. The catalogs also hold
+        # every column of the table they were loaded from, and those columns
+        # can collide with ones the viewer adds later (an input source list,
+        # for example, already has xcenter/ycenter columns).
+        entries = iw.get_catalog(catalog_label=label)["x", "y", "coord"]
+
+        # Coordinates computed from a WCS are typically FK5 while catalog
+        # coordinates are ICRS; vstack refuses to combine mismatched frames.
+        coords = entries["coord"]
+        if coords.frame.name != "icrs":
+            entries["coord"] = coords.icrs
+
         entries["marker name"] = label
         tables.append(entries)
 
     if not tables:
         return Table(names=["x", "y", "coord", "marker name"])
 
-    return vstack(tables)
+    # The catalogs keep the metadata of the tables they were loaded from,
+    # which typically conflicts between catalogs (e.g. the Vizier catalog
+    # name). The metadata is not used here, so drop it silently.
+    return vstack(tables, metadata_conflicts="silent")
 
 
 def make_markers(iw, RD, vsx, ent, name_or_coord=None):
