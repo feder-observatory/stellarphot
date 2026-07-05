@@ -30,10 +30,13 @@ __all__ = []
 
 # Map of each public name that used to be exposed here to the submodule it now
 # lives in. This is the union of the ``aavso``/``aij``/``tess`` ``__all__`` lists
-# frozen at the 2.1.0 split. It is deliberately static rather than rebuilt from the
-# live ``__all__`` lists: a name added to one of those submodules after the split
-# must NOT silently reappear at this deprecated top-level location. A test asserts
-# this map stays in sync with the submodules' ``__all__`` so drift fails loudly.
+# frozen at the 2.1.0 split. It is deliberately static -- NOT rebuilt from the live
+# ``__all__`` lists: a name added to one of those submodules after the split must
+# NOT silently reappear at this deprecated top-level location, since pre-2.1.0 code
+# (the only thing this shim exists for) can only reference names that existed at
+# 2.1.0. A test checks that every entry still points at a name that really lives in
+# its submodule, but deliberately does NOT require the map to equal the current
+# ``__all__`` -- the frozen snapshot is allowed to lag behind newly added names.
 _MOVED_NAMES = {
     "write_aavso_extended": "aavso",
     "ApertureAIJ": "aij",

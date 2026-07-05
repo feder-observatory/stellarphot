@@ -61,18 +61,16 @@ def test_private_probe_does_not_warn_or_import_tess():
     assert "stellarphot.io.tess" not in sys.modules
 
 
-def test_moved_names_map_matches_submodule_all():
-    # The static ``_MOVED_NAMES`` map must cover exactly the public names of the
-    # moved submodules -- no missing forwards, no stale entries. If a submodule's
-    # ``__all__`` drifts from the map this fails loudly rather than silently
-    # dropping (or inventing) a deprecated forward.
+def test_moved_names_map_every_forward_is_valid():
+    # ``_MOVED_NAMES`` is the frozen 2.1.0 snapshot of the deprecated surface,
+    # intentionally NOT rebuilt from the live ``__all__`` lists: a name added to a
+    # submodule after the split must not silently reappear at the deprecated
+    # top-level location. So we do NOT assert the map equals the current union of
+    # ``__all__`` (that would force the frozen surface to track later additions).
+    # We only assert the weaker, still-important property that every forward the
+    # map promises resolves -- each name really lives in the submodule it points at
+    # -- so a rename/removal that would break a deprecated forward fails loudly.
     io = importlib.import_module("stellarphot.io")
-    expected = set()
-    for submodule in ("aavso", "aij", "tess"):
-        mod = importlib.import_module(f"stellarphot.io.{submodule}")
-        expected.update(mod.__all__)
-    assert set(io._MOVED_NAMES) == expected
-    # ...and every name maps to the submodule it actually lives in.
     for name, submodule in io._MOVED_NAMES.items():
         mod = importlib.import_module(f"stellarphot.io.{submodule}")
         assert name in mod.__all__
