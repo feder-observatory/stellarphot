@@ -34,7 +34,9 @@ Other Changes and Additions
   the bqplot backend introduced in astrowidgets 0.5.0, and stellarphot no
   longer depends directly on ginga. In the comparison viewer, a plain click
   (instead of shift-click) now toggles whether a star is excluded, and APASS
-  comparison stars are drawn as diamonds rather than triangles. [#584]
+  comparison stars are drawn as diamonds rather than triangles. Because the
+  new viewer stack requires it, stellarphot now requires Python 3.12 or
+  later. [#584]
 + The duplicated logging setup in ``single_image_photometry`` and
   ``multi_image_photometry`` has been factored into a shared helper. [#152]
 + The USNO u'g'r'i'z' to SDSS DR7 ugriz transform matrix has been verified
