@@ -55,3 +55,15 @@ def test_private_probe_does_not_warn_or_import_tess():
             getattr(io, private)
     assert not caught
     assert "stellarphot.io.tess" not in sys.modules
+
+
+def test_star_import_is_a_noop():
+    # ``__all__ = []`` keeps ``from stellarphot.io import *`` a no-op so it does
+    # not leak the shim's own imports (importlib, warnings, ...). Without the
+    # explicit empty ``__all__`` star-import falls back to module globals.
+    io = importlib.import_module("stellarphot.io")
+    assert io.__all__ == []
+    namespace = {}
+    exec("from stellarphot.io import *", namespace)
+    leaked = [name for name in namespace if not name.startswith("__")]
+    assert leaked == []

@@ -13,13 +13,21 @@
 # of module import time means it only loads once ``core`` is already available; and
 # (2) private/dunder probes (doctest's ``hasattr(mod, "__test__")``, pickling,
 # etc.) are short-circuited so they never force a tess import or spurious warning.
-# Note: ``from stellarphot.io import *`` is intentionally unsupported (no
-# ``__all__``) -- import the specific submodule instead.
+# Note: ``from stellarphot.io import *`` is a deliberate no-op -- ``__all__`` is
+# empty (see below), so star-import exposes nothing and never leaks this shim's
+# own imports. Import the specific submodule instead.
 
 import importlib
 import warnings
 
 from astropy.utils.exceptions import AstropyDeprecationWarning
+
+# Keep ``from stellarphot.io import *`` a no-op. Without an explicit ``__all__``,
+# star-import would fall back to this module's non-underscore globals and leak the
+# shim internals (importlib, warnings, AstropyDeprecationWarning); an empty list
+# restores the pre-2.1.0 empty-package behavior. The deprecated names remain
+# reachable by explicit access through ``__getattr__`` below.
+__all__ = []
 
 # Submodules whose public (``__all__``) names used to be exposed here. aavso and
 # aij are cycle-safe; tess pulls in stellarphot.core, so it is imported lazily.
