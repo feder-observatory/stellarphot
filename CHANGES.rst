@@ -46,6 +46,10 @@ Bug Fixes
   marked. [#43]
 + Fixed ``TypeError`` in ``multi_image_photometry`` when exactly one source was
   missing from at least one image and ``reject_unmatched`` was enabled. [#474]
++ ``CatalogData.from_vizier`` now retries the query against a VizieR mirror
+  when a server returns an empty result (as happens when a server is up but
+  its database is unreachable), and raises an informative ``RuntimeError``
+  instead of an ``IndexError`` if every server comes back empty. [#585]
 
 1.4.15 (2024-08-16)
 -------------------
