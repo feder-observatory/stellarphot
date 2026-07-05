@@ -5,17 +5,17 @@ build-backend = "hatchling.build"
 [project]
 name = "stellarphot"
 dynamic = ["version"]
-description = "A package for performing stellar photometry aimed at variable star and exoplanet research."
+description = "A package for performing stellar photometry."
 readme = "README.md"
-license = "BSD-3-Clause"
+license = { text = "BSD-3-Clause" }
 requires-python = ">=3.11"
 authors = [
-    { name = "The Stellarphot Team", email = "mattwcraig@gmail.com" },
+    { name = "Matt Craig", email = "mattwcraig@gmail.com" },
 ]
 # Base install is headless/scriptable: the science + data layer only. The
 # Jupyter/ipywidgets GUI stack is an optional `[gui]` extra (see below), so
 # `pip install stellarphot` can be used in a plain script without pulling in
-# ipywidgets/ipyautoui/astrowidgets/ginga.
+# ipywidgets/ipyautoui/astrowidgets.
 dependencies = [
     "astropy >=5",
     "astroquery",
@@ -36,9 +36,10 @@ dependencies = [
 # The Jupyter notebook / widget stack. All of stellarphot's GUIs run in
 # notebooks, so a single `gui` extra covers the whole interactive experience.
 gui = [
-    "astrowidgets <0.4.0",  # The astrowidgets API changed significantly in 0.4,
-                             # and stellarphot is not yet compatible with it.
-    "ginga",
+    "astrowidgets >=0.5.0",  # First release with the bqplot backend stellarphot uses
+    "astro-image-display-api >=0.2.1",  # astrowidgets requires this anyway; the
+                                        # explicit pin documents the API version
+                                        # stellarphot is written against
     "ipyautoui >=0.7.19",
     "ipyfilechooser",
     "ipywidgets",
@@ -48,6 +49,11 @@ gui = [
 exoplanet = [
     "lmfit",
     "pytransit",
+]
+# Deprecated alias for `exoplanet`, kept for backwards compatibility. Will be
+# removed in a future release; use `stellarphot[exoplanet]` instead.
+exo_fitting = [
+    "stellarphot[exoplanet]",
 ]
 # Everything a user needs for the full interactive experience.
 all = [
@@ -72,15 +78,8 @@ test = [
     "tox",
 ]
 
-# These populate the "Project links" sidebar on the PyPI page. The old
-# Homepage pointed at github.com/stellarphot/stellarphot, an org that does not
-# host this project; the code and docs live under feder-observatory instead.
 [project.urls]
-Homepage = "https://github.com/feder-observatory/stellarphot"
-Documentation = "https://stellarphot.readthedocs.io"
-Repository = "https://github.com/feder-observatory/stellarphot"
-Issues = "https://github.com/feder-observatory/stellarphot/issues"
-Changelog = "https://github.com/feder-observatory/stellarphot/blob/main/CHANGES.rst"
+Homepage = "https://github.com/stellarphot/stellarphot"
 
 [tool.hatch.version]
 source = "vcs"
@@ -144,7 +143,7 @@ include = [
 
 [tool.black]
 line-length = 88
-target-version = ['py311', 'py312', 'py313']
+target-version = ['py310', 'py311']
 include = '\.pyi?$|\.ipynb$'
 # 'extend-exclude' excludes files or directories in addition to the defaults
 # extend-exclude = '''
@@ -180,7 +179,7 @@ select = [
 # The diagrams-*.md files use short Mermaid node ids that codespell
 # misreads as typos. The ExoFOP test data is a captured server response
 # whose field names look like typos to codespell.
-skip = '*.svg,docs/diagrams-*.md,stellarphot/io/tests/data/tic-236158940-exofop.json,*.lock'
+skip = '*.svg,docs/diagrams-*.md,stellarphot/io/tests/data/tic-236158940-exofop.json'
 ignore-words = "ignore-words.txt"
 
 [tool.pytest.ini_options]
@@ -217,8 +216,10 @@ filterwarnings = [
     'ignore:.*has moved to stellarphot\.gui.*:astropy.utils.exceptions.AstropyDeprecationWarning',
     # Apparently bqplot is using deprecated traitlets APIs
     'ignore:\s+Sentinel is not a public part of the traitlets API:DeprecationWarning',
-    # ginga is using something from asdf that has been deprecated
-    'ignore:AsdfInFits has been deprecated:DeprecationWarning',
+    # astrowidgets passes astropy Columns to bqplot ScatterGL marks, which
+    # makes traittypes warn (spuriously -- the dtypes match) about coercing
+    # the value to an array.
+    'ignore:Given trait value dtype "float64" does not match required type "float64":UserWarning',
     # ipyautoui generates this warning...
     'ignore:metadata \{.+\} was set from the constructor:DeprecationWarning',
     # ipywidgets or ipyautoui generates this warning...
@@ -249,47 +250,4 @@ filterwarnings = [
     # Apparently some change in pytest or coverage or pytest-cov exposes warnings
     # that were previously ignored.
     'ignore:.*:coverage.exceptions.CoverageWarning',
-    # We are currently stuck on an old version of astrowidgets, which imports
-    # astropy's deprecated TestRunner on import. astropy has changed both the
-    # wording and the category of this warning over time (AstropyPendingDeprecation
-    # -> AstropyDeprecation), so match any "TestRunner ... deprecated" message
-    # regardless of category.
-    'ignore:The TestRunner.*deprecated:',
-    # papermill sets a Windows-specific event loop policy; on python 3.14 that
-    # one line emits deprecation warnings for both WindowsSelectorEventLoopPolicy
-    # and set_event_loop_policy, so match any asyncio policy deprecation.
-    'ignore:.*asyncio.*is deprecated and slated for removal.*:DeprecationWarning'
 ]
-
-[tool.pixi.workspace]
-channels = ["conda-forge"]
-platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
-
-[tool.pixi.pypi-dependencies]
-stellarphot = { path = ".", editable = true }
-
-[tool.pixi.environments]
-default = { solve-group = "default" }
-all = { features = ["all"], solve-group = "default" }
-docs = { features = ["docs"], solve-group = "default" }
-exoplanet = { features = ["exoplanet"], solve-group = "default" }
-gui = { features = ["gui"], solve-group = "default" }
-test = { features = ["test"], solve-group = "default" }
-test-py311 = { features = ["test", "py311"]}
-test-py312 = { features = ["test", "py312"]}
-test-py313 = { features = ["test", "py313"]}
-
-[tool.pixi.feature.all.tasks]
-lab = { cmd = "jupyter lab", cwd = "stellarphot/notebooks" }
-
-[tool.pixi.feature.test.tasks]
-test = "pytest"
-
-[tool.pixi.feature.py311.dependencies]
-python = '3.11.*'
-
-[tool.pixi.feature.py312.dependencies]
-python = '3.12.*'
-
-[tool.pixi.feature.py313.dependencies]
-python = '3.13.*'
