@@ -4,7 +4,7 @@ import re
 from copy import deepcopy
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Any, Literal, TypeVar
+from typing import Annotated, Any, Literal
 
 from astropy.coordinates import EarthLocation, Latitude, Longitude, SkyCoord
 from astropy.time import Time
@@ -1137,10 +1137,10 @@ class PhotometrySettings(BaseModelWithTableRep):
 # The code for _make_partial_model is adapted from
 # https://github.com/pydantic/pydantic/issues/3120#issuecomment-1528030416
 
-BaseModelT = TypeVar("BaseModelT", bound=BaseModel)
 
-
-def _make_partial_model(model: type[BaseModelT], default=None) -> type[BaseModelT]:
+def _make_partial_model[BaseModelT: BaseModel](
+    model: type[BaseModelT], default=None
+) -> type[BaseModelT]:
     new_fields = {}
 
     for field_name, field_info in model.model_fields.items():
