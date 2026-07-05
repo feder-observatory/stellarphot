@@ -1,4 +1,3 @@
-import functools
 import logging
 
 import ipyautoui
@@ -7,18 +6,14 @@ import numpy as np
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astropy.coordinates.name_resolve import NameResolveError
-from astropy.table import Table
+from astropy.table import Table, vstack
+from astrowidgets.bqplot import ImageWidget
+from bqplot import Label
 from ipyautoui.custom import FileChooser
-
-try:
-    from astrowidgets import ImageWidget
-except ImportError:
-    from astrowidgets.ginga import ImageWidget
 
 from stellarphot import SourceListData
 from stellarphot.gui.custom_widgets import SettingWithTitle, Spinner
 from stellarphot.gui.fits_opener import FitsOpener
-from stellarphot.gui.seeing_profile_functions import set_keybindings
 from stellarphot.gui.views import ui_generator
 from stellarphot.settings import (
     PartialPhotometrySettings,
@@ -37,6 +32,60 @@ __all__ = ["make_markers", "wrap", "ComparisonViewer"]
 DESC_STYLE = {"description_width": "initial"}
 
 
+def _coord_catalog_table(table):
+    """
+    Return a copy of ``table`` whose "coords" column is renamed to "coord",
+    the SkyCoord column name astro-image-display-api expects. Loading a
+    catalog with any other column name breaks astrowidgets 0.5.0, which
+    reads the catalog back internally using the default name.
+
+    Parameters
+    ----------
+
+    table : `astropy.table.Table`
+        Table with a "coords" column of `astropy.coordinates.SkyCoord`.
+
+    Returns
+    -------
+
+    `astropy.table.Table`
+        Copy of the table with the column renamed.
+    """
+    out = Table(table)
+    out.rename_column("coords", "coord")
+    return out
+
+
+def _all_catalog_entries(iw):
+    """
+    Collect the entries of every catalog loaded in an image widget into a
+    single table, tagged with the catalog each entry came from.
+
+    Parameters
+    ----------
+
+    iw : `astrowidgets.bqplot.ImageWidget`
+        Image widget to collect catalog entries from.
+
+    Returns
+    -------
+
+    `astropy.table.Table`
+        Table with "x", "y", "coord" and "marker name" columns, where
+        "marker name" is the catalog label.
+    """
+    tables = []
+    for label in iw.catalog_labels:
+        entries = iw.get_catalog(catalog_label=label).copy()
+        entries["marker name"] = label
+        tables.append(entries)
+
+    if not tables:
+        return Table(names=["x", "y", "coord", "marker name"])
+
+    return vstack(tables)
+
+
 def make_markers(iw, RD, vsx, ent, name_or_coord=None):
     """
     Add markers for APASS, TESS targets, VSX.  Also center on object/coordinate.
@@ -44,8 +93,8 @@ def make_markers(iw, RD, vsx, ent, name_or_coord=None):
     Parameters
     ----------
 
-    iw : `astrowidgets.ImageWidget`
-        Ginga widget.
+    iw : `astrowidgets.bqplot.ImageWidget`
+        Image widget on which to show the markers.
 
     RD : `astropy.table.Table`
         Table with target information, including a
@@ -64,117 +113,102 @@ def make_markers(iw, RD, vsx, ent, name_or_coord=None):
     -------
 
     None
-        Markers are added to the image in Ginga widget.
+        Markers are added to the image in the image widget.
     """
-    iw.zoom_level = "fit"
+    # Show the whole image
+    iw.set_viewport(fov=max(iw.get_image().data.shape))
 
-    try:
-        iw.reset_markers()
-    except AttributeError:
-        iw.remove_all_markers()
+    iw.remove_catalog(catalog_label="*")
 
     if RD:
-        iw.marker = {"type": "circle", "color": "green", "radius": 10}
-        iw.add_markers(
-            RD, skycoord_colname="coords", use_skycoord=True, marker_name="TESS Targets"
+        iw.load_catalog(
+            _coord_catalog_table(RD),
+            use_skycoord=True,
+            catalog_label="TESS Targets",
+            catalog_style={"shape": "circle", "color": "green", "size": 20},
         )
 
     if name_or_coord is not None:
         if isinstance(name_or_coord, str):
-            iw.center_on(SkyCoord.from_name(name_or_coord))
+            iw.set_viewport(center=SkyCoord.from_name(name_or_coord))
         else:
-            iw.center_on(name_or_coord)
+            iw.set_viewport(center=name_or_coord)
 
     if vsx:
-        # TODO: if astrowidgets ever gets more sensible marker types use those instead
-        # of using the internal interface to marker
-        iw._marker = functools.partial(
-            iw.dc.Box,
-            xradius=10,
-            yradius=10,
-            color="blue",
+        iw.load_catalog(
+            _coord_catalog_table(vsx),
+            use_skycoord=True,
+            catalog_label="VSX",
+            catalog_style={"shape": "square", "color": "blue", "size": 20},
         )
-        iw.add_markers(
-            vsx, skycoord_colname="coords", use_skycoord=True, marker_name="VSX"
-        )
-    # TODO: if astrowidgets ever gets more sensible marker types use those instead
-    # of using the internal interface to marker
-    iw._marker = functools.partial(
-        iw.dc.Triangle,
-        xradius=10,
-        yradius=10,
-        color="red",
-    )
-    iw.add_markers(
-        ent,
-        skycoord_colname="coords",
+
+    iw.load_catalog(
+        _coord_catalog_table(ent),
         use_skycoord=True,
-        marker_name="APASS comparison",
+        catalog_label="APASS comparison",
+        catalog_style={"shape": "diamond", "color": "red", "size": 20},
     )
-    iw.marker = {"type": "cross", "color": "red", "radius": 6}
 
 
-def wrap(imagewidget, outputwidget):
+def wrap(imagewidget, status_widget):
     """
     Utility function to let you click to select/deselect comparisons.
 
     Parameters
     ----------
 
-    imagewidget : `astrowidgets.ImageWidget`
-        Ginga widget.
+    imagewidget : `astrowidgets.bqplot.ImageWidget`
+        Image widget displaying the image and catalogs.
 
-    outputwidget : `ipywidgets.Output`
-        Output widget for printing information.
+    status_widget : `ipywidgets.HTML`
+        Widget in which to display messages for the user.
 
     """
 
-    def cb(viewer, event, data_x, data_y):  # noqa: ARG001
+    def cb(interaction, event_data, buffers):  # noqa: ARG001
         """
-        The signature of this function must have the four arguments above.
+        Mouse event callback; bqplot calls it with the three arguments
+        above. Click payloads look like
+        ``{"event": "click", "domain": {"x": ..., "y": ...}}``.
         """
-        i = imagewidget._viewer.get_image()
+        if event_data.get("event") != "click":
+            return
+
+        x = event_data["domain"]["x"]
+        y = event_data["domain"]["y"]
+        out_skycoord = imagewidget.get_image().wcs.pixel_to_world(x, y)
 
         try:
             imagewidget.next_elim += 1
         except AttributeError:
             imagewidget.next_elim = 1
 
-        ra, dec = i.wcs.wcs.all_pix2world(event.data_x, event.data_y, 0)
-        out_skycoord = SkyCoord(ra=ra, dec=dec, unit=(u.degree, u.degree))
+        all_table = _all_catalog_entries(imagewidget)
+        if len(all_table) == 0:
+            status_widget.value = "Click closer to a star"
+            return
 
-        try:
-            all_table = imagewidget.get_markers(marker_name="all")
-        except AttributeError:
-            all_table = imagewidget.get_all_markers()
-
-        with outputwidget:
-            index, d2d, d3d = out_skycoord.match_to_catalog_sky(all_table["coord"])
-            if d2d < 10 * u.arcsec:
-                mouse = all_table["coord"][index].separation(all_table["coord"])
-                rat = mouse < 1 * u.arcsec
-                elims = [
-                    name
-                    for name in all_table["marker name"][rat]
-                    if name.startswith("elim")
-                ]
-                if not elims:
-                    imagewidget.add_markers(
-                        all_table[rat],
-                        skycoord_colname="coord",
-                        use_skycoord=True,
-                        marker_name=f"elim{imagewidget.next_elim}",
-                    )
-                else:
-                    for elim in elims:
-                        try:
-                            imagewidget.remove_markers_by_name(marker_name=elim)
-                        except AttributeError:
-                            imagewidget.remove_markers(marker_name=elim)
-
+        index, d2d, d3d = out_skycoord.match_to_catalog_sky(all_table["coord"])
+        if d2d < 10 * u.arcsec:
+            mouse = all_table["coord"][index].separation(all_table["coord"])
+            rat = mouse < 1 * u.arcsec
+            elims = [
+                name
+                for name in all_table["marker name"][rat]
+                if name.startswith("elim")
+            ]
+            if not elims:
+                imagewidget.load_catalog(
+                    all_table[rat],
+                    use_skycoord=True,
+                    catalog_label=f"elim{imagewidget.next_elim}",
+                    catalog_style={"shape": "plus", "color": "red", "size": 24},
+                )
             else:
-                print("sorry try again")
-                imagewidget._viewer.onscreen_message("Click closer to a star")
+                for elim in elims:
+                    imagewidget.remove_catalog(catalog_label=elim)
+        else:
+            status_widget.value = "Click closer to a star"
 
     return cb
 
@@ -231,8 +265,8 @@ class ComparisonViewer:
     dim_mag_limit : float
         Dim magnitude limit for APASS stars.
 
-    iw : `ginga.util.grc.RemoteClient`
-        Ginga widget.
+    iw : `astrowidgets.bqplot.ImageWidget`
+        Image widget.
 
     overwrite_outputs: bool
         Whether to overwrite existing output files. Defaults to True.
@@ -262,8 +296,10 @@ class ComparisonViewer:
         overwrite_outputs=True,
         observatory=None,
     ):
-        self._label_name = "labels"
         self._circle_name = "target circle"
+        # Maps a catalog label to the bqplot Label mark holding the text
+        # labels for that catalog's stars.
+        self._label_marks = {}
         self._file_chooser = FitsOpener()
 
         self._directory = directory
@@ -532,27 +568,33 @@ class ComparisonViewer:
 
     def _viewer(self):
         header = ipw.HTML(value="""
-        <h3>Click and drag or use arrow keys to pan, use +/- keys to zoom.</h3>
-        <h3>Shift-left click (or Crtl-left click) to exclude star as target
-        or comp. Click again to include.</h3>
+        <h3>Click and drag to pan, use the scroll wheel to zoom.</h3>
+        <h3>Click on a star to exclude it as target or comp.
+        Click again to include it.</h3>
         """)
 
         legend = ipw.HTML(value="""
         <ul>
         <li>Green circles -- Gaia stars within 2.5 arcmin of target</li>
-        <li>Red triangles -- Comparison stars from APASS</li>
+        <li>Red diamonds -- Comparison stars from APASS</li>
         <li>Blue squares -- VSX variables</li>
-        <li>Red × -- Exclude as target or comp</li>
+        <li>Red + -- Exclude as target or comp</li>
         </ul>
         """)
 
         iw = ImageWidget()
-        out = ipw.Output()
-        set_keybindings(iw)
-        bind_map = iw._viewer.get_bindmap()
-        gvc = iw._viewer.get_canvas()
-        bind_map.map_event(None, ("shift",), "ms_left", "cursor")
-        gvc.add_callback("cursor-down", wrap(iw, out))
+
+        # astrowidgets 0.5.0 has a bug in which the built-in _mouse_click
+        # handler references the attributes below, which are never
+        # initialized, so any click raises AttributeError and prevents
+        # callbacks registered later (like ours) from running. Setting both
+        # to False makes the built-in handler a no-op.
+        iw.click_center = False
+        iw.is_marking = False
+
+        # Messages for the user (e.g. "Click closer to a star") show up here.
+        self._status_message = ipw.HTML()
+        iw.viewer.interaction.on_msg(wrap(iw, self._status_message))
 
         self.object_name = ipw.HTML(value="<h2>Object: </h2>")
         self._object = None
@@ -590,7 +632,11 @@ class ComparisonViewer:
             self.object_name,
             self.source_and_title,
         ]
-        inner_box.children = [iw, source_legend_box]
+
+        # Put the status message below the image so messages are visible.
+        image_box = ipw.VBox()
+        image_box.children = [iw, self._status_message]
+        inner_box.children = [image_box, source_legend_box]
 
         # Add a file chooser for an input source list
         self._choose_input_source_list = FileChooser(
@@ -616,10 +662,12 @@ class ComparisonViewer:
         comp_table : `astropy.table.Table`
             Table of stars to use for the aperture file.
         """
-        try:
-            all_table = self.iw.get_all_markers()
-        except AttributeError:
-            all_table = self.iw.get_markers(marker_name="all")
+        all_table = _all_catalog_entries(self.iw)
+
+        # The circle around the target is a display overlay, not a source, so
+        # keep it out of the table. Without this the target circle could end
+        # up in the aperture file.
+        all_table = all_table[all_table["marker name"] != self._circle_name]
 
         elims = np.array([name.startswith("elim") for name in all_table["marker name"]])
         elim_table = all_table[elims]
@@ -679,58 +727,43 @@ class ComparisonViewer:
         None
             Labels for the stars are shown.
         """
-        plot_names = []
-        comp_table = self.generate_table()
         label_size = 15
-        original_mark = self.iw._marker
-        for star in comp_table:
-            star_id = star["star_id"]
-            if star["marker name"] == "TESS Targets":
-                label = f"T{star_id}"
-                self.iw._marker = functools.partial(
-                    self.iw.dc.Text,
-                    text=label,
-                    fontsize=label_size,
-                    fontscale=False,
-                    color="green",
-                )
-                self.iw.add_markers(
-                    Table(data=[[star["x"] + 20], [star["y"] - 20]], names=["x", "y"]),
-                    marker_name=self._label_name,
-                )
+        comp_table = self.generate_table()
 
-            elif star["marker name"] == "APASS comparison":
-                label = f"C{star_id}"
-                self.iw._marker = functools.partial(
-                    self.iw.dc.Text,
-                    text=label,
-                    fontsize=label_size,
-                    fontscale=False,
-                    color="red",
-                )
-                self.iw.add_markers(
-                    Table(data=[[star["x"] + 20], [star["y"] - 20]], names=["x", "y"]),
-                    marker_name=self._label_name,
-                )
+        # Each catalog gets one bqplot Label mark holding the labels for all
+        # of its stars.
+        label_prefix_color = {
+            "TESS Targets": ("T", "green"),
+            "APASS comparison": ("C", "red"),
+            "VSX": ("V", "blue"),
+        }
 
-            elif star["marker name"] == "VSX":
-                label = f"V{star_id}"
-                self.iw._marker = functools.partial(
-                    self.iw.dc.Text,
-                    text=label,
-                    fontsize=label_size,
-                    fontscale=False,
-                    color="blue",
-                )
-                self.iw.add_markers(
-                    Table(data=[[star["x"] + 20], [star["y"] - 20]], names=["x", "y"]),
-                    marker_name=self._label_name,
-                )
-            else:
-                label = f"U{star_id}"
-                print(f"Unrecognized marker name: {star['marker name']}")
-            plot_names.append(label)
-        self.iw._marker = original_mark
+        scales = {
+            "x": self.iw.viewer._scales["x"],
+            "y": self.iw.viewer._scales["y"],
+        }
+
+        for marker_name, (prefix, color) in label_prefix_color.items():
+            stars = comp_table[comp_table["marker name"] == marker_name]
+            if len(stars) == 0:
+                continue
+
+            labels = [f"{prefix}{star_id}" for star_id in stars["star_id"]]
+            mark = Label(
+                x=np.asarray(stars["x"], dtype=float) + 20,
+                y=np.asarray(stars["y"], dtype=float) - 20,
+                text=labels,
+                scales=scales,
+                colors=[color],
+                default_size=label_size,
+            )
+            self._label_marks[marker_name] = mark
+            # Mirror the mark into the viewer's own mark dictionary so the
+            # labels survive the viewer's _update_marks calls (e.g. when a
+            # catalog is added or removed).
+            self.iw.viewer._scatter_marks[f"__label__{marker_name}"] = mark
+
+        self.iw.viewer._update_marks()
 
     def remove_labels(self):
         """
@@ -742,14 +775,10 @@ class ComparisonViewer:
         None
             Labels for the stars are removed.
         """
-        try:
-            try:
-                self.iw.remove_markers(marker_name=self._label_name)
-            except AttributeError:
-                self.iw.remove_markers_by_name(marker_name=self._label_name)
-        except ValueError:
-            # No labels, keep going
-            pass
+        for name in list(self._label_marks):
+            del self._label_marks[name]
+            self.iw.viewer._scatter_marks.pop(f"__label__{name}", None)
+        self.iw.viewer._update_marks()
 
     def show_circle(self, radius=2.5 * u.arcmin, pixel_scale=0.56 * u.arcsec / u.pixel):
         """
@@ -771,15 +800,16 @@ class ComparisonViewer:
             Circle is shown around the target.
         """
         radius_pixels = np.round((radius / pixel_scale).to(u.pixel).value, decimals=0)
-        orig_marker = self.iw.marker
-        self.iw.marker = {"color": "yellow", "radius": radius_pixels, "type": "circle"}
-        self.iw.add_markers(
-            Table(data=[[self.target_coord]], names=["coords"]),
-            skycoord_colname="coords",
+        self.iw.load_catalog(
+            Table(data=[[self.target_coord]], names=["coord"]),
             use_skycoord=True,
-            marker_name=self._circle_name,
+            catalog_label=self._circle_name,
+            catalog_style={
+                "shape": "circle",
+                "color": "yellow",
+                "size": radius_pixels,
+            },
         )
-        self.iw.marker = orig_marker
 
     def remove_circle(self):
         """
@@ -792,9 +822,10 @@ class ComparisonViewer:
             Circle is removed from the image.
         """
         try:
-            self.iw.remove_markers(marker_name=self._circle_name)
-        except AttributeError:
-            self.iw.remove_markers_by_name(marker_name=self._circle_name)
+            self.iw.remove_catalog(catalog_label=self._circle_name)
+        except ValueError:
+            # No circle is currently shown
+            pass
 
     def tess_field_view(self):
         """
@@ -809,7 +840,7 @@ class ComparisonViewer:
         """
 
         # Show whole field of view
-        self.iw.zoom_level = "fit"
+        self.iw.set_viewport(fov=max(self.ccd.data.shape))
 
         # Show the circle
         self.show_circle()
@@ -837,18 +868,8 @@ class ComparisonViewer:
         # Turn off labels -- too cluttered
         self.remove_labels()
 
-        left_side = self.ccd.wcs.pixel_to_world(0, self.ccd.shape[1] / 2)
-        right_side = self.ccd.wcs.pixel_to_world(
-            self.ccd.shape[0], self.ccd.shape[1] / 2
-        )
-        fov = left_side.separation(right_side)
-
-        view_ratio = width / fov
-        # fit first to get zoom level at full field of view
-        self.iw.zoom_level = "fit"
-
-        # Then set it to what we actually want...
-        self.iw.zoom_level = self.iw.zoom_level / view_ratio
+        # The viewport accepts an angular field of view directly
+        self.iw.set_viewport(fov=width)
 
         # Show the circle
         self.show_circle()
