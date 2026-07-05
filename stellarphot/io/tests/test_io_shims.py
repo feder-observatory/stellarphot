@@ -44,8 +44,8 @@ def test_unknown_io_attribute_raises_attribute_error():
 def test_private_probe_does_not_warn_or_import_tess():
     # Dunder/private probes (doctest's ``hasattr(mod, "__test__")``, pickling, ...)
     # must not trigger the shim: no deprecation warning and no import of the heavy
-    # ``tess`` submodule. The shim short-circuits any ``_``-prefixed name before
-    # touching a submodule, so this holds regardless of test order.
+    # ``tess`` submodule. An unknown name misses the ``_MOVED_NAMES`` map and fails
+    # fast before touching a submodule, so this holds regardless of test order.
     io = importlib.import_module("stellarphot.io")
     private = "_some_private_probe"
     # Clear both sys.modules and the parent-package attribute so the "not imported"
@@ -59,6 +59,38 @@ def test_private_probe_does_not_warn_or_import_tess():
             getattr(io, private)
     assert not caught
     assert "stellarphot.io.tess" not in sys.modules
+
+
+def test_moved_names_map_matches_submodule_all():
+    # The static ``_MOVED_NAMES`` map must cover exactly the public names of the
+    # moved submodules -- no missing forwards, no stale entries. If a submodule's
+    # ``__all__`` drifts from the map this fails loudly rather than silently
+    # dropping (or inventing) a deprecated forward.
+    io = importlib.import_module("stellarphot.io")
+    expected = set()
+    for submodule in ("aavso", "aij", "tess"):
+        mod = importlib.import_module(f"stellarphot.io.{submodule}")
+        expected.update(mod.__all__)
+    assert set(io._MOVED_NAMES) == expected
+    # ...and every name maps to the submodule it actually lives in.
+    for name, submodule in io._MOVED_NAMES.items():
+        mod = importlib.import_module(f"stellarphot.io.{submodule}")
+        assert name in mod.__all__
+
+
+def test_miss_does_not_import_any_submodule():
+    # An unknown attribute must fail fast without importing any moved submodule --
+    # in particular it must not drag in ``tess`` (and therefore ``stellarphot.core``)
+    # just to raise AttributeError.
+    io = importlib.import_module("stellarphot.io")
+    names = ("aavso", "aij", "tess")
+    for name in names:
+        sys.modules.pop(f"stellarphot.io.{name}", None)
+        io.__dict__.pop(name, None)
+    missing = "definitely_not_a_real_name"
+    with pytest.raises(AttributeError):
+        getattr(io, missing)
+    assert not any(f"stellarphot.io.{name}" in sys.modules for name in names)
 
 
 def test_star_import_is_a_noop():

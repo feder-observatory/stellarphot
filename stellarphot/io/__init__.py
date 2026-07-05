@@ -7,15 +7,16 @@
 # access still works via the lazy ``__getattr__`` below but emits an
 # ``AstropyDeprecationWarning``. This shim will be removed in stellarphot 3.0.0.
 #
-# The lookup is lazy for two reasons: (1) ``stellarphot.io.tess`` imports
-# ``stellarphot.core`` while ``core`` imports ``stellarphot.io.aavso``, so eagerly
-# importing tess here would create a core <-> io import cycle -- keeping tess out
-# of module import time means it only loads once ``core`` is already available; and
-# (2) private/dunder probes (doctest's ``hasattr(mod, "__test__")``, pickling,
-# etc.) are short-circuited so they never force a tess import or spurious warning.
-# Note: ``from stellarphot.io import *`` is a deliberate no-op -- ``__all__`` is
-# empty (see below), so star-import exposes nothing and never leaks this shim's
-# own imports. Import the specific submodule instead.
+# The lookup is lazy and table-driven for two reasons: (1) ``stellarphot.io.tess``
+# imports ``stellarphot.core`` while ``core`` imports ``stellarphot.io.aavso``, so
+# eagerly importing tess here would create a core <-> io import cycle -- keeping
+# tess out of module import time means it only loads once ``core`` is already
+# available; and (2) resolving each name through a static map means an unknown
+# attribute (a typo, or a private/dunder probe from doctest/pickling) fails fast
+# without importing any submodule at all, and a known name imports exactly the one
+# submodule it lives in. Note: ``from stellarphot.io import *`` is a deliberate
+# no-op -- ``__all__`` is empty (see below), so star-import exposes nothing and
+# never leaks this shim's own imports. Import the specific submodule instead.
 
 import importlib
 import warnings
@@ -27,33 +28,48 @@ import warnings
 # through ``__getattr__`` below.
 __all__ = []
 
-# Submodules whose public (``__all__``) names used to be exposed here. aavso and
-# aij are cycle-safe; tess pulls in stellarphot.core, so it is imported lazily.
-_MOVED_SUBMODULES = ("aavso", "aij", "tess")
+# Map of each public name that used to be exposed here to the submodule it now
+# lives in. This is the union of the ``aavso``/``aij``/``tess`` ``__all__`` lists
+# frozen at the 2.1.0 split. It is deliberately static rather than rebuilt from the
+# live ``__all__`` lists: a name added to one of those submodules after the split
+# must NOT silently reappear at this deprecated top-level location. A test asserts
+# this map stays in sync with the submodules' ``__all__`` so drift fails loudly.
+_MOVED_NAMES = {
+    "write_aavso_extended": "aavso",
+    "ApertureAIJ": "aij",
+    "MultiApertureAIJ": "aij",
+    "ApertureFileAIJ": "aij",
+    "generate_aij_table": "aij",
+    "parse_aij_table": "aij",
+    "Star": "aij",
+    "tess_photometry_setup": "tess",
+    "TessSubmission": "tess",
+    "TOI": "tess",
+    "TessTargetFile": "tess",
+}
 
 
 def __getattr__(name):
-    # Short-circuit private/dunder probes so they neither import tess nor warn.
-    if name.startswith("_"):
+    submodule = _MOVED_NAMES.get(name)
+    if submodule is None:
+        # Unknown names -- typos and private/dunder probes alike -- fail fast
+        # without importing any submodule (in particular never pulling in tess).
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-    for submodule in _MOVED_SUBMODULES:
-        module = importlib.import_module(f".{submodule}", __name__)
-        if name in getattr(module, "__all__", ()):
-            # Imported here (not at module level) to mirror the sibling shim in
-            # stellarphot/core.py and keep the deprecation machinery out of the
-            # module namespace.
-            from astropy.utils.exceptions import AstropyDeprecationWarning
+    # Imported here (not at module level) to mirror the sibling shim in
+    # stellarphot/core.py and keep the deprecation machinery out of the module
+    # namespace.
+    from astropy.utils.exceptions import AstropyDeprecationWarning
 
-            warnings.warn(
-                f"Importing {name!r} from stellarphot.io is deprecated; import it "
-                f"from stellarphot.io.{submodule} instead. Deprecated since "
-                "stellarphot 2.1.0; this compatibility shim will be removed in "
-                "stellarphot 3.0.0.",
-                AstropyDeprecationWarning,
-                stacklevel=2,
-            )
-            return getattr(module, name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module = importlib.import_module(f".{submodule}", __name__)
+    warnings.warn(
+        f"Importing {name!r} from stellarphot.io is deprecated; import it "
+        f"from stellarphot.io.{submodule} instead. Deprecated since "
+        "stellarphot 2.1.0; this compatibility shim will be removed in "
+        "stellarphot 3.0.0.",
+        AstropyDeprecationWarning,
+        stacklevel=2,
+    )
+    return getattr(module, name)
 
 
 # NOTE: intentionally no custom ``__dir__``. The moved names stay reachable via
