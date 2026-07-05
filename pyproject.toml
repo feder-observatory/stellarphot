@@ -15,7 +15,7 @@ authors = [
 # Base install is headless/scriptable: the science + data layer only. The
 # Jupyter/ipywidgets GUI stack is an optional `[gui]` extra (see below), so
 # `pip install stellarphot` can be used in a plain script without pulling in
-# ipywidgets/ipyautoui/astrowidgets/ginga.
+# ipywidgets/ipyautoui/astrowidgets.
 dependencies = [
     "astropy >=5",
     "astroquery",
@@ -36,9 +36,10 @@ dependencies = [
 # The Jupyter notebook / widget stack. All of stellarphot's GUIs run in
 # notebooks, so a single `gui` extra covers the whole interactive experience.
 gui = [
-    "astrowidgets <0.4.0",  # The astrowidgets API changed significantly in 0.4,
-                             # and stellarphot is not yet compatible with it.
-    "ginga",
+    "astrowidgets >=0.5.0",  # First release with the bqplot backend stellarphot uses
+    "astro-image-display-api >=0.2.1",  # astrowidgets requires this anyway; the
+                                        # explicit pin documents the API version
+                                        # stellarphot is written against
     "ipyautoui >=0.7.19",
     "ipyfilechooser",
     "ipywidgets",
@@ -215,8 +216,10 @@ filterwarnings = [
     'ignore:.*has moved to stellarphot\.gui.*:astropy.utils.exceptions.AstropyDeprecationWarning',
     # Apparently bqplot is using deprecated traitlets APIs
     'ignore:\s+Sentinel is not a public part of the traitlets API:DeprecationWarning',
-    # ginga is using something from asdf that has been deprecated
-    'ignore:AsdfInFits has been deprecated:DeprecationWarning',
+    # astrowidgets passes astropy Columns to bqplot ScatterGL marks, which
+    # makes traittypes warn (spuriously -- the dtypes match) about coercing
+    # the value to an array.
+    'ignore:Given trait value dtype "float64" does not match required type "float64":UserWarning',
     # ipyautoui generates this warning...
     'ignore:metadata \{.+\} was set from the constructor:DeprecationWarning',
     # ipywidgets or ipyautoui generates this warning...
@@ -247,10 +250,4 @@ filterwarnings = [
     # Apparently some change in pytest or coverage or pytest-cov exposes warnings
     # that were previously ignored.
     'ignore:.*:coverage.exceptions.CoverageWarning',
-    # We are currently stuck on an old version of astrowidgets, which imports
-    # astropy's deprecated TestRunner on import. astropy has changed both the
-    # wording and the category of this warning over time (AstropyPendingDeprecation
-    # -> AstropyDeprecation), so match any "TestRunner ... deprecated" message
-    # regardless of category.
-    'ignore:The TestRunner.*deprecated:'
 ]

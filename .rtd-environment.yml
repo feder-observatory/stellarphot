@@ -7,7 +7,6 @@ dependencies:
     - astropy >=5
     - astroquery
     - ccdproc
-    - ginga
     - ipywidgets
     - bottleneck
     - photutils >=1
@@ -15,7 +14,6 @@ dependencies:
     - pandas
     - gatspy
     - pyyaml
-    - astrowidgets
     - pydantic>=2
     - reducer
     - reproject
@@ -23,3 +21,7 @@ dependencies:
     - sphinx-astropy
     - pip:
         - ipyautoui
+        # conda-forge has neither astrowidgets >=0.5.0 nor
+        # astro-image-display-api, so these come from PyPI.
+        - astrowidgets >=0.5.0
+        - astro-image-display-api >=0.2.1

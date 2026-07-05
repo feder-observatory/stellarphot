@@ -44,7 +44,15 @@ def pytest_configure(config):
     PYTEST_HEADER_MODULES.pop("h5py", None)
 
     # Always display versions of these packages
-    for package in ["astroquery", "photutils", "astrowidgets", "pydantic", "ipyautoui"]:
+    for package in [
+        "astroquery",
+        "photutils",
+        "astrowidgets",
+        "astro_image_display_api",
+        "bqplot",
+        "pydantic",
+        "ipyautoui",
+    ]:
         PYTEST_HEADER_MODULES[package] = package
 
     from .version import version
