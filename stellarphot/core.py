@@ -46,6 +46,16 @@ __all__ = [
 # from ``stellarphot.core`` (with a deprecation warning) for one or two releases.
 _MOVED_TO_CATALOGS = frozenset({"apass_dr9", "vsx_vizier", "refcat2"})
 
+# VizieR servers to try, in order, when fetching a catalog. A server that is up
+# but whose database is broken answers with a VOTable containing only error
+# messages, which astroquery silently turns into an empty result -- so
+# ``CatalogData.from_vizier`` falls through this list whenever a query comes
+# back empty.
+VIZIER_SERVERS = (
+    "vizier.cds.unistra.fr",  # astroquery's default, at CDS
+    "vizier.cfa.harvard.edu",
+)
+
 
 def __getattr__(name):
     # PEP 562 module-level attribute access. Lazily forward the moved catalog
@@ -1248,13 +1258,27 @@ class CatalogData(BaseEnhancedTable):
             if magnitude_limit is not None
             else {}
         )
-        vizier = Vizier(
-            columns=["all"],
-            row_limit=-1,
-            column_filters=column_filter,
-            timeout=180,
-        )
-        cat = vizier.query_region(center, radius=radius, catalog=desired_catalog)
+        # When a VizieR server is unreachable it may still respond with a
+        # VOTable that contains only error messages, which astroquery turns
+        # into an empty result, so an empty result on one server is retried
+        # on the others.
+        for server in VIZIER_SERVERS:
+            vizier = Vizier(
+                columns=["all"],
+                row_limit=-1,
+                column_filters=column_filter,
+                timeout=180,
+                vizier_server=server,
+            )
+            cat = vizier.query_region(center, radius=radius, catalog=desired_catalog)
+            if len(cat) > 0:
+                break
+        else:
+            raise RuntimeError(
+                f"No results returned from Vizier for catalog {desired_catalog} "
+                f"around {center}. The region may contain no matching sources, "
+                "or the VizieR servers may be unavailable."
+            )
 
         # Vizier always returns list even if there is only one element. Grab that
         # element.

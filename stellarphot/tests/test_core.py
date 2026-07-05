@@ -1041,6 +1041,90 @@ def test_from_vizier_with_header_no_wcs_raise_error():
         CatalogData.from_vizier(header, "B/vsx/vsx", clip_by_frame=True)
 
 
+class FakeVizier:
+    """
+    Stand-in for astroquery's Vizier that returns a canned result per server,
+    recording the servers queried. Empty-list results mimic what astroquery
+    returns when a VizieR server is down (it turns the error VOTable into an
+    empty TableList).
+    """
+
+    # server name -> list of tables to return; tests set this.
+    results_by_server = {}
+    servers_queried = []
+
+    def __init__(self, *_args, vizier_server=None, **_kwargs):
+        self.vizier_server = vizier_server
+
+    def query_region(self, *_args, **_kwargs):
+        FakeVizier.servers_queried.append(self.vizier_server)
+        return FakeVizier.results_by_server[self.vizier_server]
+
+
+def fake_vizier_table():
+    return Table(
+        {
+            "Name": ["DQ Psc"],
+            "RAJ2000": [359.94371],
+            "DEJ2000": [-0.2801],
+            "mag": [5.9],
+            "passband": ["Hp"],
+        }
+    )
+
+
+def test_from_vizier_falls_back_to_mirror(monkeypatch):
+    # When the first VizieR server returns an empty result (e.g. the server's
+    # database is down), from_vizier should retry against the next server in
+    # the list and succeed.
+    monkeypatch.setattr("stellarphot.core.Vizier", FakeVizier)
+    monkeypatch.setattr(
+        "stellarphot.core.VIZIER_SERVERS", ("dead.example.com", "mirror.example.com")
+    )
+    FakeVizier.results_by_server = {
+        "dead.example.com": [],
+        "mirror.example.com": [fake_vizier_table()],
+    }
+    FakeVizier.servers_queried = []
+
+    cat = CatalogData.from_vizier(
+        SkyCoord(ra=359.94371 * u.deg, dec=-0.2801 * u.deg),
+        "B/vsx/vsx",
+        colname_map=dict(Name="id", RAJ2000="ra", DEJ2000="dec"),
+        no_catalog_error=True,
+        tidy_catalog=False,
+    )
+
+    assert FakeVizier.servers_queried == ["dead.example.com", "mirror.example.com"]
+    assert len(cat) == 1
+    assert cat["id"][0] == "DQ Psc"
+
+
+def test_from_vizier_all_servers_empty_raises(monkeypatch):
+    # If every VizieR server returns an empty result the user should get an
+    # informative error, not an IndexError.
+    monkeypatch.setattr("stellarphot.core.Vizier", FakeVizier)
+    monkeypatch.setattr(
+        "stellarphot.core.VIZIER_SERVERS", ("dead.example.com", "mirror.example.com")
+    )
+    FakeVizier.results_by_server = {
+        "dead.example.com": [],
+        "mirror.example.com": [],
+    }
+    FakeVizier.servers_queried = []
+
+    with pytest.raises(RuntimeError, match="No results returned from Vizier"):
+        CatalogData.from_vizier(
+            SkyCoord(ra=359.94371 * u.deg, dec=-0.2801 * u.deg),
+            "B/vsx/vsx",
+            colname_map=dict(Name="id", RAJ2000="ra", DEJ2000="dec"),
+            no_catalog_error=True,
+            tidy_catalog=False,
+        )
+
+    assert FakeVizier.servers_queried == ["dead.example.com", "mirror.example.com"]
+
+
 # Load test apertures
 test_sl_data = ascii.read(
     get_pkg_data_filename("data/test_sourcelist.ecsv"), format="ecsv", fast_reader=False
