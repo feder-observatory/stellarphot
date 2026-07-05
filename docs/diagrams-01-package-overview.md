@@ -247,7 +247,7 @@ seeing-profile/comparison-star widgets. It is built on top of the pure-Pydantic
 `stellarphot.settings` is **data-only**: importing it (and hence
 `import stellarphot` and the core data layer) loads only the pydantic models and
 file handling, never the GUI stack. The GUI libraries
-(`ipywidgets`/`ipyautoui`/`astrowidgets`/`ginga`) are confined to
+(`ipywidgets`/`ipyautoui`/`astrowidgets`) are confined to
 `stellarphot.gui` and ship only with the optional `[gui]` extra, so a base
 install stays headless; importing `stellarphot.gui` is what pulls them in.
 
@@ -445,5 +445,5 @@ Key contents of each file:
 | Photometry engine | photutils (apertures, DAOStarFinder, centroids, profiles), astropy, ccdproc |
 | Settings | pydantic only — no GUI dependencies (the widget layer moved to `stellarphot.gui`) |
 | Transit fitting | pytransit, astropy.modeling, scipy, astroquery (MAST) |
-| GUI layer | the optional `[gui]` extra: ipywidgets, ipyautoui, ipyfilechooser, astrowidgets, ginga, jupyter-app-launcher, papermill (plus matplotlib from the base install) — not installed by a base `pip install stellarphot` |
+| GUI layer | the optional `[gui]` extra: ipywidgets, ipyautoui, ipyfilechooser, astrowidgets ≥0.5.0 (bqplot-backed viewer, astro-image-display-api), jupyter-app-launcher, papermill (plus matplotlib from the base install) — not installed by a base `pip install stellarphot` |
 | Plotting | matplotlib |
