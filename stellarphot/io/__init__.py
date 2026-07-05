@@ -45,9 +45,11 @@ def __getattr__(name):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-def __dir__():
-    names = set(globals())
-    for submodule in _MOVED_SUBMODULES:
-        module = importlib.import_module(f".{submodule}", __name__)
-        names.update(getattr(module, "__all__", ()))
-    return sorted(names)
+# NOTE: intentionally no custom ``__dir__``. The moved names stay reachable via
+# ``__getattr__`` for back-compat, but they are deliberately not advertised by
+# ``dir(stellarphot.io)``. A ``__dir__`` that enumerated them would (a) force an
+# eager import of every submodule -- including ``tess``, which pulls in
+# ``stellarphot.core`` -- defeating the laziness above, and (b) let documentation
+# tools (automodapi/autodoc) rediscover and re-document them under their old,
+# deprecated location, firing a deprecation warning that fails the ``-W`` docs
+# build. This mirrors the shim in ``stellarphot/core.py``.

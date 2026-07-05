@@ -7,6 +7,8 @@ tests check that the shim forwards attributes and warns.
 """
 
 import importlib
+import sys
+import warnings
 
 import pytest
 from astropy.utils.exceptions import AstropyDeprecationWarning
@@ -41,8 +43,15 @@ def test_unknown_io_attribute_raises_attribute_error():
 
 def test_private_probe_does_not_warn_or_import_tess():
     # Dunder/private probes (doctest's ``hasattr(mod, "__test__")``, pickling, ...)
-    # must not trigger the shim, which would import tess and emit a warning.
+    # must not trigger the shim: no deprecation warning and no import of the heavy
+    # ``tess`` submodule. The shim short-circuits any ``_``-prefixed name before
+    # touching a submodule, so this holds regardless of test order.
     io = importlib.import_module("stellarphot.io")
     private = "_some_private_probe"
-    with pytest.raises(AttributeError):
-        getattr(io, private)
+    sys.modules.pop("stellarphot.io.tess", None)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(AttributeError):
+            getattr(io, private)
+    assert not caught
+    assert "stellarphot.io.tess" not in sys.modules
