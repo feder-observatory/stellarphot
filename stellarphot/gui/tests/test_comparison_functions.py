@@ -1,6 +1,5 @@
 import gzip
 import os
-import re
 import warnings
 
 import ipywidgets as ipw
@@ -10,10 +9,12 @@ from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astropy.io import fits
 from astropy.nddata import CCDData
+from astropy.table import Table
 from astropy.utils.data import get_pkg_data_filename
 from astropy.utils.exceptions import AstropyWarning
 from astropy.wcs import WCS
 from astropy.wcs.wcs import FITSFixedWarning
+from astrowidgets.bqplot import ImageWidget
 
 from stellarphot import SourceListData
 from stellarphot.gui import comparison_functions as cf
@@ -56,6 +57,87 @@ def test_fits_file_property():
         comparison_widget.fits_file = None
 
 
+def test_click_center_and_marking_neutralized():
+    # astrowidgets 0.5.0 has a bug in which the bqplot ImageWidget's built-in
+    # _mouse_click handler references attributes (click_center and is_marking)
+    # that are never initialized, so any click raises AttributeError and,
+    # because ipywidgets runs on_msg callbacks in registration order without
+    # exception isolation, blocks our click handler too. ComparisonViewer
+    # works around this by setting both attributes to False.
+    comparison_widget = cf.ComparisonViewer()
+    assert comparison_widget.iw.click_center is False
+    assert comparison_widget.iw.is_marking is False
+
+
+def test_wrap_toggles_elim_marker():
+    # Clicking on a star should mark it for exclusion with an "elim" marker,
+    # and clicking it again should remove the marker.
+    ccd = make_ey_uma_image()
+    iw = ImageWidget()
+    iw.load_image(ccd)
+
+    # Make a one-star catalog at a known pixel position
+    star_coord = ccd.wcs.pixel_to_world(1500.0, 1000.0)
+    catalog = Table({"coord": [star_coord]})
+    iw.load_catalog(
+        catalog,
+        use_skycoord=True,
+        catalog_label="APASS comparison",
+        catalog_style={"shape": "diamond", "color": "red", "size": 20},
+    )
+
+    status = ipw.HTML()
+    callback = cf.wrap(iw, status)
+
+    x, y = ccd.wcs.world_to_pixel(star_coord)
+    click = {"event": "click", "domain": {"x": float(x), "y": float(y)}}
+
+    # Events other than clicks should be ignored
+    callback(
+        iw.viewer.interaction,
+        {"event": "mousemove", "domain": {"x": float(x), "y": float(y)}},
+        [],
+    )
+    assert "elim1" not in iw.catalog_labels
+
+    # Click on the star to exclude it...
+    callback(iw.viewer.interaction, click, [])
+    assert "elim1" in iw.catalog_labels
+
+    # ...and click again to include it.
+    callback(iw.viewer.interaction, click, [])
+    assert "elim1" not in iw.catalog_labels
+
+    # A click far from any star should display a message instead of
+    # adding a marker.
+    miss = {"event": "click", "domain": {"x": float(x) + 500, "y": float(y) + 500}}
+    callback(iw.viewer.interaction, miss, [])
+    assert "Click closer to a star" in status.value
+    assert not any(label.startswith("elim") for label in iw.catalog_labels)
+
+
+def test_make_markers_shapes_and_colors():
+    # Check that each catalog gets the marker style the legend says it has.
+    ccd = make_ey_uma_image()
+    iw = ImageWidget()
+    iw.load_image(ccd)
+
+    vsx = Table({"coords": ccd.wcs.pixel_to_world([500.0, 600.0], [700.0, 800.0])})
+    apass = Table(
+        {"coords": ccd.wcs.pixel_to_world([1000.0, 1100.0], [1200.0, 1300.0])}
+    )
+
+    cf.make_markers(iw, [], vsx, apass, name_or_coord=None)
+
+    apass_style = iw.get_catalog_style(catalog_label="APASS comparison")
+    assert apass_style["shape"] == "diamond"
+    assert apass_style["color"] == "red"
+
+    vsx_style = iw.get_catalog_style(catalog_label="VSX")
+    assert vsx_style["shape"] == "square"
+    assert vsx_style["color"] == "blue"
+
+
 @pytest.mark.parametrize("source_file_name", [None, "sources.ecsv"])
 @pytest.mark.parametrize("has_object", [True, False])
 @pytest.mark.remote_data
@@ -96,31 +178,15 @@ def test_comparison_properties(tmp_path, has_object, source_file_name):
     assert "separation" not in table.colnames
     assert "sort" not in table.colnames
 
-    # Check that if we show labels then the label names we expect show up in
-    # the astrowidgets marker table.
+    # Check that showing labels creates one label mark entry per star.
     comparison_widget.show_labels()
 
-    # Suppress a warning about the default marker set containing no stars
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore",
-            message="Marker set named.*is empty",
-            category=UserWarning,
-        )
-        try:
-            marker_getter = comparison_widget.iw.get_markers
-        except AttributeError:
-            marker_getter = comparison_widget.iw.get_markers_by_name
-
-        label_markers = marker_getter(marker_name=comparison_widget._label_name)
-    # There should be a label for each star, so check that the number of labels matches
-    # the length of the table of stars excluding the labels.
+    # There should be a label for each star, so check that the total number of
+    # label positions across the bqplot Label marks matches the number of stars.
     table = comparison_widget.generate_table()
 
-    # Drop table entries that are labels
-    table = table[table["marker name"] != comparison_widget._label_name]
-
-    assert len(label_markers) == len(table)
+    n_labels = sum(len(mark.x) for mark in comparison_widget._label_marks.values())
+    assert n_labels == len(table)
 
     # Make sure the aperture file has been written
     assert os.path.exists(comparison_widget.source_locations.value["source_list_file"])
@@ -190,15 +256,7 @@ def test_loading_second_image_succeeds(tmp_path):
     assert comparison_widget.target_coord.separation(wasp_coord) < 1 * u.arcsec
 
     # Also make sure this is where the viewer is actually centered
-    # Get the value of the HTML widget that shows the coordinates
-    view_coord_text = comparison_widget.iw.children[1].value
-
-    # Extract the coordinates from the text
-    match = re.search(
-        r"RA: +(\d+:\d+:[.\d]+), +DEC: +([+\d]+:\d+:[.\d]+)", view_coord_text
-    )
-    ra, dec = match.groups()
-    viewer_coord = SkyCoord(ra, dec, unit=(u.hour, u.deg))
+    viewer_coord = comparison_widget.iw.get_viewport(sky_or_pixel="sky")["center"]
 
     # It is not clear to me what the viewer position defaults to, but it should be
     # close to the target coordinates, where by close I mean "less than the
