@@ -244,6 +244,10 @@ filterwarnings = [
     'ignore:Jupyter is migrating its paths to use standard platformdirs:DeprecationWarning',
     # papermill is also using a deprecated method of getting current time
     'ignore:.*is deprecated and scheduled for removal.*:DeprecationWarning',
+    # papermill 2.7.0 sets WindowsSelectorEventLoopPolicy on Windows, which
+    # Python 3.14 deprecates (removal slated for 3.16). Remove when papermill
+    # stops touching the event loop policy.
+    'ignore:.*WindowsSelectorEventLoopPolicy.*is deprecated:DeprecationWarning',
     # lightkurve is using a deprecated numpy interface
     'ignore:.*numpy.core.einsumfunc is deprecated and has been renamed.*:DeprecationWarning',
     # lightkurve issues a warning about an optional import
