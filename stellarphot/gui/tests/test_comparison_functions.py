@@ -347,6 +347,53 @@ def test_comparison_properties(tmp_path, has_object, source_file_name):
     )
 
 
+def test_spinner_cleared_and_error_shown_when_catalog_load_fails(tmp_path, monkeypatch):
+    # If fetching the VSX/APASS catalogs fails, the spinner should not keep
+    # spinning forever -- the legend should come back and an error message
+    # should be shown to the user.
+    ccd = make_ey_uma_image()
+    path = tmp_path / "test.fits"
+    ccd.write(path, overwrite=True)
+    # Change working directory so files the viewer saves do not pollute the
+    # testing directory.
+    os.chdir(tmp_path)
+
+    comparison_widget = cf.ComparisonViewer()
+    legend = comparison_widget._legend_spinner_box.children[0]
+
+    def failing_set_up(*_args, **_kwargs):
+        raise RuntimeError("catalog fetch failed")
+
+    monkeypatch.setattr(cf, "set_up", failing_set_up)
+
+    with warnings.catch_warnings():
+        # Ignore the warning about the WCS having non-standard keywords (the SIP
+        # distortion parameters).
+        warnings.filterwarnings(
+            "ignore",
+            message="Some non-standard WCS keywords were excluded",
+            category=AstropyWarning,
+        )
+        # The error should still propagate so it shows up in the log...
+        with pytest.raises(RuntimeError, match="catalog fetch failed"):
+            comparison_widget._file_chooser.file_chooser.value = path
+
+    # ...but the spinner should be gone...
+    children = comparison_widget._legend_spinner_box.children
+    assert not any(isinstance(child, cf.Spinner) for child in children)
+
+    # ...the legend should be back...
+    assert legend in children
+
+    # ...and an error message should be visible.
+    error_widgets = [
+        child
+        for child in children
+        if isinstance(child, ipw.HTML) and "catalog fetch failed" in child.value
+    ]
+    assert len(error_widgets) == 1
+
+
 @pytest.mark.remote_data
 def test_loading_second_image_succeeds(tmp_path):
     # Regression test for #384

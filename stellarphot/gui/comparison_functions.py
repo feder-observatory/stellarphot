@@ -387,37 +387,49 @@ class ComparisonViewer:
         self._legend_spinner_box.children = [spinner]
         self.help_stuff.selected_index = 1
 
-        # Apply the same dim magnitude limit to the VSX lookup that is used for
-        # the comparison stars so faint variables are not included (issue #43).
-        self.vsx = set_up(self.ccd, magnitude_limit=self.dim_mag_limit)
+        try:
+            # Apply the same dim magnitude limit to the VSX lookup that is used
+            # for the comparison stars so faint variables are not included
+            # (issue #43).
+            self.vsx = set_up(self.ccd, magnitude_limit=self.dim_mag_limit)
 
-        apass, vsx_apass_angle, targets_apass_angle = crossmatch_APASS2VSX(
-            self.ccd, self.targets_from_file, self.vsx
-        )
+            apass, vsx_apass_angle, targets_apass_angle = crossmatch_APASS2VSX(
+                self.ccd, self.targets_from_file, self.vsx
+            )
 
-        self._legend_spinner_box.children = [legend]
+            apass_good_coord, good_stars = mag_scale(
+                self.target_mag,
+                apass,
+                vsx_apass_angle,
+                targets_apass_angle,
+                brighter_dmag=self.target_mag - self.bright_mag_limit,
+                dimmer_dmag=self.dim_mag_limit - self.target_mag,
+            )
 
-        apass_good_coord, good_stars = mag_scale(
-            self.target_mag,
-            apass,
-            vsx_apass_angle,
-            targets_apass_angle,
-            brighter_dmag=self.target_mag - self.bright_mag_limit,
-            dimmer_dmag=self.dim_mag_limit - self.target_mag,
-        )
+            apass_comps = in_field(apass_good_coord, self.ccd, apass, good_stars)
 
-        apass_comps = in_field(apass_good_coord, self.ccd, apass, good_stars)
+            # Set the object here so that the viewer is properly centered
+            self._set_object()
 
-        # Set the object here so that the viewer is properly centered
-        self._set_object()
-
-        make_markers(
-            self.iw,
-            self.targets_from_file,
-            self.vsx,
-            apass_comps,
-            name_or_coord=self.target_coord,
-        )
+            make_markers(
+                self.iw,
+                self.targets_from_file,
+                self.vsx,
+                apass_comps,
+                name_or_coord=self.target_coord,
+            )
+        except Exception as err:
+            # An exception raised here is invisible to the user -- this runs in
+            # a widget callback, whose traceback only goes to the log -- so put
+            # the error on screen, then re-raise so the log gets the traceback.
+            error_message = ipw.HTML(
+                value="<p style='color: red'>Loading variable/comparison stars "
+                f"failed: {err}</p>"
+            )
+            self._legend_spinner_box.children = [legend, error_message]
+            raise
+        else:
+            self._legend_spinner_box.children = [legend]
 
     @property
     def fits_file(self):
