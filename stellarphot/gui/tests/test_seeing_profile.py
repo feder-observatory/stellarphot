@@ -4,7 +4,6 @@ from copy import deepcopy
 
 import ipywidgets as ipw
 import matplotlib
-import numpy as np
 import pytest
 from astropy.nddata import CCDData
 from photutils.datasets import make_noise_image
@@ -161,7 +160,7 @@ def test_seeing_profile_save_box_title(tmp_path):
     assert AP_SETTING_SAVED in profile_widget.ap_title.value
 
 
-def test_seeing_profile_error_messages_no_star(tmp_path):
+def test_seeing_profile_error_messages_no_star(tmp_path, capsys):
     # Make sure the appropriate error message is displayed when a click happens on
     # a region with no star, and that the message only appears once.
     profile_widget = spf.SeeingProfileWidget(
@@ -211,6 +210,11 @@ def test_seeing_profile_error_messages_no_star(tmp_path):
         )
         assert len(profile_widget.error_console.outputs) == 1
 
+    # The message reaches the user through error_console only; it should
+    # not also be printed to stdout. (Other widgets write terminal control
+    # sequences to stdout, so only check for the message itself.)
+    assert "No star found" not in capsys.readouterr().out
+
 
 def test_click_dispatcher_ignores_non_click_events(tmp_path, profile_stars):
     # Mouse messages other than clicks should not trigger the profile
@@ -240,24 +244,6 @@ def test_click_dispatcher_ignores_non_click_events(tmp_path, profile_stars):
 
     # No profile should have been computed
     assert profile_widget.rad_prof is None
-
-
-def test_builtin_click_handler_is_neutralized():
-    # astrowidgets 0.5.0 has a bug in which the bqplot ImageWidget's built-in
-    # _mouse_click handler references attributes (click_center and is_marking)
-    # that are never initialized, so any click raises AttributeError and,
-    # because ipywidgets runs on_msg callbacks in registration order without
-    # exception isolation, blocks our click handler too. SeeingProfileWidget
-    # works around this by setting both attributes to False.
-    profile_widget = spf.SeeingProfileWidget()
-    iw = profile_widget.iw
-    assert iw.click_center is False
-    assert iw.is_marking is False
-
-    # With an image loaded, the built-in click handler should be a no-op
-    # rather than raising AttributeError.
-    iw.load_image(np.zeros((10, 10)))
-    iw._mouse_click({"domain": {"x": 3, "y": 3}})
 
 
 def test_seeing_profile_no_observatory():

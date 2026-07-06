@@ -9,7 +9,7 @@ from astropy.coordinates.name_resolve import NameResolveError
 from astropy.table import Table, vstack
 from astropy.utils.masked import Masked
 from astrowidgets.bqplot import ImageWidget
-from bqplot import Label
+from bqplot import Label, Lines
 from ipyautoui.custom import FileChooser
 
 from stellarphot import SourceListData
@@ -44,7 +44,8 @@ def _coord_catalog_table(table):
     ----------
 
     table : `astropy.table.Table`
-        Table with a "coords" column of `astropy.coordinates.SkyCoord`.
+        Table with a "coords" (or already-renamed "coord") column of
+        `astropy.coordinates.SkyCoord`.
 
     Returns
     -------
@@ -53,7 +54,12 @@ def _coord_catalog_table(table):
         Copy of the table with the column renamed.
     """
     out = Table(table)
-    out.rename_column("coords", "coord")
+    if "coord" not in out.colnames:
+        if "coords" not in out.colnames:
+            raise ValueError(
+                "table must have a 'coords' (or 'coord') column of SkyCoord"
+            )
+        out.rename_column("coords", "coord")
 
     # Catalogs fetched through astroquery are masked tables, so a SkyCoord
     # built from their columns holds Masked arrays, which the high-level WCS
@@ -220,6 +226,9 @@ def wrap(imagewidget, status_widget):
 
         index, d2d, d3d = out_skycoord.match_to_catalog_sky(all_table["coord"])
         if d2d < 10 * u.arcsec:
+            # This click hit a star, so any leftover "click closer" message
+            # no longer applies.
+            status_widget.value = ""
             mouse = all_table["coord"][index].separation(all_table["coord"])
             rat = mouse < 1 * u.arcsec
             elims = [
@@ -694,11 +703,6 @@ class ComparisonViewer:
         """
         all_table = _all_catalog_entries(self.iw)
 
-        # The circle around the target is a display overlay, not a source, so
-        # keep it out of the table. Without this the target circle could end
-        # up in the aperture file.
-        all_table = all_table[all_table["marker name"] != self._circle_name]
-
         elims = np.array([name.startswith("elim") for name in all_table["marker name"]])
         elim_table = all_table[elims]
         comp_table = all_table[~elims]
@@ -829,17 +833,28 @@ class ComparisonViewer:
         None
             Circle is shown around the target.
         """
-        radius_pixels = np.round((radius / pixel_scale).to(u.pixel).value, decimals=0)
-        self.iw.load_catalog(
-            Table(data=[[self.target_coord]], names=["coord"]),
-            use_skycoord=True,
-            catalog_label=self._circle_name,
-            catalog_style={
-                "shape": "circle",
-                "color": "yellow",
-                "size": radius_pixels,
+        radius_pixels = (radius / pixel_scale).to(u.pixel).value
+
+        # Draw the circle as a bqplot Lines mark rather than a catalog
+        # marker: astrowidgets 0.5.0 ignores the size in catalog_style, and a
+        # catalog entry would also show up as a clickable "star" in the click
+        # handler and in generate_table.
+        x, y = self.iw.get_image().wcs.world_to_pixel(self.target_coord)
+        theta = np.linspace(0, 2 * np.pi, 200)
+        mark = Lines(
+            x=x + radius_pixels * np.cos(theta),
+            y=y + radius_pixels * np.sin(theta),
+            scales={
+                "x": self.iw.viewer._scales["x"],
+                "y": self.iw.viewer._scales["y"],
             },
+            colors=["yellow"],
         )
+        # Put the mark in the viewer's own mark dictionary, the same pattern
+        # show_labels uses, so the circle survives the viewer's _update_marks
+        # calls.
+        self.iw.viewer._scatter_marks[f"__circle__{self._circle_name}"] = mark
+        self.iw.viewer._update_marks()
 
     def remove_circle(self):
         """
@@ -851,11 +866,8 @@ class ComparisonViewer:
         None
             Circle is removed from the image.
         """
-        try:
-            self.iw.remove_catalog(catalog_label=self._circle_name)
-        except ValueError:
-            # No circle is currently shown
-            pass
+        self.iw.viewer._scatter_marks.pop(f"__circle__{self._circle_name}", None)
+        self.iw.viewer._update_marks()
 
     def tess_field_view(self):
         """
