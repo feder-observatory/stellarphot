@@ -57,16 +57,26 @@ def test_fits_file_property():
         comparison_widget.fits_file = None
 
 
-def test_click_center_and_marking_neutralized():
-    # astrowidgets 0.5.0 has a bug in which the bqplot ImageWidget's built-in
-    # _mouse_click handler references attributes (click_center and is_marking)
-    # that are never initialized, so any click raises AttributeError and,
-    # because ipywidgets runs on_msg callbacks in registration order without
-    # exception isolation, blocks our click handler too. ComparisonViewer
-    # works around this by setting both attributes to False.
-    comparison_widget = cf.ComparisonViewer()
-    assert comparison_widget.iw.click_center is False
-    assert comparison_widget.iw.is_marking is False
+def test_coord_catalog_table_accepts_coord_column():
+    # A table that already uses the astro-image-display-api column name
+    # "coord" should pass through unchanged rather than raising a KeyError
+    # when the helper tries to rename "coords".
+    ccd = make_ey_uma_image()
+    table = Table({"coord": ccd.wcs.pixel_to_world([500.0], [700.0])})
+
+    out = cf._coord_catalog_table(table)
+
+    assert "coord" in out.colnames
+    assert len(out) == 1
+
+
+def test_coord_catalog_table_missing_coordinate_column_raises():
+    # A table with neither coordinate column name should produce a clear
+    # error rather than a KeyError from rename_column.
+    table = Table({"ra": [1.0], "dec": [2.0]})
+
+    with pytest.raises(ValueError, match="coords"):
+        cf._coord_catalog_table(table)
 
 
 def test_wrap_toggles_elim_marker():
@@ -114,6 +124,11 @@ def test_wrap_toggles_elim_marker():
     callback(iw.viewer.interaction, miss, [])
     assert "Click closer to a star" in status.value
     assert not any(label.startswith("elim") for label in iw.catalog_labels)
+
+    # A successful click afterwards should clear the stale message.
+    callback(iw.viewer.interaction, click, [])
+    assert "elim" in "".join(iw.catalog_labels)
+    assert status.value == ""
 
 
 def test_combining_catalogs_with_conflicting_meta_does_not_warn():
@@ -225,6 +240,42 @@ def test_make_markers_shapes_and_colors():
     vsx_style = iw.get_catalog_style(catalog_label="VSX")
     assert vsx_style["shape"] == "square"
     assert vsx_style["color"] == "blue"
+
+
+def test_show_circle_draws_bqplot_circle():
+    # The target circle should be drawn as a bqplot Lines mark tracing the
+    # circle, not as a catalog marker: astrowidgets 0.5.0 ignores the size in
+    # catalog_style, and a catalog entry would also show up as a clickable
+    # "star" in the click handler and in generate_table.
+    from bqplot import Lines
+
+    comparison_widget = cf.ComparisonViewer()
+    ccd = make_ey_uma_image()
+    comparison_widget.iw.load_image(ccd)
+    comparison_widget.target_coord = ccd.wcs.pixel_to_world(1500.0, 1000.0)
+
+    comparison_widget.show_circle()
+
+    # The circle must not be a catalog...
+    assert comparison_widget._circle_name not in comparison_widget.iw.catalog_labels
+
+    # ...it should be a Lines mark tracing a circle of the default radius,
+    # 2.5 arcmin at 0.56 arcsec/pixel, centered on the target.
+    mark_key = f"__circle__{comparison_widget._circle_name}"
+    mark = comparison_widget.iw.viewer._scatter_marks[mark_key]
+    assert isinstance(mark, Lines)
+    assert mark in comparison_widget.iw.viewer._figure.marks
+
+    expected_radius = ((2.5 * u.arcmin) / (0.56 * u.arcsec / u.pixel)).to(u.pixel).value
+    radii = np.hypot(np.asarray(mark.x) - 1500.0, np.asarray(mark.y) - 1000.0)
+    np.testing.assert_allclose(radii, expected_radius, atol=1)
+
+    comparison_widget.remove_circle()
+    assert mark_key not in comparison_widget.iw.viewer._scatter_marks
+    assert mark not in comparison_widget.iw.viewer._figure.marks
+
+    # Removing when no circle is shown should not raise.
+    comparison_widget.remove_circle()
 
 
 @pytest.mark.parametrize("source_file_name", [None, "sources.ecsv"])

@@ -133,10 +133,6 @@ class SeeingProfileWidget:
         self.iw.click_center = False
         self.iw.is_marking = False
 
-        # Match the behavior of the old ginga-backed widget, in which
-        # scroll-zoom was off by default.
-        self.iw.viewer.set_scroll_zoom(False)
-
         self._on_click_message = self._make_click_dispatcher()
         self.iw.viewer.interaction.on_msg(self._on_click_message)
 
@@ -455,7 +451,6 @@ class SeeingProfileWidget:
                         "to a star or on a brighter star</strong>"
                     )
                 )
-                print(f"{self.error_console.outputs=}")
                 return
             else:
                 # RadialProfile did not generate this error, pass it
