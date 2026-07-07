@@ -97,6 +97,13 @@ def calc_aij_relative_flux(
     # Not sure this is really close enough for a good match...
     good = d2d < 1.2 * u.arcsec
 
+    if not np.any(good):
+        raise RuntimeError(
+            "No comparison stars matched the positions in the photometry "
+            "data, so relative flux cannot be calculated. Check that the "
+            "comparison star coordinates are correct."
+        )
+
     check_for_bad = Table(
         data=[star_data[star_id_column].data, good], names=["star_id", "good"]
     )
@@ -132,6 +139,23 @@ def calc_aij_relative_flux(
         this_comp = star_data[star_id_column] == comp
         good[this_comp] = False
 
+    # Every time in the input data must have at least one comparison star;
+    # otherwise the comparison counts at the times with no comparison stars
+    # would silently be set to 1. Note that a comparison star that is bad at
+    # any one time is excluded as a comparison star at every time, so this
+    # also catches the case in which every comparison star has been
+    # excluded.
+    star_times = np.asarray(star_data["date-obs"].value)
+    times_with_comps = set(star_times[good])
+    if set(star_times) - times_with_comps:
+        raise RuntimeError(
+            "There are one or more times in the photometry data at which "
+            "none of the comparison stars has valid data, so relative flux "
+            "cannot be calculated. A comparison star is excluded from every "
+            "time if it is missing, has NaN counts, or has a mismatched "
+            "position at even one time."
+        )
+
     error_column_name = "noise_electrons"
     # Calculate comp star counts for each time
 
@@ -150,7 +174,11 @@ def calc_aij_relative_flux(
 
     comp_fluxes = comp_fluxes.group_by("date-obs")
     comp_totals = comp_fluxes.groups.aggregate(np.sum)[counts_column_name]
-    comp_num_stars = comp_fluxes.groups.aggregate(np.count_nonzero)[counts_column_name]
+    # Count the comparison stars in each image by counting the rows in each
+    # group. Counting nonzero fluxes would be wrong here -- exactly zero net
+    # counts is a legitimate measured value (net counts can even be negative
+    # after sky subtraction) and must not be mistaken for a missing star.
+    comp_num_stars = np.diff(comp_fluxes.groups.indices)
     comp_errors = comp_fluxes.groups.aggregate(add_in_quadrature)[error_column_name]
 
     comp_total_vector = np.ones_like(star_data[counts_column_name])
@@ -180,16 +208,30 @@ def calc_aij_relative_flux(
         comp_total_vector[this_time] *= comp_total
         comp_error_vector[this_time] = comp_error * comp_fluxes[error_column_name].unit
 
-    relative_flux = star_data[counts_column_name] / (comp_total_vector + flux_offset)
+    # A comparison star is excluded from its own comparison ensemble: its
+    # flux is removed from the comparison total (via flux_offset) and its
+    # error is removed from the comparison error, so that the relative flux
+    # and its error are computed against the same ensemble.
+    comp_total_used = comp_total_vector + flux_offset
+    # Clip protects against tiny negative values from floating point
+    # roundoff when a single comparison star dominates the ensemble error.
+    comp_error_used = np.sqrt(
+        np.clip(
+            comp_error_vector**2 - (star_data[error_column_name] * is_comp) ** 2,
+            0,
+            None,
+        )
+    )
+
+    relative_flux = star_data[counts_column_name] / comp_total_used
     relative_flux = relative_flux.flatten()
 
-    rel_flux_error = (
-        star_data[counts_column_name]
-        / comp_total_vector
-        * np.sqrt(
-            (star_data[error_column_name] / star_data[counts_column_name]) ** 2
-            + (comp_error_vector / comp_total_vector) ** 2
-        )
+    # This is the usual error propagation for a ratio, written to avoid
+    # dividing by the star's counts so that a star with exactly zero counts
+    # gets a finite error instead of NaN.
+    rel_flux_error = np.sqrt(
+        (star_data[error_column_name] / comp_total_used) ** 2
+        + (star_data[counts_column_name] * comp_error_used / comp_total_used**2) ** 2
     )
 
     # Add these columns to table
@@ -245,26 +287,27 @@ def add_relative_flux_column(
     comp_bool = source_list["marker name"] == ["APASS comparison"]
     only_comp_stars = source_list[comp_bool]
     if verbose:
-        print("Adding AIJ-style relative flux columns to photomotry data")
+        print("Adding AIJ-style relative flux columns to photometry data")
     flux_table = calc_aij_relative_flux(photometry_data, only_comp_stars)
-    # Add bjd if needed
 
-    if "bjd" not in flux_table.colnames:
+    flux_group = flux_table.group_by("file")
+
+    # Add bjd if needed
+    if "bjd" not in flux_group.colnames:
         if verbose:
             print("Adding BJD column to photometry data")
         # Accumulate the BJD here
         bjds = []
 
-        flux_group = flux_table.group_by("file")
         for group in flux_group.groups:
             mean_ra = group["ra"].mean()
             mean_dec = group["dec"].mean()
             group.add_bjd_col(bjd_coordinates=SkyCoord(mean_ra, mean_dec))
             bjds.extend(group["bjd"].jd)
 
-    # Each (ephemeral) group had a BJD, this adds the column to the
-    # original table.
-    flux_group["bjd"] = Time(bjds, scale="tdb", format="jd")
+        # Each (ephemeral) group had a BJD, this adds the column to the
+        # original table.
+        flux_group["bjd"] = Time(bjds, scale="tdb", format="jd")
 
     if verbose:
         print("Writing photometry data with relative flux columns")
