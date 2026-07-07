@@ -1,6 +1,9 @@
+import warnings
+
 import numpy as np
 from astropy import units as u
 from astropy.time import Time
+from astropy.utils.exceptions import AstropyUserWarning
 from packaging.version import Version
 
 from stellarphot import PhotometryData
@@ -157,11 +160,25 @@ class VersionMigrator:
         )
 
         if mag_cols_have_filter_names:
-            new_mag_col_data = np.zeros_like(new_data["date-obs"])
+            # Start from NaN so that any passband without a matching
+            # mag_inst_<passband> column ends up with NaN, not a bogus value.
+            new_mag_col_data = np.full(len(new_data), np.nan)
+            mag_col_passbands = {col.split("_")[-1] for col in mag_columns}
             for col in mag_columns:
                 passband = col.split("_")[-1]
                 this_passband = new_data["filter"] == passband
                 new_mag_col_data[this_passband] = new_data[col][this_passband]
+
+            missing_passbands = sorted(set(new_data["filter"]) - mag_col_passbands)
+            if missing_passbands:
+                warnings.warn(
+                    "There is no matching mag_inst_<passband> column for "
+                    "these passbands in the data: "
+                    f"{', '.join(missing_passbands)}. The mag_inst value for "
+                    "observations in those passbands will be NaN.",
+                    AstropyUserWarning,
+                    stacklevel=2,
+                )
             new_data["mag_inst"] = new_mag_col_data
             new_data.remove_columns(mag_columns)
 
