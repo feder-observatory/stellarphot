@@ -23,7 +23,17 @@ from astropy.utils.exceptions import AstropyDeprecationWarning
 from astropy.wcs import WCS
 from astropy.wcs.wcs import FITSFixedWarning
 
-from stellarphot.catalogs import apass_dr9, refcat2, vsx_vizier
+from stellarphot.catalogs import (
+    _attach_gaia_ids,
+    _process_refcat2,
+    apass_dr9,
+    refcat2,
+    vsx_vizier,
+)
+
+# Gaia DR2 source_id of EY UMa, the center of the field used in the
+# remote-data refcat2 tests. Value from SIMBAD.
+EY_UMA_GAIA_DR2_ID = 1015789765851950336
 
 
 def test_fetchers_importable_from_catalogs():
@@ -252,6 +262,140 @@ def test_find_refcat2(mag_limit, mag_limit_band):
     # # The passbands ought to have been translated to the AAVSO standard names.
     for band in ["GBP", "GRP", "GG", "SG", "SR", "SI", "SZ", "J", "H", "K"]:
         assert band in all_refcat2["passband"]
+
+    # The Gaia IDs must be unique per star. The catalog is tidy (one row per
+    # star per passband), so compare the number of distinct IDs to the number
+    # of distinct positions.
+    n_stars = len(set(ra.value for ra in all_refcat2["ra"]))
+    assert len(set(all_refcat2["id"])) == n_stars
+
+    # Spot check: the star nearest the field center (EY UMa) must carry EY UMa's
+    # known Gaia DR2 source_id, i.e. the crossmatch attached the right ID to the
+    # right row. EY UMa's refcat2 rmag is 15.24, so it is only present in the
+    # runs without a magnitude limit.
+    if mag_limit is None:
+        ey_uma = SkyCoord.from_name("EY UMa")
+        cat_coords = SkyCoord(ra=all_refcat2["ra"], dec=all_refcat2["dec"])
+        nearest = cat_coords.separation(ey_uma).argmin()
+        assert all_refcat2["id"][nearest] == EY_UMA_GAIA_DR2_ID
+
+
+def _synthetic_refcat_stars(n=5):
+    """A stand-in for the filtered refcat2 table handed to the Gaia ID join."""
+    return Table(
+        {
+            "RA_ICRS": np.linspace(135.0, 135.5, n),
+            "DE_ICRS": np.linspace(49.0, 49.5, n),
+            "rmag": np.linspace(10.0, 14.0, n),
+        }
+    )
+
+
+def _fake_xmatch_result(indices, ang_dist=None, source_ids=None):
+    """
+    Build a table shaped like an XMatch result: the echoed ``_sp_index``
+    column plus ``angDist`` and Gaia's ``source_id``. By default each input
+    row ``i`` matches Gaia source ``1000 + i``.
+    """
+    indices = np.asarray(indices)
+    if ang_dist is None:
+        ang_dist = np.full(len(indices), 0.001)
+    if source_ids is None:
+        source_ids = 1000 + indices
+    return Table(
+        {
+            "_sp_index": indices,
+            "angDist": ang_dist,
+            "source_id": source_ids,
+        }
+    )
+
+
+def test_attach_gaia_ids_shuffled_result():
+    # XMatch does not preserve input row order; every star must still get its
+    # own source_id.
+    catalog = _synthetic_refcat_stars(5)
+    result = _fake_xmatch_result([3, 0, 4, 1, 2])
+
+    matched = _attach_gaia_ids(catalog, result)
+
+    assert len(matched) == 5
+    assert list(matched["id"]) == [1000, 1001, 1002, 1003, 1004]
+    # The rest of the catalog must be untouched.
+    np.testing.assert_array_equal(matched["RA_ICRS"], catalog["RA_ICRS"])
+
+
+def test_attach_gaia_ids_unmatched_row_dropped_with_warning():
+    # A star with no Gaia match is dropped, with a warning saying how many.
+    catalog = _synthetic_refcat_stars(5)
+    result = _fake_xmatch_result([0, 1, 3, 4])  # star 2 has no match
+
+    with pytest.warns(UserWarning, match="1 of 5"):
+        matched = _attach_gaia_ids(catalog, result)
+
+    assert len(matched) == 4
+    assert list(matched["id"]) == [1000, 1001, 1003, 1004]
+    assert catalog["RA_ICRS"][2] not in matched["RA_ICRS"]
+
+
+def test_attach_gaia_ids_duplicate_match_keeps_nearest():
+    # One star matching two Gaia sources keeps only the nearest one.
+    catalog = _synthetic_refcat_stars(5)
+    # Star 1 appears twice; the farther match comes first in the result and
+    # carries a bogus source_id that must not survive.
+    result = _fake_xmatch_result(
+        [0, 1, 1, 2, 3, 4],
+        ang_dist=[0.001, 0.008, 0.002, 0.001, 0.001, 0.001],
+        source_ids=[1000, 9999, 1001, 1002, 1003, 1004],
+    )
+
+    matched = _attach_gaia_ids(catalog, result)
+
+    assert len(matched) == 5
+    assert list(matched["id"]) == [1000, 1001, 1002, 1003, 1004]
+
+
+def test_process_refcat2_uploads_slim_table(monkeypatch):
+    # The XMatch upload must contain only the index and coordinate columns,
+    # not the full 40+ column refcat2 table, and the echoed index must be
+    # used (not row order) to assign IDs.
+    n = 6
+    catalog = Table(
+        {
+            "RA_ICRS": np.linspace(135.0, 135.5, n),
+            "DE_ICRS": np.linspace(49.0, 49.5, n),
+            "e_pmRA": np.ones(n),
+            "e_pmDE": np.ones(n),
+            "e_Gmag": np.full(n, 0.01),
+            "rmag": np.linspace(10.0, 14.0, n),
+        },
+        masked=True,
+    )
+    # Row 4 is a galaxy (masked proper-motion errors), row 5 is a non-Gaia
+    # star (masked e_Gmag); both must be filtered out before the crossmatch.
+    catalog["e_pmRA"].mask = [False, False, False, False, True, False]
+    catalog["e_pmDE"].mask = [False, False, False, False, True, False]
+    catalog["e_Gmag"].mask = [False, False, False, False, False, True]
+
+    captured = {}
+
+    def fake_query(cat1=None, **kwargs):  # noqa: ARG001
+        captured["cat1"] = cat1
+        # Echo the index back in reversed order, like XMatch reordering rows.
+        indices = np.asarray(cat1["_sp_index"])[::-1]
+        return _fake_xmatch_result(indices)
+
+    import stellarphot.catalogs as catalogs_module
+
+    monkeypatch.setattr(catalogs_module.XMatch, "query", fake_query)
+
+    processed = _process_refcat2(catalog)
+
+    assert set(captured["cat1"].colnames) == {"_sp_index", "RA_ICRS", "DE_ICRS"}
+    # Only the four genuine Gaia stars survive the filters and are uploaded.
+    np.testing.assert_array_equal(captured["cat1"]["_sp_index"], np.arange(4))
+    assert len(processed) == 4
+    assert list(processed["id"]) == [1000, 1001, 1002, 1003]
 
 
 @pytest.mark.parametrize("catalog", [apass_dr9, refcat2, vsx_vizier])

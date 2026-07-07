@@ -8,7 +8,13 @@ because they are data *retrieval* helpers rather than data-structure
 definitions. ``core.py`` holds the table classes only.
 """
 
+import logging
+import time
+import warnings
+
+import numpy as np
 from astropy import units as u
+from astropy.table import Table, unique
 from astroquery.xmatch import XMatch
 
 from .core import CatalogData
@@ -19,6 +25,113 @@ __all__ = [
     "vsx_vizier",
     "refcat2",
 ]
+
+logger = logging.getLogger(__name__)
+
+
+def _attach_gaia_ids(catalog, xmatch_result, index_col="_sp_index"):
+    """
+    Attach Gaia source_ids from an XMatch result to a catalog, joining on an
+    index column rather than on row order, which XMatch does not preserve.
+
+    Parameters
+    ----------
+    catalog : `astropy.table.Table`
+        The table the IDs are being attached to. The values of ``index_col``
+        in ``xmatch_result`` are row numbers into this table.
+
+    xmatch_result : `astropy.table.Table`
+        Result of an XMatch query whose uploaded table included ``index_col``.
+        Must contain ``index_col``, ``angDist`` and ``source_id`` columns.
+
+    index_col : str, optional
+        Name of the column in ``xmatch_result`` holding the row number of the
+        matching ``catalog`` row.
+
+    Returns
+    -------
+    `astropy.table.Table`
+        The matched rows of ``catalog``, in their original order, with a new
+        ``id`` column holding the Gaia source_id. Rows with no match are
+        dropped, with a warning saying how many.
+    """
+    # When one input row matches several Gaia sources, keep only the nearest.
+    xmatch_result = xmatch_result.copy()
+    xmatch_result.sort([index_col, "angDist"])
+    nearest = unique(xmatch_result, keys=index_col, keep="first")
+
+    n_unmatched = len(catalog) - len(nearest)
+    if n_unmatched > 0:
+        warnings.warn(
+            f"{n_unmatched} of {len(catalog)} catalog entries had no Gaia "
+            "match and have been dropped.",
+            stacklevel=2,
+        )
+
+    # nearest is sorted by index_col, so this preserves the original row order.
+    catalog = catalog[np.asarray(nearest[index_col])]
+    catalog["id"] = np.asarray(nearest["source_id"])
+    return catalog
+
+
+def _process_refcat2(catalog):
+    """
+    Prepare a raw Vizier refcat2 table:
+
+    1. Filter out galaxies from the catalog.
+    2. Only keep stars that are in the Gaia DR2 catalog.
+    3. Add the Gaia DR2 ID number to the catalog as the ID column.
+    """
+    # 1.
+    # The refcat2 paper says that "Virtually all galaxies can be rejected by
+    # selecting objects for which Gaia provides a nonzero proper-motion
+    # uncertainty," which in the Vizier download are called e_pmRA and e_pmDE,
+    # "at the cost of about 0.7% of all real stars." Seems like a reasonable
+    # trade-off. Vizier omits the zero entries and astroquery returns a mask for the
+    # zero entries, so galaxies are the masked ones.
+    galaxies = catalog["e_pmRA"].mask & catalog["e_pmDE"].mask
+    catalog = catalog[~galaxies]
+
+    # 2.
+    # Also from the paper, "A non-Gaia star may be identified in Refcat2 because it
+    # will always have dGaia = 0." In the Vizier version of refcat2, this column is
+    # called e_Gmag and instead of being zero, the value is masked.
+    catalog = catalog[~catalog["e_Gmag"].mask]
+
+    # 3.
+    # Everything left should be a Gaia star, so match to that.
+    # This adds some not-insignificant time to getting the catalog, but
+    # the result is automatically cached by astroquery, which helps.
+    #
+    # Upload only the coordinates plus a row index; uploading the full
+    # 40+ column table makes the query much slower and more likely to fail,
+    # and the index is the only reliable way to join the result back to the
+    # catalog because XMatch does not preserve row order.
+    upload = Table(
+        {
+            "_sp_index": np.arange(len(catalog)),
+            "RA_ICRS": catalog["RA_ICRS"],
+            "DE_ICRS": catalog["DE_ICRS"],
+        }
+    )
+    start = time.perf_counter()
+    result = XMatch.query(
+        cat1=upload,
+        cat2="vizier:gaia_dr2_j2015p5",  # "vizier:I/345/gaia2",
+        max_distance=0.01 * u.arcsec,
+        colRA1="RA_ICRS",
+        colDec1="DE_ICRS",
+    )
+    elapsed = time.perf_counter() - start
+    logger.info(
+        "XMatch query for Gaia DR2 IDs took %.1f sec "
+        "(%d rows uploaded, %d matches returned)",
+        elapsed,
+        len(upload),
+        len(result),
+    )
+
+    return _attach_gaia_ids(catalog, result)
 
 
 def apass_dr9(
@@ -338,44 +451,6 @@ def refcat2(
     #     # by magnitude.
     #     magnitude_limit_passband = None
 
-    def process_refcat2(catalog):
-        """
-        This function does a few things:
-
-        1. Filter out galaxies from the catalog.
-        2. Only keep stars that are in the Gaia DR2 catalog.
-        3. Add the Gaia DR2 ID number to the catalog as the ID column.
-        """
-        # 1.
-        # The refcat2 paper says that "Virtually all galaxies can be rejected by
-        # selecting objects for which Gaia provides a nonzero proper-motion
-        # uncertainty," which in the Vizier download are called e_pmRA and e_pmDE,
-        # "at the cost of about 0.7% of all real stars." Seems like a reasonable
-        # trade-off. Vizier omits the zero entries and astroquery returns a mask for the
-        # zero entries, so galaxies are the masked ones.
-        galaxies = catalog["e_pmRA"].mask & catalog["e_pmDE"].mask
-        catalog = catalog[~galaxies]
-
-        # 2.
-        # Also from the paper, "A non-Gaia star may be identified in Refcat2 because it
-        # will always have dGaia = 0." In the Vizier version of refcat2, this column is
-        # called e_Gmag and instead of being zero, the value is masked.
-        catalog = catalog[~catalog["e_Gmag"].mask]
-
-        # 3.
-        # Everything left should be a Gaia star, so match to that.
-        # This adds some not-insignificant time to getting the catalog, but
-        # the result is automatically cached by astroquery, which helps.
-        result = XMatch.query(
-            cat1=catalog,
-            cat2="vizier:gaia_dr2_j2015p5",  # "vizier:I/345/gaia2",
-            max_distance=0.01 * u.arcsec,
-            colRA1="RA_ICRS",
-            colDec1="DE_ICRS",
-        )
-        catalog["id"] = result["source_id"]
-        return catalog
-
     raw_catalog = CatalogData.from_vizier(
         field_center,
         "J/ApJ/867/105/refcat2",
@@ -383,7 +458,7 @@ def refcat2(
         clip_by_frame=clip_by_frame,
         padding=padding,
         colname_map=refcat2_colnames,
-        prepare_catalog=process_refcat2,
+        prepare_catalog=_process_refcat2,
         magnitude_limit=magnitude_limit,
         magnitude_limit_passband=magnitude_limit_passband,
     )

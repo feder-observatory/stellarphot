@@ -50,6 +50,13 @@ Bug Fixes
   when a server returns an empty result (as happens when a server is up but
   its database is unreachable), and raises an informative ``RuntimeError``
   instead of an ``IndexError`` if every server comes back empty. [#585]
++ ``refcat2`` now joins the Gaia DR2 IDs from the CDS XMatch service to the
+  catalog on an explicit row index instead of relying on row order, which
+  XMatch does not preserve. Previously large fields could either crash with
+  ``ValueError: Inconsistent data column lengths`` or silently assign the
+  wrong Gaia ID to most stars. Only the coordinates are uploaded to XMatch
+  now, making the query much faster and less likely to fail on large
+  fields. [#586]
 
 1.4.15 (2024-08-16)
 -------------------
