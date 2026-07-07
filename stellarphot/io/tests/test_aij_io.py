@@ -66,7 +66,7 @@ def test_aperture_creation_from_table():
     # Note that the csv reads in the True/False column as text,
     # not as bool.
     ref_table["marker name"] = [
-        "APASS comparison" if v == "True" else "TESS target"
+        "APASS comparison" if v == "True" else "TESS Targets"
         for v in ref_table["isrefstar"]
     ]
 
@@ -151,7 +151,7 @@ def test_generate_aij_table_mixed_target_and_comps():
     comparison_table = _make_comparison_table(
         ras=[target_ra] + comp_ras,
         decs=[target_dec] + comp_decs,
-        marker_names=["TESS target", "APASS comparison", "APASS comparison"],
+        marker_names=["TESS Targets", "APASS comparison", "APASS comparison"],
     )
 
     aij_table = generate_aij_table(phot_table, comparison_table)
