@@ -80,6 +80,12 @@ Bug Fixes
 + Fixed an operator-precedence bug in ``transform_to_catalog`` that disabled
   the cross-match distance cut, letting badly matched stars bias the fitted
   transform coefficients. [#617]
++ ``calc_aij_relative_flux`` now raises an error when none of the comparison
+  stars match the photometry data, or when one or more times have no valid
+  comparison stars, instead of silently returning relative fluxes equal to
+  the raw net counts. [#618]
++ ``add_relative_flux_column`` no longer raises a ``NameError`` when the input
+  photometry data already contains a ``bjd`` column. [#618]
 
 1.4.15 (2024-08-16)
 -------------------
