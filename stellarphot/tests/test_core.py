@@ -1231,16 +1231,26 @@ def test_sourcelist_dropping_skycoords():
     sl_test.drop_ra_dec()
     assert not sl_test.has_ra_dec
     assert sl_test.has_x_y
+    # The dropped columns should be all NaN with the documented units
+    assert sl_test["ra"].unit == u.deg
+    assert sl_test["dec"].unit == u.deg
+    assert np.isnan(sl_test["ra"]).all()
+    assert np.isnan(sl_test["dec"]).all()
 
 
 def test_sourcelist_dropping_imagecoords():
     # Create good sourcelist data instance
     sl_test = SourceListData(input_data=test_sl_data, colname_map=None)
 
-    # Drop sky coordinates
+    # Drop image coordinates
     sl_test.drop_x_y()
     assert sl_test.has_ra_dec
     assert not sl_test.has_x_y
+    # The dropped columns should be all NaN with the documented units
+    assert sl_test["xcenter"].unit == u.pix
+    assert sl_test["ycenter"].unit == u.pix
+    assert np.isnan(sl_test["xcenter"]).all()
+    assert np.isnan(sl_test["ycenter"]).all()
 
 
 def test_sourcelist_slicing():

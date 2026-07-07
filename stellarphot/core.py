@@ -1619,9 +1619,11 @@ class SourceListData(BaseEnhancedTable):
         self["dec"] = Column(data=np.full(len(self), np.nan), name="dec", unit=u.deg)
 
     def drop_x_y(self):
-        # drop image-based positionsfrom existing SourceListData structure
+        # drop image-based positions from existing SourceListData structure
         self.meta["has_x_y"] = False
-        self["xcenter"] = Column(data=np.full(len(self), np.nan), name="ra", unit=u.deg)
+        self["xcenter"] = Column(
+            data=np.full(len(self), np.nan), name="xcenter", unit=u.pix
+        )
         self["ycenter"] = Column(
-            data=np.full(len(self), np.nan), name="dec", unit=u.deg
+            data=np.full(len(self), np.nan), name="ycenter", unit=u.pix
         )
