@@ -236,7 +236,11 @@ def single_image_photometry(
         locations were too close to the edge of the image or to each other for
         successful aperture photometry.  If pixel (x/y) positions were used for
         the photometry, but a valid WCS header was not available for `ccd_image`,
-        the output 'ra', 'dec', and 'bjd' columns will have np.nan values
+        the output 'ra', 'dec', and 'bjd' columns will have np.nan values.
+        The output also contains a boolean 'saturated' column that is ``True``
+        for sources whose aperture contains one or more saturated (or
+        otherwise non-finite) pixels; those sources have their
+        'aperture_net_cnts' set to np.nan.
 
     dropped_sources : list
         This of the star_ids of the sources that fell outside the image or were
@@ -359,6 +363,18 @@ def single_image_photometry(
     ccd_image.data = ccd_image.data.astype(float)
     ccd_image.data[ccd_image.data > camera.max_data_value.value] = np.nan
 
+    # Add any non-finite pixels -- the saturated pixels marked as NaN above
+    # plus any NaN already present in the input -- to the image mask so that
+    # they are excluded from the aperture sums instead of turning the sums
+    # into NaN. See #591. Sources whose aperture contains any of these pixels
+    # are flagged as saturated below.
+    bad_pixels = ~np.isfinite(ccd_image.data)
+    if bad_pixels.any():
+        if ccd_image.mask is not None:
+            ccd_image.mask = ccd_image.mask | bad_pixels
+        else:
+            ccd_image.mask = bad_pixels
+
     # Extract necessary values from sourcelist structure
     star_ids = sourcelist["star_id"].value
     xs = sourcelist["xcenter"].value
@@ -464,13 +480,33 @@ def single_image_photometry(
     # and just passing the same sourcelist when calling single_image_photometry
     # on each image.
     if use_coordinates == "sky":
+        # Apply the image mask (which includes the saturated pixels marked as
+        # NaN above) by setting the masked pixels to NaN; photutils then
+        # automatically masks the non-finite values. We deliberately do not
+        # pass the mask to centroid_sources because photutils raises an error
+        # if a cutout is completely masked, while a completely saturated
+        # source should instead produce a NaN centroid and fall back to its
+        # WCS-derived position below. See #592.
+        if ccd_image.mask is not None:
+            centroid_data = np.where(ccd_image.mask, np.nan, ccd_image.data)
+        else:
+            centroid_data = ccd_image.data
         try:
-            xcen, ycen = centroid_sources(
-                ccd_image.data,
-                xs,
-                ys,
-                box_size=2 * int(photometry_apertures.radius_pixels(fwhm)) + 1,
-            )
+            with warnings.catch_warnings():
+                # photutils warns about the non-finite values it masks; that
+                # is exactly the behavior we want here, so suppress the
+                # warning.
+                warnings.filterwarnings(
+                    "ignore",
+                    message=".*Input data contains non-finite values.*",
+                    category=AstropyUserWarning,
+                )
+                xcen, ycen = centroid_sources(
+                    centroid_data,
+                    xs,
+                    ys,
+                    box_size=2 * int(photometry_apertures.radius_pixels(fwhm)) + 1,
+                )
         except NoOverlapError:
             logger.warning(
                 f"{logline} Determining new centroids failed ... "
@@ -484,7 +520,12 @@ def single_image_photometry(
 
             # The center really shouldn't move more than about the fwhm, could
             # rework this in the future to use that instead.
-            too_much_shift = (
+            # A non-finite center_diff means centroiding failed (e.g. the
+            # cutout of a completely saturated source is all NaN), so treat
+            # it like too much shift so those sources also fall back to the
+            # WCS-derived position instead of crashing the photometry with a
+            # NaN aperture position. See #592.
+            too_much_shift = ~np.isfinite(center_diff) | (
                 center_diff
                 > photometry_settings.source_location_settings.shift_tolerance
             )
@@ -514,6 +555,20 @@ def single_image_photometry(
         r_out=photometry_apertures.outer_annulus,
     )
 
+    # Flag sources whose aperture contains any saturated (or otherwise
+    # non-finite) pixels. Those pixels are excluded from the aperture sum by
+    # the mask, so the sum would silently underestimate the flux of the
+    # source. See #591.
+    if bad_pixels.any():
+        bad_pixel_photom = aperture_photometry(
+            bad_pixels.astype(float),
+            apers,
+            method=photometry_options.partial_pixel_method,
+        )
+        source_is_saturated = np.asarray(bad_pixel_photom["aperture_sum"]) > 0
+    else:
+        source_is_saturated = np.zeros(len(aper_locs), dtype=bool)
+
     # Perform the aperture photometry
     photom = aperture_photometry(
         ccd_image.data,
@@ -532,6 +587,9 @@ def single_image_photometry(
     photom["star_id"] = star_ids
     photom["ra"] = ra * u.deg
     photom["dec"] = dec * u.deg
+
+    # Flag the sources that have saturated pixels in their aperture (#591)
+    photom["saturated"] = source_is_saturated
 
     # Drop ID column from aperture_photometry()
     del photom["id"]
@@ -649,12 +707,22 @@ def single_image_photometry(
             f"{logline} Aperture net counts negative for {np.sum(bad_cnts)} " "sources."
         )
 
-    all_bads = bad_cnts | bad_fwhm
+    # Saturated pixels are excluded from the aperture sum by the mask, so the
+    # net counts of a source with saturated pixels in its aperture silently
+    # underestimate the flux of the source. Set those to NaN too. See #591.
+    if np.sum(source_is_saturated) > 0:
+        logger.warning(
+            f"{logline} {np.sum(source_is_saturated)} sources have saturated "
+            "(or otherwise non-finite) pixels in their aperture."
+        )
+
+    all_bads = bad_cnts | bad_fwhm | source_is_saturated
 
     photom["aperture_net_cnts"][all_bads] = np.nan
     logger.info(
-        f"{logline} {np.sum(all_bads)} sources with either bad FWHM fit "
-        "or bad aperture net counts had aperture_net_cnts set to NaN."
+        f"{logline} {np.sum(all_bads)} sources with either bad FWHM fit, "
+        "bad aperture net counts, or saturated pixels in their aperture "
+        "had aperture_net_cnts set to NaN."
     )
 
     # Compute instrumental magnitudes

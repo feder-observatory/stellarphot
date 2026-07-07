@@ -123,6 +123,15 @@ def compute_fwhm(
             mask = nan_mask
 
         cutout_xy = cutout.to_cutout_position((x, y))
+
+        # A completely masked cutout (e.g. a fully saturated source, see
+        # #591/#592) has no data to measure a FWHM from, and photutils
+        # raises an error when asked to fit it, so record NaN instead.
+        if mask.all():
+            fwhm_x.append(np.nan)
+            fwhm_y.append(np.nan)
+            continue
+
         match fit_method:
             case FwhmMethods.FIT:
                 # Make sure we get an odd fits shape
