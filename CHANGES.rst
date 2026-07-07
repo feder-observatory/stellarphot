@@ -62,6 +62,9 @@ Bug Fixes
   computed for every row that has coordinates and only the rows without
   coordinates are masked in the resulting time column. A warning is issued
   when rows are skipped. [#622]
++ ``comparison_utils.in_field`` no longer swaps the x/y image bounds, which
+  excluded valid comparison-star candidates near the long edge of non-square
+  images (and could include off-frame stars). [#612]
 
 1.4.15 (2024-08-16)
 -------------------
