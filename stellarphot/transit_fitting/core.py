@@ -148,13 +148,6 @@ class TransitModelFit:
     <https://pytransit.readthedocs.io/en/latest/notebooks/models/roadrunner/roadrunner_model_example_1.html>`_
     using a quadratic limb-darkening law and a circular orbit.
 
-    Because the orbit is always circular, the model's ``eccentricity``
-    parameter has no effect on the computed light curve. It is kept in the
-    model for API stability, but it must remain fixed (the default) and its
-    value is ignored. Calling ``fit`` with ``eccentricity.fixed`` set to
-    ``False`` raises a ``ValueError``, and a fixed nonzero eccentricity
-    triggers a warning.
-
     Attributes
     ----------
 
@@ -168,6 +161,15 @@ class TransitModelFit:
 
     width : array-like
         Width of the star in pixels at each time. Must be set before fitting.
+
+    Notes
+    -----
+    Because the orbit is always circular, the model's ``eccentricity``
+    parameter has no effect on the computed light curve. It is kept in the
+    model for API stability, but it must remain fixed (the default) and its
+    value is ignored. Calling ``fit`` with ``eccentricity.fixed`` set to
+    ``False`` raises a ``ValueError``, and a fixed nonzero eccentricity
+    triggers a warning.
     """
 
     def __init__(self):
