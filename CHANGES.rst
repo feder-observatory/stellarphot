@@ -65,6 +65,9 @@ Bug Fixes
 + ``comparison_utils.in_field`` no longer swaps the x/y image bounds, which
   excluded valid comparison-star candidates near the long edge of non-square
   images (and could include off-frame stars). [#612]
++ The v1 to v2 photometry migration now writes ``NaN`` and emits a warning for
+  observations whose passband has no matching ``mag_inst_<band>`` column,
+  instead of silently writing ``mag_inst = 0``. [#613]
 
 1.4.15 (2024-08-16)
 -------------------
