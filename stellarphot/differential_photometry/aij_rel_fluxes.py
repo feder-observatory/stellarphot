@@ -287,7 +287,7 @@ def add_relative_flux_column(
     comp_bool = source_list["marker name"] == ["APASS comparison"]
     only_comp_stars = source_list[comp_bool]
     if verbose:
-        print("Adding AIJ-style relative flux columns to photomotry data")
+        print("Adding AIJ-style relative flux columns to photometry data")
     flux_table = calc_aij_relative_flux(photometry_data, only_comp_stars)
 
     flux_group = flux_table.group_by("file")
