@@ -248,17 +248,17 @@ class TestTOI:
         test_time_start = sample_toi.epoch + phase * sample_toi.period
         obs_times = test_time_start + np.linspace(0, 2) * sample_toi.duration
 
-        # Observations starting far from a transit generate a warning.
+        # Observations starting far from a transit generate a warning; the
+        # warning must be present in that case and absent otherwise.
         far_from_transit = (
             abs(phase - round(phase)) * sample_toi.period > 3 * sample_toi.duration
         )
-        if far_from_transit:
-            ctx = pytest.warns(UserWarning, match="far from a transit")
-        else:
-            ctx = warnings.catch_warnings()
-
-        with ctx:
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter("always")
             transit_time = sample_toi.transit_time_for_observation(obs_times)
+
+        far_warnings = [w for w in recorded if "far from a transit" in str(w.message)]
+        assert bool(far_warnings) == far_from_transit
 
         # The identified transit should be the one nearest the start of the
         # observations, so it can be no more than half a period away.
