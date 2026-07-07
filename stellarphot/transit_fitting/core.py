@@ -148,6 +148,13 @@ class TransitModelFit:
     <https://pytransit.readthedocs.io/en/latest/notebooks/models/roadrunner/roadrunner_model_example_1.html>`_
     using a quadratic limb-darkening law and a circular orbit.
 
+    Because the orbit is always circular, the model's ``eccentricity``
+    parameter has no effect on the computed light curve. It is kept in the
+    model for API stability, but it must remain fixed (the default) and its
+    value is ignored. Calling ``fit`` with ``eccentricity.fixed`` set to
+    ``False`` raises a ``ValueError``, and a fixed nonzero eccentricity
+    triggers a warning.
+
     Attributes
     ----------
 
@@ -335,11 +342,12 @@ class TransitModelFit:
             width_trend=0.0,
             spp_trend=0.0,
         ):
-            # pytransit uses inclination in radians. The orbit is circular
-            # (eccentricity is always fixed at 0 in this model), so ``evaluate``
-            # is left with its default ``e=0``; the ``eccentricity`` argument is
-            # retained in the signature for API stability but is unused, matching
-            # the previous behavior where batman's ``ecc`` was fixed at 0.
+            # pytransit uses inclination in radians. The orbit is circular:
+            # ``evaluate`` is left with its default ``e=0``/``w=0`` and the
+            # ``eccentricity`` argument is NOT forwarded, matching the previous
+            # behavior where batman's ``ecc`` was fixed at 0. The argument is
+            # retained in the signature only for API stability; ``fit()``
+            # raises if a user un-fixes it and warns if it is nonzero.
             flux = self._transit_model.evaluate(
                 k=rp,
                 ldc=[limb_u1, limb_u2],
@@ -357,7 +365,9 @@ class TransitModelFit:
 
         self._model = ModelClass()
 
-        # Set up some defaults for what is fixed
+        # Set up some defaults for what is fixed. The eccentricity must stay
+        # fixed: it is not forwarded to pytransit (the orbit is always
+        # circular) and fit() raises if it has been un-fixed.
         self._model.period.fixed = True
         self._model.eccentricity.fixed = True
         self._model.limb_u1.fixed = True
@@ -477,12 +487,42 @@ class TransitModelFit:
     def fit(self):
         """
         Perform a fit and update the model with best-fit values.
+
+        Raises
+        ------
+        ValueError
+            If the times or model have not been set, or if
+            ``model.eccentricity.fixed`` has been set to ``False``. The
+            eccentricity is not forwarded to the underlying pytransit model
+            (the orbit is always circular), so it cannot be fit.
         """
         # Maybe do some correctness check of the model before starting.
         if self.times is None:
             raise ValueError("The times must be set before trying " "to fit.")
         if self._model is None:
             raise ValueError("Run setup_model() before trying to fit.")
+
+        # The eccentricity parameter is never forwarded to the underlying
+        # pytransit model (the orbit is always circular, e=0). Fitting it
+        # would silently do nothing: the fitter would see a zero Jacobian
+        # column, report a meaningless "best-fit" value, and inflate the
+        # fit parameter count (and hence the BIC). Fail loudly instead.
+        if not self.model.eccentricity.fixed:
+            raise ValueError(
+                "The eccentricity cannot be fit: the underlying pytransit "
+                "model always uses a circular orbit (eccentricity 0), so the "
+                "eccentricity parameter has no effect on the model. Leave "
+                "eccentricity.fixed set to True."
+            )
+
+        if self.model.eccentricity.value != 0:
+            warnings.warn(
+                f"The eccentricity value {self.model.eccentricity.value} is "
+                "ignored by the underlying pytransit model, which always "
+                "uses a circular orbit (eccentricity 0).",
+                AstropyUserWarning,
+                stacklevel=2,
+            )
 
         # The pytransit model already has its time array (set via the ``times``
         # setter), so no additional model setup is needed here.

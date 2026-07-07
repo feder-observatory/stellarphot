@@ -1,7 +1,10 @@
+import warnings
+
 import numpy as np
 import pytest
 from astropy.table import Table
 from astropy.utils.data import get_pkg_data_filename
+from astropy.utils.exceptions import AstropyUserWarning
 
 from stellarphot.transit_fitting import TransitModelFit
 
@@ -359,6 +362,50 @@ def test_transit_data_detrend():
         + tmod.model.width_trend * tmod.width
         + tmod.model.spp_trend * tmod.spp,
     )
+
+
+def test_fit_raises_if_eccentricity_not_fixed():
+    # The eccentricity parameter is not forwarded to the underlying pytransit
+    # model, so trying to fit it would silently do nothing (a zero Jacobian
+    # column and a meaningless "best-fit" value). Un-fixing it must raise a
+    # clear error at fit time instead. See issue #593.
+    tmod = _make_transit_model_with_data(
+        noise_dev=1e-5, with_airmass=False, with_width=False, with_spp=False
+    )
+
+    tmod.model.eccentricity.fixed = False
+
+    with pytest.raises(ValueError, match="eccentricity cannot be fit"):
+        tmod.fit()
+
+
+def test_fit_warns_if_fixed_eccentricity_is_nonzero():
+    # A fixed but nonzero eccentricity is silently ignored by the underlying
+    # pytransit model (the orbit is always circular), so the user should be
+    # warned that the value they set has no effect. See issue #593.
+    tmod = _make_transit_model_with_data(
+        noise_dev=1e-5, with_airmass=False, with_width=False, with_spp=False
+    )
+
+    tmod.model.eccentricity = 0.5
+    assert tmod.model.eccentricity.fixed
+
+    with pytest.warns(AstropyUserWarning, match="eccentricity.*ignored"):
+        tmod.fit()
+
+
+def test_fit_with_default_eccentricity_neither_raises_nor_warns():
+    # The default configuration (eccentricity fixed at 0) should fit without
+    # any eccentricity-related error or warning.
+    tmod = _make_transit_model_with_data(
+        noise_dev=1e-5, with_airmass=False, with_width=False, with_spp=False
+    )
+
+    with warnings.catch_warnings(record=True) as recorded:
+        warnings.simplefilter("always")
+        tmod.fit()
+
+    assert not any("eccentricity" in str(w.message) for w in recorded)
 
 
 def test_transit_fit_parameters_unfreeze_as_expected():
