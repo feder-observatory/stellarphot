@@ -385,8 +385,14 @@ class ApertureFileAIJ:
         return apAIJ
 
 
-def _is_comp(star_coord, comp_table):
+def _is_comp(star_coord, comp_table, match_limit=2 * u.arcsec):
     idx, d2d, _ = star_coord.match_to_catalog_sky(comp_table["coord"])
+    # match_to_catalog_sky always returns the nearest entry, however far
+    # away it is. Only trust the match if it is within match_limit;
+    # otherwise this star is not in the comparison table at all, so it
+    # is not a comparison star.
+    if d2d > match_limit:
+        return False
     return "comparison" in comp_table["marker name"][idx]
 
 
