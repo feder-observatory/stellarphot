@@ -351,7 +351,7 @@ class FakeCatalogTable(Table):
         return self
 
 
-def test_transform_to_catalog_excludes_distant_matches(monkeypatch):
+def test_transform_to_catalog_excludes_distant_matches(mocker):
     # A star whose nearest catalog match is far away (much more than
     # 1 arcsec) should be excluded from the fit for the transform
     # coefficients. See issue #588 -- an operator precedence error
@@ -402,9 +402,7 @@ def test_transform_to_catalog_excludes_distant_matches(monkeypatch):
 
     # Replace the catalog fetch with our synthetic catalog so no
     # network access is needed.
-    monkeypatch.setattr(
-        magnitude_transforms, "apass_dr9", lambda *_args, **_kwargs: catalog
-    )
+    mocker.patch.object(magnitude_transforms, "apass_dr9", return_value=catalog)
 
     result = transform_to_catalog(
         observed,
