@@ -71,6 +71,9 @@ Bug Fixes
 + ``TransitModelFit.fit`` now raises an error if the ``eccentricity`` parameter
   has been un-fixed, and warns if a fixed nonzero value is set, instead of
   silently ignoring the parameter. [#614]
++ ``generate_aij_table`` no longer classifies a star as a comparison star based
+  on an arbitrarily distant sky match; a match within a couple of arcseconds is
+  now required. [#615]
 
 1.4.15 (2024-08-16)
 -------------------
