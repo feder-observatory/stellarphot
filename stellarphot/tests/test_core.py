@@ -10,6 +10,7 @@ from astropy.nddata import CCDData
 from astropy.table import Table, vstack
 from astropy.time import Time
 from astropy.utils.data import get_pkg_data_filename, get_pkg_data_path
+from astropy.utils.exceptions import AstropyUserWarning
 from astropy.wcs import WCS
 from astropy.wcs.wcs import FITSFixedWarning
 
@@ -596,10 +597,14 @@ def test_add_bjd_col_with_missing_coordinates(feder_cg_16m, feder_passbands, fed
         assert not bjd.mask[row]
         assert abs(bjd[row].value - 2459910.775405664) * 86400 < 0.05
 
-    # A warning about the skipped row should have been issued.
-    assert any(
-        "missing" in str(warning.message).lower() for warning in recorded
-    ), "Expected a warning about rows with missing RA/Dec"
+    # Exactly one warning about the skipped row should have been issued.
+    bjd_warnings = [
+        warning
+        for warning in recorded
+        if issubclass(warning.category, AstropyUserWarning)
+        and "BJD could not be computed" in str(warning.message)
+    ]
+    assert len(bjd_warnings) == 1, "Expected a warning about rows with missing RA/Dec"
 
 
 def test_photometry_data_short_filter_name(feder_cg_16m, feder_obs):
