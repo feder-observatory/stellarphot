@@ -97,6 +97,13 @@ def calc_aij_relative_flux(
     # Not sure this is really close enough for a good match...
     good = d2d < 1.2 * u.arcsec
 
+    if not np.any(good):
+        raise RuntimeError(
+            "No comparison stars matched the positions in the photometry "
+            "data, so relative flux cannot be calculated. Check that the "
+            "comparison star coordinates are correct."
+        )
+
     check_for_bad = Table(
         data=[star_data[star_id_column].data, good], names=["star_id", "good"]
     )
@@ -132,12 +139,21 @@ def calc_aij_relative_flux(
         this_comp = star_data[star_id_column] == comp
         good[this_comp] = False
 
-    if not np.any(good):
+    # Every time in the input data must have at least one comparison star;
+    # otherwise the comparison counts at the times with no comparison stars
+    # would silently be set to 1. Note that a comparison star that is bad at
+    # any one time is excluded as a comparison star at every time, so this
+    # also catches the case in which every comparison star has been
+    # excluded.
+    star_times = np.asarray(star_data["date-obs"].value)
+    times_with_comps = set(star_times[good])
+    if set(star_times) - times_with_comps:
         raise RuntimeError(
-            "No comparison stars matched the photometry data, so relative "
-            "flux cannot be calculated. Check that the comparison star "
-            "coordinates are correct and that the comparison stars have "
-            "valid data at every time in the photometry data."
+            "There are one or more times in the photometry data at which "
+            "none of the comparison stars has valid data, so relative flux "
+            "cannot be calculated. A comparison star is excluded from every "
+            "time if it is missing, has NaN counts, or has a mismatched "
+            "position at even one time."
         )
 
     error_column_name = "noise_electrons"
@@ -157,18 +173,6 @@ def calc_aij_relative_flux(
     # and convert to regular column...eventually
 
     comp_fluxes = comp_fluxes.group_by("date-obs")
-
-    # Every time in the input data must have at least one comparison star,
-    # otherwise the comparison counts at the times with no comparison stars
-    # would silently be set to 1.
-    n_times_star_data = len(np.unique(np.asarray(star_data["date-obs"].value)))
-    if len(comp_fluxes.groups) != n_times_star_data:
-        raise RuntimeError(
-            "There are one or more times in the photometry data at which "
-            "none of the comparison stars has valid data, so relative flux "
-            "cannot be calculated."
-        )
-
     comp_totals = comp_fluxes.groups.aggregate(np.sum)[counts_column_name]
     # Count the comparison stars in each image by counting the rows in each
     # group. Counting nonzero fluxes would be wrong here -- exactly zero net

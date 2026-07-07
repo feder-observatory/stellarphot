@@ -257,16 +257,43 @@ def test_no_matching_comp_stars_raises_error():
         calc_aij_relative_flux(input_table, comp_star, in_place=False)
 
 
+def test_comp_stars_missing_at_one_time_raises_error():
+    # Related to #590 -- if the comparison stars have no valid data at one
+    # (or more) of the times, they are excluded as comparison stars at every
+    # time. The error in that case should explain that, rather than say that
+    # no comparison star positions matched, since the positions match just
+    # fine at the other times.
+    _, _, input_table, comp_star = _raw_photometry_table()
+    input_table.sort(["date-obs", "star_id"])
+
+    # Remove the comparison stars (stars 2, 3 and 4) from the last time,
+    # keeping the target star at that time and all of the comparison stars
+    # at the other times.
+    last_time = np.unique(input_table["date-obs"])[-1]
+    comps_at_last_time = (input_table["date-obs"] == last_time) & (
+        input_table["star_id"] != 1
+    )
+    input_table = input_table[~comps_at_last_time]
+
+    with pytest.raises(RuntimeError, match="one or more times"):
+        calc_aij_relative_flux(input_table, comp_star, in_place=False)
+
+
 # Run in a temporary directory because add_relative_flux_column writes its
 # output file to the current working directory.
 @pytest.mark.usefixtures("change_to_tmp_dir")
-def test_add_relative_flux_column_with_existing_bjd(simple_photometry_data):
-    # Regression test for #597 -- add_relative_flux_column used to raise
-    # a NameError when the input photometry data already had a bjd column.
+@pytest.mark.parametrize("bjd_already_present", [True, False])
+def test_add_relative_flux_column(simple_photometry_data, bjd_already_present):
+    # With bjd_already_present this is a regression test for #597 --
+    # add_relative_flux_column used to raise a NameError when the input
+    # photometry data already had a bjd column. Without it, the bjd column
+    # should be computed and added to the output.
     phot_data = simple_photometry_data
 
-    # The test data already has a bjd column, which triggered the bug.
+    # The test data already has a bjd column, which triggered #597.
     assert "bjd" in phot_data.colnames
+    if not bjd_already_present:
+        del phot_data["bjd"]
 
     phot_file = Path("photometry.ecsv")
     phot_data.write(phot_file)
@@ -293,15 +320,16 @@ def test_add_relative_flux_column_with_existing_bjd(simple_photometry_data):
     source_list_file = Path("source_list.ecsv")
     source_list.write(source_list_file)
 
-    # This used to raise a NameError because the grouped table was only
-    # created when the bjd column was missing.
-    add_relative_flux_column(phot_file, source_list_file)
+    # With a pre-existing bjd column this used to raise a NameError because
+    # the grouped table was only created when the bjd column was missing.
+    add_relative_flux_column(phot_file, source_list_file, verbose=True)
 
     output_file = Path("photometry-relative-flux.ecsv")
     assert output_file.exists()
 
     output_data = PhotometryData.read(output_file)
     assert "bjd" in output_data.colnames
+    assert np.all(np.isfinite(output_data["bjd"].jd))
     assert "relative_flux" in output_data.colnames
     assert np.all(np.isfinite(output_data["relative_flux"]))
     assert np.all(output_data["relative_flux"] > 0)
