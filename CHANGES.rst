@@ -113,7 +113,7 @@ Bug Fixes
   the core of the star and the corners outside the annulus. [#602]
 + ``SourceListData.drop_x_y`` now writes the NaN placeholder ``xcenter`` and
   ``ycenter`` columns with the documented ``pix`` unit instead of ``deg``,
-  which had been copied from ``drop_ra_dec``. [#620]
+  which had been copied from ``drop_ra_dec``. [#598]
 
 1.4.15 (2024-08-16)
 -------------------
