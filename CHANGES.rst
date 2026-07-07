@@ -57,6 +57,11 @@ Bug Fixes
   wrong Gaia ID to most stars. Only the coordinates are uploaded to XMatch
   now, making the query much faster and less likely to fail on large
   fields. [#586]
++ ``PhotometryData.add_bjd_col`` no longer sets the BJD to NaN for the whole
+  table when a single row is missing an RA or Dec value. The BJD is now
+  computed for every row that has coordinates and only the rows without
+  coordinates are masked in the resulting time column. A warning is issued
+  when rows are skipped. [#622]
 
 1.4.15 (2024-08-16)
 -------------------
