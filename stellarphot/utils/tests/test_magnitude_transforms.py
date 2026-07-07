@@ -8,10 +8,12 @@ from astropy.table import Column, Table
 from astropy.utils.data import get_pkg_data_filename
 from astropy.utils.exceptions import AstropyUserWarning
 
+from .. import magnitude_transforms
 from ..magnitude_transforms import (
     calculate_transform_coefficients,
     filter_transform,
     transform_magnitudes,
+    transform_to_catalog,
 )
 
 
@@ -337,3 +339,91 @@ def test_coordinate_all_mismatches():
         )
 
     assert not any(stars_with_match)
+
+
+class FakeCatalogTable(Table):
+    """
+    Table that quacks like a stellarphot catalog just enough for
+    transform_to_catalog, which calls passband_columns on the catalog.
+    """
+
+    def passband_columns(self, passbands=None, transformer=None):  # noqa: ARG002
+        return self
+
+
+def test_transform_to_catalog_excludes_distant_matches(monkeypatch):
+    # A star whose nearest catalog match is far away (much more than
+    # 1 arcsec) should be excluded from the fit for the transform
+    # coefficients. See issue #588 -- an operator precedence error
+    # disabled the distance cut, so badly-matched stars polluted
+    # the fit.
+    n_good = 20
+
+    # Good stars sit exactly on top of their catalog counterparts.
+    ra, dec = generate_star_coordinates(n_good)
+
+    good_mags = np.linspace(-10.0, -5.0, num=n_good)
+    color = np.linspace(0.0, 1.0, num=n_good)
+
+    # Catalog magnitudes follow the fit model exactly with
+    # a=b=c=d=0 and zero point z=20.
+    zero_point = 20.0
+    cat_r = good_mags + zero_point
+
+    catalog = FakeCatalogTable(
+        {
+            "ra": ra,
+            "dec": dec,
+            "mag_R": cat_r,
+            "mag_I": cat_r - color,
+        }
+    )
+
+    # One more observed star, a degree away from every catalog star, so
+    # its nearest catalog match is bogus. Its instrumental magnitude is
+    # chosen so that the bogus match is 0.5 magnitude off the true zero
+    # point -- close enough to survive the median-based outlier cut, so
+    # only the distance cut can remove it from the fit.
+    bad_ra = ra[0]
+    bad_dec = dec[0] - 1 * u.degree
+    bad_mag = catalog["mag_R"][0] - zero_point - 0.5
+
+    observed = Table(
+        {
+            "file": ["image_1.fit"] * (n_good + 1),
+            "passband": ["R"] * (n_good + 1),
+            "ra": np.append(ra.to_value("degree"), bad_ra.to_value("degree")),
+            "dec": np.append(dec.to_value("degree"), bad_dec.to_value("degree")),
+            "mag_inst": np.append(good_mags, bad_mag),
+            "mag_error": [0.01] * (n_good + 1),
+        }
+    )
+    observed = observed.group_by("file")
+
+    # Replace the catalog fetch with our synthetic catalog so no
+    # network access is needed.
+    monkeypatch.setattr(
+        magnitude_transforms, "apass_dr9", lambda *_args, **_kwargs: catalog
+    )
+
+    result = transform_to_catalog(
+        observed,
+        "R",
+        obs_error_column="mag_error",
+        cat_name="apass_dr9",
+        cat_filter="R",
+        cat_color=("R", "I"),
+    )
+
+    # The distant star has no real match, so its calibrated
+    # magnitude should be NaN.
+    assert np.isnan(result["mag_inst_cal"][-1])
+
+    # With the distant star excluded from the fit, the good stars are
+    # an exact fit, so their calibrated magnitudes should match the
+    # catalog. If the bad match leaks into the fit it drags the
+    # coefficients away from the true values.
+    np.testing.assert_allclose(
+        result["mag_inst_cal"][:n_good], cat_r, rtol=0, atol=1e-6
+    )
+    np.testing.assert_allclose(result["z"][:n_good], zero_point, rtol=0, atol=1e-6)
