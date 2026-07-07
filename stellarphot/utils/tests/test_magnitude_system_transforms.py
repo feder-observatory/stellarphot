@@ -236,8 +236,20 @@ class TestCatalogTransforms:
 
 
 class TestUSNOPrimeToSDSSDR7:
+    # The reference for the transform is
+    # https://classic.sdss.org/dr7/algorithms/jeg_photometric_eq_dr1.php#usno2SDSS
+    # which gives, with all zpOffsets zero,
+    #
+    #   u = u'
+    #   g = g' + 0.060 * ((g' - r') - 0.53)
+    #   r = r' + 0.035 * ((r' - i') - 0.21)
+    #   i = i' + 0.041 * ((r' - i') - 0.21)
+    #   z = z' - 0.030 * ((i' - z') - 0.09)
+
     def test_transform(self):
-        # Check that the zero point for ug is correct
+        # Check the constant terms: with all input magnitudes zero, each output
+        # is the product of -b and the zeropoint color (u' is checked too since
+        # its coefficient in the u row is one).
         inp_mag = np.asarray([1.39, 0.0, 0.0, 0.0, 0.0, 1.0])
         # This should produce this output:
         # u: same as u' so 1.39
@@ -245,9 +257,56 @@ class TestUSNOPrimeToSDSSDR7:
         # r: product of -b_r and -zp_ri, so -0.00735
         # i: product of -b_i and -zp_ri, so -0.00861
         # z: product of -b_z and -zp_iz, so 0.0027
-
-        # This effectively checks the whole matrix
         expected = np.asarray([1.39, -0.0318, -0.00735, -0.00861, 0.0027, 1])
         usno_to_sdss = USNOPrimeToSDSSDR7.load()
         out_mag = usno_to_sdss(inp_mag)
         assert np.allclose(out_mag, expected)
+
+    def test_transform_zeropoint_colors_are_fixed_point(self):
+        # A star whose colors are exactly the zeropoint colors of the transform
+        # ((u'-g') = 1.39, (g'-r') = 0.53, (r'-i') = 0.21, (i'-z') = 0.09) has
+        # every color correction vanish, so its ugriz magnitudes must equal its
+        # u'g'r'i'z' magnitudes. Unlike an all-zeros input, this exercises the
+        # diagonal and off-diagonal color coefficients together.
+        z_p = 10.0
+        i_p = z_p + 0.09
+        r_p = i_p + 0.21
+        g_p = r_p + 0.53
+        u_p = g_p + 1.39
+        inp_mag = np.asarray([u_p, g_p, r_p, i_p, z_p, 1.0])
+        usno_to_sdss = USNOPrimeToSDSSDR7.load()
+        out_mag = usno_to_sdss(inp_mag)
+        assert np.allclose(out_mag[:5], inp_mag[:5])
+
+    def test_transform_matches_reference_equations(self):
+        # Check every coefficient of the matrix against the published
+        # equations, using colors that are *not* the zeropoint colors so that
+        # each color term contributes. Two stars at once also checks that the
+        # matrix multiplication handles a (n_bands + 1, n_stars) input.
+        u_p = np.asarray([15.2, 13.1])
+        g_p = np.asarray([14.7, 12.8])
+        r_p = np.asarray([13.9, 12.6])
+        i_p = np.asarray([13.4, 12.5])
+        z_p = np.asarray([13.1, 12.45])
+        inp_mag = np.asarray([u_p, g_p, r_p, i_p, z_p, np.ones_like(u_p)])
+
+        expected = np.asarray(
+            [
+                u_p,
+                g_p + 0.060 * ((g_p - r_p) - 0.53),
+                r_p + 0.035 * ((r_p - i_p) - 0.21),
+                i_p + 0.041 * ((r_p - i_p) - 0.21),
+                z_p - 0.030 * ((i_p - z_p) - 0.09),
+                np.ones_like(u_p),
+            ]
+        )
+        usno_to_sdss = USNOPrimeToSDSSDR7.load()
+        out_mag = usno_to_sdss(inp_mag)
+        assert np.allclose(out_mag, expected)
+
+    def test_transform_wrong_shape_raises(self):
+        # Input without the constant-term row should raise, not silently
+        # produce wrong magnitudes.
+        usno_to_sdss = USNOPrimeToSDSSDR7.load()
+        with pytest.raises(ValueError, match="does not match the number"):
+            usno_to_sdss(np.zeros(5))
