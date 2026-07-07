@@ -170,7 +170,11 @@ def calc_aij_relative_flux(
         )
 
     comp_totals = comp_fluxes.groups.aggregate(np.sum)[counts_column_name]
-    comp_num_stars = comp_fluxes.groups.aggregate(np.count_nonzero)[counts_column_name]
+    # Count the comparison stars in each image by counting the rows in each
+    # group. Counting nonzero fluxes would be wrong here -- exactly zero net
+    # counts is a legitimate measured value (net counts can even be negative
+    # after sky subtraction) and must not be mistaken for a missing star.
+    comp_num_stars = np.diff(comp_fluxes.groups.indices)
     comp_errors = comp_fluxes.groups.aggregate(add_in_quadrature)[error_column_name]
 
     comp_total_vector = np.ones_like(star_data[counts_column_name])
@@ -200,16 +204,30 @@ def calc_aij_relative_flux(
         comp_total_vector[this_time] *= comp_total
         comp_error_vector[this_time] = comp_error * comp_fluxes[error_column_name].unit
 
-    relative_flux = star_data[counts_column_name] / (comp_total_vector + flux_offset)
+    # A comparison star is excluded from its own comparison ensemble: its
+    # flux is removed from the comparison total (via flux_offset) and its
+    # error is removed from the comparison error, so that the relative flux
+    # and its error are computed against the same ensemble.
+    comp_total_used = comp_total_vector + flux_offset
+    # Clip protects against tiny negative values from floating point
+    # roundoff when a single comparison star dominates the ensemble error.
+    comp_error_used = np.sqrt(
+        np.clip(
+            comp_error_vector**2 - (star_data[error_column_name] * is_comp) ** 2,
+            0,
+            None,
+        )
+    )
+
+    relative_flux = star_data[counts_column_name] / comp_total_used
     relative_flux = relative_flux.flatten()
 
-    rel_flux_error = (
-        star_data[counts_column_name]
-        / comp_total_vector
-        * np.sqrt(
-            (star_data[error_column_name] / star_data[counts_column_name]) ** 2
-            + (comp_error_vector / comp_total_vector) ** 2
-        )
+    # This is the usual error propagation for a ratio, written to avoid
+    # dividing by the star's counts so that a star with exactly zero counts
+    # gets a finite error instead of NaN.
+    rel_flux_error = np.sqrt(
+        (star_data[error_column_name] / comp_total_used) ** 2
+        + (star_data[counts_column_name] * comp_error_used / comp_total_used**2) ** 2
     )
 
     # Add these columns to table

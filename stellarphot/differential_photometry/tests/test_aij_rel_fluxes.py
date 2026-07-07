@@ -42,15 +42,23 @@ def _raw_photometry_table():
     comp_stars = np.array([0, 1, 1, 1])
     expected_comp_fluxes = np.sum(fluxes[1:])
 
+    # A comparison star is excluded from its own comparison ensemble, both
+    # in the comparison total and in the comparison error, so the expected
+    # values are different for each comparison star (see #605).
     comp_flux_offset = -comp_stars * fluxes
-    expected_flux_ratios = fluxes / (expected_comp_fluxes + comp_flux_offset)
+    expected_comp_flux_by_star = expected_comp_fluxes + comp_flux_offset
+    expected_flux_ratios = fluxes / expected_comp_flux_by_star
 
     comp_error_total = np.sqrt((errors[1:] ** 2).sum())
+    comp_error_by_star = np.sqrt(comp_error_total**2 - comp_stars * errors**2)
 
     expected_flux_error = (
         fluxes
-        / expected_comp_fluxes
-        * np.sqrt(errors**2 / fluxes**2 + comp_error_total**2 / expected_comp_fluxes**2)
+        / expected_comp_flux_by_star
+        * np.sqrt(
+            errors**2 / fluxes**2
+            + comp_error_by_star**2 / expected_comp_flux_by_star**2
+        )
     )
 
     raw_table = Table(
@@ -171,6 +179,67 @@ def test_bad_comp_star(bad_thing):
         new_expected_flux[:-comparison_start],
         output_table["relative_flux"][comparison_start:],
     )
+
+
+def test_comp_star_error_uses_self_excluded_ensemble():
+    # Regression test for #605 -- the error of a comparison star must be
+    # computed against the same ensemble as its relative flux, that is, with
+    # the star itself excluded from both the comparison total counts and the
+    # comparison error added in quadrature. Previously the error used the
+    # full ensemble even though the flux excluded the star itself.
+    _, _, input_table, comp_star = _raw_photometry_table()
+
+    output = calc_aij_relative_flux(input_table, comp_star, in_place=False)
+
+    # Hand-computed expectation for star 2, a comparison star whose
+    # comparison ensemble is stars 3 and 4. These values match the ones
+    # in _raw_photometry_table.
+    flux_2 = 20000.0
+    error_2 = np.sqrt(flux_2) + 50
+    comp_total = 30000.0 + 40000.0
+    comp_error = np.sqrt((np.sqrt(30000.0) + 50) ** 2 + (np.sqrt(40000.0) + 50) ** 2)
+    expected_error_2 = (
+        flux_2
+        / comp_total
+        * np.sqrt((error_2 / flux_2) ** 2 + (comp_error / comp_total) ** 2)
+    )
+
+    star_2 = output["star_id"] == 2
+    np.testing.assert_allclose(
+        output["relative_flux_error"][star_2].value, expected_error_2
+    )
+    # The SNR should be consistent with the flux and error columns.
+    np.testing.assert_allclose(
+        output["relative_flux_snr"][star_2],
+        (output["relative_flux"][star_2] / output["relative_flux_error"][star_2]),
+    )
+
+
+def test_comp_star_with_zero_flux_is_counted():
+    # Regression test for #605 -- exactly zero net counts is a legitimate
+    # measured value (net counts can even be negative after sky subtraction).
+    # The per-image consistency check used np.count_nonzero, so a comparison
+    # star with exactly zero flux in one image was miscounted as a missing
+    # star, raising a misleading "Different number of stars in comparison
+    # sets" error.
+    _, _, input_table, comp_star = _raw_photometry_table()
+    input_table.sort(["date-obs", "star_id"])
+
+    # Star 4, a comparison star, has exactly zero net counts in the
+    # last image.
+    input_table["aperture_net_cnts"][-1] = 0.0
+
+    output = calc_aij_relative_flux(input_table, comp_star, in_place=False)
+
+    # In the last image the comparison total is 20000 + 30000 + 0.
+    last_image = output["date-obs"] == np.unique(output["date-obs"])[-1]
+    target_star = last_image & (output["star_id"] == 1)
+    zero_flux_comp = last_image & (output["star_id"] == 4)
+
+    np.testing.assert_allclose(output["relative_flux"][target_star], 10000.0 / 50000.0)
+    np.testing.assert_allclose(output["relative_flux"][zero_flux_comp], 0.0)
+    # The error should be finite everywhere, including the zero-flux row.
+    assert np.all(np.isfinite(output["relative_flux_error"]))
 
 
 def test_no_matching_comp_stars_raises_error():

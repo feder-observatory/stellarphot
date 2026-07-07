@@ -86,6 +86,17 @@ Bug Fixes
   the raw net counts. [#618]
 + ``add_relative_flux_column`` no longer raises a ``NameError`` when the input
   photometry data already contains a ``bjd`` column. [#618]
++ The relative flux error of a comparison star is now computed against the
+  same ensemble as its relative flux, with the star itself excluded from
+  both the comparison counts and the comparison error, making the reported
+  error and SNR consistent with the flux. Previously the error used the
+  full ensemble including the star itself. [#618]
++ The per-image comparison-star consistency check in
+  ``calc_aij_relative_flux`` now counts the comparison stars present in
+  each image instead of counting nonzero fluxes, so a comparison star with
+  exactly zero net counts (a legitimate measured value) no longer triggers
+  a misleading "Different number of stars in comparison sets" error, and a
+  star with zero counts now gets a finite relative flux error. [#618]
 
 1.4.15 (2024-08-16)
 -------------------
