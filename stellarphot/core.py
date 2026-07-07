@@ -15,6 +15,7 @@ from astropy.io.ascii import InconsistentTableError
 from astropy.table import Column, QTable, Table, TableAttribute
 from astropy.time import Time
 from astropy.utils.decorators import lazyproperty
+from astropy.utils.exceptions import AstropyUserWarning
 from astropy.wcs import WCS
 from astroquery.vizier import Vizier
 
@@ -706,24 +707,38 @@ class PhotometryData(BaseEnhancedTable):
                 )
             observatory = self.observatory
 
-        if bjd_coordinates is None and (
-            np.isnan(self["ra"]).any() or np.isnan(self["dec"]).any()
-        ):
-            print(
-                "WARNING: BJD could not be computed "
-                "because some RA or Dec values are missing."
-            )
-            self["bjd"] = np.full(len(self), np.nan)
+        if bjd_coordinates is None:
+            valid_coordinates = ~(np.isnan(self["ra"]) | np.isnan(self["dec"]))
         else:
+            # Explicit coordinates were provided, so every row can be computed.
+            valid_coordinates = np.ones(len(self), dtype=bool)
+
+        n_missing = len(self) - valid_coordinates.sum()
+        if n_missing > 0:
+            warnings.warn(
+                f"BJD could not be computed for {n_missing} of {len(self)} "
+                "rows because the RA or Dec value is missing. The BJD for "
+                "those rows is masked.",
+                AstropyUserWarning,
+                stacklevel=2,
+            )
+
+        bjd = np.full(len(self), np.nan)
+
+        if valid_coordinates.any():
             # Convert times at start of each observation to TDB (Barycentric Dynamical
             # Time)
-            times = Time(self["date-obs"])
+            times = Time(self["date-obs"][valid_coordinates])
             times_tdb = times.tdb
             times_tdb.format = "jd"  # Switch to JD format
 
             # Compute light travel time corrections
             if bjd_coordinates is None:
-                sky_coords = SkyCoord(ra=self["ra"], dec=self["dec"], unit="degree")
+                sky_coords = SkyCoord(
+                    ra=self["ra"][valid_coordinates],
+                    dec=self["dec"][valid_coordinates],
+                    unit="degree",
+                )
             else:
                 sky_coords = bjd_coordinates
 
@@ -732,8 +747,19 @@ class PhotometryData(BaseEnhancedTable):
             )
             time_barycenter = times_tdb + ltt_bary
 
-            # Return BJD at midpoint of exposure at each location
-            self["bjd"] = Time(time_barycenter + self["exposure"] / 2, scale="tdb")
+            # BJD at midpoint of exposure at each location
+            bjd[valid_coordinates] = (
+                time_barycenter + self["exposure"][valid_coordinates] / 2
+            ).jd
+
+        if n_missing > 0:
+            # An astropy Time cannot hold NaN values, so rows without
+            # coordinates are masked instead. A masked Time survives an
+            # ECSV round trip, and masked entries propagate through
+            # arithmetic on the column.
+            bjd = np.ma.array(bjd, mask=~valid_coordinates)
+
+        self["bjd"] = Time(bjd, format="jd", scale="tdb")
 
     def lightcurve_for(self, target, flux_column="mag_inst", passband=None):
         """
