@@ -236,6 +236,36 @@ class TestTOI:
             reference_midpoint.jd
         )
 
+    @pytest.mark.parametrize(
+        "phase",
+        [-2.6, -2.1, -1.9, -0.9, -0.1, 0.1, 0.9, 123.6],
+    )
+    def test_transit_time_for_observation_nearest_transit(self, sample_toi, phase):
+        # Regression test for #594: the returned transit time should be the
+        # transit nearest the first observation time even when the observation
+        # is before the tabulated epoch (negative phase).
+        expected_midpoint = sample_toi.epoch + round(phase) * sample_toi.period
+        test_time_start = sample_toi.epoch + phase * sample_toi.period
+        obs_times = test_time_start + np.linspace(0, 2) * sample_toi.duration
+
+        # Observations starting far from a transit generate a warning; the
+        # warning must be present in that case and absent otherwise.
+        far_from_transit = (
+            abs(phase - round(phase)) * sample_toi.period > 3 * sample_toi.duration
+        )
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter("always")
+            transit_time = sample_toi.transit_time_for_observation(obs_times)
+
+        far_warnings = [w for w in recorded if "far from a transit" in str(w.message)]
+        assert bool(far_warnings) == far_from_transit
+
+        # The identified transit should be the one nearest the start of the
+        # observations, so it can be no more than half a period away.
+        half_period = 0.5 * sample_toi.period
+        assert abs((transit_time - test_time_start).to("day")) <= half_period
+        assert transit_time.jd == pytest.approx(expected_midpoint.jd)
+
 
 class TestTessPhotometrySetup:
     # Auto-use the shared change_to_tmp_dir fixture (defined in the top-level
