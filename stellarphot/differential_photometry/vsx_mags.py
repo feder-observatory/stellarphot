@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 from astropy import units as u
 from astropy.coordinates import SkyCoord
@@ -77,10 +79,12 @@ def calc_vmag(
     Returns
     -------
     avg : float
-        Average magnitude for the variable star
+        Average magnitude for the variable star. NaN if the variable star
+        has no match within 1 arcsecond in ``star_data``.
 
     stdev : float
-        Standard deviation for variable star values
+        Standard deviation for variable star values. NaN if the variable
+        star has no match within 1 arcsecond in ``star_data``.
     """
 
     if not band:
@@ -91,6 +95,17 @@ def calc_vmag(
     var_coords = var_stars["coords"]
     star_data_coords = SkyCoord(ra=star_data["RA"], dec=star_data["Dec"])
     v_index, v_d2d, _ = var_coords.match_to_catalog_sky(star_data_coords)
+
+    # match_to_catalog_sky always returns the nearest neighbor, however far
+    # away it is, so make sure the variable star actually has a match in
+    # star_data before using its magnitude.
+    if np.any(v_d2d >= 1 * u.arcsec):
+        warnings.warn(
+            "No star within 1 arcsec of the variable star was found in "
+            "star_data, so its magnitude cannot be calculated.",
+            stacklevel=2,
+        )
+        return np.nan, np.nan
 
     rcomps = comp_stars[comp_stars["band"] == band]
 
@@ -105,9 +120,7 @@ def calc_vmag(
 
     vmag_image = star_data[v_index][star_data_mag_column]
     comp_star_mag = star_data[good_index][star_data_mag_column]
-    a_index, a_d2d, _ = comp_coords.match_to_catalog_sky(comp_coords)
-    good_a_index = a_index[good]
-    accepted_comp = rcomps[good_a_index]["mag"]
+    accepted_comp = rcomps[good]["mag"]
     new_mag = vmag_image - comp_star_mag + accepted_comp
     avg = np.nanmean(new_mag)
     stdev = np.nanstd(new_mag)
