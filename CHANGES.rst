@@ -118,7 +118,7 @@ Bug Fixes
   1 arcsecond in the photometry data, warning and returning ``NaN`` when it
   does not. Previously the magnitude of the nearest unrelated star was
   silently reported as the variable's when the target was absent from the
-  data. [#621]
+  data. [#599]
 
 1.4.15 (2024-08-16)
 -------------------
