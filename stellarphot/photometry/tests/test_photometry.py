@@ -224,8 +224,11 @@ class TestAperturePhotometry:
                 * photometry_settings_for_test.camera.max_data_value.value
                 / fake_CCDimage.data.max()
             )
-            # For the moment, ensure the integer data is NOT larger than max_adu
-            # because until #161 is fixed then having NaN in the data will not succeed.
+            # Keep the integer data below max_adu so that no source is
+            # saturated. Saturated sources (see #161/#591) are flagged and get
+            # aperture_net_cnts set to NaN, which would break the flux
+            # comparison below; saturation itself is covered by
+            # test_aperture_photometry_flags_saturated_source.
             data = scale_factor * fake_CCDimage.data
             fake_CCDimage.data = data.astype(int)
 
@@ -434,6 +437,170 @@ class TestAperturePhotometry:
         ap_phot_exact = AperturePhotometry(settings=photometry_settings_for_test)
         phot_exact, _ = ap_phot_exact(image_file)
         assert np.all(phot_exact["aperture_sum"] != phot_center["aperture_sum"])
+
+    def test_aperture_photometry_flags_saturated_source(
+        self, tmp_path, photometry_settings_for_test
+    ):
+        # Regression test for #591 (which extends #161): a source with
+        # saturated pixels in its aperture should be explicitly flagged and
+        # have its aperture_net_cnts set to NaN, while the photometry of the
+        # other sources is unaffected.
+        fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
+        source_list = self.create_source_list()
+        source_list_file = tmp_path / "source_list.ecsv"
+        source_list.write(source_list_file, overwrite=True)
+
+        max_adu = photometry_settings_for_test.camera.max_data_value.value
+
+        # Saturate a few pixels at the center of the first source, i.e. well
+        # inside its photometry aperture.
+        saturated_source = source_list[0]
+        x_sat = int(saturated_source["xcenter"].value)
+        y_sat = int(saturated_source["ycenter"].value)
+        fake_CCDimage.data[y_sat : y_sat + 2, x_sat : x_sat + 2] = 2 * max_adu
+
+        photometry_settings_for_test.source_location_settings.source_list_file = str(
+            source_list_file
+        )
+
+        image_file = tmp_path / "fake_image.fits"
+        fake_CCDimage.write(image_file, overwrite=True)
+
+        # Also do photometry on the image without saturated pixels for
+        # comparison.
+        clean_image_file = tmp_path / "clean_image.fits"
+        deepcopy(FAKE_CCD_IMAGE).write(clean_image_file, overwrite=True)
+
+        ap_phot = AperturePhotometry(settings=photometry_settings_for_test)
+        phot, _ = ap_phot(image_file)
+        clean_phot, _ = ap_phot(clean_image_file)
+
+        saturated_row = phot["star_id"] == saturated_source["star_id"]
+        assert saturated_row.sum() == 1
+
+        # The saturated source is flagged and its net counts are NaN rather
+        # than a silently wrong value.
+        assert np.all(phot["saturated"][saturated_row])
+        assert np.all(np.isnan(phot["aperture_net_cnts"][saturated_row].value))
+
+        # The other sources are not flagged and their results match the
+        # photometry of the image with no saturated pixels.
+        assert not np.any(phot["saturated"][~saturated_row])
+        assert np.all(np.isfinite(phot["aperture_net_cnts"][~saturated_row].value))
+        clean_saturated_row = clean_phot["star_id"] == saturated_source["star_id"]
+        np.testing.assert_allclose(
+            phot["aperture_sum"][~saturated_row].value,
+            clean_phot["aperture_sum"][~clean_saturated_row].value,
+        )
+
+    def test_saturated_source_recentroiding_falls_back_to_wcs(
+        self, tmp_path, photometry_settings_for_test
+    ):
+        # Regression test for #592: a completely saturated source used to
+        # produce a NaN centroid that escaped the shift-tolerance check and
+        # then crashed the photometry with a ValueError when the NaN position
+        # reached CircularAperture. Instead, the source position should fall
+        # back to the WCS-derived position and the source should be flagged
+        # as saturated.
+        fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
+        source_list = self.create_source_list()
+        source_list_file = tmp_path / "source_list.ecsv"
+        source_list.write(source_list_file, overwrite=True)
+
+        max_adu = photometry_settings_for_test.camera.max_data_value.value
+
+        # Completely saturate the first source over a region larger than the
+        # box used for recentroiding so that its centroid cannot be computed.
+        saturated_source = source_list[0]
+        x_sat = int(saturated_source["xcenter"].value)
+        y_sat = int(saturated_source["ycenter"].value)
+        half_width = 15
+        fake_CCDimage.data[
+            y_sat - half_width : y_sat + half_width + 1,
+            x_sat - half_width : x_sat + half_width + 1,
+        ] = (
+            2 * max_adu
+        )
+
+        photometry_settings_for_test.source_location_settings.source_list_file = str(
+            source_list_file
+        )
+        photometry_settings_for_test.source_location_settings.use_coordinates = "sky"
+
+        image_file = tmp_path / "fake_image.fits"
+        fake_CCDimage.write(image_file, overwrite=True)
+
+        ap_phot = AperturePhotometry(settings=photometry_settings_for_test)
+
+        # This must not raise even though the saturated source has no usable
+        # centroid.
+        phot, _ = ap_phot(image_file)
+
+        saturated_row = phot["star_id"] == saturated_source["star_id"]
+        assert saturated_row.sum() == 1
+
+        # The position of the saturated source falls back to the WCS-derived
+        # position, which for this image is essentially the input position.
+        assert np.all(
+            np.abs(
+                phot["xcenter"][saturated_row].value - saturated_source["xcenter"].value
+            )
+            < 0.01
+        )
+        assert np.all(
+            np.abs(
+                phot["ycenter"][saturated_row].value - saturated_source["ycenter"].value
+            )
+            < 0.01
+        )
+
+        # The saturated source is flagged, its net counts are NaN, and the
+        # other sources are unaffected.
+        assert np.all(phot["saturated"][saturated_row])
+        assert np.all(np.isnan(phot["aperture_net_cnts"][saturated_row].value))
+        assert not np.any(phot["saturated"][~saturated_row])
+        assert np.all(np.isfinite(phot["aperture_net_cnts"][~saturated_row].value))
+
+    def test_sky_stats_annulus_only_without_outlier_rejection(
+        self, tmp_path, photometry_settings_for_test
+    ):
+        # Regression test for #602: with reject_background_outliers=False the
+        # sky_per_pix_med and sky_per_pix_std used to be computed from the
+        # rectangular bounding box of the annulus, which includes the bright
+        # core of the star (inside the inner radius) and the corners outside
+        # the annulus, wildly inflating the reported standard deviation. They
+        # should be computed from the pixels in the annulus only.
+        fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
+        source_list = self.create_source_list()
+        source_list_file = tmp_path / "source_list.ecsv"
+        source_list.write(source_list_file, overwrite=True)
+
+        phot_options = (
+            photometry_settings_for_test.photometry_optional_settings.model_copy()
+        )
+        phot_options.reject_background_outliers = False
+        photometry_settings_for_test.photometry_optional_settings = phot_options
+        photometry_settings_for_test.source_location_settings.source_list_file = str(
+            source_list_file
+        )
+
+        image_file = tmp_path / "fake_image.fits"
+        fake_CCDimage.write(image_file, overwrite=True)
+
+        ap_phot = AperturePhotometry(settings=photometry_settings_for_test)
+        phot, _ = ap_phot(image_file)
+
+        # The annuli contain none of the flux of these compact sources, so
+        # the sky median and standard deviation should both reflect the flat
+        # noisy background of the fake image: a median close to the mean
+        # noise level and a standard deviation close to the noise deviation
+        # (which is much smaller than the amplitude of the sources).
+        assert np.allclose(
+            phot["sky_per_pix_med"].value, fake_CCDimage.mean_noise, rtol=0.1
+        )
+        assert np.allclose(
+            phot["sky_per_pix_std"].value, fake_CCDimage.noise_dev, rtol=0.2
+        )
 
     @pytest.mark.parametrize("coords", ["sky", "pixel"])
     def test_photometry_on_directory(self, coords, photometry_settings_for_test):

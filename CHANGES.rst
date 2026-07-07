@@ -97,6 +97,20 @@ Bug Fixes
   exactly zero net counts (a legitimate measured value) no longer triggers
   a misleading "Different number of stars in comparison sets" error, and a
   star with zero counts now gets a finite relative flux error. [#618]
++ Saturated pixels (those above the camera's maximum data value) no longer
+  silently poison the aperture sums in ``single_image_photometry``. They are
+  now masked in the photometry, and sources with saturated pixels in their
+  aperture are flagged in a new boolean ``saturated`` column and have their
+  ``aperture_net_cnts`` set to NaN. [#591]
++ A source whose centroid cannot be computed when ``use_coordinates="sky"``
+  (for example, because the source is completely saturated) no longer crashes
+  ``single_image_photometry`` -- and with it an entire multi-image run -- with
+  a ``ValueError``. The source now falls back to its WCS-derived position,
+  like sources whose centroid shifts by more than ``shift_tolerance``. [#592]
++ With ``reject_background_outliers=False``, the reported ``sky_per_pix_med``
+  and ``sky_per_pix_std`` are now computed from the pixels in the annulus
+  instead of from the rectangular bounding box of the annulus, which included
+  the core of the star and the corners outside the annulus. [#602]
 
 1.4.15 (2024-08-16)
 -------------------
