@@ -31,9 +31,12 @@ from stellarphot.catalogs import (
     vsx_vizier,
 )
 
-# Gaia DR2 source_id of EY UMa, the center of the field used in the
-# remote-data refcat2 tests. Value from SIMBAD.
+# Gaia DR2 source_id and ICRS coordinates of EY UMa, the center of the field
+# used in the remote-data refcat2 tests. Values from SIMBAD; a fixed coordinate
+# is used instead of SkyCoord.from_name so the tests do not depend on the
+# Sesame name resolver being up.
 EY_UMA_GAIA_DR2_ID = 1015789765851950336
+EY_UMA_COORD = SkyCoord(ra=135.58650087 * u.deg, dec=49.81921088 * u.deg)
 
 
 def test_fetchers_importable_from_catalogs():
@@ -274,9 +277,8 @@ def test_find_refcat2(mag_limit, mag_limit_band):
     # right row. EY UMa's refcat2 rmag is 15.24, so it is only present in the
     # runs without a magnitude limit.
     if mag_limit is None:
-        ey_uma = SkyCoord.from_name("EY UMa")
         cat_coords = SkyCoord(ra=all_refcat2["ra"], dec=all_refcat2["dec"])
-        nearest = cat_coords.separation(ey_uma).argmin()
+        nearest = cat_coords.separation(EY_UMA_COORD).argmin()
         assert all_refcat2["id"][nearest] == EY_UMA_GAIA_DR2_ID
 
 

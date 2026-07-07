@@ -43,6 +43,7 @@ def _attach_gaia_ids(catalog, xmatch_result, index_col="_sp_index"):
     xmatch_result : `astropy.table.Table`
         Result of an XMatch query whose uploaded table included ``index_col``.
         Must contain ``index_col``, ``angDist`` and ``source_id`` columns.
+        This table is sorted in place.
 
     index_col : str, optional
         Name of the column in ``xmatch_result`` holding the row number of the
@@ -56,7 +57,6 @@ def _attach_gaia_ids(catalog, xmatch_result, index_col="_sp_index"):
         dropped, with a warning saying how many.
     """
     # When one input row matches several Gaia sources, keep only the nearest.
-    xmatch_result = xmatch_result.copy()
     xmatch_result.sort([index_col, "angDist"])
     nearest = unique(xmatch_result, keys=index_col, keep="first")
 
@@ -68,7 +68,11 @@ def _attach_gaia_ids(catalog, xmatch_result, index_col="_sp_index"):
             stacklevel=2,
         )
 
-    # nearest is sorted by index_col, so this preserves the original row order.
+    # nearest[index_col] holds the row numbers of the catalog rows that got a
+    # match — one per matched star, sorted ascending. Indexing catalog with it
+    # does two things at once: it drops the unmatched rows (their index never
+    # appears in the result) and it puts the matched rows in the same order as
+    # nearest, so the source_id assignment below lines up row-for-row.
     catalog = catalog[np.asarray(nearest[index_col])]
     catalog["id"] = np.asarray(nearest["source_id"])
     return catalog
