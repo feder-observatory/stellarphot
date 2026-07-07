@@ -10,7 +10,6 @@ from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astropy.table import Table
 from astropy.time import Time
-from astropy.utils.data import download_file
 from pydantic import BaseModel, ConfigDict
 
 from stellarphot.core import SourceListData
@@ -25,7 +24,7 @@ __all__ = ["tess_photometry_setup", "TessSubmission", "TOI", "TessTargetFile"]
 
 # Makes me want to vomit, but....
 DEFAULT_TABLE_LOCATION = "who.the.heck.knows"
-TOI_TABLE_URL = "https://exofop.ipac.caltech.edu/tess/download_toi.php?output=csv"
+EXOFOP_TARGET_URL = "https://exofop.ipac.caltech.edu/tess/target.php"
 GAIA_APERTURE_SERVER = "https://www.astro.louisville.edu/"
 TIC_regex = re.compile(r"[tT][iI][cC][^\d]?(?P<star>\d+)(?P<planet>\.\d\d)?")
 
@@ -37,6 +36,19 @@ MODEL_DEFAULT_CONFIGURATION = ConfigDict(
     # Make sure there are no extra fields
     extra="forbid",
 )
+
+
+def _exofop_float(value, description):
+    """
+    Convert a value from ExoFOP JSON, which serves numbers as strings and
+    missing values as empty strings, to a float.
+    """
+    try:
+        return float(value)
+    except (TypeError, ValueError) as err:
+        raise RuntimeError(
+            f"ExoFOP did not provide a usable value for {description}: {value!r}"
+        ) from err
 
 
 @dataclass
@@ -326,35 +338,71 @@ class TOI(BaseModel):
     @classmethod
     def from_tic_id(cls, tic_id):
         """
-        Create a TOI object from a numerical TIC ID number. This will be obtained
-        from ExoFOP-TESS and the TESS Input Catalog (TIC) at MAST.
+        Create a TOI object from a numerical TIC ID number. The information,
+        including the coordinates, is obtained from the single-target JSON
+        endpoint at ExoFOP-TESS.
         """
-        toi_table = download_file(
-            TOI_TABLE_URL, cache=True, show_progress=True, timeout=60
-        )
-        toi_table = Table.read(toi_table, format="ascii.csv")
-        toi_table = toi_table[toi_table["TIC ID"] == tic_id]
-        if len(toi_table) != 1:  # pragma: no cover
-            raise RuntimeError(f"Found {len(toi_table)} rows in table, expected one.")
-        toi_table = toi_table[0]
+        # Use the single-target endpoint (a few tens of kB) instead of the full
+        # TOI table (several MB that takes the server most of a minute to
+        # generate), which frequently timed out. See #623. The trailing bare
+        # "json" (no "=value") is the form the ExoFOP server expects.
+        response = requests.get(f"{EXOFOP_TARGET_URL}?id={tic_id}&json", timeout=30)
+        response.raise_for_status()
+        target_info = response.json()
 
-        # Retrieve some additional information from the TIC catalog at MAST, and grab
-        # the first row of the table.
-        tic_info = get_tic_info(tic_id)[0]
+        # planet_parameters is a flat list in which entries containing a "prov"
+        # key are provenance headers; the data entries that follow a header
+        # (which have no "prov" key) belong to that provenance until the next
+        # header. We only want the parameters the TESS project assigned to the
+        # TOI, not e.g. user-supplied CTOI parameters.
+        current_provenance = None
+        toi_entries = []
+        for entry in target_info["planet_parameters"]:
+            if "prov" in entry:
+                current_provenance = entry["prov"]
+            elif current_provenance == "toi":
+                toi_entries.append(entry)
+
+        if len(toi_entries) != 1:
+            raise RuntimeError(
+                f"Found {len(toi_entries)} TOI entries for TIC {tic_id} "
+                "on ExoFOP, expected one."
+            )
+        planet = toi_entries[0]
+
+        for magnitude in target_info["magnitudes"]:
+            if magnitude["band"] == "TESS":
+                tess_mag = _exofop_float(magnitude["value"], "TESS magnitude")
+                tess_mag_error = _exofop_float(
+                    magnitude["value_e"], "TESS magnitude error"
+                )
+                break
+        else:
+            raise RuntimeError(f"No TESS magnitude found for TIC {tic_id} on ExoFOP.")
+
+        coordinates = target_info["coordinates"]
 
         return cls(
             tic_id=tic_id,
-            coord=SkyCoord(ra=tic_info["ra"], dec=tic_info["dec"], unit="degree"),
-            depth_ppt=toi_table["Depth (ppm)"] / 1000,
-            depth_error_ppt=toi_table["Depth (ppm) err"] / 1000,
-            duration=toi_table["Duration (hours)"] * u.hour,
-            duration_error=toi_table["Duration (hours) err"] * u.hour,
-            epoch=Time(toi_table["Epoch (BJD)"], scale="tdb", format="jd"),
-            epoch_error=toi_table["Epoch (BJD) err"] * u.day,
-            period=toi_table["Period (days)"] * u.day,
-            period_error=toi_table["Period (days) err"] * u.day,
-            tess_mag=toi_table["TESS Mag"],
-            tess_mag_error=toi_table["TESS Mag err"],
+            coord=SkyCoord(
+                ra=_exofop_float(coordinates["ra"], "right ascension"),
+                dec=_exofop_float(coordinates["dec"], "declination"),
+                unit="degree",
+            ),
+            depth_ppt=_exofop_float(planet["dep_p"], "transit depth") / 1000,
+            depth_error_ppt=_exofop_float(planet["dep_p_e"], "transit depth error")
+            / 1000,
+            duration=_exofop_float(planet["dur"], "transit duration") * u.hour,
+            duration_error=_exofop_float(planet["dur_e"], "transit duration error")
+            * u.hour,
+            epoch=Time(
+                _exofop_float(planet["epoch"], "epoch"), scale="tdb", format="jd"
+            ),
+            epoch_error=_exofop_float(planet["epoch_e"], "epoch error") * u.day,
+            period=_exofop_float(planet["per"], "period") * u.day,
+            period_error=_exofop_float(planet["per_e"], "period error") * u.day,
+            tess_mag=tess_mag,
+            tess_mag_error=tess_mag_error,
         )
 
     def transit_time_for_observation(self, obs_times):

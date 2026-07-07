@@ -119,6 +119,13 @@ Bug Fixes
   does not. Previously the magnitude of the nearest unrelated star was
   silently reported as the variable's when the target was absent from the
   data. [#599]
++ ``TOI.from_tic_id`` now retrieves the information for a single TIC ID,
+  including its coordinates, from ExoFOP's single-target endpoint instead of
+  downloading the entire multi-megabyte TOI table (and querying MAST for the
+  coordinates), which frequently timed out on CI. The parsing of the ExoFOP
+  response is now covered by offline tests using a captured server response,
+  and the remote-data TESS tests treat server outages and timeouts as expected
+  failures instead of errors. [#623]
 
 1.4.15 (2024-08-16)
 -------------------
