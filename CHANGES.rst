@@ -74,6 +74,9 @@ Bug Fixes
 + ``generate_aij_table`` no longer classifies a star as a comparison star based
   on an arbitrarily distant sky match; a match within a couple of arcseconds is
   now required. [#615]
++ ``TOI.transit_time_for_observation`` now returns the transit nearest the
+  observation when the observation is before the tabulated epoch; previously
+  the result could be off by up to a full period. [#616]
 
 1.4.15 (2024-08-16)
 -------------------
