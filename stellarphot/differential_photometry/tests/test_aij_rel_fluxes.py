@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import astropy.units as u
 import numpy as np
 import pytest
@@ -5,8 +7,11 @@ from astropy.coordinates import SkyCoord
 from astropy.table import Table
 from astropy.time import Time
 
-from stellarphot import PhotometryData
-from stellarphot.differential_photometry.aij_rel_fluxes import calc_aij_relative_flux
+from stellarphot import PhotometryData, SourceListData
+from stellarphot.differential_photometry.aij_rel_fluxes import (
+    add_relative_flux_column,
+    calc_aij_relative_flux,
+)
 
 
 def _repeat(array, count):
@@ -166,3 +171,68 @@ def test_bad_comp_star(bad_thing):
         new_expected_flux[:-comparison_start],
         output_table["relative_flux"][comparison_start:],
     )
+
+
+def test_no_matching_comp_stars_raises_error():
+    # Regression test for #590 -- if none of the comparison stars match
+    # the positions in the photometry data the result used to be a silent
+    # "success" in which the comparison counts were set to 1, i.e. the
+    # relative flux was just the net counts. It should raise an error instead.
+    _, _, input_table, comp_star = _raw_photometry_table()
+
+    # Shift the comparison star positions by a degree so that none of them
+    # match the positions in the photometry table.
+    comp_star["ra"] = comp_star["ra"] + 1 * u.degree
+
+    with pytest.raises(RuntimeError, match="No comparison stars"):
+        calc_aij_relative_flux(input_table, comp_star, in_place=False)
+
+
+# Run in a temporary directory because add_relative_flux_column writes its
+# output file to the current working directory.
+@pytest.mark.usefixtures("change_to_tmp_dir")
+def test_add_relative_flux_column_with_existing_bjd(simple_photometry_data):
+    # Regression test for #597 -- add_relative_flux_column used to raise
+    # a NameError when the input photometry data already had a bjd column.
+    phot_data = simple_photometry_data
+
+    # The test data already has a bjd column, which triggered the bug.
+    assert "bjd" in phot_data.colnames
+
+    phot_file = Path("photometry.ecsv")
+    phot_data.write(phot_file)
+
+    # Make a source list from the photometry data itself so that the
+    # comparison star coordinates are guaranteed to match. Use all but the
+    # first star as comparison stars.
+    comp_ids = sorted(set(phot_data["star_id"]))[1:]
+    marker_name = [
+        "APASS comparison" if star_id in comp_ids else "TESS Target"
+        for star_id in phot_data["star_id"]
+    ]
+    source_table = Table(
+        {
+            "star_id": phot_data["star_id"],
+            "ra": phot_data["ra"],
+            "dec": phot_data["dec"],
+            "xcenter": phot_data["xcenter"],
+            "ycenter": phot_data["ycenter"],
+            "marker name": marker_name,
+        }
+    )
+    source_list = SourceListData(input_data=source_table)
+    source_list_file = Path("source_list.ecsv")
+    source_list.write(source_list_file)
+
+    # This used to raise a NameError because the grouped table was only
+    # created when the bjd column was missing.
+    add_relative_flux_column(phot_file, source_list_file)
+
+    output_file = Path("photometry-relative-flux.ecsv")
+    assert output_file.exists()
+
+    output_data = PhotometryData.read(output_file)
+    assert "bjd" in output_data.colnames
+    assert "relative_flux" in output_data.colnames
+    assert np.all(np.isfinite(output_data["relative_flux"]))
+    assert np.all(output_data["relative_flux"] > 0)

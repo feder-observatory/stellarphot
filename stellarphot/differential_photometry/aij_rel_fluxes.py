@@ -132,6 +132,14 @@ def calc_aij_relative_flux(
         this_comp = star_data[star_id_column] == comp
         good[this_comp] = False
 
+    if not np.any(good):
+        raise RuntimeError(
+            "No comparison stars matched the photometry data, so relative "
+            "flux cannot be calculated. Check that the comparison star "
+            "coordinates are correct and that the comparison stars have "
+            "valid data at every time in the photometry data."
+        )
+
     error_column_name = "noise_electrons"
     # Calculate comp star counts for each time
 
@@ -149,6 +157,18 @@ def calc_aij_relative_flux(
     # and convert to regular column...eventually
 
     comp_fluxes = comp_fluxes.group_by("date-obs")
+
+    # Every time in the input data must have at least one comparison star,
+    # otherwise the comparison counts at the times with no comparison stars
+    # would silently be set to 1.
+    n_times_star_data = len(np.unique(np.asarray(star_data["date-obs"].value)))
+    if len(comp_fluxes.groups) != n_times_star_data:
+        raise RuntimeError(
+            "There are one or more times in the photometry data at which "
+            "none of the comparison stars has valid data, so relative flux "
+            "cannot be calculated."
+        )
+
     comp_totals = comp_fluxes.groups.aggregate(np.sum)[counts_column_name]
     comp_num_stars = comp_fluxes.groups.aggregate(np.count_nonzero)[counts_column_name]
     comp_errors = comp_fluxes.groups.aggregate(add_in_quadrature)[error_column_name]
@@ -247,24 +267,25 @@ def add_relative_flux_column(
     if verbose:
         print("Adding AIJ-style relative flux columns to photomotry data")
     flux_table = calc_aij_relative_flux(photometry_data, only_comp_stars)
-    # Add bjd if needed
 
-    if "bjd" not in flux_table.colnames:
+    flux_group = flux_table.group_by("file")
+
+    # Add bjd if needed
+    if "bjd" not in flux_group.colnames:
         if verbose:
             print("Adding BJD column to photometry data")
         # Accumulate the BJD here
         bjds = []
 
-        flux_group = flux_table.group_by("file")
         for group in flux_group.groups:
             mean_ra = group["ra"].mean()
             mean_dec = group["dec"].mean()
             group.add_bjd_col(bjd_coordinates=SkyCoord(mean_ra, mean_dec))
             bjds.extend(group["bjd"].jd)
 
-    # Each (ephemeral) group had a BJD, this adds the column to the
-    # original table.
-    flux_group["bjd"] = Time(bjds, scale="tdb", format="jd")
+        # Each (ephemeral) group had a BJD, this adds the column to the
+        # original table.
+        flux_group["bjd"] = Time(bjds, scale="tdb", format="jd")
 
     if verbose:
         print("Writing photometry data with relative flux columns")
