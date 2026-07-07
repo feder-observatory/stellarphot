@@ -385,13 +385,6 @@ class TOI(BaseModel):
         cycle_number = round(phase)
         that_transit = cycle_number * self.period + self.epoch
 
-        # Double-check against the neighboring transits in case of any edge
-        # cases in the rounding above.
-        for neighbor_cycle in (cycle_number - 1, cycle_number + 1):
-            neighbor_transit = neighbor_cycle * self.period + self.epoch
-            if abs(first_obs - neighbor_transit) < abs(first_obs - that_transit):
-                that_transit = neighbor_transit
-
         # Check -- are we way, way, way off from a transit?
         if abs(first_obs - that_transit) > 3 * self.duration:
             warnings.warn("Observation times are far from a transit.", stacklevel=2)
