@@ -374,17 +374,23 @@ class TOI(BaseModel):
             The transit times for the observations.
         """
         first_obs = obs_times[0]
-        # Three possible cases here. Either the first time is close to, but before, a
-        # transit, or it is close to, but just after a transit, or it is nowhere close
-        # to a transit.
-        # Assume that the first time is just before a transit
-        cycle_number = int((first_obs - self.epoch) / self.period + 1)
+        # Find the transit nearest the first observation time. Rounding the
+        # phase to the nearest integer gives the cycle number of that transit
+        # regardless of whether the observation is before or after the epoch.
+        # Note that int() instead of round() would truncate toward zero, which
+        # gives the wrong cycle for observations before the epoch (see #594).
+        phase = ((first_obs - self.epoch) / self.period).to_value(
+            u.dimensionless_unscaled
+        )
+        cycle_number = round(phase)
         that_transit = cycle_number * self.period + self.epoch
 
-        # Check -- is the first time closer to this transit or the one before it?
-        previous_transit = that_transit - self.period
-        if abs(first_obs - previous_transit) < abs(first_obs - that_transit):
-            that_transit = previous_transit
+        # Double-check against the neighboring transits in case of any edge
+        # cases in the rounding above.
+        for neighbor_cycle in (cycle_number - 1, cycle_number + 1):
+            neighbor_transit = neighbor_cycle * self.period + self.epoch
+            if abs(first_obs - neighbor_transit) < abs(first_obs - that_transit):
+                that_transit = neighbor_transit
 
         # Check -- are we way, way, way off from a transit?
         if abs(first_obs - that_transit) > 3 * self.duration:
