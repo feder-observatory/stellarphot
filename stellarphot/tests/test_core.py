@@ -10,6 +10,7 @@ from astropy.nddata import CCDData
 from astropy.table import Table, vstack
 from astropy.time import Time
 from astropy.utils.data import get_pkg_data_filename, get_pkg_data_path
+from astropy.utils.exceptions import AstropyUserWarning
 from astropy.wcs import WCS
 from astropy.wcs.wcs import FITSFixedWarning
 
@@ -548,7 +549,7 @@ def test_photometry_data(feder_cg_16m, feder_passbands, feder_obs, bjd_coordinat
         # Dec 22 30 20.77733059
         # which returned 2459910.775405664 (Uses custom IDL, astropy is SOFA checked).
         # Demand a difference of less than 1/20 of a second.
-        assert (phot_data["bjd"][0].value - 2459910.775405664) * 86400 < 0.05
+        assert abs(phot_data["bjd"][0].value - 2459910.775405664) * 86400 < 0.05
     else:
         # Do the BJD calculation based on the provided coordinates, same for
         # all strs in the image.
@@ -562,7 +563,48 @@ def test_photometry_data(feder_cg_16m, feder_passbands, feder_obs, bjd_coordinat
         # Dec 22 30 20.77733059
         # which returned 2459910.774772048 (Uses custom IDL, astropy is SOFA checked).
         # Demand a difference of less than 1/20 of a second.
-        assert (phot_data["bjd"][0].value - 2459910.774772048) * 86400 < 0.05
+        assert abs(phot_data["bjd"][0].value - 2459910.774772048) * 86400 < 0.05
+
+
+def test_add_bjd_col_with_missing_coordinates(feder_cg_16m, feder_passbands, feder_obs):
+    # Regression test for #600. A single row with missing RA/Dec should not
+    # wipe out the BJD for every row in the table -- only the row that is
+    # missing coordinates should end up without a BJD.
+    data = vstack([testphot_clean, testphot_clean, testphot_clean])
+    data["ra"][1] = np.nan
+    data["dec"][1] = np.nan
+
+    phot_data = PhotometryData(
+        observatory=feder_obs,
+        camera=feder_cg_16m,
+        passband_map=feder_passbands,
+        input_data=data,
+    )
+
+    with warnings.catch_warnings(record=True) as recorded:
+        warnings.simplefilter("always")
+        phot_data.add_bjd_col()
+
+    bjd = phot_data["bjd"]
+
+    # The row with missing coordinates should have no BJD. An astropy Time
+    # cannot hold a NaN, so the missing entry is masked instead.
+    assert bjd.mask[1]
+
+    # ...while the rows with valid coordinates should have the correct BJD.
+    # The reference value is the same one used in test_photometry_data above.
+    for row in (0, 2):
+        assert not bjd.mask[row]
+        assert abs(bjd[row].value - 2459910.775405664) * 86400 < 0.05
+
+    # Exactly one warning about the skipped row should have been issued.
+    bjd_warnings = [
+        warning
+        for warning in recorded
+        if issubclass(warning.category, AstropyUserWarning)
+        and "BJD could not be computed" in str(warning.message)
+    ]
+    assert len(bjd_warnings) == 1, "Expected a warning about rows with missing RA/Dec"
 
 
 def test_photometry_data_short_filter_name(feder_cg_16m, feder_obs):
