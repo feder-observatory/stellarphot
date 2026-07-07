@@ -68,6 +68,9 @@ Bug Fixes
 + The v1 to v2 photometry migration now writes ``NaN`` and emits a warning for
   observations whose passband has no matching ``mag_inst_<band>`` column,
   instead of silently writing ``mag_inst = 0``. [#613]
++ ``TransitModelFit.fit`` now raises an error if the ``eccentricity`` parameter
+  has been un-fixed, and warns if a fixed nonzero value is set, instead of
+  silently ignoring the parameter. [#614]
 
 1.4.15 (2024-08-16)
 -------------------
