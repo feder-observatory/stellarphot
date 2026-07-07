@@ -1,8 +1,10 @@
 from copy import deepcopy
 
+import numpy as np
 import pytest
 from astropy import units as u
 from astropy.table import Table
+from astropy.utils.exceptions import AstropyUserWarning
 from packaging.version import InvalidVersion
 
 from stellarphot import PhotometryData
@@ -107,3 +109,39 @@ class TestVersionMigrator:
         assert sp2_pd is not sp2
         # Check the metadata is the same
         assert sp2_pd.meta == sp2.meta
+
+    # The parameter two_filters is passed to the fixture stellphotv1_photometry_data.
+    # We want data that has two filters in the "filter" column and then remove
+    # the mag_inst column for one of them.
+    @pytest.mark.parametrize("two_filters", [True])
+    def test_migrate_v1_v2_missing_passband_column(self, stellphotv1_photometry_data):
+        # Regression test for #596 -- observations in a passband that has no
+        # matching mag_inst_<passband> column used to silently get mag_inst = 0.
+        # They should instead be NaN, and a warning should be issued naming the
+        # passbands with no matching column.
+
+        # The data has observations in both "B" and "ip", but remove the "ip"
+        # magnitude column so those observations have no source for mag_inst.
+        del stellphotv1_photometry_data["mag_inst_ip"]
+
+        camera = Camera(**TEST_CAMERA_VALUES)
+        observatory = Observatory(**TEST_OBSERVATORY_SETTINGS)
+        vm = VersionMigrator(
+            from_version="1", to_version="2", camera=camera, observatory=observatory
+        )
+
+        with pytest.warns(AstropyUserWarning, match="no matching.*column.*ip"):
+            sp2 = vm.migrate(stellphotv1_photometry_data)
+
+        # Observations in the passband with no magnitude column should be NaN...
+        no_mag_column = sp2["passband"] == "ip"
+        assert no_mag_column.sum() > 0
+        assert np.all(np.isnan(sp2["mag_inst"][no_mag_column]))
+
+        # ...and the passband that does have a column should be unaffected.
+        in_band_2 = sp2["passband"] == "B"
+        in_band_1 = stellphotv1_photometry_data["filter"] == "B"
+        assert all(
+            sp2["mag_inst"][in_band_2]
+            == stellphotv1_photometry_data["mag_inst_B"][in_band_1]
+        )
