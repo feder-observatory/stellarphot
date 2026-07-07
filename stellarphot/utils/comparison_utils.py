@@ -217,12 +217,12 @@ def in_field(apass_good_coord, ccd, apass, good_stars):
         Table with APASS stars in the field of view.
     """
     apassx, apassy = ccd.wcs.all_world2pix(apass_good_coord.ra, apass_good_coord.dec, 0)
-    ccdx, ccdy = ccd.shape
+    # numpy image shapes are (ny, nx)
+    ccdy, ccdx = ccd.shape
 
     xin = (apassx < ccdx) & (0 < apassx)
     yin = (apassy < ccdy) & (0 < apassy)
     xy_in = xin & yin
-    apass_good_coord[xy_in]
     nt = apass[good_stars]
     ent = nt[xy_in]
     return ent
