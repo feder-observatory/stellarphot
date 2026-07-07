@@ -650,9 +650,9 @@ def transform_to_catalog(
 
         # Impose some constraints on what is included in the fit
         good_cat = ~(
-            getattr(color, "mask", False)
-            | getattr(cat_mag, "mask", False) & (d2d.arcsecond < 1)
-        )
+            np.asarray(getattr(color, "mask", False))
+            | np.asarray(getattr(cat_mag, "mask", False))
+        ) & (d2d.arcsecond < 1)
         good_dat = (
             (one_image[obs_mag_col] < -3)
             & (one_image[obs_mag_col] > -20)

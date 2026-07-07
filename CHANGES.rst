@@ -77,6 +77,9 @@ Bug Fixes
 + ``TOI.transit_time_for_observation`` now returns the transit nearest the
   observation when the observation is before the tabulated epoch; previously
   the result could be off by up to a full period. [#616]
++ Fixed an operator-precedence bug in ``transform_to_catalog`` that disabled
+  the cross-match distance cut, letting badly matched stars bias the fitted
+  transform coefficients. [#617]
 
 1.4.15 (2024-08-16)
 -------------------
