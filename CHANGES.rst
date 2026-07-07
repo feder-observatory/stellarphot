@@ -107,6 +107,10 @@ Bug Fixes
   ``single_image_photometry`` -- and with it an entire multi-image run -- with
   a ``ValueError``. The source now falls back to its WCS-derived position,
   like sources whose centroid shifts by more than ``shift_tolerance``. [#592]
++ With ``reject_background_outliers=False``, the reported ``sky_per_pix_med``
+  and ``sky_per_pix_std`` are now computed from the pixels in the annulus
+  instead of from the rectangular bounding box of the annulus, which included
+  the core of the star and the corners outside the annulus. [#619]
 
 1.4.15 (2024-08-16)
 -------------------

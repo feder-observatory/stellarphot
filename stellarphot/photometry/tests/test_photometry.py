@@ -561,6 +561,47 @@ class TestAperturePhotometry:
         assert not np.any(phot["saturated"][~saturated_row])
         assert np.all(np.isfinite(phot["aperture_net_cnts"][~saturated_row].value))
 
+    def test_sky_stats_annulus_only_without_outlier_rejection(
+        self, tmp_path, photometry_settings_for_test
+    ):
+        # Regression test for #602: with reject_background_outliers=False the
+        # sky_per_pix_med and sky_per_pix_std used to be computed from the
+        # rectangular bounding box of the annulus, which includes the bright
+        # core of the star (inside the inner radius) and the corners outside
+        # the annulus, wildly inflating the reported standard deviation. They
+        # should be computed from the pixels in the annulus only.
+        fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
+        source_list = self.create_source_list()
+        source_list_file = tmp_path / "source_list.ecsv"
+        source_list.write(source_list_file, overwrite=True)
+
+        phot_options = (
+            photometry_settings_for_test.photometry_optional_settings.model_copy()
+        )
+        phot_options.reject_background_outliers = False
+        photometry_settings_for_test.photometry_optional_settings = phot_options
+        photometry_settings_for_test.source_location_settings.source_list_file = str(
+            source_list_file
+        )
+
+        image_file = tmp_path / "fake_image.fits"
+        fake_CCDimage.write(image_file, overwrite=True)
+
+        ap_phot = AperturePhotometry(settings=photometry_settings_for_test)
+        phot, _ = ap_phot(image_file)
+
+        # The annuli contain none of the flux of these compact sources, so
+        # the sky median and standard deviation should both reflect the flat
+        # noisy background of the fake image: a median close to the mean
+        # noise level and a standard deviation close to the noise deviation
+        # (which is much smaller than the amplitude of the sources).
+        assert np.allclose(
+            phot["sky_per_pix_med"].value, fake_CCDimage.mean_noise, rtol=0.1
+        )
+        assert np.allclose(
+            phot["sky_per_pix_std"].value, fake_CCDimage.noise_dev, rtol=0.2
+        )
+
     @pytest.mark.parametrize("coords", ["sky", "pixel"])
     def test_photometry_on_directory(self, coords, photometry_settings_for_test):
         # Create list of fake CCDData objects

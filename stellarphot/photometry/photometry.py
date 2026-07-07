@@ -652,15 +652,17 @@ def single_image_photometry(
             "without clipping (set reject_background_outliers=True "
             "to perform clipping)."
         )
-        med_pp = []
-        std_pp = []
-        for mask in annuli.to_mask():
-            annulus_data = mask.cutout(ccd_image)
-            med_pp.append(np.median(annulus_data))
-            std_pp.append(np.std(annulus_data))
+        # Compute the median and standard deviation from the pixels in the
+        # annulus only. These used to be computed from the rectangular
+        # bounding box of the annulus, which includes the core of the star
+        # (inside the inner radius) and the corners outside the annulus,
+        # wildly inflating the reported standard deviation. See #602.
+        # ApertureStats also respects the image mask, which includes the
+        # saturated pixels marked as NaN above (#591).
+        ap_stats = ApertureStats(ccd_image, annuli, sum_method="center")
         photom["sky_per_pix_avg"] = photom["annulus_sum"] / photom["annulus_area"]
-        photom["sky_per_pix_med"] = np.array(med_pp) * ccd_image.unit / u.pixel
-        photom["sky_per_pix_std"] = np.array(std_pp) * ccd_image.unit / u.pixel
+        photom["sky_per_pix_med"] = ap_stats.median / u.pixel
+        photom["sky_per_pix_std"] = ap_stats.std / u.pixel
 
     # Compute counts using clipped stats on sky per pixel
     photom["aperture_net_cnts"] = photom["aperture_sum"].value - (
