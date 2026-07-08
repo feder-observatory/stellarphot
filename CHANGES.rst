@@ -32,6 +32,9 @@ Other Changes and Additions
   modules, is now defined once in the top-level ``conftest.py``. [#426]
 + The duplicated logging setup in ``single_image_photometry`` and
   ``multi_image_photometry`` has been factored into a shared helper. [#152]
++ The USNO u'g'r'i'z' to SDSS DR7 ugriz transform matrix has been verified
+  entry-by-entry against its SDSS reference page, and tests now pin every
+  coefficient of the transform. [#611]
 
 Bug Fixes
 ^^^^^^^^^

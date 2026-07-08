@@ -257,10 +257,13 @@ class MatrixTransformMixin:
         Parameters
         ----------
         from_magnitudes : np.ArrayLike
-            Magnitudes to transform. The shape should be (n, m), where n is the number
-            of magnitudes and m is the number of passbands in the from_system. There
-            must be an entry for each passband in the from_system, even if all of the
-            entries for a particular passband are zero.
+            Magnitudes to transform. The shape should be (p + 1,) or (p + 1, n),
+            where p is the number of passbands in the from_system and n is the
+            number of stars. The rows are the magnitudes in the order of the
+            from_system passbands, followed by a final row of ones for the
+            constant term in the transform. There must be a row for each
+            passband in the from_system, even if all of the entries for a
+            particular passband are zero.
         """
         # Convert to numpy array
         from_magnitudes = np.asarray(from_magnitudes)
@@ -268,9 +271,11 @@ class MatrixTransformMixin:
         # Ensure the input shape matches the expected number of passbands. The
         # +1 is for the constant term in the transforms
         if from_magnitudes.shape[0] != len(self.from_system.passbands) + 1:
+            n_bands = len(self.from_system.passbands)
             raise ValueError(
-                f"Input shape {from_magnitudes.shape} does not match the number "
-                f"of passbands in the from_system ({len(self.from_system.passbands)})."
+                f"Input shape {from_magnitudes.shape} is invalid: expected "
+                f"{n_bands} passband rows plus a final row of ones "
+                f"({n_bands + 1} rows total)."
             )
 
         # Perform the matrix multiplication
