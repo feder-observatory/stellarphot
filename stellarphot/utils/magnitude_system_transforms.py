@@ -271,9 +271,11 @@ class MatrixTransformMixin:
         # Ensure the input shape matches the expected number of passbands. The
         # +1 is for the constant term in the transforms
         if from_magnitudes.shape[0] != len(self.from_system.passbands) + 1:
+            n_bands = len(self.from_system.passbands)
             raise ValueError(
-                f"Input shape {from_magnitudes.shape} does not match the number "
-                f"of passbands in the from_system ({len(self.from_system.passbands)})."
+                f"Input shape {from_magnitudes.shape} is invalid: expected "
+                f"{n_bands} passband rows plus a final row of ones "
+                f"({n_bands + 1} rows total)."
             )
 
         # Perform the matrix multiplication

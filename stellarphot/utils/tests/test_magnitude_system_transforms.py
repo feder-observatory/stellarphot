@@ -260,7 +260,7 @@ class TestUSNOPrimeToSDSSDR7:
         inp_mag = np.asarray([u_p, g_p, r_p, i_p, z_p, 1.0])
         usno_to_sdss = USNOPrimeToSDSSDR7.load()
         out_mag = usno_to_sdss(inp_mag)
-        assert np.allclose(out_mag[:5], inp_mag[:5])
+        assert np.allclose(out_mag[:5], inp_mag[:5], atol=1e-6, rtol=0)
 
     def test_transform_matches_reference_equations(self):
         # Check every coefficient of the matrix against the published
@@ -286,11 +286,14 @@ class TestUSNOPrimeToSDSSDR7:
         )
         usno_to_sdss = USNOPrimeToSDSSDR7.load()
         out_mag = usno_to_sdss(inp_mag)
-        assert np.allclose(out_mag, expected)
+        assert np.allclose(out_mag, expected, atol=1e-6, rtol=0)
 
     def test_transform_wrong_shape_raises(self):
         # Input without the constant-term row should raise, not silently
         # produce wrong magnitudes.
         usno_to_sdss = USNOPrimeToSDSSDR7.load()
-        with pytest.raises(ValueError, match="does not match the number"):
+        with pytest.raises(
+            ValueError,
+            match=r"expected 5 passband rows plus a final row of ones \(6 rows total\)",
+        ):
             usno_to_sdss(np.zeros(5))
