@@ -348,7 +348,26 @@ class TOI(BaseModel):
         # "json" (no "=value") is the form the ExoFOP server expects.
         response = requests.get(f"{EXOFOP_TARGET_URL}?id={tic_id}&json", timeout=30)
         response.raise_for_status()
-        target_info = response.json()
+        try:
+            target_info = response.json()
+        except ValueError as err:
+            # ExoFOP responds with HTTP 200 and a plain-text body, e.g.
+            # 'No TIC object found for "12345"', when the TIC ID is unknown.
+            raise RuntimeError(
+                f"ExoFOP returned an unusable response for TIC {tic_id}: "
+                f"{response.text[:200]!r}"
+            ) from err
+
+        missing_keys = [
+            key
+            for key in ("planet_parameters", "magnitudes", "coordinates")
+            if key not in target_info
+        ]
+        if missing_keys:
+            raise RuntimeError(
+                f"ExoFOP response for TIC {tic_id} is missing expected "
+                f"data: {', '.join(missing_keys)}"
+            )
 
         # planet_parameters is a flat list in which entries containing a "prov"
         # key are provenance headers; the data entries that follow a header

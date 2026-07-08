@@ -9,7 +9,7 @@ from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astropy.time import Time
 from astropy.utils.data import get_pkg_data_filename
-from requests import HTTPError
+from requests import HTTPError, JSONDecodeError
 
 from stellarphot.conftest import SERVER_DOWN_ERRORS
 from stellarphot.io.tess import (
@@ -163,8 +163,16 @@ class FakeExoFOPResponse:
     def __init__(self, payload, status_code=200):
         self._payload = payload
         self.status_code = status_code
+        # requests exposes the raw body as .text; from_tic_id includes it in
+        # the error it raises when the body is not JSON.
+        self.text = payload if isinstance(payload, str) else ""
 
     def json(self):
+        if isinstance(self._payload, str):
+            # A string payload represents a plain-text (non-JSON) body, which
+            # is what ExoFOP serves for an unknown TIC ID. requests raises
+            # JSONDecodeError in that case.
+            raise JSONDecodeError("Expecting value", self._payload, 0)
         return self._payload
 
     def raise_for_status(self):
@@ -215,47 +223,49 @@ class TestTOIFromTicIdOffline:
         with open(get_pkg_data_filename("data/tic-236158940-exofop.json")) as f:
             return json.load(f)
 
-    def patch_network(self, monkeypatch, payload):
+    def patch_network(self, mocker, payload):
         """
-        Fake every network access from_tic_id makes and record the URL it
-        requests. The full-TOI-table download and the MAST query must not
-        happen at all.
+        Fake every network access from_tic_id makes and return the mock that
+        replaces requests.get so tests can inspect the requested URL. The
+        full-TOI-table download and the MAST query must not happen at all.
         """
-        calls = {}
-
-        def fake_get(url, *args, **kwargs):  # noqa: ARG001
-            calls["url"] = url
-            return FakeExoFOPResponse(payload)
-
-        def fail_get_tic_info(*args, **kwargs):  # noqa: ARG001
-            raise AssertionError("from_tic_id must not query MAST (#623)")
-
-        def fail_download(*args, **kwargs):  # noqa: ARG001
-            raise AssertionError(
+        fake_get = mocker.patch(
+            "stellarphot.io.tess.requests.get",
+            return_value=FakeExoFOPResponse(payload),
+        )
+        mocker.patch(
+            "stellarphot.io.tess.get_tic_info",
+            side_effect=AssertionError("from_tic_id must not query MAST (#623)"),
+        )
+        fail_download = mocker.Mock(
+            side_effect=AssertionError(
                 "from_tic_id must not download the full TOI table (#623)"
             )
-
-        monkeypatch.setattr("stellarphot.io.tess.requests.get", fake_get)
-        monkeypatch.setattr("stellarphot.io.tess.get_tic_info", fail_get_tic_info)
-        # raising=False because once #623 is fixed download_file is no longer
-        # imported in stellarphot.io.tess and this setattr becomes a no-op.
-        monkeypatch.setattr(
-            "stellarphot.io.tess.download_file", fail_download, raising=False
         )
-        return calls
+        # Guard against the full-table download regressing via either import
+        # style. create=True because download_file is no longer imported in
+        # stellarphot.io.tess after #623; if a module-level import came back,
+        # this patch would rebind it and the guard would fire again.
+        mocker.patch("stellarphot.io.tess.download_file", fail_download, create=True)
+        # A function-level import inside from_tic_id would resolve the name at
+        # call time, bypassing the patch above; patching the source module
+        # closes that path.
+        mocker.patch("astropy.utils.data.download_file", fail_download)
+        return fake_get
 
     def test_from_tic_id_parses_exofop_json(
-        self, monkeypatch, tess_tic_expected_values, exofop_payload
+        self, mocker, tess_tic_expected_values, exofop_payload
     ):
         tic_id = tess_tic_expected_values["tic_id"]
-        calls = self.patch_network(monkeypatch, exofop_payload)
+        fake_get = self.patch_network(mocker, exofop_payload)
 
         toi = TOI.from_tic_id(tic_id)
 
         # The single-target endpoint was hit for this TIC ID
-        assert "target.php" in calls["url"]
-        assert str(tic_id) in calls["url"]
-        assert "json" in calls["url"]
+        requested_url = fake_get.call_args.args[0]
+        assert "target.php" in requested_url
+        assert str(tic_id) in requested_url
+        assert "json" in requested_url
 
         assert toi.tic_id == tic_id
         expected_coord = tess_tic_expected_values["expected_coords"]
@@ -278,10 +288,16 @@ class TestTOIFromTicIdOffline:
         assert toi.coord.separation(new_toi.coord).arcsecond < 0.01
 
     def test_from_tic_id_only_uses_toi_provenance(
-        self, monkeypatch, tess_tic_expected_values
+        self, mocker, tess_tic_expected_values
     ):
-        # A user-supplied CTOI with a different period follows the TOI
-        # section; it must be ignored.
+        # ExoFOP's "planet_parameters" is a flat list in which entries
+        # containing a "prov" key act as section headers; the entries that
+        # follow belong to that provenance (TESS-project TOI, user-submitted
+        # CTOI, ...) until the next header. This test builds a payload
+        # containing both a TOI section and a user section whose entry has a
+        # deliberately different period (99.9 d), then checks that from_tic_id
+        # returns the TESS-project value (2.677573 d) -- i.e. that user/CTOI
+        # parameters are never picked up.
         user_entry = TOI_PLANET_ENTRY | {"per": "99.9"}
         payload = make_exofop_payload(
             [
@@ -291,7 +307,7 @@ class TestTOIFromTicIdOffline:
                 user_entry,
             ]
         )
-        self.patch_network(monkeypatch, payload)
+        self.patch_network(mocker, payload)
         toi = TOI.from_tic_id(tess_tic_expected_values["tic_id"])
         assert toi.period == 2.677573 * u.day
 
@@ -308,34 +324,72 @@ class TestTOIFromTicIdOffline:
         ],
     )
     def test_from_tic_id_wrong_number_of_tois_raises(
-        self, monkeypatch, tess_tic_expected_values, planet_parameters, num_found
+        self, mocker, tess_tic_expected_values, planet_parameters, num_found
     ):
+        # The TOI section of the payload must contain exactly one planet;
+        # zero entries (e.g. only a user-submitted CTOI section) or two
+        # entries (multi-planet system) should raise a RuntimeError reporting
+        # the count, mirroring the old full-table code's "expected one row"
+        # check.
         payload = make_exofop_payload(planet_parameters)
-        self.patch_network(monkeypatch, payload)
+        self.patch_network(mocker, payload)
         with pytest.raises(RuntimeError, match=f"Found {num_found}.*expected one"):
             TOI.from_tic_id(tess_tic_expected_values["tic_id"])
 
     def test_from_tic_id_missing_tess_mag_raises(
-        self, monkeypatch, tess_tic_expected_values
+        self, mocker, tess_tic_expected_values
     ):
+        # A payload whose magnitudes list has no "band": "TESS" entry should
+        # raise a RuntimeError naming the TIC ID rather than silently using a
+        # different band.
         payload = make_exofop_payload(
             [{"prov": "toi", "prov_num": "1"}, TOI_PLANET_ENTRY],
             magnitudes=[{"band": "V", "value": "11.701", "value_e": "0.057"}],
         )
-        self.patch_network(monkeypatch, payload)
+        self.patch_network(mocker, payload)
         with pytest.raises(RuntimeError, match="TESS magnitude"):
             TOI.from_tic_id(tess_tic_expected_values["tic_id"])
 
-    def test_from_tic_id_empty_value_raises(
-        self, monkeypatch, tess_tic_expected_values
-    ):
-        # ExoFOP serves missing numbers as empty strings
+    def test_from_tic_id_empty_value_raises(self, mocker, tess_tic_expected_values):
+        # ExoFOP serves missing numbers as empty strings; conversion must fail
+        # with a RuntimeError that names the specific field (here "transit
+        # duration error") instead of a bare ValueError from float("").
         payload = make_exofop_payload(
             [{"prov": "toi", "prov_num": "1"}, TOI_PLANET_ENTRY | {"dur_e": ""}]
         )
-        self.patch_network(monkeypatch, payload)
+        self.patch_network(mocker, payload)
         with pytest.raises(RuntimeError, match="transit duration error"):
             TOI.from_tic_id(tess_tic_expected_values["tic_id"])
+
+    def test_from_tic_id_non_json_response_raises(
+        self, mocker, tess_tic_expected_values
+    ):
+        # ExoFOP returns HTTP 200 with a plain-text (non-JSON) body when the
+        # TIC ID does not exist, e.g. 'No TIC object found for "99..."'. That
+        # should surface as a RuntimeError naming the TIC ID and including the
+        # response body, not as a bare JSONDecodeError.
+        tic_id = tess_tic_expected_values["tic_id"]
+        self.patch_network(mocker, f'No TIC object found for "{tic_id}"')
+        with pytest.raises(RuntimeError, match=f"TIC {tic_id}.*No TIC object found"):
+            TOI.from_tic_id(tic_id)
+
+    @pytest.mark.parametrize(
+        "dropped_key", ["planet_parameters", "magnitudes", "coordinates"]
+    )
+    def test_from_tic_id_incomplete_payload_raises(
+        self, mocker, tess_tic_expected_values, dropped_key
+    ):
+        # A valid-JSON payload missing one of the sections from_tic_id needs
+        # should raise a RuntimeError naming the TIC ID and the missing
+        # section, not a KeyError.
+        tic_id = tess_tic_expected_values["tic_id"]
+        payload = make_exofop_payload(
+            [{"prov": "toi", "prov_num": "1"}, TOI_PLANET_ENTRY]
+        )
+        del payload[dropped_key]
+        self.patch_network(mocker, payload)
+        with pytest.raises(RuntimeError, match=f"TIC {tic_id}.*{dropped_key}"):
+            TOI.from_tic_id(tic_id)
 
 
 class TestTOI:
