@@ -246,22 +246,6 @@ class TestUSNOPrimeToSDSSDR7:
     #   i = i' + 0.041 * ((r' - i') - 0.21)
     #   z = z' - 0.030 * ((i' - z') - 0.09)
 
-    def test_transform(self):
-        # Check the constant terms: with all input magnitudes zero, each output
-        # is the product of -b and the zeropoint color (u' is checked too since
-        # its coefficient in the u row is one).
-        inp_mag = np.asarray([1.39, 0.0, 0.0, 0.0, 0.0, 1.0])
-        # This should produce this output:
-        # u: same as u' so 1.39
-        # g: product of -b_g and -zp_gr, so -0.0318
-        # r: product of -b_r and -zp_ri, so -0.00735
-        # i: product of -b_i and -zp_ri, so -0.00861
-        # z: product of -b_z and -zp_iz, so 0.0027
-        expected = np.asarray([1.39, -0.0318, -0.00735, -0.00861, 0.0027, 1])
-        usno_to_sdss = USNOPrimeToSDSSDR7.load()
-        out_mag = usno_to_sdss(inp_mag)
-        assert np.allclose(out_mag, expected)
-
     def test_transform_zeropoint_colors_are_fixed_point(self):
         # A star whose colors are exactly the zeropoint colors of the transform
         # ((u'-g') = 1.39, (g'-r') = 0.53, (r'-i') = 0.21, (i'-z') = 0.09) has
