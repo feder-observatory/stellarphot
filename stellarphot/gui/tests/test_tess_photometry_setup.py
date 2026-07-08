@@ -5,6 +5,7 @@ from astropy.coordinates import SkyCoord
 from astropy.io import fits
 
 from stellarphot import SourceListData
+from stellarphot.conftest import SERVER_DOWN_ERRORS
 from stellarphot.gui.custom_widgets import TessPhotometrySetup
 from stellarphot.io.tess import TOI
 
@@ -96,7 +97,16 @@ class TestTessPhotometrySetup:
         widget.tic_id_entry.value = tess_tic_expected_values["tic_id"]
 
         # Confirmation box is displayed, click yes
-        widget.confirm._yes.click()
+        try:
+            widget.confirm._yes.click()
+        except SERVER_DOWN_ERRORS as e:
+            # Under pytest there is no active IPython shell, so ipywidgets'
+            # CallbackDispatcher re-raises exceptions from the button handler
+            # and traitlets observers run synchronously -- server errors
+            # raised inside tess_photometry_setup propagate to here. If a
+            # future ipywidgets swallows them instead, this test fails on the
+            # all_done assertion below rather than erroring.
+            pytest.xfail(f"ExoFOP/GAIA server down or misbehaving: {e}")
 
         # The confirmation dialog should be hidden now
         assert widget.confirm.layout.display == "none"

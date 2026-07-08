@@ -175,8 +175,9 @@ select = [
 
 [tool.codespell]
 # The diagrams-*.md files use short Mermaid node ids that codespell
-# misreads as typos.
-skip = '*.svg,docs/diagrams-*.md'
+# misreads as typos. The ExoFOP test data is a captured server response
+# whose field names look like typos to codespell.
+skip = '*.svg,docs/diagrams-*.md,stellarphot/io/tests/data/tic-236158940-exofop.json'
 ignore-words = "ignore-words.txt"
 
 [tool.pytest.ini_options]

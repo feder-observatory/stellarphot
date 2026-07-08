@@ -1,14 +1,35 @@
 # This file is used to configure the behavior of pytest when using the Astropy
 # test infrastructure.
 import os
+import urllib.error
 
 import pytest
+import requests
 from astropy.coordinates import SkyCoord
 from astropy.table import Table
 from astropy.utils.data import get_pkg_data_filename
 from pytest_astropy_header.display import PYTEST_HEADER_MODULES, TESTED_VERSIONS
 
 from stellarphot import PhotometryData
+
+# Errors that indicate one of the external services the remote-data tests
+# depend on (ExoFOP, MAST, the Louisville GAIA aperture service) is down or
+# misbehaving. Remote-data tests xfail rather than fail on these.
+SERVER_DOWN_ERRORS = (
+    # Server unreachable
+    requests.exceptions.ConnectionError,
+    # Server too slow; covers ReadTimeout and ConnectTimeout
+    requests.exceptions.Timeout,
+    # raise_for_status() on an error response
+    requests.exceptions.HTTPError,
+    # astropy/astroquery network calls go through urllib, not requests
+    urllib.error.URLError,
+    # Raw socket timeouts
+    TimeoutError,
+    # The GAIA aperture service returning HTTP 200 with no usable
+    # download link surfaces as a ValueError
+    ValueError,
+)
 
 # astropy-specific-stuff
 
