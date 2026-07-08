@@ -48,7 +48,7 @@ Other Changes and Additions
   orbit has always been circular, and the guards added for it in [#614] are
   no longer needed), the default inclination bounds are now (50, 90) degrees,
   ``a`` is bounded below by 1, and the airmass/width/spp trend parameters
-  now default to not varying in fits. [#XXX]
+  now default to not varying in fits. [#625]
 
 Bug Fixes
 ^^^^^^^^^
@@ -88,15 +88,15 @@ Bug Fixes
 + ``TransitModelFit.fit`` now raises an error if the ``eccentricity`` parameter
   has been un-fixed, and warns if a fixed nonzero value is set, instead of
   silently ignoring the parameter. [#614] The parameter has since been removed
-  entirely as part of the lmfit rewrite. [#XXX]
+  entirely as part of the lmfit rewrite. [#625]
 + ``TransitModelFit.setup_model`` no longer sets the orbital radius to
   infinity when called with the default ``duration`` of zero (the estimate is
   skipped unless a positive duration is given, and likewise for the planet
   radius when ``depth`` is zero), and a duration at least as long as the
-  period now raises a clear ``ValueError``. [#XXX]
+  period now raises a clear ``ValueError``. [#625]
 + Comparing the BIC of detrending options no longer requires destructively
   refitting the model in a notebook loop; ``compare_detrend_options()`` runs
-  each candidate fit on a copy of the parameters. [#XXX]
+  each candidate fit on a copy of the parameters. [#625]
 + ``generate_aij_table`` no longer classifies a star as a comparison star based
   on an arbitrarily distant sky match; a match within a couple of arcseconds is
   now required. [#615]
