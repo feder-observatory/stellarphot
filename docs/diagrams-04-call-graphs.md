@@ -629,12 +629,12 @@ flowchart LR
     subgraph sg_core["core.py"]
         direction TB
         tmf_setup["TransitModelFit.setup_model()"]:::cls
-        tmf_internal["_setup_transit_model()"]:::cls
+        tmf_flux["_model_flux()"]:::cls
         tmf_fit["TransitModelFit.fit()"]:::cls
         tmf_lc["model_light_curve() /<br/>data_light_curve()"]:::cls
         tmf_detrend["_detrend()"]:::cls
-        tmf_bic["BIC / n_fit_parameters"]:::cls
-        fitter["VariableArgsFitter.__call__()"]:::cls
+        tmf_compare["compare_detrend_options()"]:::cls
+        runfit["_run_fit()"]:::cls
         opts["TransitModelOptions"]:::cls
     end
 
@@ -653,15 +653,16 @@ flowchart LR
     ingress["plotting.py —<br/>plot_predict_ingress_egress()"]:::fn
 
     batman["pytransit RoadRunnerModel"]:::external
-    leastsq["scipy.optimize.leastsq"]:::external
+    leastsq["lmfit.minimize<br/>(scipy least_squares)"]:::external
     mast["astroquery MAST Catalogs"]:::external
 
-    tmf_setup --> tmf_internal
-    tmf_internal --> batman
-    tmf_fit --> fitter
-    fitter --> leastsq
+    tmf_fit --> runfit
+    runfit --> leastsq
+    runfit --> tmf_flux
+    tmf_flux --> batman
+    tmf_lc --> tmf_flux
     tmf_lc --> tmf_detrend
-    tmf_bic -.-> tmf_fit
+    tmf_compare --> runfit
     opts -.->|"configures"| tmf_setup
 
     checker --> gettic
@@ -671,12 +672,12 @@ flowchart LR
     gettic --> mast
 
     click tmf_setup href "../stellarphot/transit_fitting/core.py" "transit_fitting/core.py"
-    click tmf_internal href "../stellarphot/transit_fitting/core.py" "transit_fitting/core.py"
+    click tmf_flux href "../stellarphot/transit_fitting/core.py" "transit_fitting/core.py"
     click tmf_fit href "../stellarphot/transit_fitting/core.py" "transit_fitting/core.py"
     click tmf_lc href "../stellarphot/transit_fitting/core.py" "transit_fitting/core.py"
     click tmf_detrend href "../stellarphot/transit_fitting/core.py" "transit_fitting/core.py"
-    click tmf_bic href "../stellarphot/transit_fitting/core.py" "transit_fitting/core.py"
-    click fitter href "../stellarphot/transit_fitting/core.py" "transit_fitting/core.py"
+    click tmf_compare href "../stellarphot/transit_fitting/core.py" "transit_fitting/core.py"
+    click runfit href "../stellarphot/transit_fitting/core.py" "transit_fitting/core.py"
     click opts href "../stellarphot/transit_fitting/core.py" "transit_fitting/core.py"
     click exotic href "../stellarphot/gui/transit_fitting_gui.py" "gui/transit_fitting_gui.py"
     click pop_tic href "../stellarphot/gui/transit_fitting_gui.py" "gui/transit_fitting_gui.py"
