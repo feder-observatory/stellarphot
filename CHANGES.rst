@@ -48,7 +48,11 @@ Other Changes and Additions
   orbit has always been circular, and the guards added for it in [#614] are
   no longer needed), the default inclination bounds are now (50, 90) degrees,
   ``a`` is bounded below by 1, and the airmass/width/spp trend parameters
-  now default to not varying in fits. [#625]
+  now default to not varying in fits. The RoadRunner model is built with a
+  widened radius-ratio table (``klims=(0.005, 0.6)``) so that a fitted ``rp``
+  at its upper bound of 0.5 stays strictly inside the table, avoiding an
+  out-of-bounds read in pytransit's native evaluator that crashed the fit on
+  Windows and some macOS builds. [#625]
 
 Bug Fixes
 ^^^^^^^^^

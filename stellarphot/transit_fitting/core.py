@@ -143,7 +143,15 @@ class TransitModelFit:
         # parameterized at evaluation time via ``evaluate(...)``, so no separate
         # parameter container is needed. The time array is supplied later via
         # ``set_data`` (see the ``times`` setter).
-        self._transit_model = RoadRunnerModel("quadratic")
+        #
+        # ``klims`` bounds the precomputed radius-ratio interpolation table.
+        # Its upper end must stay strictly above ``rp``'s allowed maximum (0.5
+        # in ``_default_params``): RoadRunner's native evaluator reads one
+        # element past the table when ``k`` lands exactly on the upper limit
+        # (an off-by-one in pytransit's boundary handling), which crashes with
+        # a segfault/access violation on some platforms. Widening the upper
+        # limit keeps the whole fittable ``rp`` range safely inside the table.
+        self._transit_model = RoadRunnerModel("quadratic", klims=(0.005, 0.6))
         self._times = None
         self._airmass = None
         self._spp = None
