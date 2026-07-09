@@ -125,11 +125,11 @@ class SeeingProfileWidget:
 
         # Do some set up of the ImageWidget
 
-        # astrowidgets 0.5.0 has a bug in which the built-in _mouse_click
-        # handler references the attributes below, which are never
-        # initialized, so any click raises AttributeError and prevents
-        # callbacks registered later (like ours) from running. Setting both
-        # to False makes the built-in handler a no-op.
+        # astrowidgets has a bug (still present as of 0.5.1, astropy/astrowidgets#206)
+        # in which the built-in _mouse_click handler references the attributes
+        # below, which are never initialized, so any click raises AttributeError
+        # and prevents callbacks registered later (like ours) from running.
+        # Setting both to False makes the built-in handler a no-op.
         self.iw.click_center = False
         self.iw.is_marking = False
 
