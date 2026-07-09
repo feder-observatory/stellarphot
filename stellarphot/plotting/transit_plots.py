@@ -199,11 +199,11 @@ def plot_transit_lightcurve(
     end = midpoint + 0.5 * tess_info.duration
 
     detrended_by = []
-    if not mod.model.airmass_trend.fixed:
+    if mod.params["airmass_trend"].vary:
         detrended_by.append("Airmass")
-    if not mod.model.spp_trend.fixed:
+    if mod.params["spp_trend"].vary:
         detrended_by.append("SPP")
-    if not mod.model.width_trend.fixed:
+    if mod.params["width_trend"].vary:
         detrended_by.append("Width")
 
     flux_full_detrend = mod.data_light_curve(detrend_by="all")
@@ -249,10 +249,12 @@ def plot_transit_lightcurve(
         flux_full_detrend_model - 0.08,
         c="g",
         ms=4,
-        label=f"rel_flux_T1 Transit Model ([P={mod.model.period.value:.4f}], "
-        f"(Rp/R*)^2={(mod.model.rp.value)**2:.4f}, \na/R*={mod.model.a.value:.4f}, "
-        f"[Tc={mod.model.t0.value + 2400000:.4f}], "
-        f"[u1={mod.model.limb_u1.value:.1f}, u2={mod.model.limb_u2.value:.1f})",
+        label=f"rel_flux_T1 Transit Model ([P={mod.params['period'].value:.4f}], "
+        f"(Rp/R*)^2={(mod.params['rp'].value) ** 2:.4f}, "
+        f"\na/R*={mod.params['a'].value:.4f}, "
+        f"[Tc={mod.params['t0'].value + 2400000:.4f}], "
+        f"[u1={mod.params['limb_u1'].value:.1f}, "
+        f"u2={mod.params['limb_u2'].value:.1f})",
     )
 
     plot_many_factors(photometry, shift, scale)
@@ -262,14 +264,14 @@ def plot_transit_lightcurve(
     plt.text(
         start.jd - 2400000,
         low + 0.0005,
-        f"Predicted\nIngress\n{start.jd-2400000-int(start.jd - 2400000):.3f}",
+        f"Predicted\nIngress\n{start.jd - 2400000 - int(start.jd - 2400000):.3f}",
         horizontalalignment="center",
         c="r",
     )
     plt.text(
         end.jd - 2400000,
         low + 0.0005,
-        f"Predicted\nEgress\n{end.jd-2400000-int(end.jd - 2400000):.3f}",
+        f"Predicted\nEgress\n{end.jd - 2400000 - int(end.jd - 2400000):.3f}",
         horizontalalignment="center",
         c="r",
     )

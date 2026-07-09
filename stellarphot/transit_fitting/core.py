@@ -1,26 +1,9 @@
-import warnings
+import itertools
 
 import numpy as np
 from astropy import units as u
-from astropy.modeling.fitting import LevMarLSQFitter, _validate_model
-from astropy.modeling.models import custom_model
+from astropy.table import Table
 from pydantic import BaseModel
-
-# Functions below changed from private to public in astropy 5
-try:
-    from astropy.modeling.fitting import (
-        fitter_to_model_params,
-        model_to_fit_params,
-    )
-except ImportError:
-    from astropy.modeling.fitting import (
-        _fitter_to_model_params as fitter_to_model_params,
-    )
-    from astropy.modeling.fitting import (
-        _model_to_fit_params as model_to_fit_params,
-    )
-
-from astropy.utils.exceptions import AstropyUserWarning
 
 try:
     from pytransit import RoadRunnerModel
@@ -31,6 +14,13 @@ except ImportError:  # pragma: no cover
     # clear error (see __init__).
     RoadRunnerModel = None
 
+try:
+    import lmfit
+except ImportError:  # pragma: no cover
+    # lmfit is an optional dependency (the ``exoplanet`` extra), guarded the
+    # same way as pytransit.
+    lmfit = None
+
 _PYTRANSIT_INSTALL_MESSAGE = (
     "You must install pytransit to use TransitModelFit. Try:\n"
     "  conda install -c conda-forge pytransit\n"
@@ -38,94 +28,36 @@ _PYTRANSIT_INSTALL_MESSAGE = (
     "  pip install pytransit"
 )
 
-__all__ = ["VariableArgsFitter", "TransitModelOptions", "TransitModelFit"]
+_LMFIT_INSTALL_MESSAGE = (
+    "You must install lmfit to use TransitModelFit. Try:\n"
+    "  conda install -c conda-forge lmfit\n"
+    "or\n"
+    "  pip install lmfit"
+)
+
+__all__ = ["TransitModelOptions", "TransitModelFit"]
 
 
-class VariableArgsFitter(LevMarLSQFitter):
+def _default_params():
     """
-    A callable class that can be used to fit functions with arbitrary number of
-    positional parameters.  This is a modified version of the
-    astropy.modeling.fitting.LevMarLSQFitter fitter.
+    Default parameter set for a transit fit.
 
+    Trend fitting is opt-in: the trend coefficients start with
+    ``vary=False`` and are only fit if the user (or
+    `~stellarphot.transit_fitting.TransitModelOptions`) turns them on.
     """
-
-    def __init__(self):
-        super().__init__()
-
-    # This is a straight copy-paste from the LevMarLSQFitter __call__.
-    # The only modification is to allow any number of arguments.
-    def __call__(
-        self,
-        model,
-        *args,
-        weights=None,
-        maxiter=100,
-        acc=1e-7,
-        epsilon=1.4901161193847656e-08,
-        estimate_jacobian=False,
-    ):
-        from scipy import optimize
-
-        model_copy = _validate_model(model, self.supported_constraints)
-        farg = (
-            model_copy,
-            weights,
-        ) + args
-        if model_copy.fit_deriv is None or estimate_jacobian:
-            dfunc = None
-        else:
-            dfunc = self._wrap_deriv
-        init_values0 = model_to_fit_params(model_copy)
-        # This returns a tuple of (model_params, fitparam_indices, model_bounds),
-        # where model_params is a numpy array, fitparam_indices is a list, and
-        # model_bounds is a tuple of tuples.  The problem is that this doesn't
-        # convert simply into an array within scipy.optimize.leastsq, when called.
-        # So we handle model_bounds here first to the scipy.optimize.leastsq format.
-        # can handle the list of initial values we pass in.
-        init_values = np.concatenate(
-            (
-                np.asarray(init_values0[0]).flatten(),
-                np.asarray(init_values0[1]).flatten(),
-                np.asarray(init_values0[2]).flatten(),
-            ),
-            axis=None,
-        )
-
-        fitparams, cov_x, dinfo, mess, ierr = optimize.leastsq(
-            self.objective_function,
-            init_values,
-            args=farg,
-            Dfun=dfunc,
-            col_deriv=model_copy.col_fit_deriv,
-            maxfev=maxiter,
-            epsfcn=epsilon,
-            xtol=acc,
-            full_output=True,
-        )
-        fitter_to_model_params(model_copy, fitparams)
-        self.fit_info.update(dinfo)
-        self.fit_info["cov_x"] = cov_x
-        self.fit_info["message"] = mess
-        self.fit_info["ierr"] = ierr
-        if ierr not in [1, 2, 3, 4]:
-            # apparently setting a higher stacklevel is better, see
-            # https://docs.astral.sh/ruff/rules/no-explicit-stacklevel/
-            warnings.warn(
-                "The fit may be unsuccessful; check "
-                "fit_info['message'] for more information.",
-                AstropyUserWarning,
-                stacklevel=2,
-            )
-
-        # now try to compute the true covariance matrix
-        if (len(args[-1]) > len(init_values)) and cov_x is not None:
-            sum_sqrs = np.sum(self.objective_function(fitparams, *farg) ** 2)
-            dof = len(args[-1]) - len(init_values)
-            self.fit_info["param_cov"] = cov_x * sum_sqrs / dof
-        else:
-            self.fit_info["param_cov"] = None
-
-        return model_copy
+    params = lmfit.Parameters()
+    params.add("t0", value=0.0, vary=True)
+    params.add("period", value=1.0, vary=False)
+    params.add("rp", value=0.1, vary=True, min=0.01, max=0.5)
+    params.add("a", value=10.0, vary=True, min=1.0)
+    params.add("inclination", value=90.0, vary=True, min=50, max=90)
+    params.add("limb_u1", value=0.3, vary=False)
+    params.add("limb_u2", value=0.3, vary=False)
+    params.add("airmass_trend", value=0.0, vary=False)
+    params.add("width_trend", value=0.0, vary=False)
+    params.add("spp_trend", value=0.0, vary=False)
+    return params
 
 
 class TransitModelOptions(BaseModel):
@@ -146,48 +78,88 @@ class TransitModelFit:
     The underlying transit light curve is computed with pytransit's
     `RoadRunnerModel
     <https://pytransit.readthedocs.io/en/latest/notebooks/models/roadrunner/roadrunner_model_example_1.html>`_
-    using a quadratic limb-darkening law and a circular orbit.
+    using a quadratic limb-darkening law and a circular orbit. The fit is
+    performed with `lmfit <https://lmfit.github.io/lmfit-py/>`_.
 
     Attributes
     ----------
+    params : `lmfit.Parameters`
+        The transit model parameters: ``t0``, ``period``, ``rp`` (planet
+        radius in stellar radii), ``a`` (orbital radius in stellar radii),
+        ``inclination`` (degrees), ``limb_u1``/``limb_u2`` (quadratic
+        limb-darkening coefficients) and the linear trend coefficients
+        ``airmass_trend``, ``width_trend`` and ``spp_trend``. Read or set
+        values, bounds and whether a parameter is fit through the standard
+        lmfit attributes, e.g. ``mod.params["rp"].value``,
+        ``mod.params["t0"].vary``, ``mod.params["a"].min`` and, after a
+        fit, ``mod.params["rp"].stderr``.
 
-    BIC : float
-        Bayesian Information Criterion for the fit. This is calculated
-        after the fit is performed.
+    fit_result : `lmfit.minimizer.MinimizerResult` or None
+        Result of the most recent call to ``fit``, including fit statistics
+        like ``bic`` and ``nvarys``. ``None`` until ``fit`` has been run.
 
-    n_fit_parameters : int
-        Number of parameters that were fit. This is calculated after the
-        fit is performed.
-
-    width : array-like
-        Width of the star in pixels at each time. Must be set before fitting.
+    times, airmass, width, spp, data, weights : array-like or None
+        Independent variables and data for the fit; see the property
+        docstrings.
 
     Notes
     -----
-    Because the orbit is always circular, the model's ``eccentricity``
-    parameter has no effect on the computed light curve. It is kept in the
-    model for API stability, but it must remain fixed (the default) and its
-    value is ignored. Calling ``fit`` with ``eccentricity.fixed`` set to
-    ``False`` raises a ``ValueError``, and a fixed nonzero eccentricity
-    triggers a warning.
+    The orbit is always circular; there is no eccentricity parameter.
+
+    Trend fitting is opt-in: the trend coefficients default to
+    ``vary=False`` even when a covariate (airmass, width, sky per pixel) is
+    set. Enable them via `TransitModelOptions`, directly (e.g.
+    ``mod.params["airmass_trend"].vary = True``) or with
+    ``compare_detrend_options(apply_best=True)``.
+
+    Examples
+    --------
+    Fit a transit, detrending against airmass::
+
+        mod = TransitModelFit()
+        mod.setup_model(t0=2455001.5, depth=12.1, duration=0.15, period=3.5)
+        mod.times = times
+        mod.data = fluxes
+        mod.weights = 1 / flux_errors
+        mod.airmass = airmass
+        mod.params["airmass_trend"].vary = True
+
+        result = mod.fit()
+
+        print(mod.params["rp"].value, mod.params["rp"].stderr)
+        print(result.bic)
+
+        # Which detrending parameters does the BIC favor?
+        bic_table = mod.compare_detrend_options()
     """
 
     def __init__(self):
         if RoadRunnerModel is None:
             raise ImportError(_PYTRANSIT_INSTALL_MESSAGE)
+        if lmfit is None:
+            raise ImportError(_LMFIT_INSTALL_MESSAGE)
 
         # pytransit's RoadRunnerModel with the quadratic limb-darkening law is
         # parameterized at evaluation time via ``evaluate(...)``, so no separate
         # parameter container is needed. The time array is supplied later via
         # ``set_data`` (see the ``times`` setter).
-        self._transit_model = RoadRunnerModel("quadratic")
+        #
+        # ``klims`` bounds the precomputed radius-ratio interpolation table.
+        # Its upper end must stay strictly above ``rp``'s allowed maximum (0.5
+        # in ``_default_params``): RoadRunner's native evaluator reads one
+        # element past the table when ``k`` lands exactly on the upper limit
+        # (an off-by-one in pytransit's boundary handling), which crashes with
+        # a segfault/access violation on some platforms. Widening the upper
+        # limit keeps the whole fittable ``rp`` range safely inside the table.
+        self._transit_model = RoadRunnerModel("quadratic", klims=(0.005, 0.6))
         self._times = None
         self._airmass = None
         self._spp = None
         self._width = None
-        self._fitter = VariableArgsFitter()
-        self._model = None
+        self._data = None
         self.weights = None
+        self.params = _default_params()
+        self.fit_result = None
         self._detrend_parameters = set()
         self._all_detrend_params = ["airmass", "width", "spp"]
 
@@ -223,7 +195,7 @@ class TransitModelFit:
     def times(self, value):
         if not self._check_consistent_lengths(value):
             raise ValueError(
-                "Length of times not consistent with " "other independent variables."
+                "Length of times not consistent with other independent variables."
             )
         self._times = value
 
@@ -242,7 +214,7 @@ class TransitModelFit:
     def airmass(self, value):
         if not self._check_consistent_lengths(value):
             raise ValueError(
-                "Length of airmass not consistent with " "other independent variables."
+                "Length of airmass not consistent with other independent variables."
             )
         self._airmass = value
 
@@ -264,7 +236,7 @@ class TransitModelFit:
     def width(self, value):
         if not self._check_consistent_lengths(value):
             raise ValueError(
-                "Length of width not consistent with " "other independent variables."
+                "Length of width not consistent with other independent variables."
             )
         self._width = value
 
@@ -285,7 +257,7 @@ class TransitModelFit:
     def spp(self, value):
         if not self._check_consistent_lengths(value):
             raise ValueError(
-                "Length of spp not consistent with " "other independent variables."
+                "Length of spp not consistent with other independent variables."
             )
         self._spp = value
 
@@ -306,83 +278,74 @@ class TransitModelFit:
     def data(self, value):
         if not self._check_consistent_lengths(value):
             raise ValueError(
-                "Length of data not consistent with " "independent variables."
+                "Length of data not consistent with independent variables."
             )
         self._data = value
 
-    @property
-    def model(self):
+    def _model_flux(self, params, airmass, width, spp):
         """
-        model : `astropy.modeling.Model`
-            The model used for fitting. This is a combination of the pytransit
-            transit model and any other trends that are included in the fit.
-            This is set up when the ``setup_model`` method is called.
+        Evaluate the model flux (transit plus additive linear trends) for the
+        given parameters at the times currently set on the pytransit model.
         """
-        return self._model
+        p = params.valuesdict()
+        flux = self._transit_model.evaluate(
+            k=p["rp"],
+            ldc=[p["limb_u1"], p["limb_u2"]],
+            t0=p["t0"],
+            p=p["period"],
+            a=p["a"],
+            i=np.radians(p["inclination"]),
+        )
+        flux += p["airmass_trend"] * airmass
+        flux += p["width_trend"] * width
+        flux += p["spp_trend"] * spp
+        return flux
 
-    def _setup_transit_model(self):
+    def _residual(self, params, airmass, width, spp, weights):
+        return (self._model_flux(params, airmass, width, spp) - self.data) * weights
+
+    def _run_fit(self, params):
         """
-        Creates transit astropy model with exoplanet flux and other trends.
-        Called when the necessary information is present for setting up the
-        model.
+        Run an lmfit minimization with the given parameters, returning the
+        `lmfit.minimizer.MinimizerResult`.
+
+        The fit runs on a copy of ``params``, so neither the input nor any
+        instance state is modified. For each covariate that is not set, the
+        corresponding trend parameter is forced to zero (and not varied) on
+        that copy and an all-zero covariate is substituted.
         """
+        params = params.copy()
 
-        def transit_model_with_trends(
-            time,  # noqa: ARG001  (model needs this argument as independent variable)
-            airmass,
-            width,
-            sky_per_pix,
-            t0=0.0,
-            period=1.0,
-            rp=0.1,
-            a=10.0,
-            inclination=90.0,
-            eccentricity=0.0,  # noqa: ARG001  (kept as a fixed model parameter; orbit is circular)
-            limb_u1=0.3,
-            limb_u2=0.3,
-            airmass_trend=0.0,
-            width_trend=0.0,
-            spp_trend=0.0,
-        ):
-            # pytransit uses inclination in radians. The orbit is circular:
-            # ``evaluate`` is left with its default ``e=0``/``w=0`` and the
-            # ``eccentricity`` argument is NOT forwarded, matching the previous
-            # behavior where batman's ``ecc`` was fixed at 0. The argument is
-            # retained in the signature only for API stability; ``fit()``
-            # raises if a user un-fixes it and warns if it is nonzero.
-            flux = self._transit_model.evaluate(
-                k=rp,
-                ldc=[limb_u1, limb_u2],
-                t0=t0,
-                p=period,
-                a=a,
-                i=np.radians(inclination),
-            )
-            flux += airmass_trend * (airmass)
-            flux += width_trend * width
-            flux += spp_trend * sky_per_pix
-            return flux
+        covariates = {}
+        for name in self._all_detrend_params:
+            value = getattr(self, name)
+            if value is None:
+                params[f"{name}_trend"].set(value=0.0, vary=False)
+                covariates[name] = np.zeros(len(self.times))
+            else:
+                covariates[name] = np.asarray(value, dtype=float)
 
-        ModelClass = custom_model(transit_model_with_trends)
+        weights = self.weights if self.weights is not None else 1.0
 
-        self._model = ModelClass()
-
-        # Set up some defaults for what is fixed. The eccentricity must stay
-        # fixed: it is not forwarded to pytransit (the orbit is always
-        # circular) and fit() raises if it has been un-fixed.
-        self._model.period.fixed = True
-        self._model.eccentricity.fixed = True
-        self._model.limb_u1.fixed = True
-        self._model.limb_u2.fixed = True
-
-        # Set some default bounds for inclination, in degrees.
-        self._model.inclination.bounds = (80, 90)
-
-        # Planet radius cannot be too small or too big
-        self._model.rp.bounds = (0.01, 0.5)
+        # method="least_squares" is scipy's Trust Region Reflective, which
+        # handles a starting value that sits exactly on a bound (the default
+        # inclination of 90 degrees is on its upper bound); MINPACK leastsq
+        # does not.
+        return lmfit.minimize(
+            self._residual,
+            params,
+            method="least_squares",
+            args=(
+                covariates["airmass"],
+                covariates["width"],
+                covariates["spp"],
+                weights,
+            ),
+        )
 
     def setup_model(
         self,
+        *,
         binned_data=None,
         t0=0,
         depth=0,
@@ -397,21 +360,32 @@ class TransitModelFit:
         """
         Configure a transit model for fitting. The ``duration`` and ``depth``
         are used to estimate underlying fit parameters; they are not
-        themselves fit parameters.
+        themselves fit parameters. Any previous parameter settings are reset
+        to their defaults before the new values are applied.
+
+        All arguments are keyword-only.
 
         Parameters
         ----------
+        binned_data : `astropy.timeseries.BinnedTimeSeries`, optional
+            Binned time series to load the times, data, weights and
+            covariates from.
+
         t0 : float
             Time of the center of the transit. Can be in any units
             but should be consistent with the units for the ``period``
             and for the times used for fitting.
 
         depth : float
-            Depth of the transit in parts per thousand.
+            Depth of the transit in parts per thousand. If zero (the
+            default), the planet radius ``rp`` is left at its default
+            starting value instead of being estimated.
 
         duration : float
-            Duration of the transit,in the same units as ``t0`` and
-            ``period``.
+            Duration of the transit, in the same units as ``t0`` and
+            ``period``. If zero (the default), the orbital radius ``a`` is
+            left at its default starting value instead of being estimated.
+            Must be smaller than the ``period``.
 
         period : float
             Period of the planet. Should be in the same units as ``t0``
@@ -429,14 +403,26 @@ class TransitModelFit:
         spp_trend : float
             Coefficient for a linear trend in sky per pixel.
 
-        options : TransitModelOptions, optional
-            Options for the transit model fit.
+        model_options : TransitModelOptions, optional
+            Options for the transit model fit, mapped onto the ``vary``
+            flags (and, for ``t0``, the bounds) of the parameters.
 
         Returns
         -------
         None
             Sets values for the model parameters.
+
+        Raises
+        ------
+        ValueError
+            If ``duration`` is not smaller than ``period``.
         """
+        if duration >= period:
+            raise ValueError(
+                f"The transit duration ({duration}) must be smaller than "
+                f"the period ({period})."
+            )
+
         if binned_data:
             self.times = (
                 np.array(
@@ -451,126 +437,142 @@ class TransitModelFit:
             self.airmass = np.array(binned_data["airmass"])
             self.width = np.array(binned_data["width"])
             self.spp = np.array(binned_data["sky_per_pix_avg"])
-        self._setup_transit_model()
 
-        # rp is related to depth in a straightforward way
-        self._model.rp.value = np.sqrt(depth / 1000)
+        self.params = _default_params()
+
+        # rp is related to depth in a straightforward way; a nonpositive
+        # depth means "no estimate," leaving rp at its default. Seeding rp
+        # at zero would in any case start the fit below rp's lower bound.
+        if depth > 0:
+            self.params["rp"].value = np.sqrt(depth / 1000)
 
         # The estimate below assumes a circular orbit and inclination of
         # 90 degrees (edge on). This should be fine as a starting point
-        # for the fit.
+        # for the fit. A nonpositive duration means "no estimate," leaving
+        # a at its default.
         #
         # See Kipping, eq. 16 at
         # https://doi.org/10.1111/j.1365-2966.2010.16894.x
-        estimated_a = 1 / np.sin(duration * np.pi / period)
-        self._model.a.value = estimated_a
+        if duration > 0:
+            self.params["a"].value = 1 / np.sin(duration * np.pi / period)
 
-        self._model.period.value = period
-        self._model.inclination.value = inclination
-        self._model.t0.value = t0
-        self._model.airmass_trend.value = airmass_trend
-        self._model.width_trend.value = width_trend
-        self._model.spp_trend.value = spp_trend
+        self.params["period"].value = period
+        self.params["inclination"].value = inclination
+        self.params["t0"].value = t0
+        self.params["airmass_trend"].value = airmass_trend
+        self.params["width_trend"].value = width_trend
+        self.params["spp_trend"].value = spp_trend
 
         if model_options is not None:
-            # Setup the model more 🙄
-            self.model.t0.bounds = [
-                t0 - (model_options.transit_time_range * u.min).to("day").value / 2,
-                t0 + (model_options.transit_time_range * u.min).to("day").value / 2,
-            ]
-            self.model.t0.fixed = model_options.keep_transit_time_fixed
-            self.model.a.fixed = model_options.keep_radius_orbit_fixed
-            self.model.rp.fixed = model_options.keep_radius_planet_fixed
+            half_range = (model_options.transit_time_range * u.min).to("day").value / 2
+            self.params["t0"].min = t0 - half_range
+            self.params["t0"].max = t0 + half_range
+            self.params["t0"].vary = not model_options.keep_transit_time_fixed
 
-            self.model.spp_trend.fixed = not model_options.fit_spp
-            self.model.airmass_trend.fixed = not model_options.fit_airmass
-            self.model.width_trend.fixed = not model_options.fit_width
+            self.params["a"].vary = not model_options.keep_radius_orbit_fixed
+            self.params["rp"].vary = not model_options.keep_radius_planet_fixed
+
+            self.params["airmass_trend"].vary = model_options.fit_airmass
+            self.params["width_trend"].vary = model_options.fit_width
+            self.params["spp_trend"].vary = model_options.fit_spp
 
     def fit(self):
         """
-        Perform a fit and update the model with best-fit values.
+        Fit the model to the data and update ``params`` with the best-fit
+        values and uncertainties.
+
+        Returns
+        -------
+        `lmfit.minimizer.MinimizerResult`
+            The full fit result, also stored as ``fit_result``. Includes
+            fit statistics like ``bic``.
 
         Raises
         ------
         ValueError
-            If the times or model have not been set, or if
-            ``model.eccentricity.fixed`` has been set to ``False``. The
-            eccentricity is not forwarded to the underlying pytransit model
-            (the orbit is always circular), so it cannot be fit.
+            If the times or the data have not been set. If the fit itself
+            raises, ``params`` and ``fit_result`` are left untouched.
         """
-        # Maybe do some correctness check of the model before starting.
         if self.times is None:
-            raise ValueError("The times must be set before trying " "to fit.")
-        if self._model is None:
-            raise ValueError("Run setup_model() before trying to fit.")
+            raise ValueError("The times must be set before trying to fit.")
+        if self.data is None:
+            raise ValueError("The data must be set before trying to fit.")
 
-        # The eccentricity parameter is never forwarded to the underlying
-        # pytransit model (the orbit is always circular, e=0). Fitting it
-        # would silently do nothing: the fitter would see a zero Jacobian
-        # column, report a meaningless "best-fit" value, and inflate the
-        # fit parameter count (and hence the BIC). Fail loudly instead.
-        if not self.model.eccentricity.fixed:
-            raise ValueError(
-                "The eccentricity cannot be fit: the underlying pytransit "
-                "model always uses a circular orbit (eccentricity 0), so the "
-                "eccentricity parameter has no effect on the model. Leave "
-                "eccentricity.fixed set to True."
-            )
+        result = self._run_fit(self.params)
 
-        if self.model.eccentricity.value != 0:
-            warnings.warn(
-                f"The eccentricity value {self.model.eccentricity.value} is "
-                "ignored by the underlying pytransit model, which always "
-                "uses a circular orbit (eccentricity 0).",
-                AstropyUserWarning,
-                stacklevel=2,
-            )
+        self.fit_result = result
 
-        # The pytransit model already has its time array (set via the ``times``
-        # setter), so no additional model setup is needed here.
+        # Copy the best-fit values and uncertainties back into the user's
+        # parameters without touching vary/min/max, so user choices (e.g. a
+        # trend enabled while its covariate is unset) survive the fit.
+        for name, param in result.params.items():
+            self.params[name].value = param.value
+            self.params[name].stderr = param.stderr
 
-        # Check whether any data bits are None and fix those
-        # parameters.
-        original_values = {}
+        return result
 
-        if self.spp is None:
-            original_values["spp_trend"] = self.model.spp_trend.fixed
-            self.model.spp_trend = 0
-            self.model.spp_trend.fixed = True
-            spp = np.zeros_like(self.times)
-        else:
-            spp = self.spp
+    def compare_detrend_options(self, apply_best=False):
+        """
+        Compare, via the Bayesian Information Criterion, fits with every
+        on/off combination of the trend parameters whose covariate is set.
 
-        if self.airmass is None:
-            original_values["airmass_trend"] = self.model.airmass_trend.fixed
-            self.model.airmass_trend = 0
-            self.model.airmass_trend.fixed = True
-            airmass = np.zeros_like(self.times)
-        else:
-            airmass = self.airmass
+        Each candidate fit runs on a copy of ``params`` — with the trends in
+        the combination varying, and the others fixed at zero — so this
+        method does not change the state of the model.
 
-        if self.width is None:
-            original_values["width_trend"] = self.model.width_trend.fixed
-            self.model.width_trend = 0
-            self.model.width_trend.fixed = True
-            width = np.zeros_like(self.times)
-        else:
-            width = self.width
+        Parameters
+        ----------
+        apply_best : bool, optional
+            If True, apply the lowest-BIC combination to ``params`` (each
+            trend in the winning combination is varied, the others are
+            zeroed and fixed) and run ``fit``.
 
-        # Do the fitting
+        Returns
+        -------
+        `astropy.table.Table`
+            One row per combination with a bool column per available trend
+            (``airmass``, ``width``, ``spp``) and a ``BIC`` column, sorted
+            by ascending BIC (best first).
+        """
+        if self.times is None:
+            raise ValueError("The times must be set before trying to fit.")
+        if self.data is None:
+            raise ValueError("The data must be set before trying to fit.")
 
-        new_model = self._fitter(
-            self.model, self.times, airmass, width, spp, self.data, weights=self.weights
-        )
+        available = [
+            name
+            for name in self._all_detrend_params
+            if name in self._detrend_parameters
+        ]
 
-        # Update the model (might not be necessary but can't hurt)
-        self._model = new_model
-        self._actual_fixed_params = self._model.fixed
+        rows = []
+        for combo in itertools.product([False, True], repeat=len(available)):
+            params = self.params.copy()
+            for name, enabled in zip(available, combo, strict=True):
+                if enabled:
+                    params[f"{name}_trend"].vary = True
+                else:
+                    params[f"{name}_trend"].set(value=0.0, vary=False)
 
-        # reset parameters to their original values
-        for k, v in original_values.items():
-            param = getattr(self.model, k)
-            param.fixed = v
+            result = self._run_fit(params)
+
+            row = dict(zip(available, combo, strict=True))
+            row["BIC"] = result.bic
+            rows.append(row)
+
+        comparison = Table(rows=rows)
+        comparison.sort("BIC")
+
+        if apply_best:
+            best = comparison[0]
+            for name in available:
+                if best[name]:
+                    self.params[f"{name}_trend"].vary = True
+                else:
+                    self.params[f"{name}_trend"].set(value=0.0, vary=False)
+            self.fit()
+
+        return comparison
 
     def _detrend(self, model, detrend_by):
         if detrend_by == "all":
@@ -583,7 +585,7 @@ class TransitModelFit:
         detrended = model.copy()
         for trend in detrend_by:
             detrended = detrended - (
-                getattr(self.model, f"{trend}_trend") * getattr(self, trend)
+                self.params[f"{trend}_trend"].value * getattr(self, trend)
             )
 
         return detrended
@@ -646,10 +648,8 @@ class TransitModelFit:
             raise ValueError(
                 "The times must be set before computing a model light curve."
             )
-        if self._model is None:
-            raise ValueError("Run setup_model() before computing a model light curve.")
 
-        zeros = np.zeros_like(self.times)
+        zeros = np.zeros(len(self.times))
         airmass = self.airmass if self.airmass is not None else zeros
         width = self.width if self.width is not None else zeros
         spp = self.spp if self.spp is not None else zeros
@@ -670,60 +670,13 @@ class TransitModelFit:
             # the original times even if evaluation fails.
             self._transit_model.set_data(at_times)
             try:
-                model = self.model(at_times, airmass, width, spp)
+                model = self._model_flux(self.params, airmass, width, spp)
             finally:
                 self._transit_model.set_data(np.asarray(self.times, dtype=float))
         else:
-            model = self.model(self.times, airmass, width, spp)
+            model = self._model_flux(self.params, airmass, width, spp)
 
         if detrend_by is not None:
             model = self._detrend(model, detrend_by)
 
         return model
-
-    @property
-    def n_fit_parameters(self):
-        return sum(not v for k, v in self._actual_fixed_params.items())
-
-    @property
-    def BIC(self):
-        residual = self.data - self.model_light_curve()
-        chi_sq = ((residual * self.weights) ** 2).sum()
-        BIC = chi_sq + self.n_fit_parameters * np.log(len(self.data))
-        return BIC
-
-
-# example use
-
-# self.model.eccentricity.fixed = True
-# self.model.spp_trend = 0
-# self.model.spp_trend.fixed = True
-
-# self.model.t0 = ...
-# self.model.rp = ...
-# self.fit(time, airmass, width, sky_per_pix)
-# self.model.rp
-# self.model.rp.error
-
-# my_model = TransitModelFit()
-# my_model.times = ...
-# my_model.airmass = ...
-
-# my_model.setup_model()
-# my_model.model.t0 = ...
-# my_model.model.rp = ...
-# my_model.model.period = 123
-# my_model.model.period.fixed = True
-
-# my_model.data = ...
-
-# fit_model = my_model.fit()
-
-# my_model.model_light_curve(detrend_by=['airmass', 'spp'])
-
-# at_times reuses the stored trend covariates, so it must match len(times):
-# my_model.model_light_curve(at_times=np.linspace(start - 0.1, end + 0.1,
-#                                                  num=len(my_model.times)),
-#                            detrend_by=['airmass'])
-
-# my_model.model

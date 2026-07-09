@@ -427,8 +427,7 @@ Key contents of each file:
 - [`io/tess.py`](../stellarphot/io/tess.py) — `TessSubmission` (TFOP file naming), `TOI` (transit
   parameters fetched by TIC ID), `TessTargetFile` (nearby GAIA sources),
   `tess_photometry_setup()`.
-- [`transit_fitting/core.py`](../stellarphot/transit_fitting/core.py) — `TransitModelFit`, `TransitModelOptions`,
-  `VariableArgsFitter`.
+- [`transit_fitting/core.py`](../stellarphot/transit_fitting/core.py) — `TransitModelFit`, `TransitModelOptions`.
 - [`gui/transit_fitting_gui.py`](../stellarphot/gui/transit_fitting_gui.py) — EXOTIC settings widget and TIC/TOI
   population helpers.
 - [`transit_fitting/io.py`](../stellarphot/transit_fitting/io.py) — `get_tic_info()` (MAST catalog query).

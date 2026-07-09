@@ -35,6 +35,24 @@ Other Changes and Additions
 + The USNO u'g'r'i'z' to SDSS DR7 ugriz transform matrix has been verified
   entry-by-entry against its SDSS reference page, and tests now pin every
   coefficient of the transform. [#611]
++ Transit fitting has been rebuilt on `lmfit
+  <https://lmfit.github.io/lmfit-py/>`_ (the forward model is still computed
+  with pytransit). The model parameters are exposed as an ``lmfit.Parameters``
+  at ``TransitModelFit.params``; ``fit()`` returns (and stores as
+  ``fit_result``) an lmfit result with real per-parameter uncertainties and a
+  correctly-counted BIC; and the new ``compare_detrend_options()`` compares
+  the BIC of every combination of detrending parameters without corrupting
+  the fit state. ``VariableArgsFitter`` and the ``model``, ``BIC`` and
+  ``n_fit_parameters`` attributes are gone, ``setup_model()`` is now
+  keyword-only, the no-op ``eccentricity`` parameter has been removed (the
+  orbit has always been circular, and the guards added for it in [#614] are
+  no longer needed), the default inclination bounds are now (50, 90) degrees,
+  ``a`` is bounded below by 1, and the airmass/width/spp trend parameters
+  now default to not varying in fits. The RoadRunner model is built with a
+  widened radius-ratio table (``klims=(0.005, 0.6)``) so that a fitted ``rp``
+  at its upper bound of 0.5 stays strictly inside the table, avoiding an
+  out-of-bounds read in pytransit's native evaluator that crashed the fit on
+  Windows and some macOS builds. [#625]
 
 Bug Fixes
 ^^^^^^^^^
@@ -73,7 +91,16 @@ Bug Fixes
   instead of silently writing ``mag_inst = 0``. [#613]
 + ``TransitModelFit.fit`` now raises an error if the ``eccentricity`` parameter
   has been un-fixed, and warns if a fixed nonzero value is set, instead of
-  silently ignoring the parameter. [#614]
+  silently ignoring the parameter. [#614] The parameter has since been removed
+  entirely as part of the lmfit rewrite. [#625]
++ ``TransitModelFit.setup_model`` no longer sets the orbital radius to
+  infinity when called with the default ``duration`` of zero (the estimate is
+  skipped unless a positive duration is given, and likewise for the planet
+  radius when ``depth`` is zero), and a duration at least as long as the
+  period now raises a clear ``ValueError``. [#625]
++ Comparing the BIC of detrending options no longer requires destructively
+  refitting the model in a notebook loop; ``compare_detrend_options()`` runs
+  each candidate fit on a copy of the parameters. [#625]
 + ``generate_aij_table`` no longer classifies a star as a comparison star based
   on an arbitrarily distant sky match; a match within a couple of arcseconds is
   now required. [#615]
