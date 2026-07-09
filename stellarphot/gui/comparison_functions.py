@@ -13,6 +13,7 @@ from bqplot import Label, Lines
 from ipyautoui.custom import FileChooser
 
 from stellarphot import SourceListData
+from stellarphot.gui.astrowidgets_workarounds import load_catalog
 from stellarphot.gui.custom_widgets import SettingWithTitle, Spinner
 from stellarphot.gui.fits_opener import FitsOpener
 from stellarphot.gui.views import ui_generator
@@ -156,8 +157,14 @@ def make_markers(iw, RD, vsx, ent, name_or_coord=None):
 
     iw.remove_catalog(catalog_label="*")
 
+    # The shapes below must be ones the bqplot ScatterGL frontend actually
+    # draws -- its shader only implements circle, square, arrow, cross,
+    # triangle-up and triangle-down, and silently draws nothing for the rest
+    # (including "diamond" and "plus", even though astro-image-display-api
+    # documents them as supported). "cross" renders as a plus sign.
     if RD:
-        iw.load_catalog(
+        load_catalog(
+            iw,
             _coord_catalog_table(RD),
             use_skycoord=True,
             catalog_label="TESS Targets",
@@ -171,18 +178,20 @@ def make_markers(iw, RD, vsx, ent, name_or_coord=None):
             iw.set_viewport(center=name_or_coord)
 
     if vsx:
-        iw.load_catalog(
+        load_catalog(
+            iw,
             _coord_catalog_table(vsx),
             use_skycoord=True,
             catalog_label="VSX",
             catalog_style={"shape": "square", "color": "blue", "size": 20},
         )
 
-    iw.load_catalog(
+    load_catalog(
+        iw,
         _coord_catalog_table(ent),
         use_skycoord=True,
         catalog_label="APASS comparison",
-        catalog_style={"shape": "diamond", "color": "red", "size": 20},
+        catalog_style={"shape": "triangle-up", "color": "red", "size": 20},
     )
 
 
@@ -237,11 +246,14 @@ def wrap(imagewidget, status_widget):
                 if name.startswith("elim")
             ]
             if not elims:
-                imagewidget.load_catalog(
+                # "cross" renders as a plus sign; "plus" is one of the shapes
+                # the bqplot ScatterGL frontend silently does not draw.
+                load_catalog(
+                    imagewidget,
                     all_table[rat],
                     use_skycoord=True,
                     catalog_label=f"elim{imagewidget.next_elim}",
-                    catalog_style={"shape": "plus", "color": "red", "size": 24},
+                    catalog_style={"shape": "cross", "color": "red", "size": 24},
                 )
             else:
                 for elim in elims:
@@ -627,7 +639,7 @@ class ComparisonViewer:
         legend = ipw.HTML(value="""
         <ul>
         <li>Green circles -- Gaia stars within 2.5 arcmin of target</li>
-        <li>Red diamonds -- Comparison stars from APASS</li>
+        <li>Red triangles -- Comparison stars from APASS</li>
         <li>Blue squares -- VSX variables</li>
         <li>Red + -- Exclude as target or comp</li>
         </ul>

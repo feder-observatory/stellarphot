@@ -7,6 +7,7 @@ from astropy.io import fits
 from astropy.table import Table
 from astrowidgets.bqplot import ImageWidget
 
+from stellarphot.gui.astrowidgets_workarounds import load_catalog
 from stellarphot.gui.custom_widgets import ChooseOrMakeNew
 from stellarphot.gui.fits_opener import FitsOpener
 from stellarphot.gui.views import ui_generator
@@ -467,7 +468,8 @@ class SeeingProfileWidget:
             pass
 
         # ADD MARKER WHERE CLICKED
-        self.iw.load_catalog(
+        load_catalog(
+            self.iw,
             Table(
                 data=[[rad_prof.center[0]], [rad_prof.center[1]]],
                 names=["x", "y"],

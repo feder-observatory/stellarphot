@@ -93,7 +93,7 @@ def test_wrap_toggles_elim_marker():
         catalog,
         use_skycoord=True,
         catalog_label="APASS comparison",
-        catalog_style={"shape": "diamond", "color": "red", "size": 20},
+        catalog_style={"shape": "triangle-up", "color": "red", "size": 20},
     )
 
     status = ipw.HTML()
@@ -113,6 +113,14 @@ def test_wrap_toggles_elim_marker():
     # Click on the star to exclude it...
     callback(iw.viewer.interaction, click, [])
     assert "elim1" in iw.catalog_labels
+
+    # The exclusion marker must be a shape the bqplot ScatterGL frontend
+    # actually draws -- its shader only implements circle, square, arrow,
+    # cross, triangle-up and triangle-down, and silently draws nothing for
+    # the rest. "cross" renders as the plus sign the legend promises.
+    elim_style = iw.get_catalog_style(catalog_label="elim1")
+    assert elim_style["shape"] == "cross"
+    assert elim_style["color"] == "red"
 
     # ...and click again to include it.
     callback(iw.viewer.interaction, click, [])
@@ -233,8 +241,13 @@ def test_make_markers_shapes_and_colors():
 
     cf.make_markers(iw, [], vsx, apass, name_or_coord=None)
 
+    # The shapes must be ones the bqplot ScatterGL frontend actually draws --
+    # its shader only implements circle, square, arrow, cross, triangle-up
+    # and triangle-down, and silently draws nothing for the rest (including
+    # "diamond" and "plus", even though astro-image-display-api documents
+    # them as supported).
     apass_style = iw.get_catalog_style(catalog_label="APASS comparison")
-    assert apass_style["shape"] == "diamond"
+    assert apass_style["shape"] == "triangle-up"
     assert apass_style["color"] == "red"
 
     vsx_style = iw.get_catalog_style(catalog_label="VSX")
