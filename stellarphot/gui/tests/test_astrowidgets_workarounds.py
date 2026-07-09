@@ -66,3 +66,24 @@ def test_load_catalog_does_not_warn_about_dtype():
 
     # The catalog should still have been loaded.
     assert "test" in iw.catalog_labels
+
+
+def test_load_catalog_applies_catalog_style_size():
+    # astrowidgets 0.5.x plot_named_markers hard-codes default_size=100 on
+    # the ScatterGL mark and never uses the size from catalog_style, so all
+    # catalog markers render at the same (large) size. The load_catalog
+    # wrapper sets the mark's default_size from the requested size, using
+    # the same size**2 convention as astrowidgets' set_catalog_style.
+    iw = ImageWidget()
+    iw.load_image(np.zeros((10, 10)))
+    catalog = Table({"x": [2.0, 5.0], "y": [3.0, 7.0]})
+
+    load_catalog(
+        iw,
+        catalog,
+        catalog_label="test",
+        catalog_style={"shape": "cross", "color": "red", "size": 20},
+    )
+
+    mark = iw._astro_im._scatter_marks["test"]
+    assert mark.default_size == 400

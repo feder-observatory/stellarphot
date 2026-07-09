@@ -93,7 +93,7 @@ def test_wrap_toggles_elim_marker():
         catalog,
         use_skycoord=True,
         catalog_label="APASS comparison",
-        catalog_style={"shape": "triangle-up", "color": "red", "size": 20},
+        catalog_style={"shape": "cross", "color": "red", "size": 20},
     )
 
     status = ipw.HTML()
@@ -117,10 +117,13 @@ def test_wrap_toggles_elim_marker():
     # The exclusion marker must be a shape the bqplot ScatterGL frontend
     # actually draws -- its shader only implements circle, square, arrow,
     # cross, triangle-up and triangle-down, and silently draws nothing for
-    # the rest. "cross" renders as the plus sign the legend promises.
+    # the rest.
     elim_style = iw.get_catalog_style(catalog_label="elim1")
-    assert elim_style["shape"] == "cross"
+    assert elim_style["shape"] == "triangle-up"
     assert elim_style["color"] == "red"
+    # Sizes are linear (bqplot draws size**2 pixels of area), so anything
+    # much above 10 dwarfs the stars it is supposed to mark.
+    assert elim_style["size"] == 12
 
     # ...and click again to include it.
     callback(iw.viewer.interaction, click, [])
@@ -246,13 +249,19 @@ def test_make_markers_shapes_and_colors():
     # and triangle-down, and silently draws nothing for the rest (including
     # "diamond" and "plus", even though astro-image-display-api documents
     # them as supported).
+    # "cross" renders as the plus sign the legend promises.
     apass_style = iw.get_catalog_style(catalog_label="APASS comparison")
-    assert apass_style["shape"] == "triangle-up"
+    assert apass_style["shape"] == "cross"
     assert apass_style["color"] == "red"
 
     vsx_style = iw.get_catalog_style(catalog_label="VSX")
     assert vsx_style["shape"] == "square"
     assert vsx_style["color"] == "blue"
+
+    # Sizes are linear (bqplot draws size**2 pixels of area), so anything
+    # much above 10 dwarfs the stars it is supposed to mark.
+    assert apass_style["size"] == 10
+    assert vsx_style["size"] == 10
 
 
 def test_show_circle_draws_bqplot_circle():

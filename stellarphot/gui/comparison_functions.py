@@ -168,7 +168,7 @@ def make_markers(iw, RD, vsx, ent, name_or_coord=None):
             _coord_catalog_table(RD),
             use_skycoord=True,
             catalog_label="TESS Targets",
-            catalog_style={"shape": "circle", "color": "green", "size": 20},
+            catalog_style={"shape": "circle", "color": "green", "size": 10},
         )
 
     if name_or_coord is not None:
@@ -183,7 +183,7 @@ def make_markers(iw, RD, vsx, ent, name_or_coord=None):
             _coord_catalog_table(vsx),
             use_skycoord=True,
             catalog_label="VSX",
-            catalog_style={"shape": "square", "color": "blue", "size": 20},
+            catalog_style={"shape": "square", "color": "blue", "size": 10},
         )
 
     load_catalog(
@@ -191,7 +191,7 @@ def make_markers(iw, RD, vsx, ent, name_or_coord=None):
         _coord_catalog_table(ent),
         use_skycoord=True,
         catalog_label="APASS comparison",
-        catalog_style={"shape": "triangle-up", "color": "red", "size": 20},
+        catalog_style={"shape": "cross", "color": "red", "size": 10},
     )
 
 
@@ -246,14 +246,12 @@ def wrap(imagewidget, status_widget):
                 if name.startswith("elim")
             ]
             if not elims:
-                # "cross" renders as a plus sign; "plus" is one of the shapes
-                # the bqplot ScatterGL frontend silently does not draw.
                 load_catalog(
                     imagewidget,
                     all_table[rat],
                     use_skycoord=True,
                     catalog_label=f"elim{imagewidget.next_elim}",
-                    catalog_style={"shape": "cross", "color": "red", "size": 24},
+                    catalog_style={"shape": "triangle-up", "color": "red", "size": 12},
                 )
             else:
                 for elim in elims:
@@ -639,9 +637,9 @@ class ComparisonViewer:
         legend = ipw.HTML(value="""
         <ul>
         <li>Green circles -- Gaia stars within 2.5 arcmin of target</li>
-        <li>Red triangles -- Comparison stars from APASS</li>
+        <li>Red + -- Comparison stars from APASS</li>
         <li>Blue squares -- VSX variables</li>
-        <li>Red + -- Exclude as target or comp</li>
+        <li>Red triangles -- Exclude as target or comp</li>
         </ul>
         """)
 
@@ -860,9 +858,10 @@ class ComparisonViewer:
         radius_pixels = (radius / pixel_scale).to(u.pixel).value
 
         # Draw the circle as a bqplot Lines mark rather than a catalog
-        # marker: astrowidgets 0.5.0 ignores the size in catalog_style, and a
-        # catalog entry would also show up as a clickable "star" in the click
-        # handler and in generate_table.
+        # marker: catalog marker sizes are in screen pixels, so they cannot
+        # represent a fixed on-sky radius, and a catalog entry would also
+        # show up as a clickable "star" in the click handler and in
+        # generate_table.
         x, y = self.iw.get_image().wcs.world_to_pixel(self.target_coord)
         theta = np.linspace(0, 2 * np.pi, 200)
         mark = Lines(
