@@ -31,7 +31,7 @@ Other Changes and Additions
 + The ``change_to_tmp_dir`` test fixture, previously duplicated in four test
   modules, is now defined once in the top-level ``conftest.py``. [#426]
 + The image viewers in the seeing-profile and comparison-star widgets now use
-  the bqplot backend introduced in astrowidgets 0.5.0, and stellarphot no
+  the bqplot backend in astrowidgets (0.5.1 or later), and stellarphot no
   longer depends directly on ginga. In the comparison viewer, a plain click
   (instead of shift-click) now toggles whether a star is excluded, and APASS
   comparison stars are drawn as diamonds rather than triangles. The circle

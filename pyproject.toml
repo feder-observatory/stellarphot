@@ -37,7 +37,7 @@ dependencies = [
 # The Jupyter notebook / widget stack. All of stellarphot's GUIs run in
 # notebooks, so a single `gui` extra covers the whole interactive experience.
 gui = [
-    "astrowidgets >=0.5.0",  # First release with the bqplot backend stellarphot uses
+    "astrowidgets >=0.5.1",  # First release whose bqplot backend renders correctly (0.5.0 had display bugs)
     "astro-image-display-api >=0.2.1",  # astrowidgets requires this anyway; the
                                         # explicit pin documents the API version
                                         # stellarphot is written against
