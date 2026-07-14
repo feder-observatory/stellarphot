@@ -8,14 +8,8 @@ because they are data *retrieval* helpers rather than data-structure
 definitions. ``core.py`` holds the table classes only.
 """
 
-import logging
-import time
-import warnings
-
 import numpy as np
 from astropy import units as u
-from astropy.table import Table, unique
-from astroquery.xmatch import XMatch
 
 from .core import CatalogData
 from .settings import PassbandMap
@@ -26,56 +20,37 @@ __all__ = [
     "refcat2",
 ]
 
-logger = logging.getLogger(__name__)
 
-
-def _attach_gaia_ids(catalog, xmatch_result, index_col="_sp_index"):
+def _iau_designation_ids(acronym, ra_deg, dec_deg):
     """
-    Attach Gaia source_ids from an XMatch result to a catalog, joining on an
-    index column rather than on row order, which XMatch does not preserve.
+    Build coordinate-based identifiers following the guidelines in the
+    `IAU designation specification <https://cds.unistra.fr/Dic/iau-spec.html>`_.
 
     Parameters
     ----------
-    catalog : `astropy.table.Table`
-        The table the IDs are being attached to. The values of ``index_col``
-        in ``xmatch_result`` are row numbers into this table.
+    acronym : str
+        Acronym the designations start with, e.g. ``"APASSSP"``.
 
-    xmatch_result : `astropy.table.Table`
-        Result of an XMatch query whose uploaded table included ``index_col``.
-        Must contain ``index_col``, ``angDist`` and ``source_id`` columns.
-        This table is sorted in place.
-
-    index_col : str, optional
-        Name of the column in ``xmatch_result`` holding the row number of the
-        matching ``catalog`` row.
+    ra_deg, dec_deg : array-like of float
+        Right ascension and declination in degrees.
 
     Returns
     -------
-    `astropy.table.Table`
-        The matched rows of ``catalog``, in their original order, with a new
-        ``id`` column holding the Gaia source_id. Rows with no match are
-        dropped, with a warning saying how many.
+    list of str
+        One designation per coordinate, e.g. ``"APASSSP J+359.9896+00.0122"``.
+
+    Notes
+    -----
+    The formats below include 4 digits after the decimal point (accuracy of
+    about 0.5 arcsec), a leading sign (+ or -) and leading zeros so that the
+    RA is always three digits before the decimal and the Dec is always two
+    digits before the decimal. IAU says there is a space between the acronym
+    and the coordinates.
     """
-    # When one input row matches several Gaia sources, keep only the nearest.
-    xmatch_result.sort([index_col, "angDist"])
-    nearest = unique(xmatch_result, keys=index_col, keep="first")
-
-    n_unmatched = len(catalog) - len(nearest)
-    if n_unmatched > 0:
-        warnings.warn(
-            f"{n_unmatched} of {len(catalog)} catalog entries had no Gaia "
-            "match and have been dropped.",
-            stacklevel=2,
-        )
-
-    # nearest[index_col] holds the row numbers of the catalog rows that got a
-    # match — one per matched star, sorted ascending. Indexing catalog with it
-    # does two things at once: it drops the unmatched rows (their index never
-    # appears in the result) and it puts the matched rows in the same order as
-    # nearest, so the source_id assignment below lines up row-for-row.
-    catalog = catalog[np.asarray(nearest[index_col])]
-    catalog["id"] = np.asarray(nearest["source_id"])
-    return catalog
+    return [
+        f"{acronym} J{ra:0=+9.4f}{dec:0=+8.4f}"
+        for ra, dec in zip(ra_deg, dec_deg, strict=True)
+    ]
 
 
 def _process_refcat2(catalog):
@@ -84,7 +59,7 @@ def _process_refcat2(catalog):
 
     1. Filter out galaxies from the catalog.
     2. Only keep stars that are in the Gaia DR2 catalog.
-    3. Add the Gaia DR2 ID number to the catalog as the ID column.
+    3. Add a coordinate-based designation to the catalog as the ID column.
     """
     # 1.
     # The refcat2 paper says that "Virtually all galaxies can be rejected by
@@ -103,39 +78,17 @@ def _process_refcat2(catalog):
     catalog = catalog[~catalog["e_Gmag"].mask]
 
     # 3.
-    # Everything left should be a Gaia star, so match to that.
-    # This adds some not-insignificant time to getting the catalog, but
-    # the result is automatically cached by astroquery, which helps.
-    #
-    # Upload only the coordinates plus a row index; uploading the full
-    # 40+ column table makes the query much slower and more likely to fail,
-    # and the index is the only reliable way to join the result back to the
-    # catalog because XMatch does not preserve row order.
-    upload = Table(
-        {
-            "_sp_index": np.arange(len(catalog)),
-            "RA_ICRS": catalog["RA_ICRS"],
-            "DE_ICRS": catalog["DE_ICRS"],
-        }
-    )
-    start = time.perf_counter()
-    result = XMatch.query(
-        cat1=upload,
-        cat2="vizier:gaia_dr2_j2015p5",  # "vizier:I/345/gaia2",
-        max_distance=0.01 * u.arcsec,
-        colRA1="RA_ICRS",
-        colDec1="DE_ICRS",
-    )
-    elapsed = time.perf_counter() - start
-    logger.info(
-        "XMatch query for Gaia DR2 IDs took %.1f sec "
-        "(%d rows uploaded, %d matches returned)",
-        elapsed,
-        len(upload),
-        len(result),
+    # Refcat2 has no ID column, so generate an IAU-style designation from the
+    # coordinates, as apass_dr9 does. Nothing downstream needs the ID to be a
+    # Gaia ID, and generating it locally avoids a crossmatch against a service
+    # (CDS XMatch) that has no mirrors, unlike the Vizier queries.
+    catalog["id"] = _iau_designation_ids(
+        "REFCAT2SP",
+        np.asarray(catalog["RA_ICRS"]),
+        np.asarray(catalog["DE_ICRS"]),
     )
 
-    return _attach_gaia_ids(catalog, result)
+    return catalog
 
 
 def apass_dr9(
@@ -245,20 +198,12 @@ def apass_dr9(
         magnitude_limit_passband=magnitude_limit_passband,
     )
 
-    # IAU requires an acronym to star, so make it APASS plus SP for stellarphot
-    designation_acronym = "APASSSP"
-
-    # The formats below include 4 digits after the decimal point (accuracy of about
-    # 0.5 arcsec), a leading sign (+ or -) and leading zeros so that the RA is always
-    # three digits before the decimal and the DEC is always two digits before the
-    # decimal.
-    coord_string = [
-        f"J{ra.to('degree').value:0=+9.4f}{dec.to('degree').value:0=+8.4f}"
-        for ra, dec in zip(raw_catalog["ra"], raw_catalog["dec"], strict=True)
-    ]
-
-    # IAU says there is a space between the acronym and the coordinates.
-    raw_catalog["id"] = [f"{designation_acronym} {coord}" for coord in coord_string]
+    # IAU requires an acronym to start, so make it APASS plus SP for stellarphot
+    raw_catalog["id"] = _iau_designation_ids(
+        "APASSSP",
+        raw_catalog["ra"].to("degree").value,
+        raw_catalog["dec"].to("degree").value,
+    )
 
     # Translate the passbands to AAVSO standard names.
     # No need to change B and V since those are already correct.
@@ -412,9 +357,10 @@ def refcat2(
 
     Notes
     -----
-    Refcat2 includes Gaia DR2 RA/Dec and magnitudes but does **not** include
-    the Gaia DR2 ID number. This function looks up the Gaia DR2 ID number and uses
-    it as the ID column.
+    Refcat2 does not include an identifier column. This function generates
+    an ID based on the coordinates of the refcat2 star, following the
+    guidelines in the
+    `IAU designation specification <https://cds.unistra.fr/Dic/iau-spec.html>`_.
 
     The reference for the refcat2 paper is:
 
@@ -422,8 +368,8 @@ def refcat2(
     https://iopscience.iop.org/article/10.3847/1538-4357/aae386
     """
     refcat2_colnames = {
-        # There is no refcat2 ID number, but below we will match the Gaia DR2
-        # ID number to the RA/Dec and use that as the ID.
+        # There is no refcat2 ID number; a coordinate-based designation is
+        # generated in _process_refcat2 and used as the ID.
         "RA_ICRS": "ra",
         "DE_ICRS": "dec",
     }

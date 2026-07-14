@@ -28,6 +28,13 @@ Other Changes and Additions
   They remain available as top-level names (``from stellarphot import
   apass_dr9``) and, for one or two releases, from ``stellarphot.core`` via a
   back-compat shim that raises an ``AstropyDeprecationWarning``. [#194]
++ ``refcat2`` IDs are now locally generated IAU-style coordinate designations
+  (``REFCAT2SP J+RRR.RRRR±DD.DDDD``) instead of Gaia DR2 source_ids fetched
+  from CDS XMatch. The id format changes, and stars are no longer silently
+  dropped when the Gaia crossmatch misses (nothing is dropped anymore). The
+  XMatch service has no mirror — unlike the Vizier queries, which fall back
+  across several servers — and an XMatch outage previously broke ``refcat2()``
+  entirely.
 + The ``change_to_tmp_dir`` test fixture, previously duplicated in four test
   modules, is now defined once in the top-level ``conftest.py``. [#426]
 + The duplicated logging setup in ``single_image_photometry`` and
