@@ -34,7 +34,8 @@ Other Changes and Additions
   dropped when the Gaia crossmatch misses (nothing is dropped anymore). The
   XMatch service has no mirror — unlike the Vizier queries, which fall back
   across several servers — and an XMatch outage previously broke ``refcat2()``
-  entirely.
+  entirely. This supersedes the XMatch row-index join fix from #586, since
+  there is no XMatch query left to join back. [#628]
 + The ``change_to_tmp_dir`` test fixture, previously duplicated in four test
   modules, is now defined once in the top-level ``conftest.py``. [#426]
 + The duplicated logging setup in ``single_image_photometry`` and
@@ -78,13 +79,6 @@ Bug Fixes
   when a server returns an empty result (as happens when a server is up but
   its database is unreachable), and raises an informative ``RuntimeError``
   instead of an ``IndexError`` if every server comes back empty. [#585]
-+ ``refcat2`` now joins the Gaia DR2 IDs from the CDS XMatch service to the
-  catalog on an explicit row index instead of relying on row order, which
-  XMatch does not preserve. Previously large fields could either crash with
-  ``ValueError: Inconsistent data column lengths`` or silently assign the
-  wrong Gaia ID to most stars. Only the coordinates are uploaded to XMatch
-  now, making the query much faster and less likely to fail on large
-  fields. [#586]
 + ``PhotometryData.add_bjd_col`` no longer sets the BJD to NaN for the whole
   table when a single row is missing an RA or Dec value. The BJD is now
   computed for every row that has coordinates and only the rows without

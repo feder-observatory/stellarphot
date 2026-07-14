@@ -272,7 +272,9 @@ def test_find_refcat2(mag_limit, mag_limit_band):
     # The IDs must be unique per star. The catalog is tidy (one row per
     # star per passband), so compare the number of distinct IDs to the number
     # of distinct positions.
-    n_stars = len(set(ra.value for ra in all_refcat2["ra"]))
+    n_stars = len(
+        set(zip(all_refcat2["ra"].value, all_refcat2["dec"].value, strict=True))
+    )
     assert len(set(all_refcat2["id"])) == n_stars
 
     # Spot check: the star nearest the field center (EY UMa) must carry the
