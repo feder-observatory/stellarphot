@@ -28,6 +28,21 @@ Other Changes and Additions
   They remain available as top-level names (``from stellarphot import
   apass_dr9``) and, for one or two releases, from ``stellarphot.core`` via a
   back-compat shim that raises an ``AstropyDeprecationWarning``. [#194]
++ ``refcat2`` IDs are now locally generated IAU-style coordinate designations
+  (``REFCAT2SP JRRR.RRRRR±DD.DDDDD``, coordinates truncated to five decimal
+  places) instead of Gaia DR2 source_ids fetched from CDS XMatch. The id
+  format changes, and stars are no longer silently dropped when the Gaia
+  crossmatch misses (nothing is dropped anymore). The XMatch service has no
+  mirror — unlike the Vizier queries, which fall back across several servers
+  — and an XMatch outage previously broke ``refcat2()`` entirely. This
+  supersedes the XMatch row-index join fix from #586, since there is no
+  XMatch query left to join back. [#628]
++ Coordinate-based designations now follow the IAU designation specification:
+  coordinates are truncated instead of rounded, so a designation names the
+  field that actually contains the star, and the RA no longer carries a
+  leading ``+`` sign (the spec puts a sign only on the Dec). As a result,
+  ``apass_dr9`` ids all change; ids are regenerated on every fetch, so
+  nothing persisted is affected. [#628]
 + The ``change_to_tmp_dir`` test fixture, previously duplicated in four test
   modules, is now defined once in the top-level ``conftest.py``. [#426]
 + The duplicated logging setup in ``single_image_photometry`` and
@@ -71,13 +86,6 @@ Bug Fixes
   when a server returns an empty result (as happens when a server is up but
   its database is unreachable), and raises an informative ``RuntimeError``
   instead of an ``IndexError`` if every server comes back empty. [#585]
-+ ``refcat2`` now joins the Gaia DR2 IDs from the CDS XMatch service to the
-  catalog on an explicit row index instead of relying on row order, which
-  XMatch does not preserve. Previously large fields could either crash with
-  ``ValueError: Inconsistent data column lengths`` or silently assign the
-  wrong Gaia ID to most stars. Only the coordinates are uploaded to XMatch
-  now, making the query much faster and less likely to fail on large
-  fields. [#586]
 + ``PhotometryData.add_bjd_col`` no longer sets the BJD to NaN for the whole
   table when a single row is missing an RA or Dec value. The BJD is now
   computed for every row that has coordinates and only the rows without
