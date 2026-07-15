@@ -37,9 +37,10 @@ from stellarphot.catalogs import (
 # being up.
 EY_UMA_COORD = SkyCoord(ra=135.58650087 * u.deg, dec=49.81921088 * u.deg)
 
-# The coordinate-based designation refcat2() generates for EY UMa, built from
-# the star's RA_ICRS/DE_ICRS in data/all_refcat2_ey_uma.ecsv.
-EY_UMA_REFCAT2_ID = "REFCAT2SP J+135.5865+49.8192"
+# The coordinate-based designation refcat2() generates for EY UMa, built by
+# truncating the star's RA_ICRS/DE_ICRS in data/all_refcat2_ey_uma.ecsv
+# (135.58651998, 49.81918018) to five decimal places.
+EY_UMA_REFCAT2_ID = "REFCAT2SP J135.58651+49.81918"
 
 
 def test_fetchers_importable_from_catalogs():
@@ -105,8 +106,10 @@ def test_catalog_from_vizier_search_apass():
     assert len(apass) == 6
 
     # Calculated the value below by constructing a coordinate-based
-    # designation following IAU guidelines.
-    assert apass["id"][0] == "APASSSP J+359.9896+00.0122"
+    # designation following IAU guidelines from the star's APASS coordinates
+    # (RA 359.989602, Dec 0.012185; coordinates truncated, not rounded, so
+    # the Dec gives .0121).
+    assert apass["id"][0] == "APASSSP J359.9896+00.0121"
 
     just_V = apass[apass["passband"] == "V"]
     assert np.abs(just_V["mag"][0] - 15.559) < 1e-6
@@ -290,26 +293,87 @@ def test_find_refcat2(mag_limit, mag_limit_band):
 
 def test_iau_designation_ids_format():
     # The designation format: acronym, a space, then J + RA and Dec in
-    # degrees, each with a leading sign, zero-padded (RA to three digits
-    # before the decimal, Dec to two) and four digits after the decimal.
+    # degrees, RA unsigned and Dec signed per the IAU spec, zero-padded (RA
+    # to three digits before the decimal, Dec to two) and, at the default
+    # precision, four digits after the decimal. Per the IAU spec the
+    # coordinates are truncated, not rounded, so 359.98957 gives .9895 and
+    # 0.01223 gives .0122.
     ids = _iau_designation_ids(
         "REFCAT2SP",
         [135.0, 45.5, 359.98957],
         [49.0, -0.5, 0.01223],
     )
     assert ids == [
-        "REFCAT2SP J+135.0000+49.0000",
-        "REFCAT2SP J+045.5000-00.5000",
-        "REFCAT2SP J+359.9896+00.0122",
+        "REFCAT2SP J135.0000+49.0000",
+        "REFCAT2SP J045.5000-00.5000",
+        "REFCAT2SP J359.9895+00.0122",
     ]
 
 
-def test_iau_designation_ids_matches_apass_precedent():
-    # The helper must reproduce the designation apass_dr9 has always
-    # generated (see test_catalog_from_vizier_search_apass).
-    assert _iau_designation_ids("APASSSP", [359.9896], [0.0122]) == [
-        "APASSSP J+359.9896+00.0122"
+def test_iau_designation_ids_matches_apass_star():
+    # The helper must reproduce the designation apass_dr9 generates for the
+    # star in test_catalog_from_vizier_search_apass (RA 359.989602,
+    # Dec 0.012185, truncated to four decimals).
+    assert _iau_designation_ids("APASSSP", [359.989602], [0.012185]) == [
+        "APASSSP J359.9896+00.0121"
     ]
+
+
+def test_iau_designation_ids_precision():
+    # precision sets the number of decimal digits; truncation applies at
+    # whatever precision is requested.
+    assert _iau_designation_ids(
+        "REFCAT2SP", [135.58651998], [49.81918018], precision=5
+    ) == ["REFCAT2SP J135.58651+49.81918"]
+
+
+def test_iau_designation_ids_truncates_at_bin_edges():
+    # Truncation must be exact at bin edges: naive trunc(x * 10**p) / 10**p
+    # turns 135.5865 into .5864 (135.5865 * 10_000 is 1355864.999...), and
+    # format-then-drop-a-digit turns 135.58651998 into .58652 via round-up
+    # carry. Both inputs must come out unchanged.
+    assert _iau_designation_ids("REFCAT2SP", [135.5865], [49.8191]) == [
+        "REFCAT2SP J135.5865+49.8191"
+    ]
+    assert _iau_designation_ids(
+        "REFCAT2SP", [135.58651998], [49.81918018], precision=5
+    ) == ["REFCAT2SP J135.58651+49.81918"]
+
+
+def test_iau_designation_ids_boundaries():
+    # RA just below 360 must truncate to 359.9999, not round out of range to
+    # 360.0000, and Dec just below the pole must stay below 90. RA at or
+    # above 360 wraps into [0, 360).
+    assert _iau_designation_ids("REFCAT2SP", [359.99996], [89.99996]) == [
+        "REFCAT2SP J359.9999+89.9999"
+    ]
+    assert _iau_designation_ids("REFCAT2SP", [360.0], [-89.99996]) == [
+        "REFCAT2SP J000.0000-89.9999"
+    ]
+
+
+def test_iau_designation_ids_no_collision_at_refcat2_precision():
+    # Two stars 0.11 arcsec apart collide in the same bin at the default
+    # four decimals but get distinct ids at refcat2's five decimals.
+    ra = [135.00001, 135.00004]
+    dec = [49.00001, 49.00004]
+    default_ids = _iau_designation_ids("REFCAT2SP", ra, dec)
+    assert default_ids[0] == default_ids[1]
+    refcat2_ids = _iau_designation_ids("REFCAT2SP", ra, dec, precision=5)
+    assert refcat2_ids == [
+        "REFCAT2SP J135.00001+49.00001",
+        "REFCAT2SP J135.00004+49.00004",
+    ]
+
+
+@pytest.mark.parametrize("bad", [np.nan, np.inf, -np.inf])
+def test_iau_designation_ids_rejects_non_finite(bad):
+    # A masked or corrupt coordinate must raise instead of silently
+    # producing a garbage designation.
+    with pytest.raises(ValueError, match="finite"):
+        _iau_designation_ids("REFCAT2SP", [bad], [49.0])
+    with pytest.raises(ValueError, match="finite"):
+        _iau_designation_ids("REFCAT2SP", [135.0], [bad])
 
 
 def test_process_refcat2_filters_and_ids():
@@ -338,10 +402,10 @@ def test_process_refcat2_filters_and_ids():
 
     assert len(processed) == 4
     assert list(processed["id"]) == [
-        "REFCAT2SP J+135.0000+49.0000",
-        "REFCAT2SP J+135.1000+49.1000",
-        "REFCAT2SP J+135.2000+49.2000",
-        "REFCAT2SP J+135.3000+49.3000",
+        "REFCAT2SP J135.00000+49.00000",
+        "REFCAT2SP J135.10000+49.10000",
+        "REFCAT2SP J135.20000+49.20000",
+        "REFCAT2SP J135.30000+49.30000",
     ]
 
 

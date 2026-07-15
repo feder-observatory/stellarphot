@@ -8,6 +8,8 @@ because they are data *retrieval* helpers rather than data-structure
 definitions. ``core.py`` holds the table classes only.
 """
 
+from decimal import ROUND_DOWN, Decimal
+
 import numpy as np
 from astropy import units as u
 
@@ -21,9 +23,9 @@ __all__ = [
 ]
 
 
-def _iau_designation_ids(acronym, ra_deg, dec_deg):
+def _iau_designation_ids(acronym, ra_deg, dec_deg, precision=4):
     """
-    Build coordinate-based identifiers following the guidelines in the
+    Build coordinate-based identifiers based on the guidelines in the
     `IAU designation specification <https://cds.unistra.fr/Dic/iau-spec.html>`_.
 
     Parameters
@@ -32,23 +34,47 @@ def _iau_designation_ids(acronym, ra_deg, dec_deg):
         Acronym the designations start with, e.g. ``"APASSSP"``.
 
     ra_deg, dec_deg : array-like of float
-        Right ascension and declination in degrees.
+        Right ascension and declination in degrees. Must be finite.
+
+    precision : int, optional
+        Number of digits after the decimal point. The IAU spec says the
+        precision should be commensurate with the positional accuracy of the
+        catalog; the default of 4 (0.36 arcsec bins) suits APASS DR9.
 
     Returns
     -------
     list of str
-        One designation per coordinate, e.g. ``"APASSSP J+359.9896+00.0122"``.
+        One designation per coordinate, e.g. ``"APASSSP J359.9896+00.0121"``.
 
     Notes
     -----
-    The formats below include 4 digits after the decimal point (accuracy of
-    about 0.5 arcsec), a leading sign (+ or -) and leading zeros so that the
-    RA is always three digits before the decimal and the Dec is always two
-    digits before the decimal. IAU says there is a space between the acronym
-    and the coordinates.
+    As the IAU spec requires, coordinates are truncated (not rounded), so a
+    designation names the small field on the sky that actually contains the
+    source, there is a space between the acronym and the coordinates, RA is
+    unsigned while Dec always carries a sign, and each coordinate is
+    zero-padded to fixed width (RA to three digits before the decimal, Dec
+    to two). RA is reduced modulo 360 so it stays in [0, 360).
     """
+    ra_deg = np.asarray(ra_deg, dtype=float)
+    dec_deg = np.asarray(dec_deg, dtype=float)
+    if not (np.isfinite(ra_deg).all() and np.isfinite(dec_deg).all()):
+        raise ValueError(
+            "Coordinates must be finite to generate IAU designations; "
+            "input contains NaN, inf, or masked values."
+        )
+
+    # Truncation via arithmetic (trunc(x * 10**p) / 10**p) or via formatting
+    # with an extra digit both misbehave at float bin edges; Decimal on the
+    # float's repr truncates the printed digits exactly.
+    quantum = Decimal(1).scaleb(-precision)
+    ra_fmt = f"0{precision + 4}.{precision}f"
+    dec_fmt = f"+0{precision + 4}.{precision}f"
+
+    def _trunc(value):
+        return Decimal(repr(float(value))).quantize(quantum, rounding=ROUND_DOWN)
+
     return [
-        f"{acronym} J{ra:0=+9.4f}{dec:0=+8.4f}"
+        f"{acronym} J{format(_trunc(ra % 360), ra_fmt)}{format(_trunc(dec), dec_fmt)}"
         for ra, dec in zip(ra_deg, dec_deg, strict=True)
     ]
 
@@ -82,10 +108,14 @@ def _process_refcat2(catalog):
     # coordinates, as apass_dr9 does. Nothing downstream needs the ID to be a
     # Gaia ID, and generating it locally avoids a crossmatch against a service
     # (CDS XMatch) that has no mirrors, unlike the Vizier queries.
+    # precision=5 (0.036 arcsec bins) matches Gaia DR2's sub-milliarcsecond
+    # positions and guarantees unique ids: Gaia DR2 resolves nothing closer
+    # than ~0.4 arcsec, so no two refcat2 stars can share a bin.
     catalog["id"] = _iau_designation_ids(
         "REFCAT2SP",
         np.asarray(catalog["RA_ICRS"]),
         np.asarray(catalog["DE_ICRS"]),
+        precision=5,
     )
 
     return catalog
