@@ -1,13 +1,11 @@
 import os
 import warnings
-from collections import namedtuple
 from copy import deepcopy
 
 import ipywidgets as ipw
 import matplotlib
 import pytest
 from astropy.nddata import CCDData
-from astrowidgets import ImageWidget
 from photutils.datasets import make_noise_image
 
 from stellarphot.gui import (
@@ -33,34 +31,11 @@ from stellarphot.settings.constants import (
 TEST_CAMERA_VALUES = deepcopy(TEST_CAMERA_VALUES)
 
 
-def test_keybindings():
-    def simple_bindmap(bindmap):
-        bound_keys = {}
-        # The keys of the event map are...messy. This converts them to strings
-        for key in bindmap.keys():
-            modifier = key[1]
-            key_name = key[2]
-            bound_keys[str(key[0]) + "".join(modifier) + key_name] = key
-        return bound_keys
-
-    # This test assumes the ginga widget backend...
-    iw = ImageWidget()
-    original_bindings = iw._viewer.get_bindmap().eventmap
-
-    bound_keys = simple_bindmap(original_bindings)
-    # Spot check a couple of things before we run our function
-    assert "Nonekp_D" in bound_keys
-    assert "Nonekp_+" in bound_keys
-    assert "Nonekp_left" not in bound_keys
-
-    # rebind
-    spf.set_keybindings(iw)
-    new_bindings = iw._viewer.get_bindmap().eventmap
-    bound_keys = simple_bindmap(new_bindings)
-    assert "Nonekp_D" not in bound_keys
-    assert "Nonekp_+" in bound_keys
-    # Yes, the line below is correct...
-    assert new_bindings[bound_keys["Nonekp_left"]]["name"] == "pan_right"
+def make_click_event(x, y):
+    """
+    Make a bqplot mouse-click payload like the one the front end sends.
+    """
+    return {"event": "click", "domain": {"x": x, "y": y}}
 
 
 def test_seeing_profile_object_creation():
@@ -110,11 +85,6 @@ def test_seeing_profile_properties(tmp_path, profile_stars):
     # default values in the model.
     assert profile_widget.aperture_settings.value == PhotometryApertures().model_dump()
 
-    # Get the event handler that updates plots
-    handler = profile_widget._make_show_event()
-
-    # Make a mock event object
-    Event = namedtuple("Event", ["data_x", "data_y"])
     star_loc_x, star_loc_y = profile_stars["x_mean"][0], profile_stars["y_mean"][0]
     # Sending a mock event will generate plots that we don't want to see
     # so set the matplotlib backend to a non-interactive one
@@ -124,7 +94,13 @@ def test_seeing_profile_properties(tmp_path, profile_stars):
     # a couple of times we generate this warning as values are changed.
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        handler(profile_widget.iw, Event(star_loc_x, star_loc_y))
+        # Simulate a click by sending the same message the bqplot front end
+        # would send to the production click dispatcher.
+        profile_widget._on_click_message(
+            profile_widget.iw.viewer.interaction,
+            make_click_event(star_loc_x, star_loc_y),
+            [],
+        )
 
         # The FWHM should be close to 9.6
         assert 9 < profile_widget.aperture_settings.value["fwhm_estimate"] < 10
@@ -184,7 +160,7 @@ def test_seeing_profile_save_box_title(tmp_path):
     assert AP_SETTING_SAVED in profile_widget.ap_title.value
 
 
-def test_seeing_profile_error_messages_no_star(tmp_path):
+def test_seeing_profile_error_messages_no_star(tmp_path, capsys):
     # Make sure the appropriate error message is displayed when a click happens on
     # a region with no star, and that the message only appears once.
     profile_widget = spf.SeeingProfileWidget(
@@ -203,11 +179,6 @@ def test_seeing_profile_error_messages_no_star(tmp_path):
     profile_widget.fits_file.set_file("test.fits", tmp_path)
     profile_widget.load_fits()
 
-    # Get the event handler that updates plots
-    handler = profile_widget._make_show_event()
-
-    # Make a mock event object
-    Event = namedtuple("Event", ["data_x", "data_y"])
     star_loc_x, star_loc_y = SHAPE[0] // 2, SHAPE[1] // 2
     # Sending a mock event will generate plots that we don't want to see
     # so set the matplotlib backend to a non-interactive one
@@ -220,7 +191,11 @@ def test_seeing_profile_error_messages_no_star(tmp_path):
         assert len(profile_widget.error_console.outputs) == 0
 
         # Clicking once should generate an error...
-        handler(profile_widget.iw, Event(star_loc_x, star_loc_y))
+        profile_widget._on_click_message(
+            profile_widget.iw.viewer.interaction,
+            make_click_event(star_loc_x, star_loc_y),
+            [],
+        )
         assert len(profile_widget.error_console.outputs) == 1
         assert (
             "No star found at this location"
@@ -228,8 +203,47 @@ def test_seeing_profile_error_messages_no_star(tmp_path):
         )
 
         # Clicking a second time should also just have one error
-        handler(profile_widget.iw, Event(star_loc_x, star_loc_y))
+        profile_widget._on_click_message(
+            profile_widget.iw.viewer.interaction,
+            make_click_event(star_loc_x, star_loc_y),
+            [],
+        )
         assert len(profile_widget.error_console.outputs) == 1
+
+    # The message reaches the user through error_console only; it should
+    # not also be printed to stdout. (Other widgets write terminal control
+    # sequences to stdout, so only check for the message itself.)
+    assert "No star found" not in capsys.readouterr().out
+
+
+def test_click_dispatcher_ignores_non_click_events(tmp_path, profile_stars):
+    # Mouse messages other than clicks should not trigger the profile
+    # calculation.
+    profile_widget = spf.SeeingProfileWidget(
+        camera=Camera(**TEST_CAMERA_VALUES), _testing_path=tmp_path
+    )
+
+    image = make_gaussian_sources_image(SHAPE, profile_stars) + make_noise_image(
+        SHAPE, mean=10, stddev=100, seed=RANDOM_SEED
+    )
+    ccd = CCDData(image, unit="adu")
+    ccd.header["exposure"] = 30.0
+    ccd.header["object"] = "test"
+    file_name = tmp_path / "test.fits"
+    ccd.write(file_name)
+
+    profile_widget.fits_file.set_file("test.fits", tmp_path)
+    profile_widget.load_fits()
+
+    star_loc_x, star_loc_y = profile_stars["x_mean"][0], profile_stars["y_mean"][0]
+    profile_widget._on_click_message(
+        profile_widget.iw.viewer.interaction,
+        {"event": "mousemove", "domain": {"x": star_loc_x, "y": star_loc_y}},
+        [],
+    )
+
+    # No profile should have been computed
+    assert profile_widget.rad_prof is None
 
 
 def test_seeing_profile_no_observatory():

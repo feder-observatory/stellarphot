@@ -3,6 +3,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import requests
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astropy.io import ascii, fits
@@ -1088,10 +1089,12 @@ class FakeVizier:
     Stand-in for astroquery's Vizier that returns a canned result per server,
     recording the servers queried. Empty-list results mimic what astroquery
     returns when a VizieR server is down (it turns the error VOTable into an
-    empty TableList).
+    empty TableList). An exception instance as the canned result is raised
+    instead, mimicking a network failure (e.g. a read timeout).
     """
 
-    # server name -> list of tables to return; tests set this.
+    # server name -> list of tables to return (or exception to raise);
+    # tests set this.
     results_by_server = {}
     servers_queried = []
 
@@ -1100,7 +1103,10 @@ class FakeVizier:
 
     def query_region(self, *_args, **_kwargs):
         FakeVizier.servers_queried.append(self.vizier_server)
-        return FakeVizier.results_by_server[self.vizier_server]
+        result = FakeVizier.results_by_server[self.vizier_server]
+        if isinstance(result, Exception):
+            raise result
+        return result
 
 
 def fake_vizier_table():
@@ -1165,6 +1171,63 @@ def test_from_vizier_all_servers_empty_raises(monkeypatch):
         )
 
     assert FakeVizier.servers_queried == ["dead.example.com", "mirror.example.com"]
+
+
+def test_from_vizier_falls_back_on_network_error(monkeypatch):
+    # When the first VizieR server fails at the network level (e.g. a read
+    # timeout on a query the server cannot handle), from_vizier should retry
+    # against the next server in the list and succeed.
+    monkeypatch.setattr("stellarphot.core.Vizier", FakeVizier)
+    monkeypatch.setattr(
+        "stellarphot.core.VIZIER_SERVERS", ("dead.example.com", "mirror.example.com")
+    )
+    FakeVizier.results_by_server = {
+        "dead.example.com": requests.exceptions.ReadTimeout("read timed out"),
+        "mirror.example.com": [fake_vizier_table()],
+    }
+    FakeVizier.servers_queried = []
+
+    cat = CatalogData.from_vizier(
+        SkyCoord(ra=359.94371 * u.deg, dec=-0.2801 * u.deg),
+        "B/vsx/vsx",
+        colname_map=dict(Name="id", RAJ2000="ra", DEJ2000="dec"),
+        no_catalog_error=True,
+        tidy_catalog=False,
+    )
+
+    assert FakeVizier.servers_queried == ["dead.example.com", "mirror.example.com"]
+    assert len(cat) == 1
+    assert cat["id"][0] == "DQ Psc"
+
+
+def test_from_vizier_all_servers_error_raises(monkeypatch):
+    # If every VizieR server fails at the network level the user should get
+    # the same informative RuntimeError as when they all return empty, with
+    # the network error chained as the cause.
+    monkeypatch.setattr("stellarphot.core.Vizier", FakeVizier)
+    monkeypatch.setattr(
+        "stellarphot.core.VIZIER_SERVERS", ("dead.example.com", "mirror.example.com")
+    )
+    timeout_error = requests.exceptions.ReadTimeout("read timed out")
+    FakeVizier.results_by_server = {
+        "dead.example.com": requests.exceptions.ConnectionError("no route to host"),
+        "mirror.example.com": timeout_error,
+    }
+    FakeVizier.servers_queried = []
+
+    with pytest.raises(
+        RuntimeError, match="No results returned from Vizier"
+    ) as excinfo:
+        CatalogData.from_vizier(
+            SkyCoord(ra=359.94371 * u.deg, dec=-0.2801 * u.deg),
+            "B/vsx/vsx",
+            colname_map=dict(Name="id", RAJ2000="ra", DEJ2000="dec"),
+            no_catalog_error=True,
+            tidy_catalog=False,
+        )
+
+    assert FakeVizier.servers_queried == ["dead.example.com", "mirror.example.com"]
+    assert excinfo.value.__cause__ is timeout_error
 
 
 # Load test apertures

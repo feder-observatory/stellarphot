@@ -1,17 +1,13 @@
 import warnings
 
 import ipywidgets as ipw
+import matplotlib.pyplot as plt
 import numpy as np
 from astropy.io import fits
 from astropy.table import Table
+from astrowidgets.bqplot import ImageWidget
 
-try:
-    from astrowidgets import ImageWidget
-except ImportError:
-    from astrowidgets.ginga import ImageWidget
-
-import matplotlib.pyplot as plt
-
+from stellarphot.gui.astrowidgets_workarounds import load_catalog
 from stellarphot.gui.custom_widgets import ChooseOrMakeNew
 from stellarphot.gui.fits_opener import FitsOpener
 from stellarphot.gui.views import ui_generator
@@ -27,7 +23,6 @@ from stellarphot.settings import (
 )
 
 __all__ = [
-    "set_keybindings",
     "SeeingProfileWidget",
 ]
 
@@ -37,66 +32,6 @@ AP_SETTING_SAVED = "✅"
 DEFAULT_SAVE_TITLE = "Save aperture and camera"
 
 
-# TODO: maybe move this into SeeingProfileWidget unless we anticipate
-# other widgets using this.
-def set_keybindings(image_widget, scroll_zoom=False):
-    """
-    Set image widget keyboard bindings. The bindings are:
-
-    + Pan by click-and-drag or with arrow keys.
-    + Zoom by scrolling or using the ``+``/``-`` keys.
-    + Adjust contrast by Ctrl-right click and drag
-    + Reset contrast with shift-right-click.
-
-    Any existing key bindings are removed.
-
-    Parameters
-    ----------
-
-    image_widget : `astrowidgets.ImageWidget`
-        Image widget on which to set the key bindings.
-
-    scroll_zoom : bool, optional
-        If True, zooming can be done by scrolling the mouse wheel.
-        Default is False.
-
-    Returns
-    -------
-
-    None
-        Adds key bindings to the image widget.
-    """
-    bind_map = image_widget._viewer.get_bindmap()
-    # Displays the event map...
-    # bind_map.eventmap
-    bind_map.clear_event_map()
-    bind_map.map_event(None, (), "ms_left", "pan")
-    if scroll_zoom:
-        bind_map.map_event(None, (), "pa_pan", "zoom")
-
-    # bind_map.map_event(None, (), 'ms_left', 'cursor')
-    # contrast with right mouse
-    bind_map.map_event(None, (), "ms_right", "contrast")
-
-    # shift-right mouse to reset contrast
-    bind_map.map_event(None, ("shift",), "ms_right", "contrast_restore")
-    bind_map.map_event(None, ("ctrl",), "ms_left", "cursor")
-
-    # Bind +/- to zoom in/out
-    bind_map.map_event(None, (), "kp_+", "zoom_in")
-    bind_map.map_event(None, (), "kp_=", "zoom_in")
-    bind_map.map_event(None, (), "kp_-", "zoom_out")
-    bind_map.map_event(None, (), "kp__", "zoom_out")
-
-    # Bind arrow keys to panning
-    # There is NOT a typo below. I want the keys to move the image in the
-    # direction of the arrow
-    bind_map.map_event(None, (), "kp_left", "pan_right")
-    bind_map.map_event(None, (), "kp_right", "pan_left")
-    bind_map.map_event(None, (), "kp_up", "pan_down")
-    bind_map.map_event(None, (), "kp_down", "pan_up")
-
-
 class SeeingProfileWidget:
     """
     A class for storing an instance of a widget displaying the seeing profile
@@ -104,7 +39,7 @@ class SeeingProfileWidget:
 
     Parameters
     ----------
-    imagewidget : `astrowidgets.ImageWidget`, optional
+    imagewidget : `astrowidgets.bqplot.ImageWidget`, optional
         ImageWidget instance to use for the seeing profile.
 
     width : int, optional
@@ -137,7 +72,7 @@ class SeeingProfileWidget:
     in_t : `ipywidgets.IntText`
         Text box for the inner annulus.
 
-    iw : `astrowidgets.ImageWidget`
+    iw : `astrowidgets.bqplot.ImageWidget`
         ImageWidget instance used for the seeing profile.
 
     object_name : str
@@ -175,9 +110,7 @@ class SeeingProfileWidget:
         _testing_path=None,
     ):
         if not imagewidget:
-            imagewidget = ImageWidget(
-                image_width=width, image_height=width, use_opencv=True
-            )
+            imagewidget = ImageWidget(display_width=width, display_aspect_ratio=1)
 
         self.photometry_settings = PhotometryWorkingDirSettings()
         self.iw = imagewidget
@@ -192,12 +125,17 @@ class SeeingProfileWidget:
                 saved.add_item(camera)
 
         # Do some set up of the ImageWidget
-        set_keybindings(self.iw, scroll_zoom=False)
-        bind_map = self.iw._viewer.get_bindmap()
-        bind_map.map_event(None, ("shift",), "ms_left", "cursor")
-        gvc = self.iw._viewer.get_canvas()
-        self._mse = self._make_show_event()
-        gvc.add_callback("cursor-down", self._mse)
+
+        # astrowidgets has a bug (still present as of 0.5.1, astropy/astrowidgets#206)
+        # in which the built-in _mouse_click handler references the attributes
+        # below, which are never initialized, so any click raises AttributeError
+        # and prevents callbacks registered later (like ours) from running.
+        # Setting both to False makes the built-in handler a no-op.
+        self.iw.click_center = False
+        self.iw.is_marking = False
+
+        self._on_click_message = self._make_click_dispatcher()
+        self.iw.viewer.interaction.on_msg(self._on_click_message)
 
         # Outputs to hold the graphs
         self.seeing_profile_plot = ipw.Output()
@@ -454,117 +392,115 @@ class SeeingProfileWidget:
     def _update_ap_settings(self, value):
         self.aperture_settings.value = value
 
-    def _make_show_event(self):
-        def show_event(
-            viewer, event=None, datax=None, datay=None, aperture=None  # noqa: ARG001
-        ):
+    def _make_click_dispatcher(self):
+        def on_click_message(interaction, event_data, buffers):  # noqa: ARG001
             """
-            ginga callbacks require the function signature above.
+            Dispatch mouse messages from the bqplot front end, which calls
+            this with the three arguments above. Only clicks are of
+            interest here; the payload for those looks like
+            ``{"event": "click", "domain": {"x": ..., "y": ...}}``.
             """
-            profile_size = 60
-            centering_cutout_size = 20
-            default_gap = 5  # pixels
-            default_annulus_width = 15  # pixels
-            if self.save_toggle:
-                self.save_toggle.disabled = False
+            if event_data.get("event") != "click":
+                return
 
-            update_aperture_settings = False
-            if event is not None:
-                # User clicked on a star, so generate profile
-                i = self.iw._viewer.get_image()
-                data = i.get_data()
+            self._handle_star_click(
+                event_data["domain"]["x"], event_data["domain"]["y"]
+            )
 
-                # Rough location of click in original image
-                x = int(np.floor(event.data_x))
-                y = int(np.floor(event.data_y))
+        return on_click_message
 
-                try:
-                    rad_prof = CenterAndProfile(
-                        data,
-                        (x, y),
-                        profile_radius=profile_size,
-                        centering_cutout_size=centering_cutout_size,
+    def _handle_star_click(self, x, y):
+        """
+        Compute and plot the profile of the star at the clicked position,
+        and update the aperture settings based on its FWHM.
+        """
+        profile_size = 60
+        centering_cutout_size = 20
+        default_gap = 5  # pixels
+        default_annulus_width = 15  # pixels
+        if self.save_toggle:
+            self.save_toggle.disabled = False
+
+        data = self.iw.get_image().data
+
+        # Rough location of click in original image
+        x = int(np.floor(x))
+        y = int(np.floor(y))
+
+        try:
+            rad_prof = CenterAndProfile(
+                data,
+                (x, y),
+                profile_radius=profile_size,
+                centering_cutout_size=centering_cutout_size,
+            )
+        except RuntimeError as e:
+            # Check whether this error is one generated by RadialProfile
+            if "Centroid did not converge on a star." in str(e):
+                # Clear any previous messages...no idea why the clear_output
+                # method doesn't work here, but it doesn't/
+                self.error_console.outputs = ()
+
+                # Use the append_display_data method instead of the
+                # error_console context manager because there seems to be
+                # a timing issue with the context manager when running
+                # tests.
+                self.error_console.append_display_data(
+                    ipw.HTML(
+                        "<strong>No star found at this location. "
+                        "Try clicking closer "
+                        "to a star or on a brighter star</strong>"
                     )
-                except RuntimeError as e:
-                    # Check whether this error is one generated by RadialProfile
-                    if "Centroid did not converge on a star." in str(e):
-                        # Clear any previous messages...no idea why the clear_output
-                        # method doesn't work here, but it doesn't/
-                        self.error_console.outputs = ()
-
-                        # Use the append_display_data method instead of the
-                        # error_console context manager because there seems to be
-                        # a timing issue with the context manager when running
-                        # tests.
-                        self.error_console.append_display_data(
-                            ipw.HTML(
-                                "<strong>No star found at this location. "
-                                "Try clicking closer "
-                                "to a star or on a brighter star</strong>"
-                            )
-                        )
-                        print(f"{self.error_console.outputs=}")
-                        return
-                    else:
-                        # RadialProfile did not generate this error, pass it
-                        # on to the user
-                        raise e  # pragma: no cover
-                else:
-                    # Success, clear any previous error messages
-                    self.error_console.clear_output()
-
-                try:
-                    try:  # Remove previous marker
-                        self.iw.remove_markers(marker_name=self._aperture_name)
-                    except AttributeError:
-                        self.iw.remove_markers_by_name(marker_name=self._aperture_name)
-                except ValueError:
-                    # No markers yet, keep going
-                    pass
-
-                # ADD MARKER WHERE CLICKED
-                self.iw.add_markers(
-                    Table(
-                        data=[[rad_prof.center[0]], [rad_prof.center[1]]],
-                        names=["x", "y"],
-                    ),
-                    marker_name=self._aperture_name,
                 )
-
-                # Default is 1.5 times FWHM
-                aperture_radius = np.round(1.5 * rad_prof.FWHM, 0)
-                self.rad_prof = rad_prof
-
-                # Make an aperture settings object, but don't update it's widget yet.
-                ap_settings = PhotometryApertures(
-                    radius=aperture_radius,
-                    gap=default_gap,
-                    annulus_width=default_annulus_width,
-                    fwhm_estimate=rad_prof.FWHM,
-                )
-                update_aperture_settings = True
+                return
             else:
-                # User changed aperture
-                aperture_radius = aperture["radius"]
-                ap_settings = PhotometryApertures(
-                    **aperture
-                )  # Make an aperture settings object, but don't update it's widget yet.
+                # RadialProfile did not generate this error, pass it
+                # on to the user
+                raise e  # pragma: no cover
+        else:
+            # Success, clear any previous error messages
+            self.error_console.clear_output()
 
-            if update_aperture_settings:
-                # So it turns out that the validation stuff only updates when changes
-                # are made in the UI rather than programmatically. Since we know we've
-                # set a valid value, and that we've made changes we just manually set
-                # the relevant values.
-                self.aperture_settings.savebuttonbar.unsaved_changes = True
-                self.aperture_settings.is_valid.value = True
+        try:  # Remove previous marker
+            self.iw.remove_catalog(catalog_label=self._aperture_name)
+        except ValueError:
+            # No markers yet, keep going
+            pass
 
-                # Update the value last so that the unsaved state is properly set when
-                # the value is updated.
-                self._update_ap_settings(ap_settings.model_dump())
+        # ADD MARKER WHERE CLICKED
+        load_catalog(
+            self.iw,
+            Table(
+                data=[[rad_prof.center[0]], [rad_prof.center[1]]],
+                names=["x", "y"],
+            ),
+            catalog_label=self._aperture_name,
+        )
 
-            self._update_plots()
+        # Default is 1.5 times FWHM
+        aperture_radius = np.round(1.5 * rad_prof.FWHM, 0)
+        self.rad_prof = rad_prof
 
-        return show_event
+        # Make an aperture settings object, but don't update it's widget yet.
+        ap_settings = PhotometryApertures(
+            radius=aperture_radius,
+            gap=default_gap,
+            annulus_width=default_annulus_width,
+            fwhm_estimate=rad_prof.FWHM,
+        )
+
+        # So it turns out that the validation stuff only updates when changes
+        # are made in the UI rather than programmatically. Since we know we've
+        # set a valid value, and that we've made changes we just manually set
+        # the relevant values.
+        self.aperture_settings.savebuttonbar.unsaved_changes = True
+        self.aperture_settings.is_valid.value = True
+
+        # Update the value last so that the unsaved state is properly set when
+        # the value is updated.
+        self._update_ap_settings(ap_settings.model_dump())
+
+        self._update_plots()
 
     def _update_plots(self):
         # DISPLAY THE SCALED PROFILE

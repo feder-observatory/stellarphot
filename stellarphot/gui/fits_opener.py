@@ -12,7 +12,7 @@ __all__ = ["FitsOpener"]
 class FitsOpener:
     """
     A class to open FITS files using a file chooser and display them
-    in an `astrowidgets.ImageWidget`.
+    in an `astrowidgets.bqplot.ImageWidget`.
 
     Parameters
     ----------
@@ -102,19 +102,19 @@ class FitsOpener:
 
     def load_in_image_widget(self, image_widget):
         """
-        Load the selected image into an `astrowidgets.ImageWidget`, doing the best
-        that can be done to suppress warnings.
+        Load the selected image into an `astrowidgets.bqplot.ImageWidget`, doing
+        the best that can be done to suppress warnings.
 
         Parameters
         ----------
 
-        image_widget : `astrowidgets.ImageWidget`
+        image_widget : `astrowidgets.bqplot.ImageWidget`
             The widget into which to load the image.
         """
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=FITSFixedWarning)
             warnings.filterwarnings("ignore", category=fits.verify.VerifyWarning)
-            image_widget.load_fits(str(self.path))
+            image_widget.load_image(str(self.path))
 
     def set_file(self, file, directory=None):
         """
