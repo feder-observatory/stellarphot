@@ -251,7 +251,10 @@ filterwarnings = [
     # wording and the category of this warning over time (AstropyPendingDeprecation
     # -> AstropyDeprecation), so match any "TestRunner ... deprecated" message
     # regardless of category.
-    'ignore:The TestRunner.*deprecated:'
+    'ignore:The TestRunner.*deprecated:',
+    # Something in papermill is using an asyncio feature that is deprecated
+    # in python 3.14.
+    'ignore:*asyncio.WindowsSelectorEventLoopPolicy*'
 ]
 
 [tool.pixi.workspace]
