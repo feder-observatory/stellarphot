@@ -49,11 +49,6 @@ exoplanet = [
     "lmfit",
     "pytransit",
 ]
-# Deprecated alias for `exoplanet`, kept for backwards compatibility. Will be
-# removed in a future release; use `stellarphot[exoplanet]` instead.
-exo_fitting = [
-    "stellarphot[exoplanet]",
-]
 # Everything a user needs for the full interactive experience.
 all = [
     "stellarphot[gui]",
