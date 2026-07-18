@@ -1,33 +1,26 @@
-2.0.0 (unreleased)
-------------------
-
-New Features
-^^^^^^^^^^^^
-+ Development of new data classes for handling source list, photometry, and catalog data which include data format validation. [#125]
-+ Aperture photometry streamlined into ``single_image_photometry`` and ``multi_image_photometry`` functions that use the new data classes. [#141]
-+ ``multi_image_photometry`` now is a wrapper for single_image_photometry instead of a completely separate function.
-+ Photometry related notebooks updated to use new data classes and new functions. [#151]
-+ Logging has been implemented for photometry, so all the output can now be logged to a file. [#150]
-+ Add class to hold the file locations needed for the photometry notebook. [#168]
+2.1.2 (unreleased)
+-------------------
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-+ Major reorganizaiton of code including moving functions to new modules. [#130, #133]
-+ Now requires Python 3.10 or later. [#147]
-+ Use pydantic for aperture settings. [#154]
-+ Stomped bug in handling of ``NaN``s in ``single_image_photometry``. [#157]
-+ The core data structures can now be imported without pulling in the
-  ``ipywidgets``/``ipyautoui`` GUI stack. As part of this, ``stellarphot.io`` no
-  longer re-exports the contents of its submodules: import directly from
-  ``stellarphot.io.aavso``, ``stellarphot.io.aij``, or ``stellarphot.io.tess``.
-  ``ui_generator`` is no longer importable from ``stellarphot.settings``; import
-  it from ``stellarphot.settings.views``. [#567]
-+ The catalog-fetcher functions ``apass_dr9``, ``vsx_vizier`` and ``refcat2``
-  have moved out of ``stellarphot.core`` into the new ``stellarphot.catalogs``
-  module; ``stellarphot.core`` now holds the table data-structure classes only.
-  They remain available as top-level names (``from stellarphot import
-  apass_dr9``) and, for one or two releases, from ``stellarphot.core`` via a
-  back-compat shim that raises an ``AstropyDeprecationWarning``. [#194]
++ Removed the deprecated ``exo_fitting`` optional-dependency alias now that
+  ``exoplanet`` has been the documented name for a full release cycle;
+  nothing in the codebase, docs, or notebooks referenced the old name. [#636]
++ Fixed the PyPI homepage link (it pointed at ``stellarphot/stellarphot``
+  instead of ``feder-observatory/stellarphot``) and added Documentation,
+  Repository, Issues, and Changelog project URLs. [#636]
++ Bumped the minimum supported Python to 3.11 and aligned ``tool.black``'s
+  target-version and ``tox.ini``'s envlist with it; CI already tested
+  3.11-3.13, but black and tox still referenced 3.10. [#636]
++ Updated the stale project description and author metadata, and switched
+  ``license`` to the PEP 639 SPDX string form instead of the legacy
+  ``{ text = ... }`` table. [#636]
+
+2.1.1 (2026-07-14)
+-------------------
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 + ``refcat2`` IDs are now locally generated IAU-style coordinate designations
   (``REFCAT2SP JRRR.RRRRR±DD.DDDDD``, coordinates truncated to five decimal
   places) instead of Gaia DR2 source_ids fetched from CDS XMatch. The id
@@ -43,6 +36,30 @@ Other Changes and Additions
   leading ``+`` sign (the spec puts a sign only on the Dec). As a result,
   ``apass_dr9`` ids all change; ids are regenerated on every fetch, so
   nothing persisted is affected. [#628]
+
+2.1.0 (2026-07-14)
+-------------------
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
++ ``pip install stellarphot`` no longer installs the Jupyter/ipywidgets/
+  ipyautoui GUI and notebook stack by default; install
+  ``stellarphot[gui]`` for the notebooks, ``stellarphot[exoplanet]`` for
+  exoplanet light-curve fitting, or ``stellarphot[all]`` for both. GUI and
+  widget code has moved into a new ``stellarphot.gui`` subpackage (with
+  back-compat shims that raise ``AstropyDeprecationWarning`` for the old
+  import paths), and the core data structures can now be imported without
+  pulling in the GUI stack at all. As part of this, ``stellarphot.io`` no
+  longer re-exports the contents of its submodules: import directly from
+  ``stellarphot.io.aavso``, ``stellarphot.io.aij``, or ``stellarphot.io.tess``.
+  ``ui_generator`` is no longer importable from ``stellarphot.settings``; import
+  it from ``stellarphot.settings.views``. [#566, #567, #569, #570, #571, #572]
++ The catalog-fetcher functions ``apass_dr9``, ``vsx_vizier`` and ``refcat2``
+  have moved out of ``stellarphot.core`` into the new ``stellarphot.catalogs``
+  module; ``stellarphot.core`` now holds the table data-structure classes only.
+  They remain available as top-level names (``from stellarphot import
+  apass_dr9``) and, for one or two releases, from ``stellarphot.core`` via a
+  back-compat shim that raises an ``AstropyDeprecationWarning``. [#194]
 + The ``change_to_tmp_dir`` test fixture, previously duplicated in four test
   modules, is now defined once in the top-level ``conftest.py``. [#426]
 + The duplicated logging setup in ``single_image_photometry`` and
@@ -71,8 +88,6 @@ Other Changes and Additions
 
 Bug Fixes
 ^^^^^^^^^
-+ Fixed dependence on non-release version of astrowidgets for overwrite capability on output images. [#108]
-+ Fixed computation of FWHM when fitting to data that includes NaNs. [#164]
 + The photometry logging no longer clears the root logger's handlers or removes
   handlers it did not add. Stellarphot now tags its own handlers, removes only
   those, and disables propagation so its messages are not duplicated by the
@@ -164,6 +179,76 @@ Bug Fixes
   response is now covered by offline tests using a captured server response,
   and the remote-data TESS tests treat server outages and timeouts as expected
   failures instead of errors. [#623]
+
+2.0.4 (2026-06-04)
+-------------------
+
+New Features
+^^^^^^^^^^^^
++ Added AAVSO Extended File Format export for ensemble photometry:
+  ``PhotometryData.write_aavso_extended`` (backed by a new
+  ``stellarphot.io.write_aavso_extended``) writes a target/check-star pair
+  as an AAVSO Extended File Format CSV ready for upload to WebObs, validated
+  against a new ``AAVSOSubmissionHeader`` pydantic model. [#560]
+
+Bug Fixes
+^^^^^^^^^
++ Fixed TESS-target comparison-star handling: the target coordinates are no
+  longer reset to the center of the frame when a name cannot be resolved,
+  and the input TESS source-list order (which is not guaranteed to be
+  sorted by distance from the target) is now preserved instead of being
+  overwritten by a distance sort. [#562]
+
+2.0.3 (2025-11-21)
+-------------------
+
+Bug Fixes
+^^^^^^^^^
++ ``calc_aij_relative_flux`` now also excludes comparison stars that are
+  missing from one or more images (previously only stars flagged bad or
+  containing NaNs were excluded), so the same comparison set is used
+  consistently across every image. [#549]
+
+2.0.2 (2025-10-22)
+-------------------
+
+Bug Fixes
+^^^^^^^^^
++ Updated the Gaia DR2 CDS XMatch catalog identifier used by ``refcat2``
+  (``gaia_dr2_j2015p5`` to ``vizier:gaia_dr2_j2015p5``) after CDS changed the
+  identifier, which had been causing the crossmatch to fail. [#545]
+
+2.0.1 (2025-09-12)
+-------------------
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
++ Pinned ``astrowidgets`` to below 0.4.0; the astrowidgets 0.4 API is not yet
+  supported. [#543]
+
+2.0.0 (2025-06-23)
+-------------------
+
+New Features
+^^^^^^^^^^^^
++ Development of new data classes for handling source list, photometry, and catalog data which include data format validation. [#125]
++ Aperture photometry streamlined into ``single_image_photometry`` and ``multi_image_photometry`` functions that use the new data classes. [#141]
++ ``multi_image_photometry`` now is a wrapper for single_image_photometry instead of a completely separate function.
++ Photometry related notebooks updated to use new data classes and new functions. [#151]
++ Logging has been implemented for photometry, so all the output can now be logged to a file. [#150]
++ Add class to hold the file locations needed for the photometry notebook. [#168]
+
+Other Changes and Additions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
++ Major reorganizaiton of code including moving functions to new modules. [#130, #133]
++ Now requires Python 3.10 or later. [#147]
++ Use pydantic for aperture settings. [#154]
++ Stomped bug in handling of ``NaN``s in ``single_image_photometry``. [#157]
+
+Bug Fixes
+^^^^^^^^^
++ Fixed dependence on non-release version of astrowidgets for overwrite capability on output images. [#108]
++ Fixed computation of FWHM when fitting to data that includes NaNs. [#164]
 
 1.4.15 (2024-08-16)
 -------------------
