@@ -5,12 +5,12 @@ build-backend = "hatchling.build"
 [project]
 name = "stellarphot"
 dynamic = ["version"]
-description = "A package for performing stellar photometry."
+description = "A package for performing stellar photometry aimed at variable star and exoplanet research."
 readme = "README.md"
-license = { text = "BSD-3-Clause" }
+license = "BSD-3-Clause"
 requires-python = ">=3.11"
 authors = [
-    { name = "Matt Craig", email = "mattwcraig@gmail.com" },
+    { name = "The Stellarphot Team", email = "mattwcraig@gmail.com" },
 ]
 # Base install is headless/scriptable: the science + data layer only. The
 # Jupyter/ipywidgets GUI stack is an optional `[gui]` extra (see below), so
@@ -78,7 +78,7 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/stellarphot/stellarphot"
+Homepage = "https://github.com/feder-observatory/stellarphot"
 
 [tool.hatch.version]
 source = "vcs"
@@ -142,7 +142,7 @@ include = [
 
 [tool.black]
 line-length = 88
-target-version = ['py310', 'py311']
+target-version = ['py311', 'py312', 'py313']
 include = '\.pyi?$|\.ipynb$'
 # 'extend-exclude' excludes files or directories in addition to the defaults
 # extend-exclude = '''
