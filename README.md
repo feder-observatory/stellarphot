@@ -35,7 +35,7 @@ Both `pixi` and `uv` work on a model where you create a working directory for yo
     cd project_dir_name
     uv add "stellarphot[all]"
     ```
-    This installs the entire package with all optional dependencies. Then you can start JupyterLab interface with `uv run jupyter lab`.
+    This installs the entire package with all optional dependencies. Once that is done, you can start JupyterLab interface with `uv run jupyter lab`.
 
     The optional dependencies are grouped into extras so you can install only what you need after initializing the `uv` environment and switching to the working directory:
 
@@ -55,10 +55,11 @@ Both `pixi` and `uv` work on a model where you create a working directory for yo
     cd project_dir_name
     pixi add stellarphot
     ```
-    This installs the entire package with all optional dependencies. Then you can start JupyterLab interface with `pixi run jupyter lab`.
+    This installs the entire package with all optional dependencies. Once that is done, you can start JupyterLab interface with `pixi run jupyter lab`. [**NOTE**: Since `pixi` uses `conda-forge` as its default channel, it doesn't always have the latest version of `stellarphot`. If you want the latest version, use `pixi add --pypi "stellarphot[all]"`].
     
     The optional dependencies are grouped into extras so you can install only what you need after initializing the `pixi` environment and switching to the working directory:
-
+    - `pixi add --pypi "stellarphot[all]"` — complete install pulled from PyPI with all optional dependencies. 
+        Jupyter/widget GUI.
     - `pixi add --pypi "stellarphot"` — base install. The headless/scriptable science
         engine (data structures, photometry, catalog access). Does **not** include the
         Jupyter/widget GUI.
