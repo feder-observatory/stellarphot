@@ -72,6 +72,9 @@ test = [
     "tox",
 ]
 
+# These populate the "Project links" sidebar on the PyPI page. The old
+# Homepage pointed at github.com/stellarphot/stellarphot, an org that does not
+# host this project; the code and docs live under feder-observatory instead.
 [project.urls]
 Homepage = "https://github.com/feder-observatory/stellarphot"
 Documentation = "https://stellarphot.readthedocs.io"
