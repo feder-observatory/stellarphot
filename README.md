@@ -20,31 +20,72 @@ useful photometry, with a focus on variable star and exoplanet transit observati
 
 ## Installation
 
-`stellarphot` requires Python 3.11 or later.
+`stellarphot` requires Python 3.11 or later. You can install `stellarphot` using `uv`, `pixi`, `pip` or `conda`. 
 
-You can install `stellarphot` with either `pip` or `conda`.  If you are interested in `stellarphot` for exoplanet transit light curves, `conda` is recommended at the moment because of an issue with installing one of the dependencies.
+Both `pixi` and `uv` work on a model where you create a working directory for your project and install the packages into that working directory.  This is a good way to keep your work organized and avoid conflicts with other Python packages you may have installed. You an examine the documentation for [`uv`](https://uv.readthedocs.io/en/latest/) or [`pixi`](https://pixi.readthedocs.io/en/latest/) for details on how to use those tools.
+
+`conda` and `pip` work on a model where you install the packages into your existing Python environment. This is a good way to get started quickly, but you may run into conflicts with other packages you have installed.
+
+
+### Installing with `uv`
+
+- You can create a working environment for `stellarphot` using `uv` with the following commands which initialize a new project directory (replace `project_dir_name` with the name of your choice) and install the package with all optional dependencies:
+    ```
+    uv init project_dir_name
+    cd project_dir_name
+    uv add "stellarphot[all]"
+    ```
+    This installs the entire package with all optional dependencies. Then you can start JupyterLab interface with `uv run jupyter lab`.
+
+    The optional dependencies are grouped into extras so you can install only what you need after initializing the `uv` environment and switching to the working directory:
+
+    - `uv add stellarphot` — base install. The headless/scriptable science
+        engine (data structures, photometry, catalog access). Does **not** include the
+        Jupyter/widget GUI.
+    - `uv add "stellarphot[gui]"` — adds the notebook/widget interface.
+    - `uv add "stellarphot[exoplanet]"` — adds exoplanet transit light-curve
+        fitting (`pytransit`).
+
+
+### Installing with `pixi`
+
+- You can create a working environment for `stellarphot` using `pixi` with the following commands which initialize a new project directory (replace `project_dir_name` with the name of your choice) and install the package with all optional dependencies:
+    ```
+    pixi init project_dir_name
+    cd project_dir_name
+    pixi add stellarphot
+    ```
+    This installs the entire package with all optional dependencies. Then you can start JupyterLab interface with `pixi run jupyter lab`.
+    
+    The optional dependencies are grouped into extras so you can install only what you need after initializing the `pixi` environment and switching to the working directory:
+
+    - `pixi add --pypi "stellarphot"` — base install. The headless/scriptable science
+        engine (data structures, photometry, catalog access). Does **not** include the
+        Jupyter/widget GUI.
+    - `pixi add --pypi "stellarphot[gui]"` — adds the notebook/widget interface.
+    - `pixi add --pypi "stellarphot[exoplanet]"` — adds exoplanet transit light-curve
+        fitting (`pytransit`).
+
+
+### Installing with `conda`
 
 - Install with `conda` using
   ```
   conda install -c conda-forge stellarphot
   ```
-  If you are interested in exoplanet light curve fitting, also install `pytransit` using
+  This installs the entire package with all optional dependencies. Then you can start JupyterLab interface with `jupyter lab`.  There is no easy way to install only some of the optional dependencies with `conda` at this time. [**NOTE**: `conda-forge` doesn't always have the latest version of `stellarphot`. If you want the latest version, use `uv`, `pixi`, or `pip` instead.]
 
-  ```
-  conda install -c conda-forge pytransit
-  ```
+### Installing with `pip`
 
 - Install with `pip`. Most people want the full interactive experience (the
   Jupyter notebooks and widgets plus exoplanet fitting):
   ```
   pip install stellarphot[all]
   ```
-  The optional dependencies are grouped into extras so you can install only what
-  you need:
+  The optional dependencies are grouped into extras so you can install only what you need:
 
   - `pip install stellarphot` — base install. The headless/scriptable science
-    engine (data structures, photometry, catalog access). Does **not** include the
-    Jupyter/widget GUI.
+    engine (data structures, photometry, catalog access). Does **not** include the Jupyter/widget GUI.
   - `pip install stellarphot[gui]` — adds the notebook/widget interface.
   - `pip install stellarphot[exoplanet]` — adds exoplanet transit light-curve
     fitting (`pytransit`).
@@ -52,7 +93,7 @@ You can install `stellarphot` with either `pip` or `conda`.  If you are interest
 
 ## Getting started with stellarphot
 
-1. Start Jupyterlab from the command line: `jupyter lab`
+1. Start Jupyterlab from the command line: `jupyter lab` (or `uv run jupyter lab` or `pixi run jupyter lab` if you installed with `uv` or `pixi`).
 2. Once JupyterLab opens in your web browser, open the Launcher (see Figure below)
 3. Click on the notebook you want (see figure below) and follow the instructions in the notebook.
 Output files and the settings used to generate them will show up in the file browser
@@ -113,4 +154,4 @@ Feel free to contact @mwcraig or @JuanCab with your questions about using `stell
 
 ## License
 
-This project is Copyright (c) 2019-2024 The Stellarphot Team and licensed under the terms of the BSD 3-Clause license. This package is based upon the [Astropy package template](https://github.com/astropy/package-template) which is licensed under the BSD 3-clause license.
+This project is Copyright (c) 2019-2026 The Stellarphot Team and licensed under the terms of the BSD 3-Clause license. This package is based upon the [Astropy package template](https://github.com/astropy/package-template) which is licensed under the BSD 3-clause license.
