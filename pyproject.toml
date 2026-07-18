@@ -268,9 +268,21 @@ docs = { features = ["docs"], solve-group = "default" }
 exoplanet = { features = ["exoplanet"], solve-group = "default" }
 gui = { features = ["gui"], solve-group = "default" }
 test = { features = ["test"], solve-group = "default" }
+test-py311 = { features = ["test", "py311"]}
+test-py312 = { features = ["test", "py312"]}
+test-py313 = { features = ["test", "py313"]}
 
 [tool.pixi.feature.exoplanet.tasks]
 lab = { cmd = "jupyter lab", cwd = "stellarphot/notebooks" }
 
 [tool.pixi.feature.test.tasks]
 test = "pytest"
+
+[tool.pixi.feature.py311.dependencies]
+python = '3.11.*'
+
+[tool.pixi.feature.py312.dependencies]
+python = '3.12.*'
+
+[tool.pixi.feature.py313.dependencies]
+python = '3.13.*'
