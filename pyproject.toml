@@ -74,6 +74,10 @@ test = [
 
 [project.urls]
 Homepage = "https://github.com/feder-observatory/stellarphot"
+Documentation = "https://stellarphot.readthedocs.io"
+Repository = "https://github.com/feder-observatory/stellarphot"
+Issues = "https://github.com/feder-observatory/stellarphot/issues"
+Changelog = "https://github.com/feder-observatory/stellarphot/blob/main/CHANGES.rst"
 
 [tool.hatch.version]
 source = "vcs"
