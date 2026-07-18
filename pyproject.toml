@@ -271,3 +271,6 @@ test = { features = ["test"], solve-group = "default" }
 
 [tool.pixi.feature.exoplanet.tasks]
 lab = { cmd = "jupyter lab", cwd = "stellarphot/notebooks" }
+
+[tool.pixi.feature.test.tasks]
+test = "pytest"
