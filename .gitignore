@@ -69,3 +69,6 @@ _personal_docs
 
 # Mac OSX
 .DS_Store
+# pixi environments
+.pixi/*
+!.pixi/config.toml
