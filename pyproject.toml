@@ -272,7 +272,7 @@ test-py311 = { features = ["test", "py311"]}
 test-py312 = { features = ["test", "py312"]}
 test-py313 = { features = ["test", "py313"]}
 
-[tool.pixi.feature.exoplanet.tasks]
+[tool.pixi.feature.all.tasks]
 lab = { cmd = "jupyter lab", cwd = "stellarphot/notebooks" }
 
 [tool.pixi.feature.test.tasks]
