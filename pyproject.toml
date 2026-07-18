@@ -256,7 +256,7 @@ filterwarnings = [
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]
-platforms = ["linux-64"]
+platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
 
 [tool.pixi.pypi-dependencies]
 stellarphot = { path = ".", editable = true }
@@ -269,5 +269,5 @@ exoplanet = { features = ["exoplanet"], solve-group = "default" }
 gui = { features = ["gui"], solve-group = "default" }
 test = { features = ["test"], solve-group = "default" }
 
-[tool.pixi.tasks]
+[tool.pixi.feature.exoplanet.tasks]
 lab = { cmd = "jupyter lab", cwd = "stellarphot/notebooks" }
