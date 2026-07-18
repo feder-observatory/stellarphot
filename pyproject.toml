@@ -254,7 +254,7 @@ filterwarnings = [
     'ignore:The TestRunner.*deprecated:',
     # Something in papermill is using an asyncio feature that is deprecated
     # in python 3.14.
-    'ignore:*asyncio.WindowsSelectorEventLoopPolicy*'
+    'ignore:.*asyncio.WindowsSelectorEventLoopPolicy.*'
 ]
 
 [tool.pixi.workspace]
