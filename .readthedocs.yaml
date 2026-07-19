@@ -5,16 +5,13 @@
 # Required
 version: 2
 
-conda:
-  environment: .rtd-environment.yml
-
 # Set the version of Python and other tools you might need
 build:
   os: "ubuntu-22.04"
   apt_packages:
     - graphviz
   tools:
-    python: "mambaforge-latest"
+    python: "3.12"
 
 python:
   install:

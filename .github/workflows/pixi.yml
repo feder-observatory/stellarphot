@@ -1,0 +1,34 @@
+name: Test pixi
+
+on:
+  workflow_dispatch:  # Allows manual triggering
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    # run every Monday at 6am UTC
+    - cron: '0 6 * * 1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      max-parallel: 4
+      fail-fast: false
+      matrix:
+        platform: [ubuntu-latest, macos-latest, windows-latest]
+        environment: [test, test-py311, test-py312, test-py313 ]
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - uses: prefix-dev/setup-pixi@v0.10.0
+        with:
+          pixi-version: v0.73.0
+      - run: pixi run --environment ${{ matrix.environment }} test
