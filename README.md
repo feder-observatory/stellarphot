@@ -20,7 +20,7 @@ useful photometry, with a focus on variable star and exoplanet transit observati
 
 ## Installation
 
-`stellarphot` requires Python 3.11 or later. You can install `stellarphot` using `uv`, `pixi`, `pip` or `conda`. 
+`stellarphot` requires Python 3.11 or later. You can install `stellarphot` using `uv`, `pixi`, `pip` or `conda`.
 
 Both `pixi` and `uv` work on a model where you create a working directory for your project and install the packages into that working directory.  This is a good way to keep your work organized and avoid conflicts with other Python packages you may have installed. You an examine the documentation for [`uv`](https://uv.readthedocs.io/en/latest/) or [`pixi`](https://pixi.readthedocs.io/en/latest/) for details on how to use those tools.
 
@@ -56,9 +56,9 @@ Both `pixi` and `uv` work on a model where you create a working directory for yo
     pixi add stellarphot
     ```
     This installs the entire package with all optional dependencies. Once that is done, you can start JupyterLab interface with `pixi run jupyter lab`. [**NOTE**: Since `pixi` uses `conda-forge` as its default channel, it doesn't always have the latest version of `stellarphot`. If you want the latest version, use `pixi add --pypi "stellarphot[all]"`].
-    
+
     The optional dependencies are grouped into extras so you can install only what you need after initializing the `pixi` environment and switching to the working directory:
-    - `pixi add --pypi "stellarphot[all]"`: complete install pulled from PyPI with all optional dependencies. 
+    - `pixi add --pypi "stellarphot[all]"`: complete install pulled from PyPI with all optional dependencies.
         Jupyter/widget GUI.
     - `pixi add --pypi "stellarphot"`: base install. The headless/scriptable science
         engine (data structures, photometry, catalog access). Does **not** include the
