@@ -74,4 +74,3 @@ _personal_docs
 # pixi environments
 .pixi/*
 !.pixi/config.toml
-.harper-dictionary.txt
