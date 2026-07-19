@@ -1,4 +1,4 @@
-2.1.2 (unreleased)
+2.1.2 (2026-07-19)
 -------------------
 
 Other Changes and Additions
@@ -15,6 +15,10 @@ Other Changes and Additions
 + Updated the stale project description and author metadata, and switched
   ``license`` to the PEP 639 SPDX string form instead of the legacy
   ``{ text = ... }`` table. [#636]
++ Added `pixi` support for developers who choose to clone this repo. [#639]
++ Updated the installation instructions in the README to reflect installation
+  with `uv` and `pixi` as options. Also added badges to show what versions are
+  currently available via PyPI and conda-forge. [#643]
 
 2.1.1 (2026-07-14)
 -------------------
