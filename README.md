@@ -39,11 +39,11 @@ Both `pixi` and `uv` work on a model where you create a working directory for yo
 
     The optional dependencies are grouped into extras so you can install only what you need after initializing the `uv` environment and switching to the working directory:
 
-    - `uv add stellarphot` — base install. The headless/scriptable science
+    - `uv add stellarphot`: base install. The headless/scriptable science
         engine (data structures, photometry, catalog access). Does **not** include the
         Jupyter/widget GUI.
-    - `uv add "stellarphot[gui]"` — adds the notebook/widget interface.
-    - `uv add "stellarphot[exoplanet]"` — adds exoplanet transit light-curve
+    - `uv add "stellarphot[gui]"`: adds the notebook/widget interface.
+    - `uv add "stellarphot[exoplanet]"`: adds exoplanet transit light-curve
         fitting (`pytransit`).
 
 
@@ -58,13 +58,13 @@ Both `pixi` and `uv` work on a model where you create a working directory for yo
     This installs the entire package with all optional dependencies. Once that is done, you can start JupyterLab interface with `pixi run jupyter lab`. [**NOTE**: Since `pixi` uses `conda-forge` as its default channel, it doesn't always have the latest version of `stellarphot`. If you want the latest version, use `pixi add --pypi "stellarphot[all]"`].
     
     The optional dependencies are grouped into extras so you can install only what you need after initializing the `pixi` environment and switching to the working directory:
-    - `pixi add --pypi "stellarphot[all]"` — complete install pulled from PyPI with all optional dependencies. 
+    - `pixi add --pypi "stellarphot[all]"`: complete install pulled from PyPI with all optional dependencies. 
         Jupyter/widget GUI.
-    - `pixi add --pypi "stellarphot"` — base install. The headless/scriptable science
+    - `pixi add --pypi "stellarphot"`: base install. The headless/scriptable science
         engine (data structures, photometry, catalog access). Does **not** include the
         Jupyter/widget GUI.
-    - `pixi add --pypi "stellarphot[gui]"` — adds the notebook/widget interface.
-    - `pixi add --pypi "stellarphot[exoplanet]"` — adds exoplanet transit light-curve
+    - `pixi add --pypi "stellarphot[gui]"`: adds the notebook/widget interface.
+    - `pixi add --pypi "stellarphot[exoplanet]"`: adds exoplanet transit light-curve
         fitting (`pytransit`).
 
 
@@ -85,12 +85,12 @@ Both `pixi` and `uv` work on a model where you create a working directory for yo
   ```
   The optional dependencies are grouped into extras so you can install only what you need:
 
-  - `pip install stellarphot` — base install. The headless/scriptable science
+  - `pip install stellarphot`: base install. The headless/scriptable science
     engine (data structures, photometry, catalog access). Does **not** include the Jupyter/widget GUI.
-  - `pip install stellarphot[gui]` — adds the notebook/widget interface.
-  - `pip install stellarphot[exoplanet]` — adds exoplanet transit light-curve
+  - `pip install stellarphot[gui]`: adds the notebook/widget interface.
+  - `pip install stellarphot[exoplanet]`: adds exoplanet transit light-curve
     fitting (`pytransit`).
-  - `pip install stellarphot[all]` — everything above.
+  - `pip install stellarphot[all]`: everything above.
 
 ## Getting started with stellarphot
 
