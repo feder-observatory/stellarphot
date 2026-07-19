@@ -20,7 +20,7 @@ useful photometry, with a focus on variable star and exoplanet transit observati
 
 ## Installation
 
-`stellarphot` requires Python 3.11 or later. You can install `stellarphot` using `uv`, `pixi`, `pip` or `conda`.  These tools access one of two package repositories, conda-forge or PyPI. 
+`stellarphot` requires Python 3.11 or later. You can install `stellarphot` using `uv`, `pixi`, `pip` or `conda`.  These tools access one of two package repositories, conda-forge or PyPI.
 
 - `uv` and `pip` use the PyPI package repository which currently has the following version of *stellarphot*:
 [![PyPI version](https://img.shields.io/pypi/v/stellarphot.svg)](https://pypi.org/project/stellarphot/)
@@ -58,10 +58,10 @@ Both `pixi` and `uv` work on a model where you create a working directory for yo
     cd project_dir_name
     pixi add stellarphot
     ```
-    This installs the entire package with all optional dependencies using the conda-forge package repository. Once that is done, you can start JupyterLab interface with `pixi run jupyter lab`. 
-    
+    This installs the entire package with all optional dependencies using the conda-forge package repository. Once that is done, you can start JupyterLab interface with `pixi run jupyter lab`.
+
 -  `pixi` can also access the PyPI package espository to allow installation of optional subsets of the entire package using the.  The optional subsets are grouped so you can install only what you need after initializing the `pixi` environment and switching to the working directory:
-    - `pixi add --pypi "stellarphot[all]"`: complete install with all optional dependencies. 
+    - `pixi add --pypi "stellarphot[all]"`: complete install with all optional dependencies.
     - `pixi add --pypi "stellarphot"`: base install. The headless/scriptable science engine (data structures, photometry, catalog access) which does **not** include the Jupyter/widget GUI.
     - `pixi add --pypi "stellarphot[gui]"`: adds the notebook/widget interface.
     - `pixi add --pypi "stellarphot[exoplanet]"`: adds exoplanet transit light-curve
