@@ -23,9 +23,9 @@ useful photometry, with a focus on variable star and exoplanet transit observati
 `stellarphot` requires Python 3.11 or later. You can install `stellarphot` using `uv`, `pixi`, `pip` or `conda`.  These tools access one of two package repositories, conda-forge or PyPI.
 
 - `uv` and `pip` use the PyPI package repository which currently has the following version of *stellarphot*:
-[![PyPI version](https://img.shields.io/pypi/v/stellarphot.svg)](https://pypi.org/project/stellarphot/)
+  [![PyPI version](https://img.shields.io/pypi/v/stellarphot.svg)](https://pypi.org/project/stellarphot/)
 - `pixi` and `conda` use the conda-forge package repository (although `pixi` can use PyPI instead) which currently has the following version of *stellarphot*:
-[![Conda-forge version](https://img.shields.io/conda/vn/conda-forge/stellarphot.svg)](https://anaconda.org/conda-forge/stellarphot)
+  [![Conda-forge version](https://img.shields.io/conda/vn/conda-forge/stellarphot.svg)](https://anaconda.org/conda-forge/stellarphot)
 
 Both `pixi` and `uv` work on a model where you create a working directory for your project and install the packages into that working directory.  This is a good way to keep your work organized and avoid conflicts with other Python packages you may have installed. You an examine the documentation for [`uv`](https://uv.readthedocs.io/en/latest/) or [`pixi`](https://pixi.readthedocs.io/en/latest/) for details on how to use those tools.
 
