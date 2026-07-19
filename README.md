@@ -20,39 +20,53 @@ useful photometry, with a focus on variable star and exoplanet transit observati
 
 ## Installation
 
-`stellarphot` requires Python 3.11 or later.
+`stellarphot` requires Python 3.11 or later. You can install `stellarphot` using `uv`, `pixi`, `pip` or `conda`.  These tools access one of two package repositories, conda-forge or PyPI.
 
-You can install `stellarphot` with either `pip` or `conda`.  If you are interested in `stellarphot` for exoplanet transit light curves, `conda` is recommended at the moment because of an issue with installing one of the dependencies.
+- `uv` and `pip` use the PyPI package repository which currently has the following version of *stellarphot*:
+  [![PyPI version](https://img.shields.io/pypi/v/stellarphot.svg)](https://pypi.org/project/stellarphot/)
+- `pixi` and `conda` use the conda-forge package repository (although `pixi` can use PyPI instead) which currently has the following version of *stellarphot*:
+  [![Conda-forge version](https://img.shields.io/conda/vn/conda-forge/stellarphot.svg)](https://anaconda.org/conda-forge/stellarphot)
 
-- Install with `conda` using
-  ```
-  conda install -c conda-forge stellarphot
-  ```
-  If you are interested in exoplanet light curve fitting, also install `pytransit` using
+Both `pixi` and `uv` work on a model where you create a working directory for your project and install the packages into that working directory.  This is a good way to keep your work organized and avoid conflicts with other Python packages you may have installed. You can examine the documentation for [`uv`](https://uv.readthedocs.io/en/latest/) or [`pixi`](https://pixi.readthedocs.io/en/latest/) for details on how to use those tools.
 
-  ```
-  conda install -c conda-forge pytransit
-  ```
+`conda` and `pip` work on a model where you install the packages into your existing Python environment. This allows you to get started quickly, but you may run into conflicts with other packages you have installed.
 
-- Install with `pip`. Most people want the full interactive experience (the
-  Jupyter notebooks and widgets plus exoplanet fitting):
-  ```
-  pip install stellarphot[all]
-  ```
-  The optional dependencies are grouped into extras so you can install only what
-  you need:
+### Available extras
 
-  - `pip install stellarphot` — base install. The headless/scriptable science
-    engine (data structures, photometry, catalog access). Does **not** include the
-    Jupyter/widget GUI.
-  - `pip install stellarphot[gui]` — adds the notebook/widget interface.
-  - `pip install stellarphot[exoplanet]` — adds exoplanet transit light-curve
-    fitting (`pytransit`).
-  - `pip install stellarphot[all]` — everything above.
+`stellarphot`'s dependencies are grouped into options so you can install only what you need:
+
+| Option | Adds |
+|---|---|
+| *(none, base install)* | The headless/scriptable engine (data structures, photometry, catalog access). Does **not** include the Jupyter/widget GUI. |
+| `gui` | The Jupyter notebook/widget interface. |
+| `exoplanet` | Exoplanet transit light-curve fitting (`pytransit`). |
+| `all` | Everything above. |
+
+**Note**: Only the full (`all`) install is available from conda-forge, via `conda` or `pixi`'s conda-forge mode (see the `all` row below for both `pixi` commands). Partial installs (`gui` or `exoplanet` alone) require PyPI, via `pixi --pypi`, `uv`, or `pip`.
+
+### Environmental Setup
+
+`uv` and `pixi` first need a project directory to install into (replace `project_dir_name` with a name of your choice):
+
+```
+uv init project_dir_name && cd project_dir_name    # uv
+pixi init project_dir_name && cd project_dir_name  # pixi
+```
+
+`conda` and `pip` install directly into your current Python environment, so no setup step is needed.
+
+### Installation commands
+
+| Option | `uv` | `pixi` | `conda` | `pip` |
+|---|---|---|---|---|
+| base | `uv add stellarphot` | `pixi add --pypi stellarphot` | — | `pip install stellarphot` |
+| `gui` | `uv add "stellarphot[gui]"` | `pixi add --pypi "stellarphot[gui]"` | — | `pip install "stellarphot[gui]"` |
+| `exoplanet` | `uv add "stellarphot[exoplanet]"` | `pixi add --pypi "stellarphot[exoplanet]"` | — | `pip install "stellarphot[exoplanet]"` |
+| `all` | `uv add "stellarphot[all]"` | `pixi add stellarphot` (conda-forge)<br>`pixi add --pypi "stellarphot[all]"` (PyPI) | `conda install -c conda-forge stellarphot` | `pip install "stellarphot[all]"` |
 
 ## Getting started with stellarphot
 
-1. Start Jupyterlab from the command line: `jupyter lab`
+1. Start Jupyterlab from the command line: `jupyter lab` (or `uv run jupyter lab` or `pixi run jupyter lab` if you installed with `uv` or `pixi`).
 2. Once JupyterLab opens in your web browser, open the Launcher (see Figure below)
 3. Click on the notebook you want (see figure below) and follow the instructions in the notebook.
 Output files and the settings used to generate them will show up in the file browser
@@ -113,4 +127,4 @@ Feel free to contact @mwcraig or @JuanCab with your questions about using `stell
 
 ## License
 
-This project is Copyright (c) 2019-2024 The Stellarphot Team and licensed under the terms of the BSD 3-Clause license. This package is based upon the [Astropy package template](https://github.com/astropy/package-template) which is licensed under the BSD 3-clause license.
+This project is Copyright (c) 2019-2026 The Stellarphot Team and licensed under the terms of the BSD 3-Clause license. This package is based upon the [Astropy package template](https://github.com/astropy/package-template) which is licensed under the BSD 3-clause license.
