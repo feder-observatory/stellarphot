@@ -74,7 +74,7 @@ Both `pixi` and `uv` work on a model where you create a working directory for yo
   ```
   conda install -c conda-forge stellarphot
   ```
-  This installs the entire package with all optional dependencies using the conda-forge package repository version . Then you can start JupyterLab interface with `jupyter lab`.  There is no easy way to install only some of the optional dependencies with `conda` at this time.
+  This installs the entire package with all optional dependencies (the equivalent of `stellarphot[all]` in the instructions above) using the conda-forge package repository version . Then you can start JupyterLab interface with `jupyter lab`.  There is no easy way to install only some of the optional dependencies with `conda` at this time.
 
 ### Installing with `pip`
 
