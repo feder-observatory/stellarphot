@@ -135,7 +135,7 @@ class SeeingProfileWidget:
         self.iw.is_marking = False
 
         self._on_click_message = self._make_click_dispatcher()
-        self.iw.viewer.interaction.on_msg(self._on_click_message)
+        self.iw._astro_im.interaction.on_msg(self._on_click_message)
 
         # Outputs to hold the graphs
         self.seeing_profile_plot = ipw.Output()

@@ -104,40 +104,38 @@ def test_wrap_toggles_elim_marker():
 
     # Events other than clicks should be ignored
     callback(
-        iw.viewer.interaction,
+        iw._astro_im.interaction,
         {"event": "mousemove", "domain": {"x": float(x), "y": float(y)}},
         [],
     )
     assert "elim1" not in iw.catalog_labels
 
     # Click on the star to exclude it...
-    callback(iw.viewer.interaction, click, [])
+    callback(iw._astro_im.interaction, click, [])
     assert "elim1" in iw.catalog_labels
 
-    # The exclusion marker must be a shape the bqplot ScatterGL frontend
-    # actually draws -- its shader only implements circle, square, arrow,
-    # cross, triangle-up and triangle-down, and silently draws nothing for
-    # the rest.
+    # "plus" only renders because the workarounds module swaps the catalog
+    # marks from ScatterGL (whose shader cannot draw it) to the SVG Scatter.
     elim_style = iw.get_catalog_style(catalog_label="elim1")
-    assert elim_style["shape"] == "triangle-up"
+    assert elim_style["shape"] == "plus"
     assert elim_style["color"] == "red"
     # Sizes are linear (bqplot draws size**2 pixels of area), so anything
     # much above 10 dwarfs the stars it is supposed to mark.
     assert elim_style["size"] == 12
 
     # ...and click again to include it.
-    callback(iw.viewer.interaction, click, [])
+    callback(iw._astro_im.interaction, click, [])
     assert "elim1" not in iw.catalog_labels
 
     # A click far from any star should display a message instead of
     # adding a marker.
     miss = {"event": "click", "domain": {"x": float(x) + 500, "y": float(y) + 500}}
-    callback(iw.viewer.interaction, miss, [])
+    callback(iw._astro_im.interaction, miss, [])
     assert "Click closer to a star" in status.value
     assert not any(label.startswith("elim") for label in iw.catalog_labels)
 
     # A successful click afterwards should clear the stale message.
-    callback(iw.viewer.interaction, click, [])
+    callback(iw._astro_im.interaction, click, [])
     assert "elim" in "".join(iw.catalog_labels)
     assert status.value == ""
 
@@ -244,14 +242,10 @@ def test_make_markers_shapes_and_colors():
 
     cf.make_markers(iw, [], vsx, apass, name_or_coord=None)
 
-    # The shapes must be ones the bqplot ScatterGL frontend actually draws --
-    # its shader only implements circle, square, arrow, cross, triangle-up
-    # and triangle-down, and silently draws nothing for the rest (including
-    # "diamond" and "plus", even though astro-image-display-api documents
-    # them as supported).
-    # "cross" renders as the plus sign the legend promises.
+    # "diamond" only renders because the workarounds module swaps the catalog
+    # marks from ScatterGL (whose shader cannot draw it) to the SVG Scatter.
     apass_style = iw.get_catalog_style(catalog_label="APASS comparison")
-    assert apass_style["shape"] == "cross"
+    assert apass_style["shape"] == "diamond"
     assert apass_style["color"] == "red"
 
     vsx_style = iw.get_catalog_style(catalog_label="VSX")
@@ -284,17 +278,17 @@ def test_show_circle_draws_bqplot_circle():
     # ...it should be a Lines mark tracing a circle of the default radius,
     # 2.5 arcmin at 0.56 arcsec/pixel, centered on the target.
     mark_key = f"__circle__{comparison_widget._circle_name}"
-    mark = comparison_widget.iw.viewer._scatter_marks[mark_key]
+    mark = comparison_widget.iw._astro_im._scatter_marks[mark_key]
     assert isinstance(mark, Lines)
-    assert mark in comparison_widget.iw.viewer._figure.marks
+    assert mark in comparison_widget.iw._astro_im._figure.marks
 
     expected_radius = ((2.5 * u.arcmin) / (0.56 * u.arcsec / u.pixel)).to(u.pixel).value
     radii = np.hypot(np.asarray(mark.x) - 1500.0, np.asarray(mark.y) - 1000.0)
     np.testing.assert_allclose(radii, expected_radius, atol=1)
 
     comparison_widget.remove_circle()
-    assert mark_key not in comparison_widget.iw.viewer._scatter_marks
-    assert mark not in comparison_widget.iw.viewer._figure.marks
+    assert mark_key not in comparison_widget.iw._astro_im._scatter_marks
+    assert mark not in comparison_widget.iw._astro_im._figure.marks
 
     # Removing when no circle is shown should not raise.
     comparison_widget.remove_circle()
