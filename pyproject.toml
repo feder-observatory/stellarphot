@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "A package for performing stellar photometry."
 readme = "README.md"
 license = { text = "BSD-3-Clause" }
-# The GUI stack (astrowidgets 0.5 / astro-image-display-api) requires 3.12.
+# The GUI stack (astrowidgets 0.6 / astro-image-display-api) requires 3.12.
 requires-python = ">=3.12"
 authors = [
     { name = "Matt Craig", email = "mattwcraig@gmail.com" },
@@ -37,10 +37,15 @@ dependencies = [
 # The Jupyter notebook / widget stack. All of stellarphot's GUIs run in
 # notebooks, so a single `gui` extra covers the whole interactive experience.
 gui = [
-    "astrowidgets >=0.5.1",  # First release whose bqplot backend renders correctly (0.5.0 had display bugs)
-    "astro-image-display-api >=0.2.1",  # astrowidgets requires this anyway; the
+    "astrowidgets >=0.6",  # First release with the slimmed, astro-image-display-api-only
+                           # bqplot backend: no ImageWidget.viewer property, catalog marks
+                           # drawn with the SVG Scatter (all shapes render, style size
+                           # honored), and clicks are safe without stellarphot workarounds
+    "astro-image-display-api >=0.3.0",  # astrowidgets requires this anyway; the
                                         # explicit pin documents the API version
                                         # stellarphot is written against
+    "bqplot >=0.13,<0.14",  # imported directly for the Label and Lines overlay marks;
+                            # same pin as astrowidgets (0.14 may move marks to bqplot-gl)
     "ipyautoui >=0.7.19",
     "ipyfilechooser",
     "ipywidgets",
@@ -217,10 +222,6 @@ filterwarnings = [
     'ignore:.*has moved to stellarphot\.gui.*:astropy.utils.exceptions.AstropyDeprecationWarning',
     # Apparently bqplot is using deprecated traitlets APIs
     'ignore:\s+Sentinel is not a public part of the traitlets API:DeprecationWarning',
-    # astrowidgets passes astropy Columns to bqplot ScatterGL marks, which
-    # makes traittypes warn (spuriously -- the dtypes match) about coercing
-    # the value to an array.
-    'ignore:Given trait value dtype "float64" does not match required type "float64":UserWarning',
     # ipyautoui generates this warning...
     'ignore:metadata \{.+\} was set from the constructor:DeprecationWarning',
     # ipywidgets or ipyautoui generates this warning...
