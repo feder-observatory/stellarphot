@@ -7,7 +7,6 @@ from astropy.io import fits
 from astropy.table import Table
 from astrowidgets.bqplot import ImageWidget
 
-from stellarphot.gui.astrowidgets_workarounds import load_catalog
 from stellarphot.gui.custom_widgets import ChooseOrMakeNew
 from stellarphot.gui.fits_opener import FitsOpener
 from stellarphot.gui.views import ui_generator
@@ -125,15 +124,6 @@ class SeeingProfileWidget:
                 saved.add_item(camera)
 
         # Do some set up of the ImageWidget
-
-        # astrowidgets has a bug (still present as of 0.5.1, astropy/astrowidgets#206)
-        # in which the built-in _mouse_click handler references the attributes
-        # below, which are never initialized, so any click raises AttributeError
-        # and prevents callbacks registered later (like ours) from running.
-        # Setting both to False makes the built-in handler a no-op.
-        self.iw.click_center = False
-        self.iw.is_marking = False
-
         self._on_click_message = self._make_click_dispatcher()
         self.iw._astro_im.interaction.on_msg(self._on_click_message)
 
@@ -468,13 +458,15 @@ class SeeingProfileWidget:
             pass
 
         # ADD MARKER WHERE CLICKED
-        load_catalog(
-            self.iw,
+        self.iw.load_catalog(
             Table(
                 data=[[rad_prof.center[0]], [rad_prof.center[1]]],
                 names=["x", "y"],
             ),
             catalog_label=self._aperture_name,
+            # Set the size explicitly: the astro-image-display-api default
+            # is 5, half the size this marker has always rendered at.
+            catalog_style={"shape": "circle", "color": "red", "size": 10},
         )
 
         # Default is 1.5 times FWHM

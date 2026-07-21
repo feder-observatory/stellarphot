@@ -105,6 +105,14 @@ def test_seeing_profile_properties(tmp_path, profile_stars):
         # The FWHM should be close to 9.6
         assert 9 < profile_widget.aperture_settings.value["fwhm_estimate"] < 10
 
+        # The click also marks the star. The style must be set explicitly:
+        # the astro-image-display-api default size is 5, half the size this
+        # marker has always rendered at.
+        aperture_style = profile_widget.iw.get_catalog_style(catalog_label="aperture")
+        assert aperture_style["shape"] == "circle"
+        assert aperture_style["color"] == "red"
+        assert aperture_style["size"] == 10
+
         # Get a copy of the current aperture settings
         phot_aps = dict(profile_widget.aperture_settings.value)
         new_radius = phot_aps["radius"] - 2

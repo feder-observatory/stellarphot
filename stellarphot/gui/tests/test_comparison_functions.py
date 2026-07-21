@@ -114,8 +114,8 @@ def test_wrap_toggles_elim_marker():
     callback(iw._astro_im.interaction, click, [])
     assert "elim1" in iw.catalog_labels
 
-    # "plus" only renders because the workarounds module swaps the catalog
-    # marks from ScatterGL (whose shader cannot draw it) to the SVG Scatter.
+    # "plus" is one of the shapes that only the SVG Scatter mark astrowidgets
+    # now uses can draw (the ScatterGL shader it used before could not).
     elim_style = iw.get_catalog_style(catalog_label="elim1")
     assert elim_style["shape"] == "plus"
     assert elim_style["color"] == "red"
@@ -242,8 +242,9 @@ def test_make_markers_shapes_and_colors():
 
     cf.make_markers(iw, [], vsx, apass, name_or_coord=None)
 
-    # "diamond" only renders because the workarounds module swaps the catalog
-    # marks from ScatterGL (whose shader cannot draw it) to the SVG Scatter.
+    # "diamond" is one of the shapes that only the SVG Scatter mark
+    # astrowidgets now uses can draw (the ScatterGL shader it used before
+    # could not).
     apass_style = iw.get_catalog_style(catalog_label="APASS comparison")
     assert apass_style["shape"] == "diamond"
     assert apass_style["color"] == "red"
@@ -256,6 +257,14 @@ def test_make_markers_shapes_and_colors():
     # much above 10 dwarfs the stars it is supposed to mark.
     assert apass_style["size"] == 10
     assert vsx_style["size"] == 10
+
+    # Guard against a regression to marks that cannot draw these shapes or
+    # that ignore the style's size, as astrowidgets' bqplot backend once did.
+    from bqplot import Scatter
+
+    mark = iw._astro_im._scatter_marks["APASS comparison"]
+    assert isinstance(mark, Scatter)
+    assert mark.default_size == apass_style["size"] ** 2
 
 
 def test_show_circle_draws_bqplot_circle():
