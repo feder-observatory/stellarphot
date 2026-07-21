@@ -97,7 +97,7 @@ def test_seeing_profile_properties(tmp_path, profile_stars):
         # Simulate a click by sending the same message the bqplot front end
         # would send to the production click dispatcher.
         profile_widget._on_click_message(
-            profile_widget.iw.viewer.interaction,
+            profile_widget.iw._astro_im.interaction,
             make_click_event(star_loc_x, star_loc_y),
             [],
         )
@@ -192,7 +192,7 @@ def test_seeing_profile_error_messages_no_star(tmp_path, capsys):
 
         # Clicking once should generate an error...
         profile_widget._on_click_message(
-            profile_widget.iw.viewer.interaction,
+            profile_widget.iw._astro_im.interaction,
             make_click_event(star_loc_x, star_loc_y),
             [],
         )
@@ -204,7 +204,7 @@ def test_seeing_profile_error_messages_no_star(tmp_path, capsys):
 
         # Clicking a second time should also just have one error
         profile_widget._on_click_message(
-            profile_widget.iw.viewer.interaction,
+            profile_widget.iw._astro_im.interaction,
             make_click_event(star_loc_x, star_loc_y),
             [],
         )
@@ -237,7 +237,7 @@ def test_click_dispatcher_ignores_non_click_events(tmp_path, profile_stars):
 
     star_loc_x, star_loc_y = profile_stars["x_mean"][0], profile_stars["y_mean"][0]
     profile_widget._on_click_message(
-        profile_widget.iw.viewer.interaction,
+        profile_widget.iw._astro_im.interaction,
         {"event": "mousemove", "domain": {"x": star_loc_x, "y": star_loc_y}},
         [],
     )

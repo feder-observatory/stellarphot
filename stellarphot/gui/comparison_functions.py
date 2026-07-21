@@ -157,11 +157,9 @@ def make_markers(iw, RD, vsx, ent, name_or_coord=None):
 
     iw.remove_catalog(catalog_label="*")
 
-    # The shapes below must be ones the bqplot ScatterGL frontend actually
-    # draws -- its shader only implements circle, square, arrow, cross,
-    # triangle-up and triangle-down, and silently draws nothing for the rest
-    # (including "diamond" and "plus", even though astro-image-display-api
-    # documents them as supported). "cross" renders as a plus sign.
+    # "diamond" and "plus" below only render because astrowidgets_workarounds
+    # swaps the catalog marks from ScatterGL (whose shader cannot draw them)
+    # to the SVG Scatter.
     if RD:
         load_catalog(
             iw,
@@ -191,7 +189,7 @@ def make_markers(iw, RD, vsx, ent, name_or_coord=None):
         _coord_catalog_table(ent),
         use_skycoord=True,
         catalog_label="APASS comparison",
-        catalog_style={"shape": "cross", "color": "red", "size": 10},
+        catalog_style={"shape": "diamond", "color": "red", "size": 10},
     )
 
 
@@ -251,7 +249,7 @@ def wrap(imagewidget, status_widget):
                     all_table[rat],
                     use_skycoord=True,
                     catalog_label=f"elim{imagewidget.next_elim}",
-                    catalog_style={"shape": "triangle-up", "color": "red", "size": 12},
+                    catalog_style={"shape": "plus", "color": "red", "size": 12},
                 )
             else:
                 for elim in elims:
@@ -637,9 +635,9 @@ class ComparisonViewer:
         legend = ipw.HTML(value="""
         <ul>
         <li>Green circles -- Gaia stars within 2.5 arcmin of target</li>
-        <li>Red + -- Comparison stars from APASS</li>
+        <li>Red diamonds -- Comparison stars from APASS</li>
         <li>Blue squares -- VSX variables</li>
-        <li>Red triangles -- Exclude as target or comp</li>
+        <li>Red + -- Exclude as target or comp</li>
         </ul>
         """)
 
@@ -655,7 +653,7 @@ class ComparisonViewer:
 
         # Messages for the user (e.g. "Click closer to a star") show up here.
         self._status_message = ipw.HTML()
-        iw.viewer.interaction.on_msg(wrap(iw, self._status_message))
+        iw._astro_im.interaction.on_msg(wrap(iw, self._status_message))
 
         self.object_name = ipw.HTML(value="<h2>Object: </h2>")
         self._object = None
@@ -795,8 +793,8 @@ class ComparisonViewer:
         }
 
         scales = {
-            "x": self.iw.viewer._scales["x"],
-            "y": self.iw.viewer._scales["y"],
+            "x": self.iw._astro_im._scales["x"],
+            "y": self.iw._astro_im._scales["y"],
         }
 
         for marker_name, (prefix, color) in label_prefix_color.items():
@@ -817,9 +815,9 @@ class ComparisonViewer:
             # Mirror the mark into the viewer's own mark dictionary so the
             # labels survive the viewer's _update_marks calls (e.g. when a
             # catalog is added or removed).
-            self.iw.viewer._scatter_marks[f"__label__{marker_name}"] = mark
+            self.iw._astro_im._scatter_marks[f"__label__{marker_name}"] = mark
 
-        self.iw.viewer._update_marks()
+        self.iw._astro_im._update_marks()
 
     def remove_labels(self):
         """
@@ -833,8 +831,8 @@ class ComparisonViewer:
         """
         for name in list(self._label_marks):
             del self._label_marks[name]
-            self.iw.viewer._scatter_marks.pop(f"__label__{name}", None)
-        self.iw.viewer._update_marks()
+            self.iw._astro_im._scatter_marks.pop(f"__label__{name}", None)
+        self.iw._astro_im._update_marks()
 
     def show_circle(self, radius=2.5 * u.arcmin, pixel_scale=0.56 * u.arcsec / u.pixel):
         """
@@ -868,16 +866,16 @@ class ComparisonViewer:
             x=x + radius_pixels * np.cos(theta),
             y=y + radius_pixels * np.sin(theta),
             scales={
-                "x": self.iw.viewer._scales["x"],
-                "y": self.iw.viewer._scales["y"],
+                "x": self.iw._astro_im._scales["x"],
+                "y": self.iw._astro_im._scales["y"],
             },
             colors=["yellow"],
         )
         # Put the mark in the viewer's own mark dictionary, the same pattern
         # show_labels uses, so the circle survives the viewer's _update_marks
         # calls.
-        self.iw.viewer._scatter_marks[f"__circle__{self._circle_name}"] = mark
-        self.iw.viewer._update_marks()
+        self.iw._astro_im._scatter_marks[f"__circle__{self._circle_name}"] = mark
+        self.iw._astro_im._update_marks()
 
     def remove_circle(self):
         """
@@ -889,8 +887,8 @@ class ComparisonViewer:
         None
             Circle is removed from the image.
         """
-        self.iw.viewer._scatter_marks.pop(f"__circle__{self._circle_name}", None)
-        self.iw.viewer._update_marks()
+        self.iw._astro_im._scatter_marks.pop(f"__circle__{self._circle_name}", None)
+        self.iw._astro_im._update_marks()
 
     def tess_field_view(self):
         """
