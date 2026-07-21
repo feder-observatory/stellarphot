@@ -13,7 +13,6 @@ from bqplot import Label, Lines
 from ipyautoui.custom import FileChooser
 
 from stellarphot import SourceListData
-from stellarphot.gui.astrowidgets_workarounds import load_catalog
 from stellarphot.gui.custom_widgets import SettingWithTitle, Spinner
 from stellarphot.gui.fits_opener import FitsOpener
 from stellarphot.gui.views import ui_generator
@@ -37,9 +36,9 @@ DESC_STYLE = {"description_width": "initial"}
 def _coord_catalog_table(table):
     """
     Return a copy of ``table`` whose "coords" column is renamed to "coord",
-    the SkyCoord column name astro-image-display-api expects. Loading a
-    catalog with any other column name breaks astrowidgets 0.5.0, which
-    reads the catalog back internally using the default name.
+    the SkyCoord column name astro-image-display-api uses by default, so
+    that catalogs read back from the viewer combine cleanly whatever table
+    they were loaded from.
 
     Parameters
     ----------
@@ -157,12 +156,8 @@ def make_markers(iw, RD, vsx, ent, name_or_coord=None):
 
     iw.remove_catalog(catalog_label="*")
 
-    # "diamond" and "plus" below only render because astrowidgets_workarounds
-    # swaps the catalog marks from ScatterGL (whose shader cannot draw them)
-    # to the SVG Scatter.
     if RD:
-        load_catalog(
-            iw,
+        iw.load_catalog(
             _coord_catalog_table(RD),
             use_skycoord=True,
             catalog_label="TESS Targets",
@@ -176,16 +171,14 @@ def make_markers(iw, RD, vsx, ent, name_or_coord=None):
             iw.set_viewport(center=name_or_coord)
 
     if vsx:
-        load_catalog(
-            iw,
+        iw.load_catalog(
             _coord_catalog_table(vsx),
             use_skycoord=True,
             catalog_label="VSX",
             catalog_style={"shape": "square", "color": "blue", "size": 10},
         )
 
-    load_catalog(
-        iw,
+    iw.load_catalog(
         _coord_catalog_table(ent),
         use_skycoord=True,
         catalog_label="APASS comparison",
@@ -244,8 +237,7 @@ def wrap(imagewidget, status_widget):
                 if name.startswith("elim")
             ]
             if not elims:
-                load_catalog(
-                    imagewidget,
+                imagewidget.load_catalog(
                     all_table[rat],
                     use_skycoord=True,
                     catalog_label=f"elim{imagewidget.next_elim}",
@@ -642,14 +634,6 @@ class ComparisonViewer:
         """)
 
         iw = ImageWidget()
-
-        # astrowidgets has a bug (still present as of 0.5.1, astropy/astrowidgets#206)
-        # in which the built-in _mouse_click handler references the attributes
-        # below, which are never initialized, so any click raises AttributeError
-        # and prevents callbacks registered later (like ours) from running.
-        # Setting both to False makes the built-in handler a no-op.
-        iw.click_center = False
-        iw.is_marking = False
 
         # Messages for the user (e.g. "Click closer to a star") show up here.
         self._status_message = ipw.HTML()
