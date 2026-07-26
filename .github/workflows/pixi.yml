@@ -17,11 +17,41 @@ concurrency:
 jobs:
   build:
     strategy:
-      max-parallel: 4
       fail-fast: false
       matrix:
-        platform: [ubuntu-latest, macos-latest, windows-latest]
-        environment: [test, test-py312, test-py313, test-py314 ]
+        # Every Python on ubuntu, one representative Python on macOS and
+        # Windows. The remaining OS/Python combinations run in build-full
+        # on the weekly schedule.
+        include:
+          - platform: ubuntu-latest
+            environment: test-py312
+          - platform: ubuntu-latest
+            environment: test-py313
+          - platform: ubuntu-latest
+            environment: test-py314
+          - platform: macos-latest
+            environment: test-py313
+          - platform: windows-latest
+            environment: test-py313
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - uses: prefix-dev/setup-pixi@v0.10.0
+        with:
+          pixi-version: v0.73.0
+      - run: pixi run --environment ${{ matrix.environment }} test
+
+  build-full:
+    # The OS/Python combinations not covered on pull requests.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-latest, windows-latest]
+        environment: [test-py312, test-py314]
     runs-on: ${{ matrix.platform }}
 
     steps:
