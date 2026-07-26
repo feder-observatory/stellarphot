@@ -3,7 +3,9 @@ repos:
     rev: v6.0.0
     hooks:
       - id: check-added-large-files
-        # Prevent giant files from being committed.
+        # Prevent giant files from being committed. The pixi lock file is
+        # generated, always large, and already in the repo.
+        exclude: ^pixi\.lock$
       - id: check-toml
         # Attempts to load all TOML files to verify syntax.
       - id: check-yaml

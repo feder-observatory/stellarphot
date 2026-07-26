@@ -21,7 +21,7 @@ jobs:
       fail-fast: false
       matrix:
         platform: [ubuntu-latest, macos-latest, windows-latest]
-        environment: [test, test-py311, test-py312, test-py313 ]
+        environment: [test, test-py312, test-py313, test-py314 ]
     runs-on: ${{ matrix.platform }}
 
     steps:

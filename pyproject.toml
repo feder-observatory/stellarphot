@@ -5,13 +5,13 @@ build-backend = "hatchling.build"
 [project]
 name = "stellarphot"
 dynamic = ["version"]
-description = "A package for performing stellar photometry."
+description = "A package for performing stellar photometry aimed at variable star and exoplanet research."
 readme = "README.md"
-license = { text = "BSD-3-Clause" }
+license = "BSD-3-Clause"
 # The GUI stack (astrowidgets 0.6 / astro-image-display-api) requires 3.12.
 requires-python = ">=3.12"
 authors = [
-    { name = "Matt Craig", email = "mattwcraig@gmail.com" },
+    { name = "The Stellarphot Team", email = "mattwcraig@gmail.com" },
 ]
 # Base install is headless/scriptable: the science + data layer only. The
 # Jupyter/ipywidgets GUI stack is an optional `[gui]` extra (see below), so
@@ -56,11 +56,6 @@ exoplanet = [
     "lmfit",
     "pytransit",
 ]
-# Deprecated alias for `exoplanet`, kept for backwards compatibility. Will be
-# removed in a future release; use `stellarphot[exoplanet]` instead.
-exo_fitting = [
-    "stellarphot[exoplanet]",
-]
 # Everything a user needs for the full interactive experience.
 all = [
     "stellarphot[gui]",
@@ -84,8 +79,15 @@ test = [
     "tox",
 ]
 
+# These populate the "Project links" sidebar on the PyPI page. The old
+# Homepage pointed at github.com/stellarphot/stellarphot, an org that does not
+# host this project; the code and docs live under feder-observatory instead.
 [project.urls]
-Homepage = "https://github.com/stellarphot/stellarphot"
+Homepage = "https://github.com/feder-observatory/stellarphot"
+Documentation = "https://stellarphot.readthedocs.io"
+Repository = "https://github.com/feder-observatory/stellarphot"
+Issues = "https://github.com/feder-observatory/stellarphot/issues"
+Changelog = "https://github.com/feder-observatory/stellarphot/blob/main/CHANGES.rst"
 
 [tool.hatch.version]
 source = "vcs"
@@ -149,7 +151,7 @@ include = [
 
 [tool.black]
 line-length = 88
-target-version = ['py310', 'py311']
+target-version = ['py311', 'py312', 'py313']
 include = '\.pyi?$|\.ipynb$'
 # 'extend-exclude' excludes files or directories in addition to the defaults
 # extend-exclude = '''
@@ -185,7 +187,7 @@ select = [
 # The diagrams-*.md files use short Mermaid node ids that codespell
 # misreads as typos. The ExoFOP test data is a captured server response
 # whose field names look like typos to codespell.
-skip = '*.svg,docs/diagrams-*.md,stellarphot/io/tests/data/tic-236158940-exofop.json'
+skip = '*.svg,docs/diagrams-*.md,stellarphot/io/tests/data/tic-236158940-exofop.json,*.lock'
 ignore-words = "ignore-words.txt"
 
 [tool.pytest.ini_options]
@@ -260,3 +262,36 @@ filterwarnings = [
     # that were previously ignored.
     'ignore:.*:coverage.exceptions.CoverageWarning',
 ]
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+[tool.pixi.pypi-dependencies]
+stellarphot = { path = ".", editable = true }
+
+[tool.pixi.environments]
+default = { solve-group = "default" }
+all = { features = ["all"], solve-group = "default" }
+docs = { features = ["docs"], solve-group = "default" }
+exoplanet = { features = ["exoplanet"], solve-group = "default" }
+gui = { features = ["gui"], solve-group = "default" }
+test = { features = ["test"], solve-group = "default" }
+test-py312 = { features = ["test", "py312"]}
+test-py313 = { features = ["test", "py313"]}
+test-py314 = { features = ["test", "py314"]}
+
+[tool.pixi.feature.all.tasks]
+lab = { cmd = "jupyter lab", cwd = "stellarphot/notebooks" }
+
+[tool.pixi.feature.test.tasks]
+test = "pytest"
+
+[tool.pixi.feature.py312.dependencies]
+python = '3.12.*'
+
+[tool.pixi.feature.py313.dependencies]
+python = '3.13.*'
+
+[tool.pixi.feature.py314.dependencies]
+python = '3.14.*'
