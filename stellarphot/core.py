@@ -9,6 +9,7 @@ with warnings.catch_warnings():
     import lightkurve as lk
 import numpy as np
 import pandas as pd
+import requests
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astropy.io.ascii import InconsistentTableError
@@ -56,6 +57,12 @@ VIZIER_SERVERS = (
     "vizier.cds.unistra.fr",  # astroquery's default, at CDS
     "vizier.cfa.harvard.edu",
 )
+
+# Seconds to wait for a response from a VizieR server before moving on to the
+# next one. The largest healthy query we have timed (APASS DR9 over an M31
+# field, cold cache) took ~23 s; a broken server can hang far longer than any
+# healthy one takes, and each of these blocks the notebook kernel.
+VIZIER_TIMEOUT = 30
 
 
 def __getattr__(name):
@@ -205,14 +212,14 @@ class BaseEnhancedTable(QTable):
                         )
                 except KeyError as err:
                     raise ValueError(
-                        f"data['{this_col}'] is missing from input " "data."
+                        f"data['{this_col}'] is missing from input data."
                     ) from err
             else:  # Check that columns with no units but are required exist!
                 try:
                     _ = data[this_col]
                 except KeyError as err:
                     raise ValueError(
-                        f"data['{this_col}'] is missing from input " "data."
+                        f"data['{this_col}'] is missing from input data."
                     ) from err
 
     def _update_colnames(self, colname_map, data):
@@ -312,7 +319,7 @@ class BaseEnhancedTable(QTable):
         for column, restriction in other_restrictions.items():
             results = criteria_re.match(restriction)
             if not results:
-                raise ValueError(f"Criteria {column}{restriction} not " "understood.")
+                raise ValueError(f"Criteria {column}{restriction} not understood.")
             comparison_func = comparisons[results.group(1)]
             comparison_value = results.group(2)
             new_keepers = comparison_func(self[column], float(comparison_value))
@@ -533,8 +540,7 @@ class PhotometryData(BaseEnhancedTable):
             except AttributeError as err:
                 # Happens if first item doesn't have a "scale"
                 raise ValueError(
-                    "input_data['date-obs'] isn't column of "
-                    "astropy.time.Time entries."
+                    "input_data['date-obs'] isn't column of astropy.time.Time entries."
                 ) from err
 
             # Convert input data to QTable (while also checking for required columns)
@@ -612,7 +618,6 @@ class PhotometryData(BaseEnhancedTable):
                     # Compute the columns that need to be computed (match requires
                     # python>=3.10)
                     match this_col:
-
                         case "night":
                             # Generate integer counter for nights. This should be
                             # approximately the MJD at noon local before the evening of
@@ -1260,8 +1265,7 @@ class CatalogData(BaseEnhancedTable):
             center = field_center
             if clip_by_frame:
                 raise ValueError(
-                    "To clip entries by frame you must use "
-                    "a WCS as the first argument."
+                    "To clip entries by frame you must use a WCS as the first argument."
                 )
         elif isinstance(field_center, WCS):
             center = SkyCoord(*field_center.wcs.crval, unit="deg")
@@ -1287,16 +1291,25 @@ class CatalogData(BaseEnhancedTable):
         # When a VizieR server is unreachable it may still respond with a
         # VOTable that contains only error messages, which astroquery turns
         # into an empty result, so an empty result on one server is retried
-        # on the others.
+        # on the others. A server whose database is broken may instead hang
+        # until the request times out, so network-level errors also fall
+        # through to the next server.
+        network_error = None
         for server in VIZIER_SERVERS:
             vizier = Vizier(
                 columns=["all"],
                 row_limit=-1,
                 column_filters=column_filter,
-                timeout=180,
+                timeout=VIZIER_TIMEOUT,
                 vizier_server=server,
             )
-            cat = vizier.query_region(center, radius=radius, catalog=desired_catalog)
+            try:
+                cat = vizier.query_region(
+                    center, radius=radius, catalog=desired_catalog
+                )
+            except requests.exceptions.RequestException as err:
+                network_error = err
+                continue
             if len(cat) > 0:
                 break
         else:
@@ -1304,7 +1317,7 @@ class CatalogData(BaseEnhancedTable):
                 f"No results returned from Vizier for catalog {desired_catalog} "
                 f"around {center}. The region may contain no matching sources, "
                 "or the VizieR servers may be unavailable."
-            )
+            ) from network_error
 
         # Vizier always returns list even if there is only one element. Grab that
         # element.
@@ -1398,7 +1411,7 @@ class CatalogData(BaseEnhancedTable):
         if missing_passbands and transformer is None:
             # If there are missing passbands and no transformer, raise an error
             raise ValueError(
-                f"Passbands \"{', '.join(missing_passbands)}\" not found in catalog."
+                f'Passbands "{", ".join(missing_passbands)}" not found in catalog.'
             )
         passband_mask = np.zeros(len(self), dtype=bool)
         for passband in input_passbands:
