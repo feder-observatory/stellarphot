@@ -1,3 +1,9 @@
+# Settings for pre-commit.ci, which runs these hooks on every pull request
+# (replacing the old ruff-only lint job in GitHub Actions).
+ci:
+  autofix_prs: true
+  autoupdate_schedule: monthly
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
