@@ -10842,6 +10842,7 @@ packages:
   - pydantic>=2
   - pyyaml
   - regions
+  - requests
   - astro-image-display-api>=0.3.0 ; extra == 'all'
   - astrowidgets>=0.6 ; extra == 'all'
   - bqplot>=0.13,<0.14 ; extra == 'all'

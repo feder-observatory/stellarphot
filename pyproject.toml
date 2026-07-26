@@ -29,6 +29,9 @@ dependencies = [
     "pydantic >=2",
     "pyyaml",
     "platformdirs",
+    "requests",  # imported directly in stellarphot.core to catch
+                 # RequestException in the VizieR-mirror fallback; only a
+                 # transitive dependency (via astroquery) otherwise
     "regions",  # stellarphot does not directly use regions, but
                 # astroquery.XMatch gripes on import if it is not installed
 ]
