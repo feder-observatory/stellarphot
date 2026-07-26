@@ -1,3 +1,4 @@
+import html
 import logging
 
 import ipyautoui
@@ -424,7 +425,7 @@ class ComparisonViewer:
             # the error on screen, then re-raise so the log gets the traceback.
             error_message = ipw.HTML(
                 value="<p style='color: red'>Loading variable/comparison stars "
-                f"failed: {err}</p>"
+                f"failed: {html.escape(str(err))}</p>"
             )
             self._legend_spinner_box.children = [legend, error_message]
             raise

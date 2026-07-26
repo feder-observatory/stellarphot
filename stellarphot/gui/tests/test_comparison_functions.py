@@ -387,7 +387,10 @@ def test_spinner_cleared_and_error_shown_when_catalog_load_fails(tmp_path, monke
     legend = comparison_widget._legend_spinner_box.children[0]
 
     def failing_set_up(*_args, **_kwargs):
-        raise RuntimeError("catalog fetch failed")
+        # The message contains HTML-special characters, as real network errors
+        # often do (server responses, URLs with query strings), to check that
+        # the on-screen message escapes them instead of injecting markup.
+        raise RuntimeError("catalog fetch failed: server said <b>no</b> & quit")
 
     monkeypatch.setattr(cf, "set_up", failing_set_up)
 
@@ -417,6 +420,10 @@ def test_spinner_cleared_and_error_shown_when_catalog_load_fails(tmp_path, monke
         if isinstance(child, ipw.HTML) and "catalog fetch failed" in child.value
     ]
     assert len(error_widgets) == 1
+
+    # The exception text must be HTML-escaped, not injected as markup.
+    assert "server said &lt;b&gt;no&lt;/b&gt; &amp; quit" in error_widgets[0].value
+    assert "<b>no</b>" not in error_widgets[0].value
 
 
 @pytest.mark.remote_data
