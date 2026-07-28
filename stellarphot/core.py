@@ -84,10 +84,13 @@ def coords_in_frame(coords, wcs, shape, padding=0):
 
     shape : tuple of int
         Pixel shape of the image, as ``(nx, ny)`` -- the same axis order as
-        `astropy.wcs.WCS.pixel_shape`. This is a required argument, rather
-        than being read from ``wcs.pixel_shape``, because ``pixel_shape`` is
-        frequently ``None`` (it is only set if the WCS was constructed from
-        a header with ``NAXIS`` keywords, or set explicitly).
+        `astropy.wcs.WCS.pixel_shape`, and the *reverse* of the numpy
+        ``array.shape`` order ``(ny, nx)``. If you are starting from an
+        array, pass ``array.shape[::-1]``. This is a required argument,
+        rather than being read from ``wcs.pixel_shape``, because
+        ``pixel_shape`` is frequently ``None`` (it is only set if the WCS
+        was constructed from a header with ``NAXIS`` keywords, or set
+        explicitly).
 
     padding : int, optional
         Minimum number of pixels required between a coordinate and the edge
