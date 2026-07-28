@@ -374,8 +374,12 @@ class PhotometryApertures(BaseModelWithTableRep):
         Field(
             default=False,  # To match the original default
             description=(
-                "Should the aperture be variable? If True, the aperture will be "
-                "calculated from the average FWHM of the stars in each image."
+                "Enable variable-aperture photometry. If True, the aperture "
+                "radius is `radius` × (image FWHM), computed from each image "
+                "using fast_fwhm_from_image. If False, the radius is simply "
+                "`radius`. Variable-aperture photometry adapts to seeing "
+                "conditions, improving photometric precision when FWHM "
+                "varies across images."
             ),
         ),
     ]
@@ -538,6 +542,14 @@ class Observatory(BaseModelWithTableRep):
     above example, but the example is given in part to show how to use sexagesimal
     notation.
 
+    Notes
+    -----
+    Astropy's `~astropy.coordinates.Longitude` class wraps negative (west)
+    longitudes into the 0–360° range. For example, −96.7° is displayed as
+    263.3°. This is evident in the examples above: the input −100.0 displays
+    as 260.0. When viewing the longitude value, keep in mind that east longitudes
+    appear as 0–180° while west longitudes appear as 180–360°.
+
     """
 
     # This ensures that just the first line of the docstring is used as the
@@ -575,7 +587,11 @@ class Observatory(BaseModelWithTableRep):
         _UnitQuantTypePydanticAnnotation,
         BeforeValidator(add_degree_to_float),
         Field(
-            description="Longitude of the observatory",
+            description=(
+                "Longitude of the observatory. Note that negative (west) "
+                "longitudes are wrapped into the 0–360° range (e.g. −96.7° "
+                "displays as 263.3°)."
+            ),
             examples=[
                 "-96.7678",
                 "-96d46m04.08s",
