@@ -982,11 +982,9 @@ class CatalogData(BaseEnhancedTable):
                 # data for mag_error.
 
                 if (
-                    # colname_map must be provided
-                    colname_map is not None
-                    and
                     # mag_error must not be in the colname map as a value
-                    "mag_error" not in colname_map.values()
+                    # (if a colname_map was provided at all)
+                    (colname_map is None or "mag_error" not in colname_map.values())
                     and
                     # mag_error must not be in the input data
                     "mag_error" not in input_data.colnames
