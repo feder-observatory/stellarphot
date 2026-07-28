@@ -178,6 +178,28 @@ def test_seeing_profile_save_apertures(tmp_path):
     )
 
 
+def test_seeing_profile_save_writes_widget_radius_to_settings_file(tmp_path):
+    # Combines test_seeing_profile_save_apertures (save() then load() the
+    # settings file) with the radius-widget change in
+    # test_seeing_profile_save_box_title (setting di_widgets["radius"].value
+    # directly, the way the aperture-radius UI control does) to check the
+    # full GUI -> pipeline value flow: a value entered in the radius widget
+    # ends up in the saved PhotometryWorkingDirSettings.
+    os.chdir(tmp_path)
+
+    profile_widget = spf.SeeingProfileWidget(
+        camera=Camera(**TEST_CAMERA_VALUES), _testing_path=tmp_path
+    )
+
+    new_radius = profile_widget.aperture_settings.value["radius"] + 5
+    profile_widget.aperture_settings.di_widgets["radius"].value = new_radius
+
+    profile_widget.save()
+
+    settings = PhotometryWorkingDirSettings().load()
+    assert settings.photometry_apertures.radius == new_radius
+
+
 def test_seeing_profile_save_box_title(tmp_path):
     # Save box title ends with different characters depending on whether values
     # need to be saved.

@@ -38,6 +38,15 @@ Other Changes and Additions
   ``load_fits`` now log which of the candidate exposure keywords they
   matched in the FITS header, instead of only logging on failure to find
   one. [#652]
++ Hardened the test suite (#607): added offline (mocked) coverage of
+  ``mag_scale``/``crossmatch_APASS2VSX``, of the ``apass_dr9``,
+  ``vsx_vizier`` and ``refcat2`` catalog fetchers and the
+  ``clip_by_frame=True`` path (previously exercised only by ``remote_data``
+  tests, invisible in normal CI), and of the GUI-to-settings-file value flow
+  for the seeing-profile aperture radius widget; added explicit unit
+  assertions to the settings JSON/table round-trip tests; and pinned the
+  ``klims`` workaround for pytransit's ``RoadRunnerModel`` with a regression
+  test at the maximum allowed planet radius. [#653]
 
 Bug Fixes
 ^^^^^^^^^

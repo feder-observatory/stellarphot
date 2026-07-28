@@ -214,6 +214,79 @@ class TestModelAgnosticActions:
         assert all(title_present)
 
 
+def test_camera_json_round_trip_preserves_units():
+    # test_model_json_tround_trip above only checks model equality, which
+    # would still pass if a value came back with a unit that is merely
+    # equivalent (rather than identical) to the original -- e.g. a gain of
+    # "2.0 electron / adu" being silently converted to some other, numerically
+    # equal, combination of units. Check the units explicitly.
+    camera = Camera(**deepcopy(TEST_CAMERA_VALUES))
+    camera2 = Camera.model_validate_json(camera.model_dump_json())
+
+    assert camera2.gain.unit == u.electron / u.adu
+    assert camera2.gain.value == 2.0
+    assert camera2.read_noise.unit == u.electron
+    assert camera2.read_noise.value == 10.0
+    assert camera2.dark_current.unit == u.electron / u.s
+    assert camera2.dark_current.value == 0.01
+    assert camera2.pixel_scale.unit == u.arcsec / u.pix
+    assert camera2.pixel_scale.value == 0.563
+    assert camera2.max_data_value.unit == u.adu
+    assert camera2.max_data_value.value == 50000.0
+    assert camera2.data_unit == u.adu
+
+
+def test_observatory_json_round_trip_preserves_units():
+    # As above, but for Observatory's latitude/longitude/elevation, which
+    # are not plain Quantity objects (Latitude/Longitude/Quantity
+    # respectively), so are worth checking on their own.
+    observatory = Observatory(**deepcopy(TEST_OBSERVATORY_SETTINGS))
+    observatory2 = Observatory.model_validate_json(observatory.model_dump_json())
+
+    assert observatory2.latitude.unit == u.degree
+    assert observatory2.latitude.value == 45.0
+    assert observatory2.longitude.unit == u.degree
+    assert observatory2.longitude.value == 43.0
+    assert observatory2.elevation.unit == u.m
+    assert observatory2.elevation.value == 311.0
+
+
+def test_camera_table_round_trip_preserves_units(tmp_path):
+    # Companion to test_camera_json_round_trip_preserves_units above, but
+    # for the table-metadata round trip (see test_model_table_round_trip).
+    camera = Camera(**deepcopy(TEST_CAMERA_VALUES))
+    table = BaseEnhancedTable({"data": [1, 2, 3]})
+    table.meta["model"] = camera
+    table_path = tmp_path / "test_table.ecsv"
+    table.write(table_path)
+    new_table = BaseEnhancedTable.read(table_path)
+    camera2 = new_table.meta["model"]
+
+    assert camera2.gain.unit == u.electron / u.adu
+    assert camera2.gain.value == 2.0
+    assert camera2.max_data_value.unit == u.adu
+    assert camera2.max_data_value.value == 50000.0
+
+
+def test_observatory_table_round_trip_preserves_units(tmp_path):
+    # Companion to test_observatory_json_round_trip_preserves_units above,
+    # but for the table-metadata round trip.
+    observatory = Observatory(**deepcopy(TEST_OBSERVATORY_SETTINGS))
+    table = BaseEnhancedTable({"data": [1, 2, 3]})
+    table.meta["model"] = observatory
+    table_path = tmp_path / "test_table.ecsv"
+    table.write(table_path)
+    new_table = BaseEnhancedTable.read(table_path)
+    observatory2 = new_table.meta["model"]
+
+    assert observatory2.latitude.unit == u.degree
+    assert observatory2.latitude.value == 45.0
+    assert observatory2.longitude.unit == u.degree
+    assert observatory2.longitude.value == 43.0
+    assert observatory2.elevation.unit == u.m
+    assert observatory2.elevation.value == 311.0
+
+
 @pytest.mark.parametrize(
     "model,settings",
     [

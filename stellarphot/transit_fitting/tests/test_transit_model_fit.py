@@ -136,6 +136,39 @@ def test_model_light_curve_at_times_length_mismatch_raises():
     np.testing.assert_allclose(tmod.model_light_curve(), baseline)
 
 
+def test_model_light_curve_at_max_rp_bound_is_finite_and_not_flat():
+    # Regression test for the klims=(0.005, 0.6) workaround in
+    # TransitModelFit.__init__ (see the comment there). rp's own allowed
+    # range tops out at 0.5 (_default_params), but RoadRunnerModel's default
+    # klims upper bound is also 0.5, and its native evaluator misbehaves
+    # when the radius ratio k lands exactly on the klims upper limit -- an
+    # off-by-one in pytransit's boundary handling that can crash outright,
+    # and that was observed (without the workaround, i.e. constructing
+    # RoadRunnerModel with its default klims) to instead silently return a
+    # flat, transit-free light curve here. Widening klims's upper bound
+    # keeps rp's whole allowed range safely inside the precomputed table.
+    #
+    # This evaluates the model at rp's maximum bound and checks for a sane
+    # transit signature (finite values with a real dip) rather than a flat
+    # or non-finite light curve, so it fails if the klims workaround is
+    # removed or narrowed back to rp's bound.
+    tmod = _make_transit_model_with_data(
+        noise_dev=0, with_airmass=False, with_width=False, with_spp=False
+    )
+
+    assert tmod.params["rp"].max == 0.5
+    tmod.params["rp"].value = tmod.params["rp"].max
+
+    light_curve = tmod.model_light_curve()
+
+    assert np.all(np.isfinite(light_curve))
+    # A transit with rp=0.5 has real depth; the light curve must actually
+    # dip well below 1, not stay flat (which is what the unpatched klims
+    # upper bound produces).
+    assert light_curve.min() < 1.0 - 1e-3
+    assert not np.allclose(light_curve, light_curve[0])
+
+
 def test_model_light_curve_requires_times():
     # model_light_curve() is public API; if called before times are set it
     # should fail fast with a clear ValueError (mirroring fit()) rather than a

@@ -291,6 +291,147 @@ def test_find_refcat2(mag_limit, mag_limit_band):
         assert all_refcat2["id"][nearest] == EY_UMA_REFCAT2_ID
 
 
+# ---------------------------------------------------------------------------
+# Offline coverage for apass_dr9, vsx_vizier and refcat2, and for the
+# clip_by_frame=True path. The behavioral tests above are marked
+# remote_data, so they do not run (and are not visible as failures) in
+# normal CI. These mock ``VizierClass.query_region`` -- the network boundary
+# inside ``CatalogData.from_vizier`` -- with data drawn from the same
+# fixtures the remote_data tests use, so the fetchers' own processing (id
+# generation, column renaming/mapping, tidying, magnitude-limit-passband
+# validation, frame clipping) is exercised without a network call.
+#
+# The patch target must be the *class*: ``stellarphot.core.Vizier`` is
+# astroquery's ready-made VizierClass instance, and ``from_vizier`` builds a
+# fresh instance per server by calling it, so an attribute patched onto the
+# singleton is never consulted. Each test asserts the mock was called so the
+# suite fails loudly -- rather than quietly querying the live servers -- if
+# the query path moves again.
+# ---------------------------------------------------------------------------
+
+_QUERY_REGION = "astroquery.vizier.core.VizierClass.query_region"
+
+
+def _ey_uma_header():
+    # Same WCS/header construction used by the remote_data tests above
+    # (test_vsx_results, test_find_apass, test_find_refcat2).
+    CCD_SHAPE = [2048, 3073]
+    wcs_file = get_pkg_data_filename("data/sample_wcs_ey_uma.fits")
+    with fits.open(wcs_file) as hdulist:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="The WCS transformation has more",
+                category=FITSFixedWarning,
+            )
+            wcs = WCS(hdulist[0].header)
+    wcs.pixel_shape = list(reversed(CCD_SHAPE))
+    ccd = CCDData(data=np.zeros(CCD_SHAPE), wcs=wcs, unit="adu")
+    return ccd.to_hdu()[0].header
+
+
+def test_apass_dr9_offline(mocker):
+    # data/all_apass_ey_uma.ecsv holds the raw APASS DR9 Vizier response
+    # (RAJ2000/DEJ2000/Field/Vmag/... columns) used to build the "expected"
+    # data in test_find_apass, so it can be fed straight back in as a mocked
+    # query_region result.
+    raw_apass = Table.read(get_pkg_data_filename("data/all_apass_ey_uma.ecsv"))
+    query = mocker.patch(_QUERY_REGION, return_value=[raw_apass])
+
+    result = apass_dr9(_ey_uma_header(), radius=10 * u.arcmin)
+
+    assert query.called
+    assert set(ra.value for ra in result["ra"]) == set(raw_apass["RAJ2000"])
+    # The passbands ought to have been translated to the AAVSO standard
+    # names, same regression covered for the remote_data version (#439).
+    for band in ["B", "V", "SG", "SR", "SI"]:
+        assert band in result["passband"]
+
+
+def test_apass_dr9_offline_clip_by_frame(mocker):
+    # clip_by_frame=True is only ever exercised by the remote_data tests, so
+    # it is invisible to normal CI. Check offline that it actually restricts
+    # the result to stars inside the frame (minus padding), i.e. that it
+    # removes at least one star near the edge of this field.
+    raw_apass = Table.read(get_pkg_data_filename("data/all_apass_ey_uma.ecsv"))
+    query = mocker.patch(_QUERY_REGION, return_value=[raw_apass])
+    header = _ey_uma_header()
+
+    unclipped = apass_dr9(header, radius=10 * u.arcmin, clip_by_frame=False)
+    clipped = apass_dr9(header, radius=10 * u.arcmin, clip_by_frame=True)
+
+    assert query.call_count == 2
+    assert len(clipped) < len(unclipped)
+    assert set(clipped["ra"].value) <= set(unclipped["ra"].value)
+
+
+def test_refcat2_offline(mocker):
+    # data/all_refcat2_ey_uma.ecsv holds refcat2 rows already run through
+    # _process_refcat2 (galaxy/non-Gaia filtering plus id generation), saved
+    # before tidying. Reading it back drops the mask on e_pmRA/e_pmDE/e_Gmag
+    # (no values are actually masked, since this is already the filtered
+    # survivors), so it is restored as a masked table before being handed
+    # back to _process_refcat2 as the mocked raw response -- otherwise
+    # ``catalog["e_pmRA"].mask`` raises because the column isn't a
+    # MaskedColumn. Filtering is then a no-op (nothing left to filter) and
+    # id generation just reproduces the same ids.
+    raw_refcat2 = Table.read(get_pkg_data_filename("data/all_refcat2_ey_uma.ecsv"))
+    raw_refcat2 = Table(raw_refcat2, masked=True)
+    query = mocker.patch(_QUERY_REGION, return_value=[raw_refcat2])
+
+    result = refcat2(_ey_uma_header(), radius=10 * u.arcmin)
+
+    assert query.called
+    assert set(ra.value for ra in result["ra"]) == set(raw_refcat2["RA_ICRS"])
+    for band in ["GBP", "GRP", "GG", "SG", "SR", "SI", "SZ", "J", "H", "K"]:
+        assert band in result["passband"]
+
+    # ids must be unique per star, same check as test_find_refcat2.
+    n_stars = len(set(zip(result["ra"].value, result["dec"].value, strict=True)))
+    assert len(set(result["id"])) == n_stars
+
+
+def _vsx_raw_from_processed(processed):
+    # unclipped_ey_uma_vsx.fits / clipped_ey_uma_vsx.fits hold the already
+    # *processed* output of vsx_vizier (see test_vsx_results), not the raw
+    # Vizier response. Reconstruct a plausible raw B/vsx/vsx response by
+    # undoing vsx_vizier's column renames (and dropping mag_error, which is
+    # synthesized by CatalogData rather than coming from Vizier).
+    raw = processed.copy()
+    raw.rename_column("id", "Name")
+    raw.rename_column("ra", "RAJ2000")
+    raw.rename_column("dec", "DEJ2000")
+    raw.rename_column("mag", "max")
+    raw.rename_column("passband", "n_max")
+    raw.remove_column("mag_error")
+    return raw
+
+
+@pytest.mark.parametrize(
+    "clip, data_file",
+    [
+        (False, "data/unclipped_ey_uma_vsx.fits"),
+        (True, "data/clipped_ey_uma_vsx.fits"),
+    ],
+)
+def test_vsx_vizier_offline(clip, data_file, mocker):
+    # Offline counterpart to test_vsx_results, also covering the
+    # clip_by_frame=True path (parametrized case above). Each fixture is
+    # reconstructed into its own raw input so clip_by_frame=True is exercised
+    # on data that already sits inside the frame (an idempotent, and so
+    # self-consistent, check) rather than relying on it happening to filter
+    # data captured under different server-side settings down to the same
+    # rows.
+    expected = Table.read(get_pkg_data_filename(data_file))
+    raw_vsx = _vsx_raw_from_processed(expected)
+    query = mocker.patch(_QUERY_REGION, return_value=[raw_vsx])
+
+    actual = vsx_vizier(_ey_uma_header(), radius=0.5 * u.degree, clip_by_frame=clip)
+
+    assert query.called
+    assert set(actual["OID"]) == set(expected["OID"])
+
+
 def test_iau_designation_ids_format():
     # The designation format: acronym, a space, then J + RA and Dec in
     # degrees, RA unsigned and Dec signed per the IAU spec, zero-padded (RA
