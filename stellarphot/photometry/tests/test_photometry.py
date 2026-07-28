@@ -1133,17 +1133,66 @@ class TestAperturePhotometry:
         with pytest.raises(ValueError, match="is not a valid file or directory"):
             ap("invalid_path")
 
+    def test_logging_reports_matched_exposure_keyword(
+        self, caplog, tmp_path, photometry_settings_for_test
+    ):
+        # single_image_photometry searches the header for one of several
+        # candidate exposure keywords (EXPOSURE, EXPTIME, ...). Once it finds
+        # one it should log which keyword it used, so the source of the
+        # exposure time used for photometry is auditable. See #606.
+        fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
+        image_file = tmp_path / "fake_image.fits"
+        fake_CCDimage.write(image_file, overwrite=True)
+
+        found_sources = source_detection(
+            fake_CCDimage, fwhm=fake_CCDimage.sources["x_stddev"].mean(), threshold=10
+        )
+        source_list_file = tmp_path / "source_list.ecsv"
+        found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
+
+        phot_options = (
+            photometry_settings_for_test.photometry_optional_settings.model_copy()
+        )
+        phot_options.reject_background_outliers = False
+        phot_options.reject_too_close = False
+        phot_options.include_dig_noise = True
+
+        source_locations = (
+            photometry_settings_for_test.source_location_settings.model_copy()
+        )
+        source_locations.source_list_file = str(source_list_file)
+
+        photometry_settings_for_test.source_location_settings = source_locations
+        photometry_settings_for_test.photometry_optional_settings = phot_options
+
+        # single_image_photometry's logger sets propagate=False (so its
+        # messages do not also show up via the root logger), which means
+        # caplog's handler -- attached to the root logger by default -- never
+        # sees them. Attach the handler directly to this logger instead.
+        target_logger = logging.getLogger("single_image_photometry")
+        target_logger.addHandler(caplog.handler)
+        try:
+            with caplog.at_level(logging.INFO, logger="single_image_photometry"):
+                ap_phot = AperturePhotometry(settings=photometry_settings_for_test)
+                ap_phot(image_file)
+        finally:
+            target_logger.removeHandler(caplog.handler)
+
+        # FAKE_CCD_IMAGE sets the "EXPOSURE" header keyword.
+        matches = [
+            record.message
+            for record in caplog.records
+            if "exposure keyword" in record.message
+        ]
+        assert matches, "No log message reporting the matched exposure keyword"
+        assert any("EXPOSURE" in message for message in matches)
+
     # Checking logging for AperturePhotometry for single image photometry.
     @pytest.mark.parametrize("logfile", ["test.log", None])
     @pytest.mark.parametrize("console_log", [True, False])
     def test_logging_single_image(
         self, capsys, logfile, console_log, tmp_path, photometry_settings_for_test
     ):
-        # Disable any root logger handlers that are active before using
-        # logging since that is expectation of single_image_photometry.
-        if logging.root.hasHandlers():
-            logging.root.handlers.clear()
-
         # Create fake image
         fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
         image_file = tmp_path / "fake_image.fits"

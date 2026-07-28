@@ -125,6 +125,35 @@ def test_seeing_profile_properties(tmp_path, profile_stars):
         assert profile_widget.aperture_settings.value == phot_aps
 
 
+def test_load_fits_logs_matched_exposure_keyword(caplog, tmp_path):
+    # load_fits searches the header for one of several candidate exposure
+    # keywords (EXPOSURE, EXPTIME, ...). Once it finds one it should log
+    # which keyword it used, so the source of the exposure time is
+    # auditable. See #606.
+    profile_widget = spf.SeeingProfileWidget(
+        camera=Camera(**TEST_CAMERA_VALUES), _testing_path=tmp_path
+    )
+
+    image = make_noise_image(SHAPE, mean=10, stddev=1, seed=RANDOM_SEED)
+    ccd = CCDData(image, unit="adu")
+    ccd.header["EXPTIME"] = 30.0
+    ccd.header["object"] = "test"
+    file_name = tmp_path / "test.fits"
+    ccd.write(file_name)
+
+    profile_widget.fits_file.set_file("test.fits", tmp_path)
+    with caplog.at_level("INFO"):
+        profile_widget.load_fits()
+
+    matches = [
+        record.message
+        for record in caplog.records
+        if "exposure keyword" in record.message
+    ]
+    assert matches, "No log message reporting the matched exposure keyword"
+    assert any("EXPTIME" in message for message in matches)
+
+
 def test_seeing_profile_save_apertures(tmp_path):
     # Make sure that saving partial photometery settings works
     os.chdir(tmp_path)

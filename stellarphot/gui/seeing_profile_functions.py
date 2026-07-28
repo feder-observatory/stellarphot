@@ -1,3 +1,4 @@
+import logging
 import warnings
 
 import ipywidgets as ipw
@@ -24,6 +25,8 @@ from stellarphot.settings import (
 __all__ = [
     "SeeingProfileWidget",
 ]
+
+logger = logging.getLogger(__name__)
 
 DESC_STYLE = {"description_width": "initial"}
 AP_SETTING_NEEDS_SAVE = "❗️"
@@ -224,6 +227,7 @@ class SeeingProfileWidget:
         for key in EXPOSURE_KEYWORDS:
             if key in self.fits_file.header:
                 self.exposure = self.fits_file.header[key]
+                logger.info(f"Using exposure keyword {key!r} for exposure time.")
                 break
         else:
             # apparently setting a higher stacklevel is better, see

@@ -3,6 +3,7 @@ import pytest
 from astropy.io import ascii as ap_ascii
 from astropy.time import Time
 from astropy.utils.data import get_pkg_data_filename
+from astropy.utils.exceptions import AstropyUserWarning
 
 from stellarphot import PhotometryData
 from stellarphot.io.aavso import (
@@ -27,14 +28,23 @@ def header():
 
 @pytest.fixture
 def phot_table():
-    """The test photometry fixture, with no further modification.
+    """The test photometry fixture.
 
     The fixture has 8 stars, two files, passband ``SR`` (a valid AAVSO filter).
+
+    The shared data file only has ``mag_inst`` (part of the PhotometryData
+    schema), but the writer should be fed calibrated magnitudes, and an
+    instrumental-looking ``mag_column`` trips the MTYPE=STD guard warning --
+    which, under the project's ``filterwarnings = error`` config, would fail
+    every test in this module. Add a calibrated-named copy for the writer
+    tests to use; the values themselves don't matter to the writer.
     """
     data_file = get_pkg_data_filename(
         "data/test_photometry_data.ecsv", package="stellarphot.tests"
     )
-    return PhotometryData.read(data_file)
+    data = PhotometryData.read(data_file)
+    data["mag_cal"] = data["mag_inst"]
+    return data
 
 
 @pytest.fixture
@@ -50,7 +60,7 @@ def writer_kwargs(header):
         check_star_id=6,
         check_name="check1",
         chart="X12345",
-        mag_column="mag_inst",
+        mag_column="mag_cal",
         mag_error_column="mag_error",
     )
 
@@ -237,7 +247,7 @@ class TestTargetRows:
         for mag_str, err_str, src in zip(
             rows["MAGNITUDE"], rows["MAGERR"], target_rows, strict=True
         ):
-            assert abs(float(mag_str) - float(src["mag_inst"])) < 1e-4
+            assert abs(float(mag_str) - float(src["mag_cal"])) < 1e-4
             # mag_error in the fixture carries 1/adu units; .value strips them.
             assert abs(float(err_str) - float(src["mag_error"].value)) < 1e-3
 
@@ -328,8 +338,7 @@ class TestCheckStarPairing:
         # if the writer regressed for fixtures with reused filenames.
         check_rows = phot_table[phot_table["star_id"] == writer_kwargs["check_star_id"]]
         check_lookup = {
-            (str(r["date-obs"]), r["passband"]): float(r["mag_inst"])
-            for r in check_rows
+            (str(r["date-obs"]), r["passband"]): float(r["mag_cal"]) for r in check_rows
         }
 
         target_rows = phot_table[
@@ -536,7 +545,7 @@ class TestNonFiniteValues:
         bad = phot_table.copy()
         target_mask = bad["star_id"] == writer_kwargs["target_star_id"]
         idx = np.where(target_mask)[0][0]
-        bad["mag_inst"][idx] = float("nan")
+        bad["mag_cal"][idx] = float("nan")
         out = tmp_path / "sub.csv"
         with pytest.raises(ValueError, match="MAGNITUDE"):
             write_aavso_extended(bad, out, **writer_kwargs)
@@ -545,7 +554,7 @@ class TestNonFiniteValues:
         bad = phot_table.copy()
         check_mask = bad["star_id"] == writer_kwargs["check_star_id"]
         idx = np.where(check_mask)[0][0]
-        bad["mag_inst"][idx] = float("nan")
+        bad["mag_cal"][idx] = float("nan")
         out = tmp_path / "sub.csv"
         with pytest.raises(ValueError, match="KMAG"):
             write_aavso_extended(bad, out, **writer_kwargs)
@@ -649,3 +658,46 @@ class TestKwargTypeValidation:
         out = tmp_path / "sub.csv"
         with pytest.raises(TypeError, match="group"):
             write_aavso_extended(phot_table, out, **writer_kwargs)
+
+
+# ---- MTYPE=STD guard ---------------------------------------------------------
+
+
+class TestMtypeGuard:
+    """The writer hardcodes MTYPE=STD (calibrated magnitudes). It only ever
+    sees the magnitude column *name*, so it can only warn -- not know for
+    certain -- when that name looks like it holds instrumental/uncalibrated
+    magnitudes instead.
+    """
+
+    @pytest.mark.parametrize(
+        "column_name", ["mag_inst", "mag_inst_r", "mag_instrumental"]
+    )
+    def test_warns_for_instrumental_looking_column_name(
+        self, tmp_path, phot_table, writer_kwargs, column_name
+    ):
+        phot_table[column_name] = phot_table["mag_cal"]
+        writer_kwargs["mag_column"] = column_name
+        out = tmp_path / "sub.csv"
+        with pytest.warns(AstropyUserWarning, match="MTYPE=STD"):
+            write_aavso_extended(phot_table, out, **writer_kwargs)
+
+    # mag_inst_cal and mag_inst_r_cal are what transform_to_catalog names its
+    # calibrated output (obs_mag_col + "_cal"), and the calibration user guide
+    # tells users to pass mag_column="mag_inst_cal" to this writer -- so the
+    # instrumental prefix must not trip the warning when the calibrated
+    # suffix is present.
+    @pytest.mark.parametrize(
+        "column_name",
+        ["mag_cal", "mag_standard", "mag", "mag_inst_cal", "mag_inst_r_cal"],
+    )
+    def test_no_warning_for_calibrated_looking_column_name(
+        self, tmp_path, phot_table, writer_kwargs, column_name
+    ):
+        phot_table[column_name] = phot_table["mag_cal"]
+        writer_kwargs["mag_column"] = column_name
+        out = tmp_path / "sub.csv"
+        # The project-wide filterwarnings = error config turns a spurious
+        # MTYPE warning (or any other warning) into a test failure, so a
+        # plain call is the whole test.
+        write_aavso_extended(phot_table, out, **writer_kwargs)
