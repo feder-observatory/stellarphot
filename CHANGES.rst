@@ -33,6 +33,11 @@ Bug Fixes
   ``rp1`` passbands by name instead of assuming they are the first two
   columns of the input magnitudes, and raises a clear error if either band
   is missing from the transform's ``from_system``. [#649]
++ ``fast_fwhm_from_image`` no longer places its source-fitting window 0.5
+  pixel off center (the block-reduced-image coordinates were converted back
+  to original-image pixel coordinates with an off-by-0.5 formula), and it no
+  longer mutates the caller's ``CCDData.mask`` in place when flagging pixels
+  above ``max_adu``. [#651]
 
 2.1.2 (2026-07-19)
 -------------------

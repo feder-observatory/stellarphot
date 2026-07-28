@@ -382,6 +382,20 @@ def source_detection(
     return sl_data
 
 
+def _block_center_to_pixel(block_index, block_size):
+    """
+    Convert a block index from a block-reduced image into the pixel
+    coordinate, in the original (pre-reduction) image, of the center of
+    that block.
+
+    Block ``block_index`` in the reduced image is the average of original
+    image pixels ``block_index * block_size`` through
+    ``(block_index + 1) * block_size - 1`` (inclusive), so the center of
+    that span of pixels is ``block_size * (block_index + 0.5) - 0.5``.
+    """
+    return block_size * (block_index + 0.5) - 0.5
+
+
 def fast_fwhm_from_image(
     ccd,
     fwhm_estimate,
@@ -491,8 +505,12 @@ def fast_fwhm_from_image(
     fwhm_est_sources = block_sources[: int(1.2 * n_brightest)]
 
     # Estimate the x and y positions of the sources in the original image
-    fwhm_est_sources["xcenter"] = block_size * (fwhm_est_sources["xcenter"].value + 0.5)
-    fwhm_est_sources["ycenter"] = block_size * (fwhm_est_sources["ycenter"].value + 0.5)
+    fwhm_est_sources["xcenter"] = _block_center_to_pixel(
+        fwhm_est_sources["xcenter"].value, block_size
+    )
+    fwhm_est_sources["ycenter"] = _block_center_to_pixel(
+        fwhm_est_sources["ycenter"].value, block_size
+    )
 
     # Compute the FWHM of the sources in the original image
     # Make sure fit_shape is an odd number about 5 times the estimated fwhm
@@ -502,7 +520,9 @@ def fast_fwhm_from_image(
     # max_adu. After we do the PSF fitting, we only keep results in which there were
     # no masked pixels in the fit. As a result, stars that are too bright in the image
     # will be ignored in the event they made it through the block reduction.
-    mask = np.zeros_like(ccd.data, dtype=bool) if mask is None else mask
+    # Copy the mask (or create a new one) instead of mutating it in place so
+    # that we don't alias, and thus modify, the caller's mask array.
+    mask = np.zeros_like(data, dtype=bool) if mask is None else mask.copy()
     mask |= data > max_adu
 
     with warnings.catch_warnings():
