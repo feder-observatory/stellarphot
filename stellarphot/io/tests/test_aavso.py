@@ -1,5 +1,3 @@
-import warnings
-
 import numpy as np
 import pytest
 from astropy.io import ascii as ap_ascii
@@ -13,17 +11,6 @@ from stellarphot.io.aavso import (
     write_aavso_extended,
 )
 from stellarphot.settings.aavso_submission import AAVSOSubmissionHeader
-
-# The fixture ``writer_kwargs`` below uses ``mag_column="mag_inst"`` -- a
-# realistic instrumental-magnitude column name -- for every test in this
-# module. That name triggers the MTYPE=STD guard warning added for #606,
-# so silence that specific warning at module scope; the dedicated tests in
-# ``TestMtypeGuard`` below use ``pytest.warns``, which resets the warnings
-# filters for the duration of the ``with`` block and so is unaffected by
-# this module-wide filter.
-pytestmark = pytest.mark.filterwarnings(
-    "ignore:.*MTYPE=STD.*:astropy.utils.exceptions.AstropyUserWarning"
-)
 
 # ---- fixtures ---------------------------------------------------------------
 
@@ -41,14 +28,23 @@ def header():
 
 @pytest.fixture
 def phot_table():
-    """The test photometry fixture, with no further modification.
+    """The test photometry fixture.
 
     The fixture has 8 stars, two files, passband ``SR`` (a valid AAVSO filter).
+
+    The shared data file only has ``mag_inst`` (part of the PhotometryData
+    schema), but the writer should be fed calibrated magnitudes, and an
+    instrumental-looking ``mag_column`` trips the MTYPE=STD guard warning --
+    which, under the project's ``filterwarnings = error`` config, would fail
+    every test in this module. Add a calibrated-named copy for the writer
+    tests to use; the values themselves don't matter to the writer.
     """
     data_file = get_pkg_data_filename(
         "data/test_photometry_data.ecsv", package="stellarphot.tests"
     )
-    return PhotometryData.read(data_file)
+    data = PhotometryData.read(data_file)
+    data["mag_cal"] = data["mag_inst"]
+    return data
 
 
 @pytest.fixture
@@ -64,7 +60,7 @@ def writer_kwargs(header):
         check_star_id=6,
         check_name="check1",
         chart="X12345",
-        mag_column="mag_inst",
+        mag_column="mag_cal",
         mag_error_column="mag_error",
     )
 
@@ -221,10 +217,7 @@ class TestTargetRows:
 
     def test_chart_and_mtype(self, tmp_path, phot_table, writer_kwargs):
         out = tmp_path / "sub.csv"
-        # writer_kwargs uses mag_column="mag_inst", which looks instrumental
-        # and so triggers the MTYPE=STD guard warning (see TestMtypeGuard).
-        with pytest.warns(AstropyUserWarning, match="MTYPE=STD"):
-            write_aavso_extended(phot_table, out, **writer_kwargs)
+        write_aavso_extended(phot_table, out, **writer_kwargs)
         rows = _read_data_rows(out)
         assert set(rows["CHART"]) == {writer_kwargs["chart"]}
         assert set(rows["MTYPE"]) == {"STD"}
@@ -254,7 +247,7 @@ class TestTargetRows:
         for mag_str, err_str, src in zip(
             rows["MAGNITUDE"], rows["MAGERR"], target_rows, strict=True
         ):
-            assert abs(float(mag_str) - float(src["mag_inst"])) < 1e-4
+            assert abs(float(mag_str) - float(src["mag_cal"])) < 1e-4
             # mag_error in the fixture carries 1/adu units; .value strips them.
             assert abs(float(err_str) - float(src["mag_error"].value)) < 1e-3
 
@@ -345,8 +338,7 @@ class TestCheckStarPairing:
         # if the writer regressed for fixtures with reused filenames.
         check_rows = phot_table[phot_table["star_id"] == writer_kwargs["check_star_id"]]
         check_lookup = {
-            (str(r["date-obs"]), r["passband"]): float(r["mag_inst"])
-            for r in check_rows
+            (str(r["date-obs"]), r["passband"]): float(r["mag_cal"]) for r in check_rows
         }
 
         target_rows = phot_table[
@@ -553,7 +545,7 @@ class TestNonFiniteValues:
         bad = phot_table.copy()
         target_mask = bad["star_id"] == writer_kwargs["target_star_id"]
         idx = np.where(target_mask)[0][0]
-        bad["mag_inst"][idx] = float("nan")
+        bad["mag_cal"][idx] = float("nan")
         out = tmp_path / "sub.csv"
         with pytest.raises(ValueError, match="MAGNITUDE"):
             write_aavso_extended(bad, out, **writer_kwargs)
@@ -562,7 +554,7 @@ class TestNonFiniteValues:
         bad = phot_table.copy()
         check_mask = bad["star_id"] == writer_kwargs["check_star_id"]
         idx = np.where(check_mask)[0][0]
-        bad["mag_inst"][idx] = float("nan")
+        bad["mag_cal"][idx] = float("nan")
         out = tmp_path / "sub.csv"
         with pytest.raises(ValueError, match="KMAG"):
             write_aavso_extended(bad, out, **writer_kwargs)
@@ -684,7 +676,7 @@ class TestMtypeGuard:
     def test_warns_for_instrumental_looking_column_name(
         self, tmp_path, phot_table, writer_kwargs, column_name
     ):
-        phot_table[column_name] = phot_table["mag_inst"]
+        phot_table[column_name] = phot_table["mag_cal"]
         writer_kwargs["mag_column"] = column_name
         out = tmp_path / "sub.csv"
         with pytest.warns(AstropyUserWarning, match="MTYPE=STD"):
@@ -702,18 +694,10 @@ class TestMtypeGuard:
     def test_no_warning_for_calibrated_looking_column_name(
         self, tmp_path, phot_table, writer_kwargs, column_name
     ):
-        phot_table[column_name] = phot_table["mag_inst"]
+        phot_table[column_name] = phot_table["mag_cal"]
         writer_kwargs["mag_column"] = column_name
         out = tmp_path / "sub.csv"
-        # Record candidate MTYPE warnings explicitly: the module-level ignore
-        # filter above would otherwise silence a spurious MTYPE warning before
-        # the project-wide filterwarnings="error" could turn it into a
-        # failure. Every other warning stays an error, matching the project
-        # config.
-        with warnings.catch_warnings(record=True) as recorded:
-            warnings.simplefilter("error")
-            warnings.filterwarnings(
-                "always", message=".*MTYPE=STD.*", category=AstropyUserWarning
-            )
-            write_aavso_extended(phot_table, out, **writer_kwargs)
-        assert not recorded
+        # The project-wide filterwarnings = error config turns a spurious
+        # MTYPE warning (or any other warning) into a test failure, so a
+        # plain call is the whole test.
+        write_aavso_extended(phot_table, out, **writer_kwargs)
