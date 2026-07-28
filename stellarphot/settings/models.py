@@ -374,12 +374,8 @@ class PhotometryApertures(BaseModelWithTableRep):
         Field(
             default=False,  # To match the original default
             description=(
-                "Enable variable-aperture photometry. If True, the aperture "
-                "radius is `radius` × (image FWHM), computed from each image "
-                "using fast_fwhm_from_image. If False, the radius is simply "
-                "`radius`. Variable-aperture photometry adapts to seeing "
-                "conditions, improving photometric precision when FWHM "
-                "varies across images."
+                "If True, the aperture radius is radius × the FWHM measured "
+                "in each image; if False, radius is used as-is, in pixels."
             ),
         ),
     ]
@@ -588,9 +584,8 @@ class Observatory(BaseModelWithTableRep):
         BeforeValidator(add_degree_to_float),
         Field(
             description=(
-                "Longitude of the observatory. Note that negative (west) "
-                "longitudes are wrapped into the 0–360° range (e.g. −96.7° "
-                "displays as 263.3°)."
+                "Longitude of the observatory. West (negative) longitudes are "
+                "wrapped to 0–360°, e.g. −96.7° becomes 263.3°."
             ),
             examples=[
                 "-96.7678",
