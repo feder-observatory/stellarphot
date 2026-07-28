@@ -644,6 +644,41 @@ class TestPhotometryApertureSettings:
         radius_pix = ap_set.radius_pixels(fwhm)
         assert radius_pix == pytest.approx(7.5, rel=1e-6)
 
+    @pytest.mark.parametrize(
+        "variable_aperture,radius",
+        [
+            (True, 1.5),
+            (False, 5.0),
+        ],
+    )
+    def test_annulus_pixels_methods(self, variable_aperture, radius):
+        # The annulus radii should follow the FWHM passed in, just like
+        # radius_pixels does, so that in variable-aperture mode the annulus
+        # can track the per-image FWHM. See #654.
+        settings = deepcopy(TEST_APERTURE_SETTINGS)
+        settings["variable_aperture"] = variable_aperture
+        settings["radius"] = radius
+        ap_set = PhotometryApertures(**settings)
+
+        # Deliberately different from the settings' fwhm_estimate
+        fwhm = 2 * settings["fwhm_estimate"]
+        if variable_aperture:
+            expected_inner = radius * fwhm + settings["gap"]
+        else:
+            expected_inner = radius + settings["gap"]
+        expected_outer = expected_inner + settings["annulus_width"]
+
+        assert ap_set.inner_annulus_pixels(fwhm) == pytest.approx(expected_inner)
+        assert ap_set.outer_annulus_pixels(fwhm) == pytest.approx(expected_outer)
+
+        # The properties should still be based on the settings' fwhm_estimate
+        assert ap_set.inner_annulus == pytest.approx(
+            ap_set.inner_annulus_pixels(settings["fwhm_estimate"])
+        )
+        assert ap_set.outer_annulus == pytest.approx(
+            ap_set.outer_annulus_pixels(settings["fwhm_estimate"])
+        )
+
 
 @pytest.mark.parametrize("bad_one", ["radius", "gap", "annulus_width"])
 def test_create_invalid_values(bad_one):
