@@ -3,6 +3,10 @@
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
++ Documentation improvements: fixed docstring default values, expanded
+  variable-aperture photometry documentation with details on how aperture radii
+  are computed, clarified astropy Longitude wrapping behavior in the Observatory
+  class, and corrected type annotations and comments throughout the codebase. [#648]
 + The image viewers in the seeing-profile and comparison-star widgets now use
   the bqplot backend in astrowidgets (0.6 or later), and stellarphot no
   longer depends directly on ginga. In the comparison viewer, a plain click

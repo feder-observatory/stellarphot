@@ -108,7 +108,7 @@ class TessSubmission:
 
     telescope_code: str
     filter: str
-    utc_start: int
+    utc_start: str
     tic_id: int
     planet_number: int
 

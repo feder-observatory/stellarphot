@@ -432,7 +432,7 @@ def transform_magnitudes(
     )
 
     # create a boolean of all of the matches that have a discrepancy of less
-    # than 5 arcseconds
+    # than 2 arcseconds
     good_match_for_transform = d2d < 2 * u.arcsecond
 
     catalog_index, d2d, _ = match_coordinates_sky(input_coords, catalog_all_coords)

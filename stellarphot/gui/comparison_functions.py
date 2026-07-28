@@ -273,7 +273,7 @@ class ComparisonViewer:
         Bright magnitude limit for APASS stars. Defaults to 8.
 
     dim_mag_limit : float, optional
-        Dim magnitude limit for APASS stars.  Defaults to 17.
+        Dim magnitude limit for APASS stars.  Defaults to 15.
 
     targets_from_file : str, optional
         File with target information.  Defaults to None.

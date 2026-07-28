@@ -244,6 +244,11 @@ def populate_TOI_boxes(toi, exotic_widget):
         "Target Star Dec": "coordP",
         "Orbital Period (days)": "period",
         "Orbital Period Uncertainty": "period_error",
+        # EXOTIC's field is named "Published Mid-Transit Time (BJD-UTC)" but the
+        # value is actually BJD_TDB (EXOTIC fills this from NASA Exoplanet Archive's
+        # pl_tranmid which is BJD_TDB, and compares against BJD_TDB image times
+        # without conversion). Since toi.epoch is already in TDB, passing
+        # toi.epoch.value is correct — do NOT convert to UTC here.
         "Published Mid-Transit Time (BJD-UTC)": "epoch",
         "Mid-Transit Time Uncertainty": "epoch_error",
         # Could maybe get these from TOI information, but not straightforward
