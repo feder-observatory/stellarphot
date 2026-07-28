@@ -12,6 +12,13 @@ Other Changes and Additions
   rather than a marker. Scroll-to-zoom is always on in the new viewers; the
   bqplot backend provides no way to disable it. Because the new viewer stack
   requires it, stellarphot now requires Python 3.12 or later. [#584]
++ Removed ``stellarphot/utils/catalog_search.py``, an empty (0-byte) module
+  with no references anywhere in the codebase. [#xxx]
++ Added a comment to the ``bottleneck`` dependency in ``pyproject.toml``
+  explaining why it is listed even though nothing imports it directly:
+  astropy's ``sigma_clip``, which the photometry code calls heavily, uses it
+  opportunistically to speed up its internal numpy operations when present.
+  [#xxx]
 
 Bug Fixes
 ^^^^^^^^^

@@ -20,7 +20,9 @@ authors = [
 dependencies = [
     "astropy >=5",
     "astroquery",
-    "bottleneck",
+    "bottleneck",  # not imported directly, but astropy's sigma_clip -- called
+                   # heavily by the photometry code -- uses it opportunistically
+                   # to speed up its internal numpy operations when present
     "ccdproc",
     "lightkurve",
     "matplotlib",
