@@ -304,3 +304,63 @@ def test_fast_fwhm_from_image_bad_aggregate():
             max_adu=65000,
             aggregate_by="foo",
         )
+
+
+def test_fast_fwhm_from_image_does_not_mutate_input_mask():
+    # Regression test for a latent bug in fast_fwhm_from_image: the function
+    # used to do `mask |= data > max_adu` on the mask pulled directly off of
+    # the input CCDData, which mutates the caller's mask array in place.
+    expected_fwhm = 5.5
+    fake_image = FakeCCDImage(seed=SEED, fwhm=expected_fwhm)
+
+    # Build a mask with a mix of True and False entries that is unrelated to
+    # which pixels are above max_adu.
+    mask = np.zeros(fake_image.data.shape, dtype=bool)
+    mask[0, 0] = True
+    mask[0, 1] = True
+    mask[10, 10] = True
+    fake_image.mask = mask
+
+    original_mask = mask.copy()
+
+    # Set max_adu comfortably above every source's peak so source detection
+    # and FWHM fitting behave normally, then poke in a single hot pixel,
+    # away from any source and not already masked, that exceeds max_adu.
+    # This guarantees the `mask |= data > max_adu` line actually finds a
+    # new pixel to mask, regardless of the random noise realization.
+    max_adu = 5000.0
+    assert fake_image.data.max() < max_adu
+    fake_image.data[5, 5] = max_adu + 1000
+    assert not fake_image.mask[5, 5]
+
+    fast_fwhm_from_image(
+        fake_image,
+        5,
+        noise=fake_image.noise_dev,
+        max_adu=max_adu,
+        aggregate_by=None,
+    )
+
+    np.testing.assert_array_equal(fake_image.mask, original_mask)
+
+
+def test_block_center_to_pixel():
+    # Regression test for the block-center off-by-0.5 bug in
+    # fast_fwhm_from_image (stellarphot issue #606). A block of size
+    # ``block_size`` at reduced-image index ``block_index`` covers original
+    # image pixels ``block_index * block_size`` through
+    # ``(block_index + 1) * block_size - 1`` inclusive, so the center of
+    # that block, in original-image pixel coordinates, is
+    # ``block_size * (block_index + 0.5) - 0.5``, NOT
+    # ``block_size * (block_index + 0.5)``.
+    from stellarphot.photometry.source_detection import _block_center_to_pixel
+
+    for block_size in [1, 4, 8]:
+        for block_index in [0, 1, 5, 12]:
+            original_pixels = np.arange(
+                block_index * block_size, (block_index + 1) * block_size
+            )
+            expected_center = original_pixels.mean()
+            assert _block_center_to_pixel(block_index, block_size) == pytest.approx(
+                expected_center
+            )
