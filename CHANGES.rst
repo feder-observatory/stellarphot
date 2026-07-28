@@ -31,6 +31,13 @@ Other Changes and Additions
   a source landing exactly on the edge pixel of the frame now counts as
   in-field where it previously did not. This is a deliberate, minor behavior
   change. [#650]
++ ``write_aavso_extended`` now warns when ``mag_column`` looks instrumental/
+  uncalibrated (e.g. its name starts with ``mag_inst``), since the writer
+  always labels the file ``MTYPE=STD`` (calibrated magnitudes), which would
+  then be wrong. ``single_image_photometry`` and the seeing-profile widget's
+  ``load_fits`` now log which of the candidate exposure keywords they
+  matched in the FITS header, instead of only logging on failure to find
+  one. [#652]
 
 Bug Fixes
 ^^^^^^^^^

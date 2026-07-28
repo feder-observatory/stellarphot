@@ -1,8 +1,11 @@
+import warnings
+
 import numpy as np
 import pytest
 from astropy.io import ascii as ap_ascii
 from astropy.time import Time
 from astropy.utils.data import get_pkg_data_filename
+from astropy.utils.exceptions import AstropyUserWarning
 
 from stellarphot import PhotometryData
 from stellarphot.io.aavso import (
@@ -10,6 +13,17 @@ from stellarphot.io.aavso import (
     write_aavso_extended,
 )
 from stellarphot.settings.aavso_submission import AAVSOSubmissionHeader
+
+# The fixture ``writer_kwargs`` below uses ``mag_column="mag_inst"`` -- a
+# realistic instrumental-magnitude column name -- for every test in this
+# module. That name triggers the MTYPE=STD guard warning added for #606,
+# so silence that specific warning at module scope; the dedicated tests in
+# ``TestMtypeGuard`` below use ``pytest.warns``, which resets the warnings
+# filters for the duration of the ``with`` block and so is unaffected by
+# this module-wide filter.
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:.*MTYPE=STD.*:astropy.utils.exceptions.AstropyUserWarning"
+)
 
 # ---- fixtures ---------------------------------------------------------------
 
@@ -207,7 +221,10 @@ class TestTargetRows:
 
     def test_chart_and_mtype(self, tmp_path, phot_table, writer_kwargs):
         out = tmp_path / "sub.csv"
-        write_aavso_extended(phot_table, out, **writer_kwargs)
+        # writer_kwargs uses mag_column="mag_inst", which looks instrumental
+        # and so triggers the MTYPE=STD guard warning (see TestMtypeGuard).
+        with pytest.warns(AstropyUserWarning, match="MTYPE=STD"):
+            write_aavso_extended(phot_table, out, **writer_kwargs)
         rows = _read_data_rows(out)
         assert set(rows["CHART"]) == {writer_kwargs["chart"]}
         assert set(rows["MTYPE"]) == {"STD"}
@@ -649,3 +666,41 @@ class TestKwargTypeValidation:
         out = tmp_path / "sub.csv"
         with pytest.raises(TypeError, match="group"):
             write_aavso_extended(phot_table, out, **writer_kwargs)
+
+
+# ---- MTYPE=STD guard ---------------------------------------------------------
+
+
+class TestMtypeGuard:
+    """The writer hardcodes MTYPE=STD (calibrated magnitudes). It only ever
+    sees the magnitude column *name*, so it can only warn -- not know for
+    certain -- when that name looks like it holds instrumental/uncalibrated
+    magnitudes instead.
+    """
+
+    @pytest.mark.parametrize(
+        "column_name", ["mag_inst", "mag_inst_r", "mag_instrumental"]
+    )
+    def test_warns_for_instrumental_looking_column_name(
+        self, tmp_path, phot_table, writer_kwargs, column_name
+    ):
+        phot_table[column_name] = phot_table["mag_inst"]
+        writer_kwargs["mag_column"] = column_name
+        out = tmp_path / "sub.csv"
+        with pytest.warns(AstropyUserWarning, match="MTYPE=STD"):
+            write_aavso_extended(phot_table, out, **writer_kwargs)
+
+    @pytest.mark.parametrize("column_name", ["mag_cal", "mag_standard", "mag"])
+    def test_no_warning_for_calibrated_looking_column_name(
+        self, tmp_path, phot_table, writer_kwargs, column_name
+    ):
+        phot_table[column_name] = phot_table["mag_inst"]
+        writer_kwargs["mag_column"] = column_name
+        out = tmp_path / "sub.csv"
+        # Record warnings explicitly rather than relying on the project-wide
+        # filterwarnings="error": the module-level ignore filter above would
+        # otherwise silence a spurious MTYPE warning before it could error.
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter("always")
+            write_aavso_extended(phot_table, out, **writer_kwargs)
+        assert not any("MTYPE=STD" in str(w.message) for w in recorded)

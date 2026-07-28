@@ -339,6 +339,8 @@ def single_image_photometry(
         )
         return None, None
 
+    logger.info(f"{logline} Using exposure keyword {matched_kw!r} for exposure time.")
+
     exposure = ccd_image.header[matched_kw]
 
     # Search for other keywords that are required

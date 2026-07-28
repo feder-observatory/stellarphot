@@ -7,22 +7,33 @@ target star and one check star. The data layout follows the spec mirrored in
 v1 limitations:
 - ``DATE=JD`` only. ``HJD`` and ``EXCEL`` are valid in the header model but
   raise ``NotImplementedError`` from the writer.
-- ``MTYPE`` is hardcoded to ``STD`` (calibrated/standardized magnitudes), which
-  is the correct value when CNAME=ENSEMBLE.
+- ``MTYPE`` is hardcoded to ``STD`` (calibrated/standardized magnitudes). The
+  writer only sees the ``mag_column`` name, not how the values were derived,
+  so it warns (rather than raises) when that name looks instrumental/
+  uncalibrated -- e.g. starts with ``mag_inst`` -- since ``MTYPE=STD`` would
+  then be incorrect.
 - ``OBSTYPE`` is hardcoded to ``CCD``.
 """
 
 import io
+import warnings
 from pathlib import Path
 
 import numpy as np
 from astropy.table import Column, QTable, Table, join
 from astropy.time import Time
+from astropy.utils.exceptions import AstropyUserWarning
 
 from stellarphot.settings.aavso_models import AAVSOFilters
 from stellarphot.settings.aavso_submission import AAVSOSubmissionHeader
 
 __all__ = ["write_aavso_extended"]
+
+# Column-name prefixes that suggest a magnitude is instrumental/uncalibrated
+# rather than standardized. The writer only ever sees the column *name*, not
+# how the values were produced, so this is a heuristic used to warn -- not to
+# block -- the write. See the MTYPE=STD guard in ``write_aavso_extended``.
+_INSTRUMENTAL_MAG_PREFIXES = ("mag_inst",)
 
 
 ALLOWED_EXTENSIONS = frozenset({".txt", ".csv", ".tsv"})
@@ -257,6 +268,22 @@ def write_aavso_extended(
                 f"Column {col!r} is not in phot_data; "
                 f"available columns: {phot_data.colnames}"
             )
+
+    # This writer always labels the file MTYPE=STD (calibrated/standardized
+    # magnitudes); it has no way to check whether the values in mag_column
+    # are actually calibrated. Warn when the column name itself suggests
+    # otherwise, since that is the one signal available at write time.
+    if mag_column.startswith(_INSTRUMENTAL_MAG_PREFIXES):
+        warnings.warn(
+            f"mag_column={mag_column!r} looks like an instrumental "
+            "(uncalibrated) magnitude, but this file will be labeled "
+            "MTYPE=STD (calibrated magnitudes), which is likely wrong for "
+            "this column. Pass a column of calibrated/standardized "
+            "magnitudes, or ignore this warning if mag_column is in fact "
+            "already calibrated.",
+            AstropyUserWarning,
+            stacklevel=2,
+        )
 
     _validate_trans(trans)
     group = _coerce_group(group)
