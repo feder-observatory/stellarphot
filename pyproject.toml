@@ -49,6 +49,10 @@ gui = [
                                         # stellarphot is written against
     "bqplot >=0.13,<0.14",  # imported directly for the Label and Lines overlay marks;
                             # same pin as astrowidgets (0.14 may move marks to bqplot-gl)
+    "bqplot-image-gl >=1.10",  # astrowidgets draws the image via ImageGL but leaves this
+                               # unpinned; older releases ship frontend JS built against
+                               # bqplot JS 0.5.x, which renders a blank figure with
+                               # bqplot 0.13 (JS 0.6.x)
     "ipyautoui >=0.7.19",
     "ipyfilechooser",
     "ipywidgets",
