@@ -295,12 +295,21 @@ def test_find_refcat2(mag_limit, mag_limit_band):
 # Offline coverage for apass_dr9, vsx_vizier and refcat2, and for the
 # clip_by_frame=True path. The behavioral tests above are marked
 # remote_data, so they do not run (and are not visible as failures) in
-# normal CI. These mock ``Vizier.query_region`` -- the network boundary
+# normal CI. These mock ``VizierClass.query_region`` -- the network boundary
 # inside ``CatalogData.from_vizier`` -- with data drawn from the same
 # fixtures the remote_data tests use, so the fetchers' own processing (id
 # generation, column renaming/mapping, tidying, magnitude-limit-passband
 # validation, frame clipping) is exercised without a network call.
+#
+# The patch target must be the *class*: ``stellarphot.core.Vizier`` is
+# astroquery's ready-made VizierClass instance, and ``from_vizier`` builds a
+# fresh instance per server by calling it, so an attribute patched onto the
+# singleton is never consulted. Each test asserts the mock was called so the
+# suite fails loudly -- rather than quietly querying the live servers -- if
+# the query path moves again.
 # ---------------------------------------------------------------------------
+
+_QUERY_REGION = "astroquery.vizier.core.VizierClass.query_region"
 
 
 def _ey_uma_header():
@@ -327,10 +336,11 @@ def test_apass_dr9_offline(mocker):
     # data in test_find_apass, so it can be fed straight back in as a mocked
     # query_region result.
     raw_apass = Table.read(get_pkg_data_filename("data/all_apass_ey_uma.ecsv"))
-    mocker.patch("stellarphot.core.Vizier.query_region", return_value=[raw_apass])
+    query = mocker.patch(_QUERY_REGION, return_value=[raw_apass])
 
     result = apass_dr9(_ey_uma_header(), radius=10 * u.arcmin)
 
+    assert query.called
     assert set(ra.value for ra in result["ra"]) == set(raw_apass["RAJ2000"])
     # The passbands ought to have been translated to the AAVSO standard
     # names, same regression covered for the remote_data version (#439).
@@ -344,14 +354,15 @@ def test_apass_dr9_offline_clip_by_frame(mocker):
     # the result to stars inside the frame (minus padding), i.e. that it
     # removes at least one star near the edge of this field.
     raw_apass = Table.read(get_pkg_data_filename("data/all_apass_ey_uma.ecsv"))
-    mocker.patch("stellarphot.core.Vizier.query_region", return_value=[raw_apass])
+    query = mocker.patch(_QUERY_REGION, return_value=[raw_apass])
     header = _ey_uma_header()
 
     unclipped = apass_dr9(header, radius=10 * u.arcmin, clip_by_frame=False)
     clipped = apass_dr9(header, radius=10 * u.arcmin, clip_by_frame=True)
 
+    assert query.call_count == 2
     assert len(clipped) < len(unclipped)
-    assert set(clipped["ra"]) <= set(unclipped["ra"])
+    assert set(clipped["ra"].value) <= set(unclipped["ra"].value)
 
 
 def test_refcat2_offline(mocker):
@@ -366,10 +377,11 @@ def test_refcat2_offline(mocker):
     # id generation just reproduces the same ids.
     raw_refcat2 = Table.read(get_pkg_data_filename("data/all_refcat2_ey_uma.ecsv"))
     raw_refcat2 = Table(raw_refcat2, masked=True)
-    mocker.patch("stellarphot.core.Vizier.query_region", return_value=[raw_refcat2])
+    query = mocker.patch(_QUERY_REGION, return_value=[raw_refcat2])
 
     result = refcat2(_ey_uma_header(), radius=10 * u.arcmin)
 
+    assert query.called
     assert set(ra.value for ra in result["ra"]) == set(raw_refcat2["RA_ICRS"])
     for band in ["GBP", "GRP", "GG", "SG", "SR", "SI", "SZ", "J", "H", "K"]:
         assert band in result["passband"]
@@ -412,10 +424,11 @@ def test_vsx_vizier_offline(clip, data_file, mocker):
     # rows.
     expected = Table.read(get_pkg_data_filename(data_file))
     raw_vsx = _vsx_raw_from_processed(expected)
-    mocker.patch("stellarphot.core.Vizier.query_region", return_value=[raw_vsx])
+    query = mocker.patch(_QUERY_REGION, return_value=[raw_vsx])
 
     actual = vsx_vizier(_ey_uma_header(), radius=0.5 * u.degree, clip_by_frame=clip)
 
+    assert query.called
     assert set(actual["OID"]) == set(expected["OID"])
 
 
