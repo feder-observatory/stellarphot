@@ -5,6 +5,7 @@ from astropy.coordinates import SkyCoord
 from astropy.table import Table
 
 from stellarphot.catalogs import apass_dr9, vsx_vizier
+from stellarphot.core import coords_in_frame
 
 __all__ = ["read_file", "set_up", "crossmatch_APASS2VSX", "mag_scale", "in_field"]
 
@@ -216,13 +217,11 @@ def in_field(apass_good_coord, ccd, apass, good_stars):
     ent : `astropy.table.Table`
         Table with APASS stars in the field of view.
     """
-    apassx, apassy = ccd.wcs.all_world2pix(apass_good_coord.ra, apass_good_coord.dec, 0)
-    # numpy image shapes are (ny, nx)
+    # numpy image shapes are (ny, nx); coords_in_frame expects (nx, ny), the
+    # same axis order as wcs.pixel_shape.
     ccdy, ccdx = ccd.shape
 
-    xin = (apassx < ccdx) & (0 < apassx)
-    yin = (apassy < ccdy) & (0 < apassy)
-    xy_in = xin & yin
+    xy_in = coords_in_frame(apass_good_coord, ccd.wcs, (ccdx, ccdy))
     nt = apass[good_stars]
     ent = nt[xy_in]
     return ent
