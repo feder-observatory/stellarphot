@@ -690,17 +690,30 @@ class TestMtypeGuard:
         with pytest.warns(AstropyUserWarning, match="MTYPE=STD"):
             write_aavso_extended(phot_table, out, **writer_kwargs)
 
-    @pytest.mark.parametrize("column_name", ["mag_cal", "mag_standard", "mag"])
+    # mag_inst_cal and mag_inst_r_cal are what transform_to_catalog names its
+    # calibrated output (obs_mag_col + "_cal"), and the calibration user guide
+    # tells users to pass mag_column="mag_inst_cal" to this writer -- so the
+    # instrumental prefix must not trip the warning when the calibrated
+    # suffix is present.
+    @pytest.mark.parametrize(
+        "column_name",
+        ["mag_cal", "mag_standard", "mag", "mag_inst_cal", "mag_inst_r_cal"],
+    )
     def test_no_warning_for_calibrated_looking_column_name(
         self, tmp_path, phot_table, writer_kwargs, column_name
     ):
         phot_table[column_name] = phot_table["mag_inst"]
         writer_kwargs["mag_column"] = column_name
         out = tmp_path / "sub.csv"
-        # Record warnings explicitly rather than relying on the project-wide
-        # filterwarnings="error": the module-level ignore filter above would
-        # otherwise silence a spurious MTYPE warning before it could error.
+        # Record candidate MTYPE warnings explicitly: the module-level ignore
+        # filter above would otherwise silence a spurious MTYPE warning before
+        # the project-wide filterwarnings="error" could turn it into a
+        # failure. Every other warning stays an error, matching the project
+        # config.
         with warnings.catch_warnings(record=True) as recorded:
-            warnings.simplefilter("always")
+            warnings.simplefilter("error")
+            warnings.filterwarnings(
+                "always", message=".*MTYPE=STD.*", category=AstropyUserWarning
+            )
             write_aavso_extended(phot_table, out, **writer_kwargs)
-        assert not any("MTYPE=STD" in str(w.message) for w in recorded)
+        assert not recorded

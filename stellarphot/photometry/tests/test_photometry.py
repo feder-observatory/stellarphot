@@ -1140,9 +1140,6 @@ class TestAperturePhotometry:
         # candidate exposure keywords (EXPOSURE, EXPTIME, ...). Once it finds
         # one it should log which keyword it used, so the source of the
         # exposure time used for photometry is auditable. See #606.
-        if logging.root.hasHandlers():
-            logging.root.handlers.clear()
-
         fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
         image_file = tmp_path / "fake_image.fits"
         fake_CCDimage.write(image_file, overwrite=True)
@@ -1196,11 +1193,6 @@ class TestAperturePhotometry:
     def test_logging_single_image(
         self, capsys, logfile, console_log, tmp_path, photometry_settings_for_test
     ):
-        # Disable any root logger handlers that are active before using
-        # logging since that is expectation of single_image_photometry.
-        if logging.root.hasHandlers():
-            logging.root.handlers.clear()
-
         # Create fake image
         fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
         image_file = tmp_path / "fake_image.fits"

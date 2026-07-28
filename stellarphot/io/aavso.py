@@ -10,8 +10,9 @@ v1 limitations:
 - ``MTYPE`` is hardcoded to ``STD`` (calibrated/standardized magnitudes). The
   writer only sees the ``mag_column`` name, not how the values were derived,
   so it warns (rather than raises) when that name looks instrumental/
-  uncalibrated -- e.g. starts with ``mag_inst`` -- since ``MTYPE=STD`` would
-  then be incorrect.
+  uncalibrated -- e.g. starts with ``mag_inst`` without ending in ``_cal``
+  (``mag_inst_cal`` is calibrated) -- since ``MTYPE=STD`` would then be
+  incorrect.
 - ``OBSTYPE`` is hardcoded to ``CCD``.
 """
 
@@ -32,8 +33,12 @@ __all__ = ["write_aavso_extended"]
 # Column-name prefixes that suggest a magnitude is instrumental/uncalibrated
 # rather than standardized. The writer only ever sees the column *name*, not
 # how the values were produced, so this is a heuristic used to warn -- not to
-# block -- the write. See the MTYPE=STD guard in ``write_aavso_extended``.
+# block -- the write. Names ending in ``_cal`` are exempt even with an
+# instrumental prefix: ``transform_to_catalog`` names its calibrated output
+# ``obs_mag_col + "_cal"``, so the *documented* calibrated column is
+# ``mag_inst_cal``. See the MTYPE=STD guard in ``write_aavso_extended``.
 _INSTRUMENTAL_MAG_PREFIXES = ("mag_inst",)
+_CALIBRATED_MAG_SUFFIX = "_cal"
 
 
 ALLOWED_EXTENSIONS = frozenset({".txt", ".csv", ".tsv"})
@@ -273,7 +278,9 @@ def write_aavso_extended(
     # magnitudes); it has no way to check whether the values in mag_column
     # are actually calibrated. Warn when the column name itself suggests
     # otherwise, since that is the one signal available at write time.
-    if mag_column.startswith(_INSTRUMENTAL_MAG_PREFIXES):
+    if mag_column.startswith(_INSTRUMENTAL_MAG_PREFIXES) and not mag_column.endswith(
+        _CALIBRATED_MAG_SUFFIX
+    ):
         warnings.warn(
             f"mag_column={mag_column!r} looks like an instrumental "
             "(uncalibrated) magnitude, but this file will be labeled "
