@@ -839,6 +839,34 @@ def test_catalog_colname_map():
     assert catalog_slice.catalog_source == "Vizier"
 
 
+def test_catalog_no_catalog_error_without_colname_map():
+    # Regression test: no_catalog_error should fill in a NaN mag_error
+    # column even when the input table already uses the standard
+    # column names and no colname_map is provided.
+    standard_cat = Table(
+        data=[
+            ["ASASSN-V J000052.03+002216.6"],
+            [0.21675],
+            [0.37127],
+            [12.660],
+            ["g"],
+        ],
+        names=["id", "ra", "dec", "mag", "passband"],
+    )
+    standard_cat["ra"].unit = u.deg
+    standard_cat["dec"].unit = u.deg
+
+    catalog_dat = CatalogData(
+        input_data=standard_cat,
+        catalog_name="VSX",
+        catalog_source="Vizier",
+        colname_map=None,
+        no_catalog_error=True,
+    )
+
+    assert np.all(np.isnan(catalog_dat["mag_error"]))
+
+
 def test_catalog_bandpassmap():
     # Map column and bandpass names
     vsx_colname_map = {

@@ -178,6 +178,58 @@ class TestPanStarrs1ToJohnsonCousins:
             gp1_B_poly(fake_gp1_mags[0, 0] - fake_gp1_mags[0, 1]) + fake_gp1_mags[0, 0],
         )
 
+    def test_transform_color_uses_band_lookup_not_position(self):
+        # The gp1 - rp1 color used internally must be found by looking up
+        # the band names in from_system.passbands, not by assuming gp1 and
+        # rp1 are the first two columns of the input array. Reordering the
+        # passbands (and the input magnitudes to match) should not change
+        # the result.
+        ps1_to_jc = PanStarrs1ToJohnsonCousins.load()
+        band_values = {
+            "gp1": 20.0,
+            "rp1": 19.0,
+            "ip1": 18.0,
+            "zp1": 17.0,
+            "yp1": 16.0,
+            "wp1": 15.0,
+        }
+        original_order = ps1_to_jc.from_system.passbands
+        original_mags = np.array([band_values[b] for b in original_order])
+        expected = ps1_to_jc(original_mags)
+
+        # Reverse the passband order so that gp1/rp1 are no longer the
+        # first two entries, and reorder the magnitudes to match.
+        reordered_order = list(reversed(original_order))
+        assert reordered_order != original_order
+        reordered_system = ps1_to_jc.from_system.model_copy(
+            update={"passbands": reordered_order}
+        )
+        ps1_to_jc_reordered = ps1_to_jc.model_copy(
+            update={"from_system": reordered_system}
+        )
+        reordered_mags = np.array([band_values[b] for b in reordered_order])
+
+        result = ps1_to_jc_reordered(reordered_mags)
+        assert np.allclose(result, expected)
+
+    def test_transform_missing_required_band_raises(self):
+        # If the input passbands don't include gp1 or rp1, the transform
+        # cannot compute the g-r color it needs and should raise a clear
+        # error rather than silently using the wrong columns.
+        ps1_to_jc = PanStarrs1ToJohnsonCousins.load()
+        passbands_without_rp1 = [
+            band for band in ps1_to_jc.from_system.passbands if band != "rp1"
+        ]
+        missing_system = ps1_to_jc.from_system.model_copy(
+            update={"passbands": passbands_without_rp1}
+        )
+        ps1_to_jc_missing_rp1 = ps1_to_jc.model_copy(
+            update={"from_system": missing_system}
+        )
+
+        with pytest.raises(ValueError, match="rp1"):
+            ps1_to_jc_missing_rp1(np.zeros(len(passbands_without_rp1)))
+
 
 class TestCatalogTransforms:
     @pytest.mark.remote_data

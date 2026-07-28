@@ -210,7 +210,17 @@ class PanStarrs1ToJohnsonCousinsMixin:
         from_band_index = {
             band: index for index, band in enumerate(self.from_system.passbands)
         }
-        color = from_magnitudes[..., 0] - from_magnitudes[..., 1]
+        missing_bands = [band for band in ("gp1", "rp1") if band not in from_band_index]
+        if missing_bands:
+            raise ValueError(
+                "Cannot compute the Pan-STARRS1 g-r color needed for this "
+                "transformation because the following required passband(s) "
+                f"are missing from from_system.passbands: {missing_bands}."
+            )
+        color = (
+            from_magnitudes[..., from_band_index["gp1"]]
+            - from_magnitudes[..., from_band_index["rp1"]]
+        )
         if len(from_magnitudes.shape) == 1:
             from_magnitudes = from_magnitudes[np.newaxis, :]
         to_mags = np.zeros(
