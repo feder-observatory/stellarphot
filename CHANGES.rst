@@ -16,6 +16,21 @@ Other Changes and Additions
   rather than a marker. Scroll-to-zoom is always on in the new viewers; the
   bqplot backend provides no way to disable it. Because the new viewer stack
   requires it, stellarphot now requires Python 3.12 or later. [#584]
++ Removed ``stellarphot/utils/catalog_search.py``, an empty (0-byte) module
+  with no references anywhere in the codebase. [#650]
++ Added a comment to the ``bottleneck`` dependency in ``pyproject.toml``
+  explaining why it is listed even though nothing imports it directly:
+  astropy's ``sigma_clip``, which the photometry code calls heavily, uses it
+  opportunistically to speed up its internal numpy operations when present.
+  [#650]
++ Extracted the in-frame containment check duplicated between
+  ``CatalogData.from_vizier`` and ``stellarphot.utils.comparison_utils.in_field``
+  into a single shared helper, ``stellarphot.core.coords_in_frame``. Both call
+  sites now use the same inclusive (``>=``/``<=``) edge semantics that
+  ``from_vizier`` already used; previously ``in_field`` used strict bounds, so
+  a source landing exactly on the edge pixel of the frame now counts as
+  in-field where it previously did not. This is a deliberate, minor behavior
+  change. [#650]
 
 Bug Fixes
 ^^^^^^^^^

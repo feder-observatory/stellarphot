@@ -20,6 +20,7 @@ from stellarphot.core import (
     CatalogData,
     PhotometryData,
     SourceListData,
+    coords_in_frame,
 )
 from stellarphot.settings import Camera, Observatory, PassbandMap
 
@@ -1110,6 +1111,68 @@ def test_from_vizier_with_header_no_wcs_raise_error():
 
     with pytest.raises(ValueError, match="Invalid coordinates in input"):
         CatalogData.from_vizier(header, "B/vsx/vsx", clip_by_frame=True)
+
+
+class _FakeWCS:
+    """
+    Stand-in for a WCS whose ``all_world2pix`` returns fixed pixel
+    coordinates, regardless of input. This isolates the boundary/padding
+    logic in ``coords_in_frame`` from the floating-point noise a real WCS
+    round trip (world -> pixel -> world -> pixel) introduces right at pixel
+    edges (e.g. pixel 0 round-tripping to ``-7e-12`` instead of exactly
+    ``0.0``).
+    """
+
+    # Deliberately do not set pixel_shape -- coords_in_frame must rely on
+    # the shape argument, not wcs.pixel_shape, since the latter is often
+    # None in practice.
+
+    def __init__(self, x, y):
+        self._x = np.asarray(x, dtype=float)
+        self._y = np.asarray(y, dtype=float)
+
+    def all_world2pix(self, ra, dec, origin):  # noqa: ARG002
+        return self._x, self._y
+
+
+def _fake_coords(n):
+    # coords_in_frame only reads .ra/.dec off of this to hand to
+    # all_world2pix, which _FakeWCS ignores, so the actual values don't
+    # matter -- just the length.
+    return SkyCoord(ra=np.zeros(n) * u.deg, dec=np.zeros(n) * u.deg)
+
+
+class TestCoordsInFrame:
+    def test_padding_excludes_sources_within_margin(self):
+        # x=40 is inside the image but inside the 50-pixel padding margin;
+        # x=200 is well clear of the margin. y=100 is within [50, 150] for
+        # both.
+        wcs = _FakeWCS(x=[40.0, 200.0], y=[100.0, 100.0])
+        coords = _fake_coords(2)
+
+        mask = coords_in_frame(coords, wcs, (400, 200), padding=50)
+
+        assert list(mask) == [False, True]
+
+    def test_edge_pixel_counts_as_inside(self):
+        # Corners exactly on the frame edge should be included; a point just
+        # past the edge should not.
+        wcs = _FakeWCS(x=[0.0, 400.0, 401.0], y=[0.0, 200.0, 100.0])
+        coords = _fake_coords(3)
+
+        mask = coords_in_frame(coords, wcs, (400, 200))
+
+        assert list(mask) == [True, True, False]
+
+    def test_non_square_shape_axes_are_not_swapped(self):
+        # x=300 is only valid on the wide (400-pixel) axis; if the helper
+        # swapped shape's axes this point would be incorrectly excluded.
+        wcs = _FakeWCS(x=[300.0], y=[100.0])
+        coords = _fake_coords(1)
+
+        mask = coords_in_frame(coords, wcs, (400, 200))
+
+        assert list(mask) == [True]
 
 
 class FakeVizier:

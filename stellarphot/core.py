@@ -65,6 +65,54 @@ VIZIER_SERVERS = (
 VIZIER_TIMEOUT = 30
 
 
+def coords_in_frame(coords, wcs, shape, padding=0):
+    """
+    Determine which sky coordinates fall within an image frame.
+
+    This is the shared containment check used both by
+    `CatalogData.from_vizier` (to clip a Vizier catalog to the field of
+    view) and by `stellarphot.utils.comparison_utils.in_field`.
+
+    Parameters
+    ----------
+
+    coords : `astropy.coordinates.SkyCoord`
+        Coordinates to test.
+
+    wcs : `astropy.wcs.WCS`
+        WCS solution used to convert ``coords`` to pixel positions.
+
+    shape : tuple of int
+        Pixel shape of the image, as ``(nx, ny)`` -- the same axis order as
+        `astropy.wcs.WCS.pixel_shape`, and the *reverse* of the numpy
+        ``array.shape`` order ``(ny, nx)``. If you are starting from an
+        array, pass ``array.shape[::-1]``. This is a required argument,
+        rather than being read from ``wcs.pixel_shape``, because
+        ``pixel_shape`` is frequently ``None`` (it is only set if the WCS
+        was constructed from a header with ``NAXIS`` keywords, or set
+        explicitly).
+
+    padding : int, optional
+        Minimum number of pixels required between a coordinate and the edge
+        of the frame for that coordinate to be considered in-frame. Default
+        is 0.
+
+    Returns
+    -------
+
+    `numpy.ndarray` of bool
+        Boolean array, the same length as ``coords``, ``True`` for the
+        coordinates that fall within the frame (and at least ``padding``
+        pixels from its edge). Pixels exactly on the frame edge (or exactly
+        ``padding`` pixels in from it) count as in-frame.
+    """
+    nx, ny = shape
+    x, y = wcs.all_world2pix(coords.ra, coords.dec, 0)
+    in_x = (x >= padding) & (x <= nx - padding)
+    in_y = (y >= padding) & (y <= ny - padding)
+    return in_x & in_y
+
+
 def __getattr__(name):
     # PEP 562 module-level attribute access. Lazily forward the moved catalog
     # fetchers to ``stellarphot.catalogs`` so ``from stellarphot.core import
@@ -1351,10 +1399,7 @@ class CatalogData(BaseEnhancedTable):
         if clip_by_frame:
             cat_coords = SkyCoord(ra=cat["ra"], dec=cat["dec"])
             wcs = WCS(field_center)
-            x, y = wcs.all_world2pix(cat_coords.ra, cat_coords.dec, 0)
-            in_x = (x >= padding) & (x <= wcs.pixel_shape[0] - padding)
-            in_y = (y >= padding) & (y <= wcs.pixel_shape[1] - padding)
-            in_fov = in_x & in_y
+            in_fov = coords_in_frame(cat_coords, wcs, wcs.pixel_shape, padding=padding)
             cat = cat[in_fov]
 
         return cat
