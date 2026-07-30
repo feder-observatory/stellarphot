@@ -30,6 +30,11 @@ def generate_table_representers(cls):
     def _constructor(loader, node):
         # This loads the simple dictionary we dumped in _representer,
         # then initializes the model with the json string.
+        #
+        # Settings written to table metadata before the settings_version
+        # field existed validate here with the current version by default.
+        # That is deliberate: a table records photometry that has already
+        # been done, so the settings-file migration does not apply.
         mapping = loader.construct_mapping(node)
         return cls.model_validate_json(mapping["model_json_string"])
 
