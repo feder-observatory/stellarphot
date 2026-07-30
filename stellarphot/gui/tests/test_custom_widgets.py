@@ -1259,7 +1259,7 @@ class TestReviewSettings:
         # With no saved settings there is nothing to report, so the banner
         # is empty and hidden.
         review_settings = ReviewSettings([Camera])
-        assert review_settings._banner.value == ""
+        assert review_settings._banner_html.value == ""
         assert review_settings._banner.layout.display == "none"
 
     def test_banner_reports_unreadable_settings_file(self):
@@ -1275,9 +1275,37 @@ class TestReviewSettings:
         # exercises the automatic save that happens during widget creation.
         review_settings = ReviewSettings([Camera, PhotometryApertures])
 
-        assert "Unable to read the saved settings" in review_settings._banner.value
+        banner_text = review_settings._banner_html.value
+        assert "Unable to read the saved settings" in banner_text
         assert review_settings._banner.layout.display == "flex"
         assert wd_settings.settings_file.read_text() == bad_content
+
+        # Only the first line of the error is in the visible message; the
+        # rest of the validation error is inside a collapsed details element.
+        visible_text = banner_text.split("<details>")[0]
+        assert "validation error" in visible_text
+        assert "Field required" not in visible_text
+        assert "<details><summary>Full error</summary>" in banner_text
+        assert "Field required" in banner_text.split("<details>")[1]
+
+    def test_banner_dismiss_button_stays_dismissed(self):
+        # Clicking the dismiss button hides the banner, and the same message
+        # does not come back when the settings are reloaded (which happens
+        # on every tab selection).
+        wd_settings = PhotometryWorkingDirSettings()
+        wd_settings.settings_file.write_text('{"pasta": "carbonara"}')
+
+        review_settings = ReviewSettings([Camera, PhotometryApertures])
+        assert review_settings._banner.layout.display == "flex"
+
+        review_settings._banner_dismiss.click()
+        assert review_settings._banner.layout.display == "none"
+        assert review_settings._banner_html.value == ""
+
+        # Selecting a different tab reloads the settings from disk; the
+        # dismissed message should stay dismissed.
+        review_settings._container.selected_index = 1
+        assert review_settings._banner.layout.display == "none"
 
     def test_banner_shows_warnings_from_loading_settings(self, mocker):
         # Warnings generated while loading settings (e.g. a settings-format
@@ -1291,8 +1319,17 @@ class TestReviewSettings:
         )
         review_settings = ReviewSettings([Camera])
 
-        assert "Settings were migrated" in review_settings._banner.value
+        assert "Settings were migrated" in review_settings._banner_html.value
         assert review_settings._banner.layout.display == "flex"
+
+    def test_accordion_collapse_does_not_error(self):
+        # An accordion with every section collapsed has selected_index None,
+        # which used to raise a TypeError in the selection observer.
+        review_settings = ReviewSettings(
+            [Camera, PhotometryApertures], style="accordion"
+        )
+        review_settings._container.selected_index = 0
+        review_settings._container.selected_index = None
 
 
 def test_add_saving_with_unrecognized_widget():

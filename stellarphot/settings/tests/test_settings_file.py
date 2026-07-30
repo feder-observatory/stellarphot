@@ -1,4 +1,5 @@
 import os
+import warnings
 from copy import deepcopy
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -483,6 +484,27 @@ class TestPhotometryWorkingDirSettings:
         assert settings_file.partial_settings_file.exists()
         assert settings_file.partial_settings == partial_settings
         assert settings_file.settings_file.read_text() == bad_content
+
+    def test_save_does_not_repeat_load_warnings(self, mocker):
+        # save() calls load() internally for bookkeeping. Warnings from that
+        # load (e.g. a settings-format migration message) were already shown
+        # when the settings were first loaded, so save() should not repeat
+        # them.
+        real_load = PhotometryWorkingDirSettings.load
+
+        def warning_load(_self):
+            warnings.warn("Settings were migrated", UserWarning, stacklevel=2)
+            return real_load(_self)
+
+        mocker.patch.object(
+            settings_files.PhotometryWorkingDirSettings, "load", warning_load
+        )
+
+        settings_file = PhotometryWorkingDirSettings()
+        camera = Camera.model_validate_json(CAMERA)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            settings_file.save(PartialPhotometrySettings(camera=camera), update=True)
 
     def test_load_conflicting_partial_and_full_settings(self):
         # Make a valid partial settings file and a valid full settings file

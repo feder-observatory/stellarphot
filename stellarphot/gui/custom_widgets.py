@@ -770,10 +770,23 @@ class ReviewSettings(ipw.VBox):
     def __init__(self, settings, style="tabs", *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         # Banner for messages about problems loading saved settings. It is
-        # hidden unless there is a message to show.
-        self._banner = ipw.HTML()
+        # hidden unless there is a message to show, and can be dismissed
+        # with its close button. Dismissed messages stay dismissed even
+        # though the settings are reloaded on every tab selection.
+        self._banner_html = ipw.HTML(layout=ipw.Layout(flex="1 1 auto"))
+        self._banner_dismiss = ipw.Button(
+            description="✕",
+            tooltip="Dismiss this message",
+            layout=ipw.Layout(width="2.5em"),
+        )
+        self._banner_dismiss.on_click(self._dismiss_banner)
+        self._banner = ipw.HBox(
+            [self._banner_html, self._banner_dismiss],
+            layout=ipw.Layout(align_items="center"),
+        )
         self._banner.layout.display = "none"
         self._banner_messages = []
+        self._dismissed_messages = set()
 
         # Get a copy of whatever settings may have already been saved.
         self._current_settings = self._load_working_dir_settings()
@@ -918,31 +931,51 @@ class ReviewSettings(ipw.VBox):
                 or wd_settings.partial_settings_file.exists()
             )
             if settings_file_exists:
-                messages.append(
+                # The full error can run to dozens of lines for a pydantic
+                # ValidationError, so only its first line is shown; the rest
+                # goes into a collapsed details element.
+                error_lines = str(e).splitlines()
+                message = (
                     "Unable to read the saved settings in this directory, so "
-                    f"none of the values below come from them. The error was: {e} "
+                    f"none of the values below come from them ({error_lines[0]}). "
                     "To keep the old file, make a copy of it before saving any "
                     "settings here."
                 )
+                if detail := " ".join(error_lines[1:]):
+                    message += (
+                        f"<details><summary>Full error</summary>{detail}</details>"
+                    )
+                messages.append(message)
         self._banner_messages = messages
         self._update_banner()
         return loaded
 
     def _update_banner(self):
         """
-        Show the banner if there are messages, hide it if there are none.
+        Show the banner if there are messages that have not been dismissed,
+        hide it otherwise.
         """
-        if self._banner_messages:
-            content = "".join(f"<p>⚠️ {msg}</p>" for msg in self._banner_messages)
-            self._banner.value = (
+        messages = [
+            msg for msg in self._banner_messages if msg not in self._dismissed_messages
+        ]
+        if messages:
+            content = "".join(f"<p>⚠️ {msg}</p>" for msg in messages)
+            self._banner_html.value = (
                 "<div style='border: 2px solid #ffc107; border-radius: 4px; "
                 "background-color: #fff3cd; color: #664d03; "
                 f"padding: 0.25em 1em;'>{content}</div>"
             )
             self._banner.layout.display = "flex"
         else:
-            self._banner.value = ""
+            self._banner_html.value = ""
             self._banner.layout.display = "none"
+
+    def _dismiss_banner(self, _=None):
+        """
+        Hide the currently displayed messages until a new one arrives.
+        """
+        self._dismissed_messages.update(self._banner_messages)
+        self._update_banner()
 
     def _observe_tab_selection(self, change):
         """
@@ -955,6 +988,11 @@ class ReviewSettings(ipw.VBox):
 
         # Get the index
         new_selected = change["new"]
+
+        # An accordion reports a selection of None when every section is
+        # collapsed; there is nothing to update in that case.
+        if new_selected is None:
+            return
 
         setting_badge = self._setting_widgets[new_selected].badge
         if setting_badge is not None:

@@ -1,4 +1,5 @@
 import re
+import warnings
 from pathlib import Path
 from typing import ClassVar
 
@@ -407,7 +408,13 @@ class PhotometryWorkingDirSettings:
         full_settings = False
 
         try:
-            _ = self.load()
+            # This load is internal bookkeeping; any warnings it generates
+            # (e.g. a settings-format migration message) were already shown
+            # when the settings were first loaded, so don't repeat them on
+            # every save.
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                _ = self.load()
         except ValueError:
             # If we catch a ValueError, then we are in a situation where we have no
             # settings files. We can proceed to save the settings.
