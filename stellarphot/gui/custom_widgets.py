@@ -782,7 +782,11 @@ class ReviewSettings(ipw.VBox):
         self._banner_dismiss.on_click(self._dismiss_banner)
         self._banner = ipw.HBox(
             [self._banner_html, self._banner_dismiss],
-            layout=ipw.Layout(align_items="center"),
+            layout=ipw.Layout(
+                align_items="center",
+                border="2px solid #ffc107",
+                padding="0.25em 1em",
+            ),
         )
         self._banner.layout.display = "none"
         self._banner_messages = []
@@ -960,11 +964,7 @@ class ReviewSettings(ipw.VBox):
         ]
         if messages:
             content = "".join(f"<p>⚠️ {msg}</p>" for msg in messages)
-            self._banner_html.value = (
-                "<div style='border: 2px solid #ffc107; border-radius: 4px; "
-                "background-color: #fff3cd; color: #664d03; "
-                f"padding: 0.25em 1em;'>{content}</div>"
-            )
+            self._banner_html.value = content
             self._banner.layout.display = "flex"
         else:
             self._banner_html.value = ""
