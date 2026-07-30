@@ -1,6 +1,7 @@
 # Some settings require custom widgets to be displayed in the GUI. These are defined in
 # this module.
 
+import warnings
 from enum import StrEnum
 
 import ipywidgets as ipw
@@ -761,15 +762,21 @@ class ReviewSettings(ipw.VBox):
     4. Creating a new one of those saveable settings also saves it to the working
        directory settings.
 
+    If the saved settings in the working directory cannot be read, or reading them
+    generates warnings, a banner describing the problem is displayed above the
+    settings.
     """
 
     def __init__(self, settings, style="tabs", *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        # Banner for messages about problems loading saved settings. It is
+        # hidden unless there is a message to show.
+        self._banner = ipw.HTML()
+        self._banner.layout.display = "none"
+        self._banner_messages = []
+
         # Get a copy of whatever settings may have already been saved.
-        try:
-            self._current_settings = PhotometryWorkingDirSettings().load()
-        except ValueError:
-            self._current_settings = PartialPhotometrySettings()
+        self._current_settings = self._load_working_dir_settings()
 
         self._setting_widgets = []
         self._plain_names = []
@@ -865,7 +872,7 @@ class ReviewSettings(ipw.VBox):
         self._container.children = self._setting_widgets
         self._container.titles = self._make_titles()
 
-        self.children = [self._container]
+        self.children = [self._banner, self._container]
 
         # Set up an observer to run when a tab is selected
         self._container.observe(self._observe_tab_selection, names="selected_index")
@@ -888,12 +895,54 @@ class ReviewSettings(ipw.VBox):
         """
         The current settings in the widget.
         """
-        try:
-            self._current_settings = PhotometryWorkingDirSettings().load()
-        except ValueError:
-            self._current_settings = PartialPhotometrySettings()
-
+        self._current_settings = self._load_working_dir_settings()
         return self._current_settings
+
+    def _load_working_dir_settings(self):
+        """
+        Load settings from the working directory, routing any warnings the load
+        generates, and any failure to read an existing settings file, into the
+        banner instead of silently discarding them.
+        """
+        wd_settings = PhotometryWorkingDirSettings()
+        messages = []
+        try:
+            with warnings.catch_warnings(record=True) as recorded:
+                warnings.simplefilter("always")
+                loaded = wd_settings.load()
+            messages.extend(str(warning.message) for warning in recorded)
+        except ValueError as e:
+            loaded = PartialPhotometrySettings()
+            settings_file_exists = (
+                wd_settings.settings_file.exists()
+                or wd_settings.partial_settings_file.exists()
+            )
+            if settings_file_exists:
+                messages.append(
+                    "Unable to read the saved settings in this directory, so "
+                    f"none of the values below come from them. The error was: {e} "
+                    "To keep the old file, make a copy of it before saving any "
+                    "settings here."
+                )
+        self._banner_messages = messages
+        self._update_banner()
+        return loaded
+
+    def _update_banner(self):
+        """
+        Show the banner if there are messages, hide it if there are none.
+        """
+        if self._banner_messages:
+            content = "".join(f"<p>⚠️ {msg}</p>" for msg in self._banner_messages)
+            self._banner.value = (
+                "<div style='border: 2px solid #ffc107; border-radius: 4px; "
+                "background-color: #fff3cd; color: #664d03; "
+                f"padding: 0.25em 1em;'>{content}</div>"
+            )
+            self._banner.layout.display = "flex"
+        else:
+            self._banner.value = ""
+            self._banner.layout.display = "none"
 
     def _observe_tab_selection(self, change):
         """

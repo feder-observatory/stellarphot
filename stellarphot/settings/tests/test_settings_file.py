@@ -468,6 +468,22 @@ class TestPhotometryWorkingDirSettings:
         else:
             assert settings_file.settings.camera.name == full_settings.camera.name
 
+    def test_save_partial_update_with_unreadable_full_settings(self):
+        # An existing full settings file that cannot be read should not make
+        # a partial save crash. The partial settings are saved on their own
+        # and the unreadable file is left in place.
+        settings_file = PhotometryWorkingDirSettings()
+        bad_content = '{"pasta": "carbonara"}'
+        settings_file.settings_file.write_text(bad_content)
+
+        camera = Camera.model_validate_json(CAMERA)
+        partial_settings = PartialPhotometrySettings(camera=camera)
+        settings_file.save(partial_settings, update=True)
+
+        assert settings_file.partial_settings_file.exists()
+        assert settings_file.partial_settings == partial_settings
+        assert settings_file.settings_file.read_text() == bad_content
+
     def test_load_conflicting_partial_and_full_settings(self):
         # Make a valid partial settings file and a valid full settings file
         # that conflict with each other.

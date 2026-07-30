@@ -1,3 +1,4 @@
+import warnings
 from copy import deepcopy
 from pathlib import Path
 
@@ -1253,6 +1254,45 @@ class TestReviewSettings:
         review_settings = ReviewSettings([PhotometryApertures, Camera])
         review_settings._container.selected_index = 1
         assert SaveStatus.SETTING_NOT_SAVED in review_settings._container.titles[1]
+
+    def test_banner_hidden_when_no_settings_files(self):
+        # With no saved settings there is nothing to report, so the banner
+        # is empty and hidden.
+        review_settings = ReviewSettings([Camera])
+        assert review_settings._banner.value == ""
+        assert review_settings._banner.layout.display == "none"
+
+    def test_banner_reports_unreadable_settings_file(self):
+        # A settings file in the working directory that exists but cannot be
+        # read used to be silently ignored. The widget should still come up,
+        # starting from defaults, with a banner explaining what happened, and
+        # the unreadable file should be left in place.
+        wd_settings = PhotometryWorkingDirSettings()
+        bad_content = '{"pasta": "carbonara"}'
+        wd_settings.settings_file.write_text(bad_content)
+
+        # PhotometryApertures can be created from default values, so this also
+        # exercises the automatic save that happens during widget creation.
+        review_settings = ReviewSettings([Camera, PhotometryApertures])
+
+        assert "Unable to read the saved settings" in review_settings._banner.value
+        assert review_settings._banner.layout.display == "flex"
+        assert wd_settings.settings_file.read_text() == bad_content
+
+    def test_banner_shows_warnings_from_loading_settings(self, mocker):
+        # Warnings generated while loading settings (e.g. a settings-format
+        # migration) should be displayed in the banner.
+        def fake_load(_self):
+            warnings.warn("Settings were migrated", UserWarning, stacklevel=2)
+            return PartialPhotometrySettings()
+
+        mocker.patch.object(
+            settings_files.PhotometryWorkingDirSettings, "load", fake_load
+        )
+        review_settings = ReviewSettings([Camera])
+
+        assert "Settings were migrated" in review_settings._banner.value
+        assert review_settings._banner.layout.display == "flex"
 
 
 def test_add_saving_with_unrecognized_widget():
