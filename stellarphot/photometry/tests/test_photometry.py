@@ -1127,6 +1127,18 @@ class TestAperturePhotometry:
             assert np.allclose(
                 group["aperture"].value, fwhm_multiplier * expected_fwhm, rtol=tolerance
             )
+            # The annulus should track the per-image FWHM too, not the static
+            # fwhm_estimate from the settings. See #654.
+            expected_inner = fwhm_multiplier * expected_fwhm + aperture_settings.gap
+            expected_outer = expected_inner + aperture_settings.annulus_width
+            assert np.allclose(
+                group["annulus_inner"].value, expected_inner, rtol=tolerance
+            )
+            assert np.allclose(
+                group["annulus_outer"].value, expected_outer, rtol=tolerance
+            )
+            # The aperture must never reach into its own sky annulus
+            assert np.all(group["aperture"].value < group["annulus_inner"].value)
 
     def test_invalid_path(self, photometry_settings_for_test):
         ap = AperturePhotometry(settings=photometry_settings_for_test)

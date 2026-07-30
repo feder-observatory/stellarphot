@@ -451,7 +451,7 @@ def single_image_photometry(
 
     # Remove all source positions too close to edges of image (where the annulus would
     # extend beyond the image boundaries).
-    padding = photometry_apertures.outer_annulus
+    padding = photometry_apertures.outer_annulus_pixels(fwhm)
     out_of_bounds = (
         (xs < padding)
         | (xs > (ccd_image.shape[1] - padding))
@@ -553,8 +553,8 @@ def single_image_photometry(
     apers = CircularAperture(aper_locs, r=photometry_apertures.radius_pixels(fwhm))
     annuli = CircularAnnulus(
         aper_locs,
-        r_in=photometry_apertures.inner_annulus,
-        r_out=photometry_apertures.outer_annulus,
+        r_in=photometry_apertures.inner_annulus_pixels(fwhm),
+        r_out=photometry_apertures.outer_annulus_pixels(fwhm),
     )
 
     # Flag sources whose aperture contains any saturated (or otherwise

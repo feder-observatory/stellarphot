@@ -422,16 +422,18 @@ class PhotometryApertures(BaseModelWithTableRep):
     @property
     def inner_annulus(self):
         """
-        Radius of the inner annulus in pixels.
+        Radius of the inner annulus in pixels, based on the FWHM estimate
+        in the settings.
         """
-        return self.radius_pixels(self.fwhm_estimate) + self.gap
+        return self.inner_annulus_pixels(self.fwhm_estimate)
 
     @property
     def outer_annulus(self):
         """
-        Radius of the outer annulus in pixels.
+        Radius of the outer annulus in pixels, based on the FWHM estimate
+        in the settings.
         """
-        return self.inner_annulus + self.annulus_width
+        return self.outer_annulus_pixels(self.fwhm_estimate)
 
     def radius_pixels(self, fwhm):
         """
@@ -442,6 +444,20 @@ class PhotometryApertures(BaseModelWithTableRep):
             return fwhm * self.radius
         else:
             return self.radius
+
+    def inner_annulus_pixels(self, fwhm):
+        """
+        Return the inner annulus radius in pixels for the given FWHM,
+        depending on whether the aperture is variable or not.
+        """
+        return self.radius_pixels(fwhm) + self.gap
+
+    def outer_annulus_pixels(self, fwhm):
+        """
+        Return the outer annulus radius in pixels for the given FWHM,
+        depending on whether the aperture is variable or not.
+        """
+        return self.inner_annulus_pixels(fwhm) + self.annulus_width
 
 
 class PhotometryFileSettings(BaseModelWithTableRep):
