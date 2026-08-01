@@ -404,6 +404,10 @@ class PhotometryWorkingDirSettings:
         Finally, if we are passed a partial setting and there is a full setting on disk,
         then the partial settings are merged with the full settings, and the full
         settings are saved.
+
+        An existing settings file that cannot be read is never overwritten in
+        place; it is renamed with a ``.bak`` suffix before the new settings are
+        written.
         """
         full_settings = False
 
@@ -419,6 +423,18 @@ class PhotometryWorkingDirSettings:
             # If we catch a ValueError, then we are in a situation where we have no
             # settings files. We can proceed to save the settings.
             pass
+
+        # A file that exists on disk but whose in-memory settings are None
+        # failed to parse during the load above. Note the two flags now,
+        # before the code below reassigns the in-memory settings, so that
+        # the unreadable file can be renamed aside instead of destroyed.
+        # If the load failed on the partial file then the full file was
+        # never parsed, so this may occasionally set aside a .bak for a
+        # readable full file -- that errs on the side of preserving data.
+        unreadable_full = self._settings_file.exists() and self._settings is None
+        unreadable_partial = (
+            self._partial_settings_file.exists() and self._partial_settings is None
+        )
 
         match settings:
             case PartialPhotometrySettings():
@@ -449,7 +465,8 @@ class PhotometryWorkingDirSettings:
                     # If the settings file exists but could not be read then
                     # self._settings is None and there is nothing to merge the
                     # partial settings into. The partial settings are saved on
-                    # their own and the unreadable file is left in place.
+                    # their own and the unreadable file is renamed with a .bak
+                    # suffix before anything overwrites it.
 
                 # Are we updating or replacing partial settings?
                 if update and self._partial_settings is not None:
@@ -487,8 +504,31 @@ class PhotometryWorkingDirSettings:
                 )
 
         if full_settings:
-            self._partial_settings_file.unlink(missing_ok=True)
+            if unreadable_partial:
+                # Preserve the unreadable partial file instead of deleting it.
+                # Use replace rather than rename so that an existing .bak file
+                # is overwritten on all platforms.
+                self._partial_settings_file.replace(
+                    self._partial_settings_file.with_name(
+                        self._partial_settings_file.name + ".bak"
+                    )
+                )
+            else:
+                self._partial_settings_file.unlink(missing_ok=True)
             self._partial_settings = None
+
+        # If the file we are about to write exists but could not be read, rename
+        # it aside so its contents are preserved rather than overwritten.
+        if file == self._settings_file and unreadable_full:
+            self._settings_file.replace(
+                self._settings_file.with_name(self._settings_file.name + ".bak")
+            )
+        elif file == self._partial_settings_file and unreadable_partial:
+            self._partial_settings_file.replace(
+                self._partial_settings_file.with_name(
+                    self._partial_settings_file.name + ".bak"
+                )
+            )
 
         # Write the settings to a file. The settings themselves are models, so we
         # are guaranteed to write the correct model type (partial or full settings)
