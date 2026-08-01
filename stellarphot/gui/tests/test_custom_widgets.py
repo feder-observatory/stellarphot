@@ -1280,12 +1280,17 @@ class TestReviewSettings:
         assert review_settings._banner.layout.display == "flex"
         assert wd_settings.settings_file.read_text() == bad_content
 
+        # The message points out that saving will preserve the unreadable
+        # file with a .bak extension rather than overwrite it.
+        assert "renamed with a .bak extension" in banner_text
+
         # Only the first line of the error is in the visible message; the
-        # rest of the validation error is inside a collapsed details element.
+        # rest of the validation error is inside a collapsed details element,
+        # formatted in a pre block that preserves pydantic's line breaks.
         visible_text = banner_text.split("<details>")[0]
         assert "validation error" in visible_text
         assert "Field required" not in visible_text
-        assert "<details><summary>Full error</summary>" in banner_text
+        assert "<details><summary>Full error</summary><pre>" in banner_text
         assert "Field required" in banner_text.split("<details>")[1]
 
     def test_banner_dismiss_button_stays_dismissed(self):
@@ -1322,6 +1327,77 @@ class TestReviewSettings:
         assert "Settings were migrated" in review_settings._banner_html.value
         assert review_settings._banner.layout.display == "flex"
 
+    def test_banner_escapes_html_from_settings_file(self):
+        # The banner message includes content that came from the settings
+        # file, so markup in a corrupt file must be escaped rather than
+        # rendered as HTML.
+        wd_settings = PhotometryWorkingDirSettings()
+        wd_settings.settings_file.write_text(
+            '{"camera": "<img src=x onerror=alert(1)>"}'
+        )
+
+        review_settings = ReviewSettings([Camera])
+
+        banner_text = review_settings._banner_html.value
+        assert "<img" not in banner_text
+        assert "&lt;img" in banner_text
+
+    def test_banner_shows_warnings_when_load_also_fails(self, mocker):
+        # Warnings emitted while loading settings should reach the banner
+        # even when the load then fails, alongside the error message itself.
+        def fake_load(_self):
+            warnings.warn("Settings were migrated", UserWarning, stacklevel=2)
+            raise ValueError("Error loading settings: broken")
+
+        mocker.patch.object(
+            settings_files.PhotometryWorkingDirSettings, "load", fake_load
+        )
+        # The error is only reported when a settings file actually exists.
+        PhotometryWorkingDirSettings().settings_file.write_text("{}")
+
+        review_settings = ReviewSettings([Camera])
+
+        banner_text = review_settings._banner_html.value
+        assert "Error loading settings: broken" in banner_text
+        assert "Settings were migrated" in banner_text
+        assert review_settings._banner.layout.display == "flex"
+
+    def test_banner_ignores_non_user_warnings(self, mocker):
+        # Warnings other than UserWarning raised on the load path, like a
+        # DeprecationWarning from a library internal, are not actionable by
+        # the user and should stay out of the banner.
+        def fake_load(_self):
+            warnings.warn("this API is deprecated", DeprecationWarning, stacklevel=2)
+            return PartialPhotometrySettings()
+
+        mocker.patch.object(
+            settings_files.PhotometryWorkingDirSettings, "load", fake_load
+        )
+        review_settings = ReviewSettings([Camera])
+
+        assert review_settings._banner_html.value == ""
+        assert review_settings._banner.layout.display == "none"
+
+    def test_unreadable_settings_file_preserved_as_bak(self):
+        # An unreadable partial settings file in the working directory should
+        # be reported in the banner, and the automatic save that happens
+        # during widget creation should preserve the original content with a
+        # .bak extension instead of overwriting it.
+        wd_settings = PhotometryWorkingDirSettings()
+        bad_content = '{"pasta": "carbonara"}'
+        wd_settings.partial_settings_file.write_text(bad_content)
+
+        # PhotometryApertures can be created from default values, so the
+        # automatic save fires during widget creation.
+        review_settings = ReviewSettings([Camera, PhotometryApertures])
+
+        banner_text = review_settings._banner_html.value
+        assert "Unable to read the saved settings" in banner_text
+        backup = wd_settings.partial_settings_file.with_name(
+            wd_settings.partial_settings_file.name + ".bak"
+        )
+        assert backup.read_text() == bad_content
+
     def test_accordion_collapse_does_not_error(self):
         # An accordion with every section collapsed has selected_index None,
         # which used to raise a TypeError in the selection observer.
@@ -1330,6 +1406,7 @@ class TestReviewSettings:
         )
         review_settings._container.selected_index = 0
         review_settings._container.selected_index = None
+        # Reaching this point without an exception is the test
 
 
 def test_add_saving_with_unrecognized_widget():

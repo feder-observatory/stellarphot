@@ -1,6 +1,7 @@
 # Some settings require custom widgets to be displayed in the GUI. These are defined in
 # this module.
 
+import html
 import warnings
 from enum import StrEnum
 
@@ -793,7 +794,7 @@ class ReviewSettings(ipw.VBox):
         self._dismissed_messages = set()
 
         # Get a copy of whatever settings may have already been saved.
-        self._current_settings = self._load_working_dir_settings()
+        self._refresh()
 
         self._setting_widgets = []
         self._plain_names = []
@@ -910,7 +911,15 @@ class ReviewSettings(ipw.VBox):
     @property
     def current_settings(self):
         """
-        The current settings in the widget.
+        The settings as of the last refresh; a snapshot rather than a live
+        read from disk.
+        """
+        return self._current_settings
+
+    def _refresh(self):
+        """
+        Reload the settings from the working directory, updating the banner
+        with any problems the load encounters, and return the result.
         """
         self._current_settings = self._load_working_dir_settings()
         return self._current_settings
@@ -925,9 +934,14 @@ class ReviewSettings(ipw.VBox):
         messages = []
         try:
             with warnings.catch_warnings(record=True) as recorded:
-                warnings.simplefilter("always")
+                # Settings problems are reported as UserWarning; internal
+                # deprecation noise from pydantic/astropy on the load path
+                # should not reach a user-facing banner. A dedicated warning
+                # category may replace this when settings-migration work
+                # lands, see issue #656.
+                warnings.simplefilter("ignore")
+                warnings.simplefilter("always", UserWarning)
                 loaded = wd_settings.load()
-            messages.extend(str(warning.message) for warning in recorded)
         except ValueError as e:
             loaded = PartialPhotometrySettings()
             settings_file_exists = (
@@ -941,15 +955,21 @@ class ReviewSettings(ipw.VBox):
                 error_lines = str(e).splitlines()
                 message = (
                     "Unable to read the saved settings in this directory, so "
-                    f"none of the values below come from them ({error_lines[0]}). "
-                    "To keep the old file, make a copy of it before saving any "
-                    "settings here."
+                    "none of the values below come from them "
+                    f"({html.escape(error_lines[0])}). "
+                    "When settings are saved here, the unreadable file is "
+                    "renamed with a .bak extension rather than overwritten."
                 )
-                if detail := " ".join(error_lines[1:]):
+                if detail := "\n".join(error_lines[1:]):
                     message += (
-                        f"<details><summary>Full error</summary>{detail}</details>"
+                        "<details><summary>Full error</summary>"
+                        f"<pre>{html.escape(detail)}</pre></details>"
                     )
                 messages.append(message)
+        # Extend outside the try/except so warnings are reported even when
+        # load() raises after emitting them; ``recorded`` stays bound because
+        # catch_warnings exits normally during exception propagation.
+        messages.extend(html.escape(str(warning.message)) for warning in recorded)
         self._banner_messages = messages
         self._update_banner()
         return loaded
@@ -963,7 +983,9 @@ class ReviewSettings(ipw.VBox):
             msg for msg in self._banner_messages if msg not in self._dismissed_messages
         ]
         if messages:
-            content = "".join(f"<p>⚠️ {msg}</p>" for msg in messages)
+            # A div rather than a p because a message may contain a details
+            # element, which is not allowed inside a p.
+            content = "".join(f"<div>⚠️ {msg}</div>" for msg in messages)
             self._banner_html.value = content
             self._banner.layout.display = "flex"
         else:
@@ -974,6 +996,9 @@ class ReviewSettings(ipw.VBox):
         """
         Hide the currently displayed messages until a new one arrives.
         """
+        # Button.on_click invokes handlers with the button instance as the
+        # only argument, which is unused here; the =None default lets the
+        # method also be called directly with no argument.
         self._dismissed_messages.update(self._banner_messages)
         self._update_banner()
 
@@ -1003,7 +1028,7 @@ class ReviewSettings(ipw.VBox):
 
             snake_name = to_snake(setting_widget._autoui_widget.model.__name__)
 
-            disk_value = getattr(self.current_settings, snake_name)
+            disk_value = getattr(self._refresh(), snake_name)
             if disk_value is None:
                 # The setting is not saved
                 setting_widget = SaveStatus.SETTING_NOT_SAVED
