@@ -954,11 +954,12 @@ class ReviewSettings(ipw.VBox):
                 # goes into a collapsed details element.
                 error_lines = str(e).splitlines()
                 message = (
-                    "Unable to read the saved settings in this directory, so "
-                    "none of the values below come from them "
+                    "There is a problem with the saved settings in this "
+                    "directory, so none of the values below come from them "
                     f"({html.escape(error_lines[0])}). "
-                    "When settings are saved here, the unreadable file is "
-                    "renamed with a .bak extension rather than overwritten."
+                    "If saving settings here would overwrite a file that "
+                    "could not be read, that file is renamed with a .bak "
+                    "extension first."
                 )
                 if detail := "\n".join(error_lines[1:]):
                     message += (
@@ -1031,7 +1032,7 @@ class ReviewSettings(ipw.VBox):
             disk_value = getattr(self._refresh(), snake_name)
             if disk_value is None:
                 # The setting is not saved
-                setting_widget = SaveStatus.SETTING_NOT_SAVED
+                setting_widget.badge = SaveStatus.SETTING_NOT_SAVED
             else:
                 # Set the badge to saved if it has been saved.
                 value_from_widget = setting_widget._autoui_widget.model.model_validate(

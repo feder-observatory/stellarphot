@@ -1276,7 +1276,7 @@ class TestReviewSettings:
         review_settings = ReviewSettings([Camera, PhotometryApertures])
 
         banner_text = review_settings._banner_html.value
-        assert "Unable to read the saved settings" in banner_text
+        assert "There is a problem with the saved settings" in banner_text
         assert review_settings._banner.layout.display == "flex"
         assert wd_settings.settings_file.read_text() == bad_content
 
@@ -1392,7 +1392,7 @@ class TestReviewSettings:
         review_settings = ReviewSettings([Camera, PhotometryApertures])
 
         banner_text = review_settings._banner_html.value
-        assert "Unable to read the saved settings" in banner_text
+        assert "There is a problem with the saved settings" in banner_text
         backup = wd_settings.partial_settings_file.with_name(
             wd_settings.partial_settings_file.name + ".bak"
         )
@@ -1407,6 +1407,29 @@ class TestReviewSettings:
         review_settings._container.selected_index = 0
         review_settings._container.selected_index = None
         # Reaching this point without an exception is the test
+
+    def test_tab_selection_marks_unsaved_setting(self):
+        # Selecting a tab whose setting is not saved on disk should set that
+        # tab's badge to SETTING_NOT_SAVED. This used to silently do nothing
+        # because the selection observer rebound a local variable instead of
+        # setting the widget's badge.
+        wd_settings = PhotometryWorkingDirSettings()
+
+        # PhotometryApertures can be created from default values, so it is
+        # saved automatically when the widget is created; deleting the
+        # settings file afterwards leaves its tab in the not-saved state.
+        review_settings = ReviewSettings([PhotometryApertures, Camera])
+        wd_settings.partial_settings_file.unlink(missing_ok=True)
+
+        # Switch away from the apertures tab and back so the selection
+        # observer fires for it.
+        review_settings._container.selected_index = 1
+        review_settings._container.selected_index = 0
+
+        # Setting the widget badge triggers the observer that copies it into
+        # the badge list and the tab title.
+        assert review_settings.badges[0] == SaveStatus.SETTING_NOT_SAVED
+        assert SaveStatus.SETTING_NOT_SAVED in review_settings._container.titles[0]
 
 
 def test_add_saving_with_unrecognized_widget():
