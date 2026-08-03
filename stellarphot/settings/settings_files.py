@@ -428,9 +428,8 @@ class PhotometryWorkingDirSettings:
         # failed to parse during the load above. Note the two flags now,
         # before the code below reassigns the in-memory settings, so that
         # the unreadable file can be renamed aside instead of destroyed.
-        # If the load failed on the partial file then the full file was
-        # never parsed, so this may occasionally set aside a .bak for a
-        # readable full file -- that errs on the side of preserving data.
+        # load() parses both files before raising, so these flags are accurate
+        # even when only one of the two files is unreadable.
         unreadable_full = self._settings_file.exists() and self._settings is None
         unreadable_partial = (
             self._partial_settings_file.exists() and self._partial_settings is None
@@ -552,6 +551,8 @@ class PhotometryWorkingDirSettings:
         if not (self._settings_file.exists() or self._partial_settings_file.exists()):
             raise ValueError(f"Settings file {self._settings_file} does not exist")
 
+        errors = []
+
         # Load PartialPhotometrySettings first, if it exists.
         if self._partial_settings_file.exists():
             with self._partial_settings_file.open(encoding=ENCODING) as f:
@@ -562,7 +563,7 @@ class PhotometryWorkingDirSettings:
                     content
                 )
             except ValidationError as e:
-                raise ValueError(f"Error loading partial settings: {e}") from e
+                errors.append(f"Error loading partial settings: {e}")
 
         # Now load full settings if they exist
         if self._settings_file.exists():
@@ -572,7 +573,14 @@ class PhotometryWorkingDirSettings:
             try:
                 self._settings = PhotometrySettings.model_validate_json(content)
             except ValidationError as e:
-                raise ValueError(f"Error loading settings: {e}") from e
+                errors.append(f"Error loading settings: {e}")
+
+        # Both files are parsed before any error is raised so that the
+        # in-memory settings reflect every file that could be read; save()
+        # relies on that to merge into readable settings and to rename only
+        # genuinely unreadable files to .bak.
+        if errors:
+            raise ValueError("\n".join(errors))
 
         # Handle case where we have valid partial and valid full settings
         self._resolve_full_partial_conflict()

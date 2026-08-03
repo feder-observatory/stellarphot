@@ -542,6 +542,94 @@ class TestPhotometryWorkingDirSettings:
         )
         assert backup_file.read_text() == bad_content
 
+    def test_save_partial_update_with_corrupt_partial_and_valid_full(self):
+        # Test that when both a valid full settings file and a corrupt partial
+        # settings file exist, a partial save with update=True will:
+        # 1. Rename the corrupt partial file to .bak
+        # 2. Merge the new partial into the valid full settings
+        # 3. Save the result as a full settings file (since the partial is
+        #    compatible with full)
+        settings_file = PhotometryWorkingDirSettings()
+
+        # Write a valid full settings file
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+        settings_file.settings_file.write_text(full_settings.model_dump_json(indent=4))
+
+        # Write a corrupt partial settings file
+        corrupt_partial_content = '{"pasta": "carbonara"}'
+        settings_file.partial_settings_file.write_text(corrupt_partial_content)
+
+        # Create a fresh instance to trigger load()
+        settings_file = PhotometryWorkingDirSettings()
+
+        # Save a new partial settings with a different camera
+        camera = Camera.model_validate_json(CAMERA)
+        new_partial = PartialPhotometrySettings(camera=camera)
+        settings_file.save(new_partial, update=True)
+
+        # Assert: corrupt partial file is renamed to .bak
+        assert not settings_file.partial_settings_file.exists()
+        backup_file = settings_file.partial_settings_file.with_name(
+            settings_file.partial_settings_file.name + ".bak"
+        )
+        assert backup_file.exists()
+        assert backup_file.read_text() == corrupt_partial_content
+
+        # Assert: subsequent load succeeds and returns merged settings
+        fresh_instance = PhotometryWorkingDirSettings()
+        loaded = fresh_instance.load()
+        # The loaded settings should have the new camera and all other fields
+        # from the original full settings
+        assert loaded.camera == camera
+        assert (
+            loaded.observatory
+            == PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS).observatory
+        )
+
+    def test_save_partial_update_with_corrupt_full_and_valid_partial(self):
+        # Test that when both a corrupt full settings file and a valid partial
+        # settings file exist, a partial save with update=True will:
+        # 1. Leave the corrupt full file in place (un-renamed)
+        # 2. Merge into the valid partial and save the result
+        # 3. Not create a .bak of the corrupt full file
+        settings_file = PhotometryWorkingDirSettings()
+
+        # Write a valid partial settings file with a camera
+        camera = Camera.model_validate_json(CAMERA)
+        partial_settings = PartialPhotometrySettings(camera=camera)
+        settings_file.partial_settings_file.write_text(
+            partial_settings.model_dump_json(indent=4)
+        )
+
+        # Write a corrupt full settings file
+        corrupt_full_content = '{"pasta": "carbonara"}'
+        settings_file.settings_file.write_text(corrupt_full_content)
+
+        # Create a fresh instance
+        settings_file = PhotometryWorkingDirSettings()
+
+        # Save a new partial settings with an observatory
+        observatory = Observatory(**TEST_PHOTOMETRY_SETTINGS["observatory"])
+        new_partial = PartialPhotometrySettings(observatory=observatory)
+        settings_file.save(new_partial, update=True)
+
+        # Assert: corrupt full file is left in place un-renamed
+        assert settings_file.settings_file.exists()
+        assert settings_file.settings_file.read_text() == corrupt_full_content
+        backup_file = settings_file.settings_file.with_name(
+            settings_file.settings_file.name + ".bak"
+        )
+        assert not backup_file.exists()
+
+        # Assert: partial file on disk contains merged settings
+        # (old camera + new observatory). Verify by parsing the file directly
+        # since the corrupt full file prevents load() from succeeding.
+        partial_from_disk = PartialPhotometrySettings.model_validate_json(
+            settings_file.partial_settings_file.read_text()
+        )
+        assert partial_from_disk.camera == camera
+        assert partial_from_disk.observatory == observatory
+
     def test_save_does_not_repeat_load_warnings(self, mocker):
         # save() calls load() internally for bookkeeping. Warnings from that
         # load (e.g. a settings-format migration message) were already shown
