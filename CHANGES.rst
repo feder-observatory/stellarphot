@@ -56,8 +56,9 @@ Other Changes and Additions
   deletes a settings file whose contents could not be read, or a partial
   settings file whose values are not carried into the full settings being
   written; such files are preserved with a ``.bak`` suffix instead. Note
-  that ``ReviewSettings.current_settings`` is now a snapshot as of the last
-  refresh rather than a live re-read of the settings files. [#657]
+  that ``ReviewSettings.current_settings`` is now a snapshot rather than a
+  live re-read of the settings files; the snapshot is refreshed at the end
+  of widget construction and on each tab selection. [#657]
 
 Bug Fixes
 ^^^^^^^^^

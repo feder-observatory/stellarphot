@@ -1281,10 +1281,11 @@ class TestReviewSettings:
         assert review_settings._banner.layout.display == "flex"
         assert wd_settings.settings_file.read_text() == bad_content
 
-        # The message points out that saving will preserve the unreadable
-        # file with a .bak extension rather than overwrite it.
+        # The message names the unreadable file and points out that a save
+        # will not overwrite it, and that a save that needs to replace it
+        # will first preserve it with a .bak extension.
         assert "photometry_settings.json.bak" in banner_text
-        assert "rather than overwritten" in banner_text
+        assert "will not be overwritten" in banner_text
 
         # Only the first line of the error is in the visible message; the
         # rest of the validation error is inside a collapsed details element,
@@ -1296,21 +1297,15 @@ class TestReviewSettings:
         assert "Field required" in banner_text.split("<details>")[1]
 
     def test_banner_dismiss_button_stays_dismissed(self):
-        # Clicking the dismiss button hides the banner, and the same message
-        # does not come back when the settings are reloaded (which happens
-        # on every tab selection).
+        # Clicking the dismiss button hides the banner, and the message does
+        # not come back when the settings are reloaded (which happens on
+        # every tab selection). The automatic save of PhotometryApertures
+        # during construction writes a readable partial settings file, which
+        # changes the wording composed around the error on later refreshes;
+        # dismissal must stick anyway because it is keyed on the (stable)
+        # first line of the error, not on the full message text.
         wd_settings = PhotometryWorkingDirSettings()
         wd_settings.settings_file.write_text('{"pasta": "carbonara"}')
-        # Pre-seed a valid (empty) partial settings file so that the
-        # automatic save triggered by PhotometryApertures during
-        # construction (see below) merely adds a key to an
-        # already-readable partial settings file, rather than making a
-        # previously-unreadable one readable. That keeps the banner
-        # message identical across every refresh in this test, which is
-        # what "stays dismissed" is meant to exercise.
-        wd_settings.partial_settings_file.write_text(
-            PartialPhotometrySettings().model_dump_json()
-        )
 
         review_settings = ReviewSettings([Camera, PhotometryApertures])
         assert review_settings._banner.layout.display == "flex"
@@ -1380,6 +1375,42 @@ class TestReviewSettings:
         review_settings._container.selected_index = 1
         assert review_settings._dismissed_messages == set()
 
+    def test_banner_message_updates_instead_of_duplicating(self):
+        # The wording composed around a load error can change between
+        # refreshes for the same underlying problem: here the corrupt full
+        # settings file first has no readable companion ("None of the values
+        # below..."), then the automatic save of PhotometryApertures during
+        # construction writes a readable partial settings file, so later
+        # refreshes report the partial file as the fallback. The banner must
+        # show exactly one message, updated in place to the latest wording,
+        # not one near-duplicate per wording.
+        wd_settings = PhotometryWorkingDirSettings()
+        wd_settings.settings_file.write_text('{"pasta": "carbonara"}')
+
+        review_settings = ReviewSettings([Camera, PhotometryApertures])
+
+        banner_text = review_settings._banner_html.value
+        assert banner_text.count("There is a problem with the saved settings") == 1
+
+        # Selecting a tab triggers another refresh; still just one message.
+        review_settings._container.selected_index = 1
+        banner_text = review_settings._banner_html.value
+        assert banner_text.count("There is a problem with the saved settings") == 1
+
+        # The message reflects the latest wording: the autosaved partial
+        # settings file is now the readable fallback, and the original
+        # "no readable settings" sentence has been replaced in place.
+        assert "come from the partial settings file" in banner_text
+        assert "None of the values below" not in banner_text
+
+    def test_current_settings_fresh_after_construction(self):
+        # Widget construction itself saves settings (PhotometryApertures can
+        # be built from defaults and is autosaved), so the snapshot taken at
+        # the top of construction goes stale before the constructor returns.
+        # The refresh at the end of construction must pick up those saves.
+        review_settings = ReviewSettings([Camera, PhotometryApertures])
+        assert review_settings.current_settings.photometry_apertures is not None
+
     def test_banner_uses_readable_settings_as_fallback(self):
         # If the partial settings file cannot be read but the full settings
         # file is fine, the widget should still be built from the readable
@@ -1397,28 +1428,17 @@ class TestReviewSettings:
 
         banner_text = review_settings._banner_html.value
         assert review_settings._banner.layout.display == "flex"
-        assert "could still be read" in banner_text
+        assert "come from the full settings file" in banner_text
         assert review_settings.current_settings.camera == full_settings.camera
-
-    def test_banner_names_unreadable_settings_file(self):
-        # The banner should name the specific file that could not be read
-        # so the user knows what a subsequent save would preserve as .bak.
-        wd_settings = PhotometryWorkingDirSettings()
-        wd_settings.settings_file.write_text('{"pasta": "carbonara"}')
-
-        review_settings = ReviewSettings([Camera])
-
-        banner_text = review_settings._banner_html.value
-        assert "photometry_settings.json.bak" in banner_text
-        assert "rather than overwritten" in banner_text
 
     def test_banner_conflict_wording_when_both_files_readable(self):
         # When both the full and partial settings files are individually
         # readable but disagree with each other, the "this file could not
         # be read" wording would be misleading -- both files were read
-        # just fine. The banner should instead point out that the
-        # conflicting (losing) partial settings file will be kept as a
-        # .bak when full settings are next saved.
+        # just fine. The banner should instead say that the values shown
+        # come from the (preferred) full settings file and that saving full
+        # settings resolves the conflict, keeping the conflicting (losing)
+        # partial settings file as a .bak.
         saved = SavedSettings()
         saved.add_item(Camera(**TEST_CAMERA_VALUES))
 
@@ -1436,7 +1456,9 @@ class TestReviewSettings:
 
         banner_text = review_settings._banner_html.value
         assert review_settings._banner.layout.display == "flex"
-        assert "rather than overwritten" not in banner_text
+        assert "will not be overwritten" not in banner_text
+        assert "come from the full settings file" in banner_text
+        assert "resolve the conflict" in banner_text
         assert "conflicting partial settings file will be preserved" in banner_text
         assert "partial_photometry_settings.json.bak" in banner_text
 

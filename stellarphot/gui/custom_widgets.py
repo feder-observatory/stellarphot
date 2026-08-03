@@ -790,7 +790,13 @@ class ReviewSettings(ipw.VBox):
             ),
         )
         self._banner.layout.display = "none"
-        self._banner_messages = []
+        # Maps a stable message key (the first line of a load error, or a
+        # warning's text) to the composed HTML shown for it; insertion order
+        # is display order. Keying on the stable part of the message lets a
+        # refresh that rewords the same underlying problem update its entry
+        # in place, and lets a dismissal survive the rewording.
+        # ``_dismissed_messages`` holds the keys of dismissed messages.
+        self._banner_messages = {}
         self._dismissed_messages = set()
 
         # Get a copy of whatever settings may have already been saved.
@@ -899,6 +905,14 @@ class ReviewSettings(ipw.VBox):
         for idx, widget in enumerate(self._setting_widgets):
             widget.observe(self._observe_badge_change(idx), names="badge")
 
+        # Construction itself may have changed what is on disk -- default-
+        # constructible settings were autosaved above, and setting a
+        # ChooseOrMakeNew value triggers its save observer -- so refresh
+        # once more so that current_settings (and the banner) reflect the
+        # post-construction state instead of the pre-save snapshot taken at
+        # the top of this method.
+        self._refresh()
+
     def _make_titles(self):
         """
         Make titles from badges and plain titles.
@@ -930,12 +944,21 @@ class ReviewSettings(ipw.VBox):
         generates, and any failure to read an existing settings file, into the
         banner instead of silently discarding them.
 
-        Banner messages are sticky: once shown, a message stays in
-        ``self._banner_messages`` until the user dismisses it, even if a later
-        refresh no longer produces it (e.g. an automatic save during widget
-        construction renames the offending file to ``.bak``, curing the
-        problem before the user ever saw the banner). Messages are never
-        removed here; only ``_dismiss_banner`` removes them.
+        Banner messages are keyed by the stable part of the message -- the
+        first line of the load error, or the warning text -- rather than by
+        the full composed text, because the sentences composed around that
+        stable part can change between refreshes for the same underlying
+        problem (e.g. an autosave during widget construction writes a
+        readable partial file, changing which fallback sentence applies).
+        When a refresh reproduces an already-shown key, its wording is
+        updated in place instead of a near-duplicate being appended.
+
+        Banner messages are also sticky: once shown, an entry stays in
+        ``self._banner_messages`` until the user dismisses it, even if a
+        later refresh no longer produces its key (e.g. an automatic save
+        during widget construction renames the offending file to ``.bak``,
+        curing the problem before the user ever saw the banner). Entries are
+        never removed here; only ``_dismiss_banner`` removes them.
         """
         wd_settings = PhotometryWorkingDirSettings()
         current = []
@@ -967,19 +990,23 @@ class ReviewSettings(ipw.VBox):
                 # ValidationError, so only its first line is shown; the rest
                 # goes into a collapsed details element.
                 error_lines = str(e).splitlines()
-                fallback_found = (
-                    wd_settings.settings is not None
-                    or wd_settings.partial_settings is not None
-                )
+                # The first line of the error is stable across refreshes even
+                # when the sentences composed around it change, so it serves
+                # as the identity key for this message.
+                message_key = html.escape(error_lines[0])
                 message = (
                     "There is a problem with the saved settings in this "
-                    f"directory ({html.escape(error_lines[0])})."
+                    f"directory ({message_key})."
                 )
-                if fallback_found:
-                    message += (
-                        " The values below come from the settings that "
-                        "could still be read."
-                    )
+                # Report which file, if either, the displayed values came
+                # from. Both files are parsed before load() raises, so a
+                # non-None attribute here means that file really was read.
+                # The full settings win when both were readable (the
+                # conflicting-values case below).
+                if wd_settings.settings is not None:
+                    message += " The values below come from the full settings file."
+                elif wd_settings.partial_settings is not None:
+                    message += " The values below come from the partial settings file."
                 else:
                     message += " None of the values below come from the saved settings."
 
@@ -1004,12 +1031,19 @@ class ReviewSettings(ipw.VBox):
                     if len(names) == 1:
                         joined_names = names[0]
                         joined_baks = f"{names[0]}.bak"
+                        replace_clause = "if a save needs to replace it, it"
                     else:
                         joined_names = " and ".join(names)
                         joined_baks = " and ".join(f"{name}.bak" for name in names)
+                        replace_clause = "if a save needs to replace them, they"
+                    # The .bak rename happens only when a save actually
+                    # replaces that specific file -- a partial-settings save
+                    # leaves an unreadable full settings file in place -- so
+                    # promise it only for a file a save needs to replace.
                     message += (
-                        f" If settings are saved here, {joined_names} will be "
-                        f"preserved as {joined_baks} rather than overwritten."
+                        f" If settings are saved here, {joined_names} will "
+                        f"not be overwritten; {replace_clause} will first be "
+                        f"preserved as {joined_baks}."
                     )
                 else:
                     # Both files were readable, so this is the conflicting-
@@ -1017,9 +1051,9 @@ class ReviewSettings(ipw.VBox):
                     # misleading here.
                     partial_name = html.escape(wd_settings.partial_settings_file.name)
                     message += (
-                        " If full settings are saved here, the conflicting "
-                        f"partial settings file will be preserved as "
-                        f"{partial_name}.bak."
+                        " Saving full settings here will resolve the "
+                        "conflict; the conflicting partial settings file "
+                        f"will be preserved as {partial_name}.bak."
                     )
 
                 if detail := "\n".join(error_lines[1:]):
@@ -1027,23 +1061,29 @@ class ReviewSettings(ipw.VBox):
                         "<details><summary>Full error</summary>"
                         f"<pre>{html.escape(detail)}</pre></details>"
                     )
-                current.append(message)
-        # Extend outside the try/except so warnings are reported even when
-        # load() raises after emitting them; ``recorded`` stays bound because
-        # catch_warnings exits normally during exception propagation.
-        current.extend(html.escape(str(warning.message)) for warning in recorded)
+                current.append((message_key, message))
+        # Add the warnings outside the try/except so they are reported even
+        # when load() raises after emitting them; ``recorded`` stays bound
+        # because catch_warnings exits normally during exception propagation.
+        # A warning's text is stable across refreshes, so it is its own key.
+        for warning in recorded:
+            warning_text = html.escape(str(warning.message))
+            current.append((warning_text, warning_text))
 
-        # Dismissal is remembered only for as long as a message keeps being
-        # produced. Prune it down to messages still in ``current`` so it
+        # Dismissal is remembered only for as long as a message's key keeps
+        # being produced. Prune it down to keys still in ``current`` so it
         # cannot grow without bound with stale entries; if a problem goes
         # away and later recurs, showing it again (undismissed) is correct.
-        self._dismissed_messages &= set(current)
-        for message in current:
-            if (
-                message not in self._banner_messages
-                and message not in self._dismissed_messages
-            ):
-                self._banner_messages.append(message)
+        self._dismissed_messages &= {key for key, _ in current}
+        for key, msg in current:
+            if key in self._dismissed_messages:
+                continue
+            # Assignment both adds a new message and updates the wording of
+            # an already-shown one in place (dict insertion order keeps its
+            # display position), so a reworded message never appears as a
+            # near-duplicate alongside its older self. Keys absent from
+            # ``current`` are deliberately left alone -- see the docstring.
+            self._banner_messages[key] = msg
         self._update_banner()
         return loaded
 
@@ -1055,7 +1095,9 @@ class ReviewSettings(ipw.VBox):
         if self._banner_messages:
             # A div rather than a p because a message may contain a details
             # element, which is not allowed inside a p.
-            content = "".join(f"<div>⚠️ {msg}</div>" for msg in self._banner_messages)
+            content = "".join(
+                f"<div>⚠️ {msg}</div>" for msg in self._banner_messages.values()
+            )
             self._banner_html.value = content
             self._banner.layout.display = "flex"
         else:
@@ -1069,8 +1111,10 @@ class ReviewSettings(ipw.VBox):
         # Button.on_click invokes handlers with the button instance as the
         # only argument, which is unused here; the =None default lets the
         # method also be called directly with no argument.
+        # Iterating the messages dict yields its keys, which is exactly what
+        # the dismissed set stores.
         self._dismissed_messages.update(self._banner_messages)
-        self._banner_messages = []
+        self._banner_messages = {}
         self._update_banner()
 
     def _observe_tab_selection(self, change):
