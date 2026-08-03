@@ -1346,8 +1346,10 @@ class TestReviewSettings:
         # every tab selection). The automatic save of PhotometryApertures
         # during construction writes a readable partial settings file, which
         # changes the wording composed around the error on later refreshes;
-        # dismissal must stick anyway because it is keyed on the (stable)
-        # first line of the error, not on the full message text.
+        # dismissal must stick anyway because it is keyed on the load
+        # error's fixed identity plus a fingerprint of its first line, and
+        # that first line stays stable across these refreshes even though
+        # the surrounding wording changes.
         wd_settings = PhotometryWorkingDirSettings()
         wd_settings.settings_file.write_text('{"pasta": "carbonara"}')
 
@@ -1380,15 +1382,18 @@ class TestReviewSettings:
         # which means the *next* load from disk will succeed.
         review_settings = ReviewSettings([Camera, PhotometryApertures])
         assert review_settings._banner.layout.display == "flex"
-        message = review_settings._banner_html.value
-        assert message
+        banner_text = review_settings._banner_html.value
+        assert "There is a problem with the saved settings" in banner_text
 
         # Selecting the PhotometryApertures tab triggers another refresh.
         # The load succeeds now, but the message should still be shown
-        # because the user never dismissed it.
+        # because the user never dismissed it -- now marked as resolved
+        # instead of asserting the (no longer true) original claim.
         review_settings._container.selected_index = 1
         assert review_settings._banner.layout.display == "flex"
-        assert review_settings._banner_html.value == message
+        banner_text = review_settings._banner_html.value
+        assert "There is a problem with the saved settings" in banner_text
+        assert "No longer detected as of the latest reload" in banner_text
 
         # Dismissing hides it...
         review_settings._banner_dismiss.click()
@@ -1411,13 +1416,52 @@ class TestReviewSettings:
         assert review_settings._banner.layout.display == "flex"
 
         review_settings._banner_dismiss.click()
-        assert review_settings._dismissed_messages
+        assert review_settings._dismissed
 
         # The bad partial settings file was renamed to .bak during
         # construction, so this refresh succeeds and no longer produces the
         # dismissed message; it should be pruned from the dismissed set.
         review_settings._container.selected_index = 1
-        assert review_settings._dismissed_messages == set()
+        assert review_settings._dismissed == {}
+
+    def test_dismissed_load_error_reappears_for_new_error(self):
+        # Dismissing a load error must not silently suppress a later, freshly
+        # arisen load error that happens to reuse the same fixed banner key.
+        wd_settings = PhotometryWorkingDirSettings()
+        wd_settings.settings_file.write_text('{"pasta": "carbonara"}')
+
+        review = ReviewSettings([Camera])
+
+        review._banner_dismiss.click()
+        assert review._banner.layout.display == "none"
+
+        # A second, previously fine file now also becomes corrupt. This
+        # changes the error's first line from "Error loading settings: ..."
+        # to "Error loading partial settings: ...", i.e. a genuinely new
+        # incident under the same _LOAD_ERROR_KEY.
+        partial_settings_file = wd_settings.partial_settings_file
+        partial_settings_file.write_text('{"pasta": "rigatoni"}')
+        review._refresh()
+
+        assert review._banner.layout.display == "flex"
+        assert "There is a problem with the saved settings" in review._banner_html.value
+
+    def test_banner_marks_resolved_problem(self):
+        # When an autosave triggered by a tab selection cures the underlying
+        # problem, the sticky message stays but gets a "resolved" marker
+        # rather than continuing to assert the (no longer true) claim.
+        wd_settings = PhotometryWorkingDirSettings()
+        wd_settings.partial_settings_file.write_text('{"pasta": "carbonara"}')
+
+        # The PhotometryApertures autosave during construction renames the
+        # bad partial settings file to .bak, curing the problem.
+        review = ReviewSettings([Camera, PhotometryApertures])
+
+        # Selecting the PhotometryApertures tab triggers another refresh.
+        review._container.selected_index = 1
+
+        assert review._banner.layout.display == "flex"
+        assert "No longer detected as of the latest reload" in review._banner_html.value
 
     def test_banner_message_updates_instead_of_duplicating(self):
         # The wording composed around a load error can change between
@@ -1610,6 +1654,35 @@ class TestReviewSettings:
             wd_settings.partial_settings_file.name + ".bak"
         )
         assert backup.read_text() == bad_content
+
+    def test_autosave_does_not_print_settings_warnings(self, mocker):
+        # A settings-migration warning raised while loading should reach the
+        # banner exactly once. Without the fix, it would also be printed to
+        # the console once per autosaved setting: the widget's own explicit
+        # loads (which feed the banner) route the warning through their own
+        # recording context, but the autosave triggered during construction
+        # calls save(), whose internal bookkeeping load deliberately lets
+        # PhotometrySettingsWarning through.
+        def fake_load(_self):
+            warnings.warn(
+                "Settings were migrated", PhotometrySettingsWarning, stacklevel=2
+            )
+            return PartialPhotometrySettings()
+
+        mocker.patch.object(
+            settings_files.PhotometryWorkingDirSettings, "load", fake_load
+        )
+
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter("always")
+            # PhotometryApertures can be built from defaults, so it is
+            # autosaved during construction.
+            review_settings = ReviewSettings([PhotometryApertures])
+
+        assert "Settings were migrated" in review_settings._banner_html.value
+        assert not any(
+            issubclass(w.category, PhotometrySettingsWarning) for w in recorded
+        )
 
     def test_accordion_collapse_does_not_error(self):
         # An accordion with every section collapsed has selected_index None,

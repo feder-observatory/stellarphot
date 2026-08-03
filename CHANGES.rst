@@ -64,7 +64,12 @@ Other Changes and Additions
   ``PhotometryWorkingDirSettings.save`` suppresses repeated warnings from
   its internal bookkeeping load, but lets ``PhotometrySettingsWarning``
   through so a caller whose first interaction with the settings is a save
-  still sees user-actionable problems. Note that
+  still sees user-actionable problems (the ``ReviewSettings`` autosaves
+  suppress that pass-through, since the widget already shows the warning
+  in its banner). A banner message whose underlying problem is no longer
+  reproduced by the latest reload is marked "No longer detected" instead
+  of continuing to read as a current problem, and dismissing a load-error
+  message does not suppress a later, different load error. Note that
   ``ReviewSettings.current_settings`` is now a snapshot rather than a
   live re-read of the settings files; the snapshot is refreshed at the end
   of widget construction and on each tab selection (refreshing is not a
@@ -105,7 +110,12 @@ Bug Fixes
   existing readable settings file. The error raised for conflicting
   partial and full settings files no longer advises deleting one of the
   files (a save resolves the conflict and preserves the losing partial
-  settings file as ``.bak``). In
+  settings file as ``.bak``), and the error raised by
+  ``save(partial, update=False)`` no longer claims full settings "already
+  exist" when the existing full settings file could not be read. The
+  ``full_settings_unreadable``/``partial_settings_unreadable`` properties
+  are False before ``load`` has been called, instead of reporting an
+  existing readable file as unreadable. In
   ``ReviewSettings``, collapsing every section of an accordion no longer
   raises, selecting a tab whose setting is not saved now actually marks
   the tab as not saved, and a tab badge stuck at not-saved now recovers

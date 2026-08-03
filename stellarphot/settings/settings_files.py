@@ -306,6 +306,7 @@ class PhotometryWorkingDirSettings:
         )
         self._partial_settings = None
         self._settings = None
+        self._load_attempted = False
 
     @property
     def settings(self):
@@ -325,21 +326,27 @@ class PhotometryWorkingDirSettings:
     def full_settings_unreadable(self):
         """
         True when the full settings file exists on disk but could not be read
-        by the most recent `load`. Only meaningful after `load` has been
-        called on this instance -- before any load, the in-memory settings
-        are None, so an existing readable file would also report True.
+        by the most recent `load`. Always False before `load` has been called
+        on this instance.
         """
-        return self._settings_file.exists() and self._settings is None
+        return (
+            self._load_attempted
+            and self._settings_file.exists()
+            and self._settings is None
+        )
 
     @property
     def partial_settings_unreadable(self):
         """
         True when the partial settings file exists on disk but could not be
-        read by the most recent `load`. Only meaningful after `load` has been
-        called on this instance -- before any load, the in-memory settings
-        are None, so an existing readable file would also report True.
+        read by the most recent `load`. Always False before `load` has been
+        called on this instance.
         """
-        return self._partial_settings_file.exists() and self._partial_settings is None
+        return (
+            self._load_attempted
+            and self._partial_settings_file.exists()
+            and self._partial_settings is None
+        )
 
     # Properties for settings file and partial settings file
     @property
@@ -515,6 +522,14 @@ class PhotometryWorkingDirSettings:
                     if not update:
                         # If so, we can't save partial settings if the update flag
                         # is False.
+                        if unreadable_full:
+                            raise ValueError(
+                                "Cannot save partial settings: a full settings file "
+                                f"exists at {self._settings_file} but could not be "
+                                "read. Fix or remove that file, or save with "
+                                "update=True, which saves the partial settings and "
+                                "leaves the unreadable file in place."
+                            )
                         raise ValueError(
                             "Cannot save partial settings when full "
                             "settings already exist."
@@ -630,6 +645,8 @@ class PhotometryWorkingDirSettings:
         PhotometrySettings | PartialPhotometrySettings | None
             The settings loaded from disk, or None if there are no settings files.
         """
+        self._load_attempted = True
+
         # Assume we have nothing to begin....
         self._partial_settings = None
         self._settings = None

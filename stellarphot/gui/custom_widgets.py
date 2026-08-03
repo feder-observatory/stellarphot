@@ -85,7 +85,7 @@ class ChooseOrMakeNew(ipw.VBox):
 
         # Descriptive title
         self._title = ipw.HTML(
-            value=(f"Choose a {self._display_name} " "or make a new one")
+            value=(f"Choose a {self._display_name} or make a new one")
         )
 
         self._choose_detail_container = ipw.HBox(layout={"width": DEFAULT_BUTTON_WIDTH})
@@ -742,12 +742,10 @@ class SettingWithTitle(ipw.VBox):
             self.badge = SaveStatus.SETTING_IS_SAVED
 
 
-# Identity key for the single load-error banner message. A fixed key --
-# rather than one derived from the error text -- lets a refresh that
-# raises a different error for the same incident (e.g. an autosave cured
-# one of two unreadable files) update the message in place instead of
-# appending a near-duplicate. Deliberately not plausible warning text,
-# since warning messages are their own keys in the same dict.
+# Fixed identity key for the (at most one) load-error banner message, so
+# that a refresh which reworks the message for the same incident updates it
+# in place rather than appending a near-duplicate. Not plausible warning
+# text, since a warning is keyed on its own text in the same dict.
 _LOAD_ERROR_KEY = "__settings-load-error__"
 
 
@@ -800,16 +798,20 @@ class ReviewSettings(ipw.VBox):
             ),
         )
         self._banner.layout.display = "none"
-        # Maps a stable message key (``_LOAD_ERROR_KEY`` for the (at most
-        # one) load-error message, or a warning's own text) to the composed
-        # HTML shown for it; insertion order is display order. The load
-        # error uses a fixed key, rather than one derived from the error
-        # text, so a refresh that raises a differently-worded error for the
-        # same incident updates the entry in place instead of appending a
-        # near-duplicate, and so a dismissal survives the rewording.
-        # ``_dismissed_messages`` holds the keys of dismissed messages.
+        # ``_banner_messages`` maps a stable key (``_LOAD_ERROR_KEY``, or a
+        # warning's own text) to the composed HTML shown for it; insertion
+        # order is display order. ``_banner_fingerprints`` maps that same
+        # key to a fingerprint of the specific incident currently shown
+        # under it, so a key being reused for a genuinely new incident can
+        # be told apart from a reworded repeat of one already dismissed.
+        # ``_dismissed`` maps a dismissed key to the fingerprint it was
+        # dismissed at. ``_resolved_keys`` holds keys whose problem the most
+        # recent refresh no longer reproduces, but whose message is still
+        # shown -- see ``_update_banner``.
         self._banner_messages = {}
-        self._dismissed_messages = set()
+        self._banner_fingerprints = {}
+        self._dismissed = {}
+        self._resolved_keys = set()
 
         # Get a copy of whatever settings may have already been saved.
         self._refresh()
@@ -973,12 +975,21 @@ class ReviewSettings(ipw.VBox):
         reproduces an already-shown key, its wording is updated in place
         instead of a near-duplicate being appended.
 
+        Because a key can outlive the incident it first named, each entry in
+        ``current`` also carries a fingerprint (the load error's escaped
+        first line, or a warning's own text). A dismissed key stays
+        dismissed only while its fingerprint matches what was dismissed; a
+        different fingerprint under the same key means a new, unrelated
+        incident, which is shown normally.
+
         Banner messages are also sticky: once shown, an entry stays in
         ``self._banner_messages`` until the user dismisses it, even if a
         later refresh no longer produces its key (e.g. an automatic save
         during widget construction renames the offending file to ``.bak``,
-        curing the problem before the user ever saw the banner). Entries are
-        never removed here; only ``_dismiss_banner`` removes them.
+        curing the problem before the user ever saw the banner). Such
+        entries are marked in ``self._resolved_keys`` instead of being
+        removed; only ``_dismiss_banner`` removes entries from
+        ``self._banner_messages``.
         """
         wd_settings = PhotometryWorkingDirSettings()
         current = []
@@ -1057,7 +1068,8 @@ class ReviewSettings(ipw.VBox):
                     message += (
                         f" If settings are saved here, {joined_names} will "
                         f"not be overwritten; {replace_clause} will first be "
-                        f"preserved as {joined_baks}."
+                        f"preserved as {joined_baks} (or the next available "
+                        "numbered backup if that name is already taken)."
                     )
                 else:
                     # Both files were readable, so this is the conflicting-
@@ -1067,7 +1079,8 @@ class ReviewSettings(ipw.VBox):
                     message += (
                         " Saving full settings here will resolve the "
                         "conflict; the conflicting partial settings file "
-                        f"will be preserved as {partial_name}.bak."
+                        f"will be preserved as {partial_name}.bak (or the "
+                        "next available numbered backup)."
                     )
 
                 if detail := "\n".join(error_lines[1:]):
@@ -1075,42 +1088,67 @@ class ReviewSettings(ipw.VBox):
                         "<details><summary>Full error</summary>"
                         f"<pre>{html.escape(detail)}</pre></details>"
                     )
-                current.append((_LOAD_ERROR_KEY, message))
+                current.append((_LOAD_ERROR_KEY, first_line, message))
         # Add the warnings outside the try/except so they are reported even
         # when load() raises after emitting them; ``recorded`` stays bound
         # because catch_warnings exits normally during exception propagation.
-        # A warning's text is stable across refreshes, so it is its own key.
+        # A warning's text is stable across refreshes, so it is its own key
+        # and its own fingerprint.
         for warning in recorded:
             warning_text = html.escape(str(warning.message))
-            current.append((warning_text, warning_text))
+            current.append((warning_text, warning_text, warning_text))
 
-        # Dismissal is remembered only for as long as a message's key keeps
-        # being produced. Prune it down to keys still in ``current`` so it
-        # cannot grow without bound with stale entries; if a problem goes
-        # away and later recurs, showing it again (undismissed) is correct.
-        self._dismissed_messages &= {key for key, _ in current}
-        for key, msg in current:
-            if key in self._dismissed_messages:
-                continue
-            # Assignment both adds a new message and updates the wording of
-            # an already-shown one in place (dict insertion order keeps its
-            # display position), so a reworded message never appears as a
-            # near-duplicate alongside its older self. Keys absent from
-            # ``current`` are deliberately left alone -- see the docstring.
+        current_keys = {key for key, _, _ in current}
+        # A dismissal is remembered only for as long as its key keeps being
+        # produced, so it cannot grow without bound with stale entries; if a
+        # problem goes away and later recurs, showing it again is correct.
+        self._dismissed = {
+            key: fingerprint
+            for key, fingerprint in self._dismissed.items()
+            if key in current_keys
+        }
+        for key, fingerprint, msg in current:
+            dismissed_fingerprint = self._dismissed.get(key)
+            if dismissed_fingerprint is not None:
+                if dismissed_fingerprint == fingerprint:
+                    # Same incident as the one dismissed.
+                    continue
+                # A different incident reusing this key -- e.g. a second
+                # file has now gone bad -- so it is shown again.
+                del self._dismissed[key]
+            # Assignment updates an already-shown key in place instead of
+            # appending a duplicate.
             self._banner_messages[key] = msg
+            self._banner_fingerprints[key] = fingerprint
+
+        # A sticky message whose key this refresh no longer produces is
+        # marked resolved rather than removed; a recurrence un-resolves it.
+        for key in self._banner_messages:
+            if key in current_keys:
+                self._resolved_keys.discard(key)
+            else:
+                self._resolved_keys.add(key)
+
         self._update_banner()
         return loaded
 
     def _update_banner(self):
         """
         Show the banner if there are any (sticky, un-dismissed) messages,
-        hide it otherwise.
+        hide it otherwise. A message whose key is in ``self._resolved_keys``
+        is marked as no longer detected instead of as an active problem.
         """
         if self._banner_messages:
             # A div rather than a p because a message may contain a details
             # element, which is not allowed inside a p.
             content = "".join(
-                f"<div>⚠️ {msg}</div>" for msg in self._banner_messages.values()
+                (
+                    "<div>✓ <em>No longer detected as of the latest "
+                    f"reload:</em> {msg}</div>"
+                    if key in self._resolved_keys
+                    else f"<div>⚠️ {msg}</div>"
+                )
+                for key, msg in self._banner_messages.items()
             )
             self._banner_html.value = content
             self._banner.layout.display = "flex"
@@ -1125,13 +1163,11 @@ class ReviewSettings(ipw.VBox):
         messages at once, including any that arrived after the one the
         user meant to dismiss.
         """
-        # Button.on_click invokes handlers with the button instance as the
-        # only argument, which is unused here; the =None default lets the
-        # method also be called directly with no argument.
-        # Iterating the messages dict yields its keys, which is exactly what
-        # the dismissed set stores.
-        self._dismissed_messages.update(self._banner_messages)
+        for key in self._banner_messages:
+            self._dismissed[key] = self._banner_fingerprints.get(key, key)
         self._banner_messages = {}
+        self._banner_fingerprints = {}
+        self._resolved_keys = set()
         self._update_banner()
 
     def _observe_tab_selection(self, change):
@@ -1145,7 +1181,6 @@ class ReviewSettings(ipw.VBox):
         # badge latched at NOT_SAVED can recover when the setting gets saved
         # by something other than this widget's own observers.
 
-        # Get the index
         new_selected = change["new"]
 
         # An accordion reports a selection of None when every section is
@@ -1176,7 +1211,6 @@ class ReviewSettings(ipw.VBox):
             snake_name = to_snake(setting_widget._autoui_widget.model.__name__)
             disk_value = getattr(self._refresh(), snake_name)
             if disk_value is None:
-                # The setting is not saved
                 setting_widget.badge = SaveStatus.SETTING_NOT_SAVED
             else:
                 try:
@@ -1237,7 +1271,16 @@ def _add_saving_to_widget(setting_widget):
             # editing one
             return
         # We have a validated setting so save it.
-        wd_settings.save(pps, update=True)
+        with warnings.catch_warnings(record=True):
+            # The widget already shows PhotometrySettingsWarning in its
+            # banner via its own load, so save()'s bookkeeping load must not
+            # also print it once per autosaved setting. A plain filter
+            # cannot suppress it here: save()'s own nested catch_warnings
+            # sets PhotometrySettingsWarning to "default" after this point,
+            # which always outranks a filter set by an outer caller.
+            # Recording (and discarding) intercepts it regardless of
+            # nesting.
+            wd_settings.save(pps, update=True)
 
     if hasattr(setting_widget, "_choose_existing"):
         setting_widget._choose_existing.observe(save_wd, "value")

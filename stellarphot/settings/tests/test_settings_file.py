@@ -1028,3 +1028,72 @@ class TestPhotometryWorkingDirSettings:
         assert "\nFull settings:" in message
         assert str(settings_file.settings_file) in message
         assert str(settings_file.partial_settings_file) in message
+
+    def test_unreadable_properties_false_before_load(self):
+        # Before any load() call, the *_unreadable properties should be False
+        # even if a valid settings file exists on disk.
+        settings_file = PhotometryWorkingDirSettings()
+
+        # Write a valid full settings file
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+        settings_file.settings_file.write_text(full_settings.model_dump_json(indent=4))
+
+        # Create a fresh instance
+        fresh_instance = PhotometryWorkingDirSettings()
+
+        # Before load(), both properties should be False
+        assert not fresh_instance.full_settings_unreadable
+        assert not fresh_instance.partial_settings_unreadable
+
+        # After load(), they should still be False because the file is readable
+        fresh_instance.load()
+        assert not fresh_instance.full_settings_unreadable
+        assert not fresh_instance.partial_settings_unreadable
+
+    def test_unreadable_properties_corrupt_file_before_and_after_load(self):
+        # Before any load() call, the *_unreadable properties should be False
+        # even if a corrupt settings file exists. After load() fails on a
+        # corrupt file, the properties should report True.
+        settings_file = PhotometryWorkingDirSettings()
+
+        # Write a corrupt full settings file
+        bad_content = '{"pasta": "carbonara"}'
+        settings_file.settings_file.write_text(bad_content)
+
+        # Create a fresh instance
+        fresh_instance = PhotometryWorkingDirSettings()
+
+        # Before load(), full_settings_unreadable should be False
+        assert not fresh_instance.full_settings_unreadable
+
+        # Attempt to load - this should raise
+        with pytest.raises(ValueError, match="Error loading settings"):
+            fresh_instance.load()
+
+        # After load() fails, full_settings_unreadable should be True
+        assert fresh_instance.full_settings_unreadable
+        assert not fresh_instance.partial_settings_unreadable
+
+    def test_save_partial_no_update_with_unreadable_full_settings_message(self):
+        # When trying to save partial settings with update=False and the full
+        # settings file exists but is unreadable, the error message should be
+        # specific about the unreadable file, not the generic message about
+        # full settings already existing.
+        settings_file = PhotometryWorkingDirSettings()
+
+        # Write a corrupt full settings file
+        bad_content = '{"pasta": "carbonara"}'
+        settings_file.settings_file.write_text(bad_content)
+
+        # Create a fresh instance and try to save partial with update=False
+        fresh_instance = PhotometryWorkingDirSettings()
+        partial_settings = PartialPhotometrySettings(
+            camera=Camera.model_validate_json(CAMERA)
+        )
+
+        # Should raise ValueError with "could not be read" in the message
+        with pytest.raises(ValueError, match="could not be read"):
+            fresh_instance.save(partial_settings, update=False)
+
+        # Verify the unreadable file's content is untouched
+        assert fresh_instance.settings_file.read_text() == bad_content
