@@ -929,9 +929,16 @@ class ReviewSettings(ipw.VBox):
         Load settings from the working directory, routing any warnings the load
         generates, and any failure to read an existing settings file, into the
         banner instead of silently discarding them.
+
+        Banner messages are sticky: once shown, a message stays in
+        ``self._banner_messages`` until the user dismisses it, even if a later
+        refresh no longer produces it (e.g. an automatic save during widget
+        construction renames the offending file to ``.bak``, curing the
+        problem before the user ever saw the banner). Messages are never
+        removed here; only ``_dismiss_banner`` removes them.
         """
         wd_settings = PhotometryWorkingDirSettings()
-        messages = []
+        current = []
         try:
             with warnings.catch_warnings(record=True) as recorded:
                 # Settings problems are reported as UserWarning; internal
@@ -943,7 +950,14 @@ class ReviewSettings(ipw.VBox):
                 warnings.simplefilter("always", UserWarning)
                 loaded = wd_settings.load()
         except ValueError as e:
-            loaded = PartialPhotometrySettings()
+            # load() parses both files before raising, so whichever of these
+            # is not None was actually readable and can be used as a
+            # fallback instead of falling all the way back to empty settings.
+            loaded = (
+                wd_settings.settings
+                or wd_settings.partial_settings
+                or PartialPhotometrySettings()
+            )
             settings_file_exists = (
                 wd_settings.settings_file.exists()
                 or wd_settings.partial_settings_file.exists()
@@ -953,40 +967,95 @@ class ReviewSettings(ipw.VBox):
                 # ValidationError, so only its first line is shown; the rest
                 # goes into a collapsed details element.
                 error_lines = str(e).splitlines()
+                fallback_found = (
+                    wd_settings.settings is not None
+                    or wd_settings.partial_settings is not None
+                )
                 message = (
                     "There is a problem with the saved settings in this "
-                    "directory, so none of the values below come from them "
-                    f"({html.escape(error_lines[0])}). "
-                    "If saving settings here would overwrite a file that "
-                    "could not be read, that file is renamed with a .bak "
-                    "extension first."
+                    f"directory ({html.escape(error_lines[0])})."
                 )
+                if fallback_found:
+                    message += (
+                        " The values below come from the settings that "
+                        "could still be read."
+                    )
+                else:
+                    message += " None of the values below come from the saved settings."
+
+                # A file is unreadable, as opposed to merely conflicting with
+                # its counterpart, exactly when it exists on disk but load()
+                # left the corresponding in-memory attribute as None.
+                unreadable_full = (
+                    wd_settings.settings_file.exists() and wd_settings.settings is None
+                )
+                unreadable_partial = (
+                    wd_settings.partial_settings_file.exists()
+                    and wd_settings.partial_settings is None
+                )
+                if unreadable_full or unreadable_partial:
+                    names = []
+                    if unreadable_full:
+                        names.append(html.escape(wd_settings.settings_file.name))
+                    if unreadable_partial:
+                        names.append(
+                            html.escape(wd_settings.partial_settings_file.name)
+                        )
+                    if len(names) == 1:
+                        joined_names = names[0]
+                        joined_baks = f"{names[0]}.bak"
+                    else:
+                        joined_names = " and ".join(names)
+                        joined_baks = " and ".join(f"{name}.bak" for name in names)
+                    message += (
+                        f" If settings are saved here, {joined_names} will be "
+                        f"preserved as {joined_baks} rather than overwritten."
+                    )
+                else:
+                    # Both files were readable, so this is the conflicting-
+                    # values case; the unreadable-file wording above would be
+                    # misleading here.
+                    partial_name = html.escape(wd_settings.partial_settings_file.name)
+                    message += (
+                        " If full settings are saved here, the conflicting "
+                        f"partial settings file will be preserved as "
+                        f"{partial_name}.bak."
+                    )
+
                 if detail := "\n".join(error_lines[1:]):
                     message += (
                         "<details><summary>Full error</summary>"
                         f"<pre>{html.escape(detail)}</pre></details>"
                     )
-                messages.append(message)
+                current.append(message)
         # Extend outside the try/except so warnings are reported even when
         # load() raises after emitting them; ``recorded`` stays bound because
         # catch_warnings exits normally during exception propagation.
-        messages.extend(html.escape(str(warning.message)) for warning in recorded)
-        self._banner_messages = messages
+        current.extend(html.escape(str(warning.message)) for warning in recorded)
+
+        # Dismissal is remembered only for as long as a message keeps being
+        # produced. Prune it down to messages still in ``current`` so it
+        # cannot grow without bound with stale entries; if a problem goes
+        # away and later recurs, showing it again (undismissed) is correct.
+        self._dismissed_messages &= set(current)
+        for message in current:
+            if (
+                message not in self._banner_messages
+                and message not in self._dismissed_messages
+            ):
+                self._banner_messages.append(message)
         self._update_banner()
         return loaded
 
     def _update_banner(self):
         """
-        Show the banner if there are messages that have not been dismissed,
+        Show the banner if there are any (sticky, un-dismissed) messages,
         hide it otherwise.
         """
-        messages = [
-            msg for msg in self._banner_messages if msg not in self._dismissed_messages
-        ]
-        if messages:
+        if self._banner_messages:
             # A div rather than a p because a message may contain a details
             # element, which is not allowed inside a p.
-            content = "".join(f"<div>⚠️ {msg}</div>" for msg in messages)
+            content = "".join(f"<div>⚠️ {msg}</div>" for msg in self._banner_messages)
             self._banner_html.value = content
             self._banner.layout.display = "flex"
         else:
@@ -1001,6 +1070,7 @@ class ReviewSettings(ipw.VBox):
         # only argument, which is unused here; the =None default lets the
         # method also be called directly with no argument.
         self._dismissed_messages.update(self._banner_messages)
+        self._banner_messages = []
         self._update_banner()
 
     def _observe_tab_selection(self, change):

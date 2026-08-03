@@ -27,6 +27,7 @@ from stellarphot.settings import (
     PassbandMap,
     PhotometryApertures,
     PhotometryOptionalSettings,
+    PhotometrySettings,
     PhotometryWorkingDirSettings,
     SavedSettings,
     SourceLocationSettings,
@@ -1282,7 +1283,8 @@ class TestReviewSettings:
 
         # The message points out that saving will preserve the unreadable
         # file with a .bak extension rather than overwrite it.
-        assert "renamed with a .bak extension" in banner_text
+        assert "photometry_settings.json.bak" in banner_text
+        assert "rather than overwritten" in banner_text
 
         # Only the first line of the error is in the visible message; the
         # rest of the validation error is inside a collapsed details element,
@@ -1299,6 +1301,16 @@ class TestReviewSettings:
         # on every tab selection).
         wd_settings = PhotometryWorkingDirSettings()
         wd_settings.settings_file.write_text('{"pasta": "carbonara"}')
+        # Pre-seed a valid (empty) partial settings file so that the
+        # automatic save triggered by PhotometryApertures during
+        # construction (see below) merely adds a key to an
+        # already-readable partial settings file, rather than making a
+        # previously-unreadable one readable. That keeps the banner
+        # message identical across every refresh in this test, which is
+        # what "stays dismissed" is meant to exercise.
+        wd_settings.partial_settings_file.write_text(
+            PartialPhotometrySettings().model_dump_json()
+        )
 
         review_settings = ReviewSettings([Camera, PhotometryApertures])
         assert review_settings._banner.layout.display == "flex"
@@ -1311,6 +1323,134 @@ class TestReviewSettings:
         # dismissed message should stay dismissed.
         review_settings._container.selected_index = 1
         assert review_settings._banner.layout.display == "none"
+
+    def test_banner_message_stays_after_underlying_problem_resolves(self):
+        # A banner message must not silently disappear once the user has
+        # had a chance to see it, even if a later refresh no longer
+        # reproduces the underlying problem. This matters because the
+        # automatic save that happens during widget construction (for a
+        # setting like PhotometryApertures that can be built from defaults)
+        # can itself cure the problem -- e.g. by renaming an unreadable
+        # partial settings file to .bak -- before the user has dismissed
+        # anything.
+        wd_settings = PhotometryWorkingDirSettings()
+        wd_settings.partial_settings_file.write_text('{"pasta": "carbonara"}')
+
+        # The automatic save for PhotometryApertures fires during
+        # construction and renames the bad partial settings file to .bak,
+        # which means the *next* load from disk will succeed.
+        review_settings = ReviewSettings([Camera, PhotometryApertures])
+        assert review_settings._banner.layout.display == "flex"
+        message = review_settings._banner_html.value
+        assert message
+
+        # Selecting the PhotometryApertures tab triggers another refresh.
+        # The load succeeds now, but the message should still be shown
+        # because the user never dismissed it.
+        review_settings._container.selected_index = 1
+        assert review_settings._banner.layout.display == "flex"
+        assert review_settings._banner_html.value == message
+
+        # Dismissing hides it...
+        review_settings._banner_dismiss.click()
+        assert review_settings._banner.layout.display == "none"
+        assert review_settings._banner_html.value == ""
+
+        # ... and it stays hidden across further refreshes.
+        review_settings._container.selected_index = 0
+        assert review_settings._banner.layout.display == "none"
+
+    def test_dismissed_messages_pruned_once_no_longer_produced(self):
+        # The set of dismissed messages should not grow without bound: once
+        # a dismissed message is no longer produced by a refresh, it should
+        # be dropped so that an unrelated, differently-worded problem later
+        # is shown rather than being mistaken for something dismissed.
+        wd_settings = PhotometryWorkingDirSettings()
+        wd_settings.partial_settings_file.write_text('{"pasta": "carbonara"}')
+
+        review_settings = ReviewSettings([Camera, PhotometryApertures])
+        assert review_settings._banner.layout.display == "flex"
+
+        review_settings._banner_dismiss.click()
+        assert review_settings._dismissed_messages
+
+        # The bad partial settings file was renamed to .bak during
+        # construction, so this refresh succeeds and no longer produces the
+        # dismissed message; it should be pruned from the dismissed set.
+        review_settings._container.selected_index = 1
+        assert review_settings._dismissed_messages == set()
+
+    def test_banner_uses_readable_settings_as_fallback(self):
+        # If the partial settings file cannot be read but the full settings
+        # file is fine, the widget should still be built from the readable
+        # full settings rather than falling all the way back to empty
+        # settings, and the banner should say so.
+        saved = SavedSettings()
+        saved.add_item(Camera(**TEST_CAMERA_VALUES))
+
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+        wd_settings = PhotometryWorkingDirSettings()
+        wd_settings.save(full_settings)
+        wd_settings.partial_settings_file.write_text('{"pasta": "carbonara"}')
+
+        review_settings = ReviewSettings([Camera])
+
+        banner_text = review_settings._banner_html.value
+        assert review_settings._banner.layout.display == "flex"
+        assert "could still be read" in banner_text
+        assert review_settings.current_settings.camera == full_settings.camera
+
+    def test_banner_names_unreadable_settings_file(self):
+        # The banner should name the specific file that could not be read
+        # so the user knows what a subsequent save would preserve as .bak.
+        wd_settings = PhotometryWorkingDirSettings()
+        wd_settings.settings_file.write_text('{"pasta": "carbonara"}')
+
+        review_settings = ReviewSettings([Camera])
+
+        banner_text = review_settings._banner_html.value
+        assert "photometry_settings.json.bak" in banner_text
+        assert "rather than overwritten" in banner_text
+
+    def test_banner_conflict_wording_when_both_files_readable(self):
+        # When both the full and partial settings files are individually
+        # readable but disagree with each other, the "this file could not
+        # be read" wording would be misleading -- both files were read
+        # just fine. The banner should instead point out that the
+        # conflicting (losing) partial settings file will be kept as a
+        # .bak when full settings are next saved.
+        saved = SavedSettings()
+        saved.add_item(Camera(**TEST_CAMERA_VALUES))
+
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+        wd_settings = PhotometryWorkingDirSettings()
+        wd_settings.settings_file.write_text(full_settings.model_dump_json())
+
+        conflicting_camera = Camera(**TEST_CAMERA_VALUES)
+        conflicting_camera.gain = 2 * conflicting_camera.gain
+        wd_settings.partial_settings_file.write_text(
+            PartialPhotometrySettings(camera=conflicting_camera).model_dump_json()
+        )
+
+        review_settings = ReviewSettings([Camera])
+
+        banner_text = review_settings._banner_html.value
+        assert review_settings._banner.layout.display == "flex"
+        assert "rather than overwritten" not in banner_text
+        assert "conflicting partial settings file will be preserved" in banner_text
+        assert "partial_photometry_settings.json.bak" in banner_text
+
+    def test_banner_handles_invalid_utf8_settings_file(self):
+        # Bytes that are not valid UTF-8 raise a UnicodeDecodeError while
+        # reading the settings file; that must be handled the same as any
+        # other unreadable settings file rather than propagating out of
+        # widget construction.
+        wd_settings = PhotometryWorkingDirSettings()
+        wd_settings.settings_file.write_bytes(b"\xff\xfe not utf8")
+
+        review_settings = ReviewSettings([Camera])
+
+        assert review_settings._banner.layout.display == "flex"
 
     def test_banner_shows_warnings_from_loading_settings(self, mocker):
         # Warnings generated while loading settings (e.g. a settings-format

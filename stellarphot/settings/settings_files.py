@@ -407,9 +407,11 @@ class PhotometryWorkingDirSettings:
 
         An existing settings file that cannot be read is never overwritten in
         place; it is renamed with a ``.bak`` suffix before the new settings are
-        written. A readable partial settings file that conflicts with the full
-        settings is likewise renamed with a ``.bak`` suffix, rather than
-        deleted, when a save writes full settings.
+        written. A readable partial settings file whose non-None values are
+        not all carried into the full settings being written is likewise
+        renamed with a ``.bak`` suffix, rather than deleted, when a save
+        writes full settings -- this includes, but is not limited to, the
+        case where the partial settings conflict with the full settings.
         """
         full_settings = False
 
@@ -435,14 +437,6 @@ class PhotometryWorkingDirSettings:
         unreadable_full = self._settings_file.exists() and self._settings is None
         unreadable_partial = (
             self._partial_settings_file.exists() and self._partial_settings is None
-        )
-        # Both in-memory settings are populated only when the load above
-        # raised because the two files are readable but inconsistent. The
-        # partial file loses that conflict once full settings are written, so
-        # it must be set aside rather than deleted -- its differing values
-        # cannot be reconstructed from the saved settings.
-        conflicting_partial = (
-            self._settings is not None and self._partial_settings is not None
         )
 
         match settings:
@@ -513,11 +507,22 @@ class PhotometryWorkingDirSettings:
                 )
 
         if full_settings:
-            if unreadable_partial or conflicting_partial:
-                # Preserve a partial file that could not be read, or whose
-                # contents lost a conflict with the full settings, instead of
-                # deleting it. Use replace rather than rename so that an
-                # existing .bak file is overwritten on all platforms.
+            # Preserve the on-disk partial settings as .bak, instead of
+            # deleting them, whenever some of their information would
+            # otherwise be lost: either the file could not be read at all, or
+            # it is readable but has a non-None value that differs from what
+            # is about to be written as the full settings. self._partial_settings
+            # still reflects whatever was loaded from disk at the top of this
+            # method -- none of the full-settings code paths above reassign it
+            # -- so this comparison is against the pre-save partial settings.
+            written = settings.model_dump()
+            partial_values_lost = self._partial_settings is not None and any(
+                v is not None and written.get(k) != v
+                for k, v in self._partial_settings.model_dump().items()
+            )
+            if unreadable_partial or partial_values_lost:
+                # Use replace rather than rename so that an existing .bak
+                # file is overwritten on all platforms.
                 self._partial_settings_file.replace(
                     self._partial_settings_file.with_name(
                         self._partial_settings_file.name + ".bak"
@@ -563,35 +568,39 @@ class PhotometryWorkingDirSettings:
             raise ValueError(f"Settings file {self._settings_file} does not exist")
 
         errors = []
+        last_exc = None
 
-        # Load PartialPhotometrySettings first, if it exists.
+        # Load PartialPhotometrySettings first, if it exists. A read failure
+        # (ValidationError, or an OSError/UnicodeDecodeError while opening or
+        # decoding the file) leaves self._partial_settings as None, exactly
+        # like the missing/unparseable-content case below.
         if self._partial_settings_file.exists():
-            with self._partial_settings_file.open(encoding=ENCODING) as f:
-                content = f.read()
-
             try:
+                with self._partial_settings_file.open(encoding=ENCODING) as f:
+                    content = f.read()
                 self._partial_settings = PartialPhotometrySettings.model_validate_json(
                     content
                 )
-            except ValidationError as e:
+            except (ValidationError, OSError, UnicodeDecodeError) as e:
                 errors.append(f"Error loading partial settings: {e}")
+                last_exc = e
 
         # Now load full settings if they exist
         if self._settings_file.exists():
-            with self._settings_file.open(encoding=ENCODING) as f:
-                content = f.read()
-
             try:
+                with self._settings_file.open(encoding=ENCODING) as f:
+                    content = f.read()
                 self._settings = PhotometrySettings.model_validate_json(content)
-            except ValidationError as e:
+            except (ValidationError, OSError, UnicodeDecodeError) as e:
                 errors.append(f"Error loading settings: {e}")
+                last_exc = e
 
         # Both files are parsed before any error is raised so that the
         # in-memory settings reflect every file that could be read; save()
         # relies on that to merge into readable settings and to rename only
         # genuinely unreadable files to .bak.
         if errors:
-            raise ValueError("\n".join(errors))
+            raise ValueError("\n".join(errors)) from last_exc
 
         # Handle case where we have valid partial and valid full settings
         self._resolve_full_partial_conflict()
@@ -624,11 +633,11 @@ class PhotometryWorkingDirSettings:
 
         if full_from_partial != self._settings:
             raise ValueError(
-                "Partial settings and full settings do not match. "
-                "Please resolve the discrepancy by deleting one of the "
-                "settings files."
-                f"Folder with settings: {self._working_dir}"
-                f"Partial settings: {self._partial_settings_file} "
+                "Partial settings and full settings do not match. Please "
+                "resolve the discrepancy by deleting one of the settings "
+                "files.\n"
+                f"Folder with settings: {self._working_dir}\n"
+                f"Partial settings: {self._partial_settings_file}\n"
                 f"Full settings: {self._settings_file}"
             )
 

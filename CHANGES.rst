@@ -47,6 +47,17 @@ Other Changes and Additions
   assertions to the settings JSON/table round-trip tests; and pinned the
   ``klims`` workaround for pytransit's ``RoadRunnerModel`` with a regression
   test at the maximum allowed planet radius. [#653]
++ ``ReviewSettings`` now shows a dismissible banner above the settings when
+  the saved settings in the working directory cannot be read or when loading
+  them generates warnings; previously such problems were silently swallowed
+  and the widget came up with defaults and no explanation. When one of the
+  settings files is readable, the widget now starts from it instead of from
+  defaults. ``PhotometryWorkingDirSettings.save`` no longer overwrites or
+  deletes a settings file whose contents could not be read, or a partial
+  settings file whose values are not carried into the full settings being
+  written; such files are preserved with a ``.bak`` suffix instead. Note
+  that ``ReviewSettings.current_settings`` is now a snapshot as of the last
+  refresh rather than a live re-read of the settings files. [#657]
 
 Bug Fixes
 ^^^^^^^^^
@@ -69,6 +80,14 @@ Bug Fixes
   to original-image pixel coordinates with an off-by-0.5 formula), and it no
   longer mutates the caller's ``CCDData.mask`` in place when flagging pixels
   above ``max_adu``. [#651]
++ ``PhotometryWorkingDirSettings.save(partial_settings, update=True)`` no
+  longer raises ``AttributeError`` when an existing full settings file
+  cannot be read. Settings files that cannot be read because of an encoding
+  or operating-system error (not just invalid JSON) are now reported the
+  same way as corrupt files instead of crashing ``ReviewSettings``. In
+  ``ReviewSettings``, collapsing every section of an accordion no longer
+  raises, and selecting a tab whose setting is not saved now actually marks
+  the tab as not saved. [#657]
 
 2.1.2 (2026-07-19)
 -------------------

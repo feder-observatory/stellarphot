@@ -816,3 +816,106 @@ class TestPhotometryWorkingDirSettings:
         assert from_file2 == PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
         # Make sure we have no partial settings
         assert settings_file.partial_settings is None
+
+    def test_save_full_direct_with_differing_partial_settings_makes_backup(self):
+        # A direct save of full settings (not a partial update) should still
+        # preserve a readable, on-disk partial settings file as .bak when one
+        # of its non-None values is not carried into the full settings being
+        # written -- that value would otherwise be silently lost, since a
+        # direct full save never merges in the on-disk partial settings.
+        settings_file = PhotometryWorkingDirSettings()
+        camera = Camera.model_validate_json(CAMERA)
+        partial_content = PartialPhotometrySettings(camera=camera).model_dump_json()
+        settings_file.partial_settings_file.write_text(partial_content)
+
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+        settings_file.save(full_settings)
+
+        assert not settings_file.partial_settings_file.exists()
+        backup_file = settings_file.partial_settings_file.with_name(
+            settings_file.partial_settings_file.name + ".bak"
+        )
+        assert backup_file.read_text() == partial_content
+        assert settings_file.settings_file.exists()
+        assert settings_file.settings == full_settings
+
+    def test_save_full_direct_with_matching_partial_settings_no_backup(self):
+        # If the only non-None value in the on-disk partial settings matches
+        # the corresponding value in the full settings being written, nothing
+        # would be lost by discarding the partial file, so no .bak should be
+        # created.
+        settings_file = PhotometryWorkingDirSettings()
+        matching_camera = Camera(**TEST_PHOTOMETRY_SETTINGS["camera"])
+        partial_content = PartialPhotometrySettings(
+            camera=matching_camera
+        ).model_dump_json()
+        settings_file.partial_settings_file.write_text(partial_content)
+
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+        settings_file.save(full_settings)
+
+        assert not settings_file.partial_settings_file.exists()
+        backup_file = settings_file.partial_settings_file.with_name(
+            settings_file.partial_settings_file.name + ".bak"
+        )
+        assert not backup_file.exists()
+        assert settings_file.settings_file.exists()
+        assert settings_file.settings == full_settings
+
+    def test_load_settings_file_invalid_utf8(self):
+        # A settings file that is not valid UTF-8 should be treated the same
+        # as a ValidationError: load() reports it as a readable-but-bad file,
+        # and a subsequent save preserves the original bytes as a .bak rather
+        # than silently overwriting them.
+        settings_file = PhotometryWorkingDirSettings()
+        bad_bytes = b"\xff\xfe not utf8"
+        settings_file.settings_file.write_bytes(bad_bytes)
+
+        with pytest.raises(ValueError, match="Error loading settings"):
+            settings_file.load()
+
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+        settings_file.save(full_settings)
+
+        assert settings_file.settings_file.exists()
+        assert settings_file.settings == full_settings
+        backup_file = settings_file.settings_file.with_name(
+            settings_file.settings_file.name + ".bak"
+        )
+        assert backup_file.read_bytes() == bad_bytes
+
+    def test_load_error_chains_exception(self):
+        # The ValueError raised by a failed load should chain the underlying
+        # exception via `from`, so the original cause is not lost.
+        settings_file = PhotometryWorkingDirSettings()
+        with settings_file.settings_file.open("w") as f:
+            f.write("{bad: settings}")
+
+        with pytest.raises(ValueError) as exc_info:
+            settings_file.load()
+
+        assert exc_info.value.__cause__ is not None
+
+    def test_load_conflict_error_message_puts_paths_on_later_lines(self):
+        # The GUI shows only the first line of an error prominently and folds
+        # the rest into collapsed details, so the file paths must not appear
+        # on the first line of the conflict message.
+        settings_file = PhotometryWorkingDirSettings()
+        camera = Camera.model_validate_json(CAMERA)
+        partial_settings = PartialPhotometrySettings(camera=camera)
+        with settings_file.partial_settings_file.open("w") as f:
+            f.write(partial_settings.model_dump_json())
+
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+        with settings_file.settings_file.open("w") as f:
+            f.write(full_settings.model_dump_json())
+
+        with pytest.raises(ValueError) as exc_info:
+            settings_file.load()
+
+        message = str(exc_info.value)
+        first_line = message.splitlines()[0]
+        assert "photometry_settings.json" not in first_line
+        assert "\nFull settings:" in message
+        assert str(settings_file.settings_file) in message
+        assert str(settings_file.partial_settings_file) in message
