@@ -407,7 +407,9 @@ class PhotometryWorkingDirSettings:
 
         An existing settings file that cannot be read is never overwritten in
         place; it is renamed with a ``.bak`` suffix before the new settings are
-        written.
+        written. A readable partial settings file that conflicts with the full
+        settings is likewise renamed with a ``.bak`` suffix, rather than
+        deleted, when a save writes full settings.
         """
         full_settings = False
 
@@ -433,6 +435,14 @@ class PhotometryWorkingDirSettings:
         unreadable_full = self._settings_file.exists() and self._settings is None
         unreadable_partial = (
             self._partial_settings_file.exists() and self._partial_settings is None
+        )
+        # Both in-memory settings are populated only when the load above
+        # raised because the two files are readable but inconsistent. The
+        # partial file loses that conflict once full settings are written, so
+        # it must be set aside rather than deleted -- its differing values
+        # cannot be reconstructed from the saved settings.
+        conflicting_partial = (
+            self._settings is not None and self._partial_settings is not None
         )
 
         match settings:
@@ -503,10 +513,11 @@ class PhotometryWorkingDirSettings:
                 )
 
         if full_settings:
-            if unreadable_partial:
-                # Preserve the unreadable partial file instead of deleting it.
-                # Use replace rather than rename so that an existing .bak file
-                # is overwritten on all platforms.
+            if unreadable_partial or conflicting_partial:
+                # Preserve a partial file that could not be read, or whose
+                # contents lost a conflict with the full settings, instead of
+                # deleting it. Use replace rather than rename so that an
+                # existing .bak file is overwritten on all platforms.
                 self._partial_settings_file.replace(
                     self._partial_settings_file.with_name(
                         self._partial_settings_file.name + ".bak"

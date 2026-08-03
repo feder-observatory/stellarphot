@@ -630,6 +630,46 @@ class TestPhotometryWorkingDirSettings:
         assert partial_from_disk.camera == camera
         assert partial_from_disk.observatory == observatory
 
+    @pytest.mark.parametrize("save_what", ["partial_update", "full"])
+    def test_save_with_conflicting_partial_settings_makes_backup(self, save_what):
+        # A readable partial settings file that conflicts with the full
+        # settings loses the conflict when a save writes full settings; it
+        # should be preserved with a .bak extension rather than deleted,
+        # because its differing values cannot be reconstructed from the
+        # saved settings.
+        settings_file = PhotometryWorkingDirSettings()
+
+        # Write conflicting valid files directly to the directory to avoid
+        # any conflict resolution in the save method.
+        camera = Camera.model_validate_json(CAMERA)
+        partial_content = PartialPhotometrySettings(camera=camera).model_dump_json()
+        settings_file.partial_settings_file.write_text(partial_content)
+
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+        settings_file.settings_file.write_text(full_settings.model_dump_json())
+
+        # Create a fresh instance and save full settings, either directly or
+        # by way of a partial update that merges into the full settings.
+        settings_file = PhotometryWorkingDirSettings()
+        if save_what == "partial_update":
+            to_save = PartialPhotometrySettings(
+                observatory=Observatory(**TEST_PHOTOMETRY_SETTINGS["observatory"])
+            )
+        else:
+            to_save = full_settings
+        settings_file.save(to_save, update=True)
+
+        # Assert: the conflicting partial file is set aside, not deleted
+        assert not settings_file.partial_settings_file.exists()
+        backup_file = settings_file.partial_settings_file.with_name(
+            settings_file.partial_settings_file.name + ".bak"
+        )
+        assert backup_file.read_text() == partial_content
+
+        # Assert: the directory loads cleanly, with the full settings winning
+        # the conflict
+        assert PhotometryWorkingDirSettings().load() == full_settings
+
     def test_save_does_not_repeat_load_warnings(self, mocker):
         # save() calls load() internally for bookkeeping. Warnings from that
         # load (e.g. a settings-format migration message) were already shown
