@@ -423,9 +423,12 @@ class PhotometryWorkingDirSettings:
         while backup.exists():
             counter += 1
             backup = path.with_name(f"{path.name}.bak{counter}")
-        # replace() rather than rename() so that the (unlikely) race of the
-        # chosen backup name being created between the exists() check and
-        # the rename still succeeds on every platform.
+        # replace() gives deterministic cross-platform behavior. In the
+        # (unlikely) race where the chosen backup name is created between
+        # the exists() check above and this call, the just-created file is
+        # silently overwritten -- a narrow window this single-user,
+        # widget-driven code accepts. rename() would not close it either:
+        # os.rename also silently replaces an existing file on POSIX.
         path.replace(backup)
         return backup
 
@@ -473,16 +476,23 @@ class PhotometryWorkingDirSettings:
         full_settings = False
 
         try:
-            # This load is internal bookkeeping; any warnings it generates
-            # (e.g. a settings-format migration message) were already shown
-            # when the settings were first loaded, so don't repeat them on
-            # every save.
+            # This load is internal bookkeeping. Library warnings it
+            # generates were already surfaced when the settings were first
+            # loaded, so don't repeat them on every save -- but let
+            # PhotometrySettingsWarning through, so a caller whose first
+            # interaction with the settings is a save() still sees
+            # user-actionable problems such as a settings-format migration.
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
+                warnings.simplefilter("default", PhotometrySettingsWarning)
                 _ = self.load()
         except ValueError:
-            # If we catch a ValueError, then we are in a situation where we have no
-            # settings files. We can proceed to save the settings.
+            # load() raises ValueError when there are no settings files at
+            # all, when a file exists but cannot be read, and when readable
+            # partial and full settings conflict. The save proceeds in every
+            # one of those cases; the unreadable-file cases rely on the
+            # snapshot below so the problem file is set aside as .bak
+            # rather than destroyed.
             pass
 
         # A file that is unreadable failed to parse during the load above.
@@ -572,11 +582,18 @@ class PhotometryWorkingDirSettings:
 
         # Write the settings to a file. The settings themselves are models, so we
         # are guaranteed to write the correct model type (partial or full settings)
-        # to the file. Serialize before opening the file so that a failure to
-        # serialize cannot truncate an existing settings file.
+        # to the file. Write to a temporary file in the same directory and then
+        # atomically replace the target, so that a failure at any point during
+        # serialization or writing leaves any existing settings file untouched.
         json_data = settings.model_dump_json(indent=4)
-        with file.open("w", encoding=ENCODING) as f:
-            f.write(json_data)
+        tmp_file = file.with_name(file.name + ".tmp")
+        try:
+            tmp_file.write_text(json_data, encoding=ENCODING)
+            tmp_file.replace(file)
+        finally:
+            # After a successful replace the temporary file no longer exists,
+            # so this only cleans up after a failed write.
+            tmp_file.unlink(missing_ok=True)
 
         if full_settings:
             # Now that the full settings that supersede the partial settings
@@ -686,9 +703,9 @@ class PhotometryWorkingDirSettings:
 
         if full_from_partial != self._settings:
             raise ValueError(
-                "Partial settings and full settings do not match. Please "
-                "resolve the discrepancy by deleting one of the settings "
-                "files.\n"
+                "Partial settings and full settings do not match.\n"
+                "Saving full settings will resolve the conflict; the partial "
+                "settings file will be preserved with a .bak suffix.\n"
                 f"Folder with settings: {self._working_dir}\n"
                 f"Partial settings: {self._partial_settings_file}\n"
                 f"Full settings: {self._settings_file}"

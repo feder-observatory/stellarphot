@@ -13,6 +13,7 @@ from stellarphot.settings import (
     PartialPhotometrySettings,
     PassbandMap,
     PhotometrySettings,
+    PhotometrySettingsWarning,
     PhotometryWorkingDirSettings,
     SavedSettings,
     settings_files,  # This import is needed for mocking -- see TestSavedSettings
@@ -736,11 +737,31 @@ class TestPhotometryWorkingDirSettings:
 
         assert settings_file.partial_settings_file.read_text() == partial_content
 
-    def test_save_does_not_repeat_load_warnings(self, mocker):
+    def test_failed_write_leaves_existing_settings_intact(self, mocker):
+        # A failure partway through writing the new settings must not
+        # truncate or destroy the existing readable settings file; the
+        # write goes to a temporary file that atomically replaces the
+        # target only on success.
+        settings_file = PhotometryWorkingDirSettings()
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+        settings_file.save(full_settings)
+        original = settings_file.settings_file.read_text()
+
+        mocker.patch.object(Path, "write_text", side_effect=OSError("disk full"))
+        with pytest.raises(OSError, match="disk full"):
+            PhotometryWorkingDirSettings().save(full_settings)
+
+        assert settings_file.settings_file.read_text() == original
+        assert not settings_file.settings_file.with_name(
+            settings_file.settings_file.name + ".tmp"
+        ).exists()
+
+    def test_save_suppresses_non_settings_warnings_from_load(self, mocker):
         # save() calls load() internally for bookkeeping. Warnings from that
-        # load (e.g. a settings-format migration message) were already shown
-        # when the settings were first loaded, so save() should not repeat
-        # them.
+        # load (e.g. library warnings) were already shown when the settings
+        # were first loaded, so save() should not repeat them -- but see
+        # test_save_lets_settings_warnings_through for the one category that
+        # must still get through.
         real_load = PhotometryWorkingDirSettings.load
 
         def warning_load(_self):
@@ -755,6 +776,28 @@ class TestPhotometryWorkingDirSettings:
         camera = Camera.model_validate_json(CAMERA)
         with warnings.catch_warnings():
             warnings.simplefilter("error")
+            settings_file.save(PartialPhotometrySettings(camera=camera), update=True)
+
+    def test_save_lets_settings_warnings_through(self, mocker):
+        # save()'s internal load suppresses library warnings, but a
+        # PhotometrySettingsWarning (e.g. a settings-format migration
+        # message) must reach a caller whose first interaction with the
+        # settings is a save().
+        real_load = PhotometryWorkingDirSettings.load
+
+        def warning_load(_self):
+            warnings.warn(
+                "Settings were migrated", PhotometrySettingsWarning, stacklevel=2
+            )
+            return real_load(_self)
+
+        mocker.patch.object(
+            settings_files.PhotometryWorkingDirSettings, "load", warning_load
+        )
+
+        settings_file = PhotometryWorkingDirSettings()
+        camera = Camera.model_validate_json(CAMERA)
+        with pytest.warns(PhotometrySettingsWarning, match="migrated"):
             settings_file.save(PartialPhotometrySettings(camera=camera), update=True)
 
     def test_load_conflicting_partial_and_full_settings(self):

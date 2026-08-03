@@ -742,6 +742,15 @@ class SettingWithTitle(ipw.VBox):
             self.badge = SaveStatus.SETTING_IS_SAVED
 
 
+# Identity key for the single load-error banner message. A fixed key --
+# rather than one derived from the error text -- lets a refresh that
+# raises a different error for the same incident (e.g. an autosave cured
+# one of two unreadable files) update the message in place instead of
+# appending a near-duplicate. Deliberately not plausible warning text,
+# since warning messages are their own keys in the same dict.
+_LOAD_ERROR_KEY = "__settings-load-error__"
+
+
 class ReviewSettings(ipw.VBox):
     """
     Widget to preview the saved settings in the working directory. It displays one
@@ -778,7 +787,7 @@ class ReviewSettings(ipw.VBox):
         self._banner_html = ipw.HTML(layout=ipw.Layout(flex="1 1 auto"))
         self._banner_dismiss = ipw.Button(
             description="✕",
-            tooltip="Dismiss this message",
+            tooltip="Dismiss these messages",
             layout=ipw.Layout(width="2.5em"),
         )
         self._banner_dismiss.on_click(self._dismiss_banner)
@@ -791,11 +800,13 @@ class ReviewSettings(ipw.VBox):
             ),
         )
         self._banner.layout.display = "none"
-        # Maps a stable message key (the first line of a load error, or a
-        # warning's text) to the composed HTML shown for it; insertion order
-        # is display order. Keying on the stable part of the message lets a
-        # refresh that rewords the same underlying problem update its entry
-        # in place, and lets a dismissal survive the rewording.
+        # Maps a stable message key (``_LOAD_ERROR_KEY`` for the (at most
+        # one) load-error message, or a warning's own text) to the composed
+        # HTML shown for it; insertion order is display order. The load
+        # error uses a fixed key, rather than one derived from the error
+        # text, so a refresh that raises a differently-worded error for the
+        # same incident updates the entry in place instead of appending a
+        # near-duplicate, and so a dismissal survives the rewording.
         # ``_dismissed_messages`` holds the keys of dismissed messages.
         self._banner_messages = {}
         self._dismissed_messages = set()
@@ -935,6 +946,11 @@ class ReviewSettings(ipw.VBox):
         """
         Reload the settings from the working directory, updating the banner
         with any problems the load encounters, and return the result.
+
+        Note that the underlying load is not a pure read: it deletes a
+        partial settings file that exactly duplicates the full settings
+        file, so a refresh can tidy the working directory as a side
+        effect.
         """
         self._current_settings = self._load_working_dir_settings()
         return self._current_settings
@@ -945,14 +961,17 @@ class ReviewSettings(ipw.VBox):
         generates, and any failure to read an existing settings file, into the
         banner instead of silently discarding them.
 
-        Banner messages are keyed by the stable part of the message -- the
-        first line of the load error, or the warning text -- rather than by
-        the full composed text, because the sentences composed around that
-        stable part can change between refreshes for the same underlying
-        problem (e.g. an autosave during widget construction writes a
-        readable partial file, changing which fallback sentence applies).
-        When a refresh reproduces an already-shown key, its wording is
-        updated in place instead of a near-duplicate being appended.
+        At most one load-error message can exist per refresh, so it is keyed
+        by the fixed ``_LOAD_ERROR_KEY`` rather than by anything derived
+        from the error text; a warning is keyed by its own (stable) text.
+        Keying the load error on a fixed value, rather than on the error
+        text, matters because the sentences composed around it -- and even
+        which file is reported as unreadable -- can change between refreshes
+        for the same underlying incident (e.g. an autosave during widget
+        construction renames one bad file to ``.bak``, so a later refresh
+        raises an error about the *other* file instead). When a refresh
+        reproduces an already-shown key, its wording is updated in place
+        instead of a near-duplicate being appended.
 
         Banner messages are also sticky: once shown, an entry stays in
         ``self._banner_messages`` until the user dismisses it, even if a
@@ -992,13 +1011,10 @@ class ReviewSettings(ipw.VBox):
                 # ValidationError, so only its first line is shown; the rest
                 # goes into a collapsed details element.
                 error_lines = str(e).splitlines()
-                # The first line of the error is stable across refreshes even
-                # when the sentences composed around it change, so it serves
-                # as the identity key for this message.
-                message_key = html.escape(error_lines[0])
+                first_line = html.escape(error_lines[0])
                 message = (
                     "There is a problem with the saved settings in this "
-                    f"directory ({message_key})."
+                    f"directory ({first_line})."
                 )
                 # Report which file, if either, the displayed values came
                 # from. Both files are parsed before load() raises, so a
@@ -1059,7 +1075,7 @@ class ReviewSettings(ipw.VBox):
                         "<details><summary>Full error</summary>"
                         f"<pre>{html.escape(detail)}</pre></details>"
                     )
-                current.append((message_key, message))
+                current.append((_LOAD_ERROR_KEY, message))
         # Add the warnings outside the try/except so they are reported even
         # when load() raises after emitting them; ``recorded`` stays bound
         # because catch_warnings exits normally during exception propagation.
@@ -1104,7 +1120,10 @@ class ReviewSettings(ipw.VBox):
 
     def _dismiss_banner(self, _=None):
         """
-        Hide the currently displayed messages until a new one arrives.
+        Dismiss every message currently shown, hiding the banner. There is
+        no per-message dismissal: the single close button clears all
+        messages at once, including any that arrived after the one the
+        user meant to dismiss.
         """
         # Button.on_click invokes handlers with the button instance as the
         # only argument, which is unused here; the =None default lets the

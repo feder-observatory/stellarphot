@@ -1297,6 +1297,49 @@ class TestReviewSettings:
         assert "<details><summary>Full error</summary><pre>" in banner_text
         assert "Field required" in banner_text.split("<details>")[1]
 
+    def test_banner_reports_both_files_unreadable(self):
+        # When both settings files exist but neither can be read, the
+        # banner names both files and both .bak names in one message.
+        wd_settings = PhotometryWorkingDirSettings()
+        wd_settings.settings_file.write_text('{"pasta": "carbonara"}')
+        wd_settings.partial_settings_file.write_text('{"pasta": "rigatoni"}')
+
+        review_settings = ReviewSettings([Camera])
+
+        banner_text = review_settings._banner_html.value
+        assert review_settings._banner.layout.display == "flex"
+        assert "None of the values below" in banner_text
+        assert (
+            "photometry_settings.json and partial_photometry_settings.json"
+            in banner_text
+        )
+        assert (
+            "photometry_settings.json.bak and partial_photometry_settings.json.bak"
+            in banner_text
+        )
+        assert "will not be overwritten" in banner_text
+
+    def test_banner_single_message_when_error_identity_changes(self):
+        # With both files unreadable, the first refresh raises an error
+        # whose first line comes from the partial file; the construction
+        # autosave (PhotometryApertures saves its defaults) renames the bad
+        # partial file to .bak, so later refreshes raise the full-file
+        # error instead. That is still the same incident, so the banner
+        # must show exactly one problem message, updated in place, not one
+        # per error wording.
+        wd_settings = PhotometryWorkingDirSettings()
+        wd_settings.settings_file.write_text('{"pasta": "carbonara"}')
+        wd_settings.partial_settings_file.write_text('{"pasta": "rigatoni"}')
+
+        review_settings = ReviewSettings([Camera, PhotometryApertures])
+        banner_text = review_settings._banner_html.value
+        assert banner_text.count("There is a problem with the saved settings") == 1
+
+        # A tab selection triggers another refresh; still one message.
+        review_settings._container.selected_index = 1
+        banner_text = review_settings._banner_html.value
+        assert banner_text.count("There is a problem with the saved settings") == 1
+
     def test_banner_dismiss_button_stays_dismissed(self):
         # Clicking the dismiss button hides the banner, and the message does
         # not come back when the settings are reloaded (which happens on

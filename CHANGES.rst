@@ -60,10 +60,16 @@ Other Changes and Additions
   ``.bak2``... suffixes are used instead). Warnings raised while loading the
   settings are shown in the banner only when they are of the new
   ``stellarphot.settings.PhotometrySettingsWarning`` category, so plain
-  ``UserWarning``\\s from libraries on the load path stay out of it. Note
-  that ``ReviewSettings.current_settings`` is now a snapshot rather than a
+  ``UserWarning``\\s from libraries on the load path stay out of it.
+  ``PhotometryWorkingDirSettings.save`` suppresses repeated warnings from
+  its internal bookkeeping load, but lets ``PhotometrySettingsWarning``
+  through so a caller whose first interaction with the settings is a save
+  still sees user-actionable problems. Note that
+  ``ReviewSettings.current_settings`` is now a snapshot rather than a
   live re-read of the settings files; the snapshot is refreshed at the end
-  of widget construction and on each tab selection. [#657]
+  of widget construction and on each tab selection (refreshing is not a
+  pure read: as before this change, loading deletes a partial settings
+  file that exactly duplicates the full settings file). [#657]
 
 Bug Fixes
 ^^^^^^^^^
@@ -93,7 +99,13 @@ Bug Fixes
   same way as corrupt files instead of crashing ``ReviewSettings``. When a
   save writes full settings, the partial settings file is no longer deleted
   before the new settings file has been successfully written, so a failed
-  write cannot destroy the only copy of the partial settings. In
+  write cannot destroy the only copy of the partial settings. Settings
+  files are now written to a temporary file that atomically replaces the
+  target, so a failure partway through a write can no longer truncate an
+  existing readable settings file. The error raised for conflicting
+  partial and full settings files no longer advises deleting one of the
+  files (a save resolves the conflict and preserves the losing partial
+  settings file as ``.bak``). In
   ``ReviewSettings``, collapsing every section of an accordion no longer
   raises, selecting a tab whose setting is not saved now actually marks
   the tab as not saved, and a tab badge stuck at not-saved now recovers
