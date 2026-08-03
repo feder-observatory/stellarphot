@@ -670,6 +670,72 @@ class TestPhotometryWorkingDirSettings:
         # the conflict
         assert PhotometryWorkingDirSettings().load() == full_settings
 
+    def test_unreadable_properties_reflect_last_load(self):
+        # After a load(), the *_unreadable properties report exactly which
+        # existing files could not be read: here the full settings file is
+        # corrupt and there is no partial settings file at all.
+        settings_file = PhotometryWorkingDirSettings()
+        settings_file.settings_file.write_text('{"pasta": "carbonara"}')
+
+        with pytest.raises(ValueError, match="Error loading settings"):
+            settings_file.load()
+
+        assert settings_file.full_settings_unreadable
+        assert not settings_file.partial_settings_unreadable
+
+    def test_save_does_not_overwrite_existing_backup(self):
+        # A .bak file may hold the only copy of settings from an earlier
+        # corruption, so a save that needs to set aside another unreadable
+        # file must use a numbered backup name (.bak1, .bak2, ...) rather
+        # than overwriting the existing .bak.
+        settings_file = PhotometryWorkingDirSettings()
+        old_backup_content = '{"pasta": "amatriciana"}'
+        backup_file = settings_file.settings_file.with_name(
+            settings_file.settings_file.name + ".bak"
+        )
+        backup_file.write_text(old_backup_content)
+
+        bad_content = '{"pasta": "carbonara"}'
+        settings_file.settings_file.write_text(bad_content)
+
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+        settings_file.save(full_settings)
+
+        # The earlier backup is untouched and the unreadable file went to
+        # the next available numbered name.
+        assert backup_file.read_text() == old_backup_content
+        numbered_backup = settings_file.settings_file.with_name(
+            settings_file.settings_file.name + ".bak1"
+        )
+        assert numbered_backup.read_text() == bad_content
+        assert settings_file.settings == full_settings
+
+    def test_failed_write_preserves_partial_settings_file(self, mocker):
+        # Saving full settings disposes of the partial settings file, whose
+        # non-None values may exist nowhere else if the write of the full
+        # settings then fails. The disposal must therefore happen only after
+        # the full settings are safely on disk.
+        settings_file = PhotometryWorkingDirSettings()
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+        # The partial camera matches the full settings being saved, which is
+        # the case where save() would simply delete (not back up) the
+        # partial settings file.
+        partial_content = PartialPhotometrySettings(
+            camera=full_settings.camera
+        ).model_dump_json()
+        settings_file.partial_settings_file.write_text(partial_content)
+
+        # Serialization happens before the settings file is opened for
+        # writing, so this failure stands in for any failure to get the new
+        # settings onto disk.
+        mocker.patch.object(
+            PhotometrySettings, "model_dump_json", side_effect=RuntimeError("disk full")
+        )
+        with pytest.raises(RuntimeError, match="disk full"):
+            settings_file.save(full_settings)
+
+        assert settings_file.partial_settings_file.read_text() == partial_content
+
     def test_save_does_not_repeat_load_warnings(self, mocker):
         # save() calls load() internally for bookkeeping. Warnings from that
         # load (e.g. a settings-format migration message) were already shown

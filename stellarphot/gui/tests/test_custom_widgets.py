@@ -28,6 +28,7 @@ from stellarphot.settings import (
     PhotometryApertures,
     PhotometryOptionalSettings,
     PhotometrySettings,
+    PhotometrySettingsWarning,
     PhotometryWorkingDirSettings,
     SavedSettings,
     SourceLocationSettings,
@@ -1478,7 +1479,9 @@ class TestReviewSettings:
         # Warnings generated while loading settings (e.g. a settings-format
         # migration) should be displayed in the banner.
         def fake_load(_self):
-            warnings.warn("Settings were migrated", UserWarning, stacklevel=2)
+            warnings.warn(
+                "Settings were migrated", PhotometrySettingsWarning, stacklevel=2
+            )
             return PartialPhotometrySettings()
 
         mocker.patch.object(
@@ -1508,7 +1511,9 @@ class TestReviewSettings:
         # Warnings emitted while loading settings should reach the banner
         # even when the load then fails, alongside the error message itself.
         def fake_load(_self):
-            warnings.warn("Settings were migrated", UserWarning, stacklevel=2)
+            warnings.warn(
+                "Settings were migrated", PhotometrySettingsWarning, stacklevel=2
+            )
             raise ValueError("Error loading settings: broken")
 
         mocker.patch.object(
@@ -1524,12 +1529,15 @@ class TestReviewSettings:
         assert "Settings were migrated" in banner_text
         assert review_settings._banner.layout.display == "flex"
 
-    def test_banner_ignores_non_user_warnings(self, mocker):
-        # Warnings other than UserWarning raised on the load path, like a
-        # DeprecationWarning from a library internal, are not actionable by
-        # the user and should stay out of the banner.
+    @pytest.mark.parametrize("category", [DeprecationWarning, UserWarning])
+    def test_banner_ignores_other_warning_categories(self, mocker, category):
+        # Only PhotometrySettingsWarning is user-actionable; anything else
+        # raised on the load path -- a DeprecationWarning from a library
+        # internal, or a plain UserWarning such as a pydantic serializer
+        # warning or astropy's AstropyUserWarning -- should stay out of the
+        # banner.
         def fake_load(_self):
-            warnings.warn("this API is deprecated", DeprecationWarning, stacklevel=2)
+            warnings.warn("some library warning", category, stacklevel=2)
             return PartialPhotometrySettings()
 
         mocker.patch.object(
@@ -1592,6 +1600,42 @@ class TestReviewSettings:
         # the badge list and the tab title.
         assert review_settings.badges[0] == SaveStatus.SETTING_NOT_SAVED
         assert SaveStatus.SETTING_NOT_SAVED in review_settings._container.titles[0]
+
+    def test_tab_selection_picks_up_external_save(self):
+        # A badge latched at SETTING_NOT_SAVED must recover when the setting
+        # is saved by something other than this widget's own observers, e.g.
+        # another widget or a notebook writing the settings file. Selecting
+        # the tab used to trust a non-None badge unconditionally, so the
+        # not-saved badge stuck forever.
+        wd_settings = PhotometryWorkingDirSettings()
+
+        # PhotometryApertures autosaves its defaults during construction;
+        # deleting the settings file afterwards leaves its tab unsaved.
+        review = ReviewSettings([PhotometryApertures, Camera])
+        wd_settings.partial_settings_file.unlink(missing_ok=True)
+
+        # Switch away and back so the selection observer latches the badge
+        # at not-saved.
+        review._container.selected_index = 1
+        review._container.selected_index = 0
+        assert review.badges[0] == SaveStatus.SETTING_NOT_SAVED
+
+        # Save the value displayed in the widget externally, i.e. through a
+        # fresh PhotometryWorkingDirSettings rather than the widget's own
+        # save machinery.
+        apertures = PhotometryApertures.model_validate(
+            review._setting_widgets[0]._autoui_widget.value
+        )
+        PhotometryWorkingDirSettings().save(
+            PartialPhotometrySettings(photometry_apertures=apertures), update=True
+        )
+
+        # Selecting the tab again re-derives the badge from disk instead of
+        # trusting the latched not-saved badge.
+        review._container.selected_index = 1
+        review._container.selected_index = 0
+        assert review.badges[0] == SaveStatus.SETTING_IS_SAVED
+        assert SaveStatus.SETTING_IS_SAVED in review._container.titles[0]
 
 
 def test_add_saving_with_unrecognized_widget():

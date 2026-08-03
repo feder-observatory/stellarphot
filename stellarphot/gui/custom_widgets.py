@@ -23,6 +23,7 @@ from stellarphot.settings import (
     PartialPhotometrySettings,
     PassbandMap,
     PhotometryRunSettings,
+    PhotometrySettingsWarning,
     PhotometryWorkingDirSettings,
     SavedSettings,
 )
@@ -964,13 +965,14 @@ class ReviewSettings(ipw.VBox):
         current = []
         try:
             with warnings.catch_warnings(record=True) as recorded:
-                # Settings problems are reported as UserWarning; internal
-                # deprecation noise from pydantic/astropy on the load path
-                # should not reach a user-facing banner. A dedicated warning
-                # category may replace this when settings-migration work
-                # lands, see issue #656.
+                # Only PhotometrySettingsWarning -- the category for
+                # user-actionable problems with saved settings files -- is
+                # recorded for display. Plain UserWarnings from libraries on
+                # the load path (e.g. pydantic serializer warnings, astropy's
+                # AstropyUserWarning) deliberately stay out of the banner,
+                # along with deprecation and other internal noise.
                 warnings.simplefilter("ignore")
-                warnings.simplefilter("always", UserWarning)
+                warnings.simplefilter("always", PhotometrySettingsWarning)
                 loaded = wd_settings.load()
         except ValueError as e:
             # load() parses both files before raising, so whichever of these
@@ -1012,14 +1014,10 @@ class ReviewSettings(ipw.VBox):
 
                 # A file is unreadable, as opposed to merely conflicting with
                 # its counterpart, exactly when it exists on disk but load()
-                # left the corresponding in-memory attribute as None.
-                unreadable_full = (
-                    wd_settings.settings_file.exists() and wd_settings.settings is None
-                )
-                unreadable_partial = (
-                    wd_settings.partial_settings_file.exists()
-                    and wd_settings.partial_settings is None
-                )
+                # left the corresponding in-memory attribute as None -- which
+                # is what these properties report after the load() above.
+                unreadable_full = wd_settings.full_settings_unreadable
+                unreadable_partial = wd_settings.partial_settings_unreadable
                 if unreadable_full or unreadable_partial:
                     names = []
                     if unreadable_full:
@@ -1121,10 +1119,12 @@ class ReviewSettings(ipw.VBox):
         """
         Observer for the tab or accordion selection.
         """
-        # Once the user has clicked on the tab, the status badge for the
-        # tab should just be the badge for the widget it holds, if the
-        # widget has a badge. Otherwise, compare the widget value to the
-        # saved value to determine the badge.
+        # Once the user has clicked on the tab, the status badge for the tab
+        # should be the badge for the widget it holds when that badge reports
+        # a positive status. A badge of None or NOT_SAVED is instead
+        # re-derived by comparing the widget value to the saved value, so a
+        # badge latched at NOT_SAVED can recover when the setting gets saved
+        # by something other than this widget's own observers.
 
         # Get the index
         new_selected = change["new"]
@@ -1134,27 +1134,48 @@ class ReviewSettings(ipw.VBox):
         if new_selected is None:
             return
 
-        setting_badge = self._setting_widgets[new_selected].badge
-        if setting_badge is not None:
+        setting_widget = self._setting_widgets[new_selected]
+        setting_badge = setting_widget.badge
+
+        # A ChooseOrMakeNew that is making a new item or editing one manages
+        # its own badge through _choose_existing_observer; a disk comparison
+        # here would report the still-saved on-disk value as SAVED while the
+        # user is mid-edit, so trust its badge unconditionally.
+        chooser = setting_widget._widget
+        mid_interaction = isinstance(chooser, ChooseOrMakeNew) and (
+            chooser._making_new or chooser._editing
+        )
+        if setting_badge is not None and (
+            mid_interaction or setting_badge != SaveStatus.SETTING_NOT_SAVED
+        ):
             self.badges[new_selected] = setting_badge
         else:
-            # Check whether the setting is saved or not
-            setting_widget = self._setting_widgets[new_selected]
-
+            # A badge of None or NOT_SAVED is re-derived from disk rather
+            # than trusted, so a save made outside this widget's own
+            # observers (e.g. by another widget writing the settings file)
+            # is picked up.
             snake_name = to_snake(setting_widget._autoui_widget.model.__name__)
-
             disk_value = getattr(self._refresh(), snake_name)
             if disk_value is None:
                 # The setting is not saved
                 setting_widget.badge = SaveStatus.SETTING_NOT_SAVED
             else:
-                # Set the badge to saved if it has been saved.
-                value_from_widget = setting_widget._autoui_widget.model.model_validate(
-                    setting_widget._autoui_widget.value
-                )
-
-                if disk_value == value_from_widget:
-                    setting_widget.badge = SaveStatus.SETTING_IS_SAVED
+                try:
+                    value_from_widget = (
+                        setting_widget._autoui_widget.model.model_validate(
+                            setting_widget._autoui_widget.value
+                        )
+                    )
+                except ValidationError:
+                    # The widget holds an incomplete/invalid value; whatever
+                    # is on disk, it does not match what is displayed.
+                    setting_widget.badge = SaveStatus.SETTING_NOT_SAVED
+                else:
+                    # A valid widget value that differs from disk deliberately
+                    # leaves the badge unchanged, as before this re-derivation
+                    # existed.
+                    if disk_value == value_from_widget:
+                        setting_widget.badge = SaveStatus.SETTING_IS_SAVED
 
         self._container.titles = self._make_titles()
 

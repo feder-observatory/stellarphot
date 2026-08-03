@@ -55,7 +55,12 @@ Other Changes and Additions
   defaults. ``PhotometryWorkingDirSettings.save`` no longer overwrites or
   deletes a settings file whose contents could not be read, or a partial
   settings file whose values are not carried into the full settings being
-  written; such files are preserved with a ``.bak`` suffix instead. Note
+  written; such files are preserved with a ``.bak`` suffix instead, and
+  existing ``.bak`` backups are never overwritten (numbered ``.bak1``,
+  ``.bak2``... suffixes are used instead). Warnings raised while loading the
+  settings are shown in the banner only when they are of the new
+  ``stellarphot.settings.PhotometrySettingsWarning`` category, so plain
+  ``UserWarning``\\s from libraries on the load path stay out of it. Note
   that ``ReviewSettings.current_settings`` is now a snapshot rather than a
   live re-read of the settings files; the snapshot is refreshed at the end
   of widget construction and on each tab selection. [#657]
@@ -85,10 +90,15 @@ Bug Fixes
   longer raises ``AttributeError`` when an existing full settings file
   cannot be read. Settings files that cannot be read because of an encoding
   or operating-system error (not just invalid JSON) are now reported the
-  same way as corrupt files instead of crashing ``ReviewSettings``. In
+  same way as corrupt files instead of crashing ``ReviewSettings``. When a
+  save writes full settings, the partial settings file is no longer deleted
+  before the new settings file has been successfully written, so a failed
+  write cannot destroy the only copy of the partial settings. In
   ``ReviewSettings``, collapsing every section of an accordion no longer
-  raises, and selecting a tab whose setting is not saved now actually marks
-  the tab as not saved. [#657]
+  raises, selecting a tab whose setting is not saved now actually marks
+  the tab as not saved, and a tab badge stuck at not-saved now recovers
+  when the setting is saved outside the widget (e.g. by another widget
+  writing the settings file). [#657]
 
 2.1.2 (2026-07-19)
 -------------------

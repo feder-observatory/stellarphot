@@ -14,13 +14,27 @@ from .models import (
     PhotometrySettings,
 )
 
-__all__ = ["SavedSettings", "SETTINGS_FILE_VERSION", "PhotometryWorkingDirSettings"]
+__all__ = [
+    "SavedSettings",
+    "SETTINGS_FILE_VERSION",
+    "PhotometrySettingsWarning",
+    "PhotometryWorkingDirSettings",
+]
 
 # We will have to version settings formats, I think. Hopefully this changes rarely
 # or never.
 SETTINGS_FILE_VERSION = "2"  # value chosen to match major version of stellarphot
 
 ENCODING = "utf-8"
+
+
+class PhotometrySettingsWarning(UserWarning):
+    """
+    Warning category for user-actionable problems with saved photometry
+    settings files (e.g. a settings-format migration). Warnings of this
+    category are shown to the user in the `~stellarphot.gui.ReviewSettings`
+    banner; plain `UserWarning`\\s from libraries on the load path are not.
+    """
 
 
 class SavedFileOperations:
@@ -307,6 +321,26 @@ class PhotometryWorkingDirSettings:
         """
         return self._partial_settings
 
+    @property
+    def full_settings_unreadable(self):
+        """
+        True when the full settings file exists on disk but could not be read
+        by the most recent `load`. Only meaningful after `load` has been
+        called on this instance -- before any load, the in-memory settings
+        are None, so an existing readable file would also report True.
+        """
+        return self._settings_file.exists() and self._settings is None
+
+    @property
+    def partial_settings_unreadable(self):
+        """
+        True when the partial settings file exists on disk but could not be
+        read by the most recent `load`. Only meaningful after `load` has been
+        called on this instance -- before any load, the in-memory settings
+        are None, so an existing readable file would also report True.
+        """
+        return self._partial_settings_file.exists() and self._partial_settings is None
+
     # Properties for settings file and partial settings file
     @property
     def settings_file(self):
@@ -375,6 +409,26 @@ class PhotometryWorkingDirSettings:
 
         return disk_settings
 
+    def _move_aside(self, path):
+        """
+        Rename ``path`` to a backup name that does not already exist and
+        return the backup path.
+
+        The first available of ``path.bak``, ``path.bak1``, ``path.bak2``,
+        ... is used, so an earlier backup -- which may hold the only copy of
+        settings from a previous corruption -- is never overwritten.
+        """
+        backup = path.with_name(path.name + ".bak")
+        counter = 0
+        while backup.exists():
+            counter += 1
+            backup = path.with_name(f"{path.name}.bak{counter}")
+        # replace() rather than rename() so that the (unlikely) race of the
+        # chosen backup name being created between the exists() check and
+        # the rename still succeeds on every platform.
+        path.replace(backup)
+        return backup
+
     def save(self, settings, update=False):
         """
         Save the partial or full settings to the working directory. Note well that
@@ -412,6 +466,9 @@ class PhotometryWorkingDirSettings:
         renamed with a ``.bak`` suffix, rather than deleted, when a save
         writes full settings -- this includes, but is not limited to, the
         case where the partial settings conflict with the full settings.
+        Existing backups are never overwritten; if a ``.bak`` file already
+        exists, numbered suffixes (``.bak1``, ``.bak2``, ...) are used
+        instead.
         """
         full_settings = False
 
@@ -428,16 +485,15 @@ class PhotometryWorkingDirSettings:
             # settings files. We can proceed to save the settings.
             pass
 
-        # A file that exists on disk but whose in-memory settings are None
-        # failed to parse during the load above. Note the two flags now,
-        # before the code below reassigns the in-memory settings, so that
-        # the unreadable file can be renamed aside instead of destroyed.
-        # load() parses both files before raising, so these flags are accurate
-        # even when only one of the two files is unreadable.
-        unreadable_full = self._settings_file.exists() and self._settings is None
-        unreadable_partial = (
-            self._partial_settings_file.exists() and self._partial_settings is None
-        )
+        # A file that is unreadable failed to parse during the load above.
+        # Snapshot the two properties now, before the code below reassigns
+        # the in-memory settings (which would change what the properties
+        # report), so that the unreadable file can be renamed aside instead
+        # of destroyed. load() parses both files before raising, so these
+        # flags are accurate even when only one of the two files is
+        # unreadable.
+        unreadable_full = self.full_settings_unreadable
+        unreadable_partial = self.partial_settings_unreadable
 
         match settings:
             case PartialPhotometrySettings():
@@ -506,12 +562,34 @@ class PhotometryWorkingDirSettings:
                     f"not {type(settings)}"
                 )
 
+        # If the file we are about to write exists but could not be read, rename
+        # it aside so its contents are preserved rather than overwritten. This
+        # must happen before the write below, which would clobber the file.
+        if file == self._settings_file and unreadable_full:
+            self._move_aside(self._settings_file)
+        elif file == self._partial_settings_file and unreadable_partial:
+            self._move_aside(self._partial_settings_file)
+
+        # Write the settings to a file. The settings themselves are models, so we
+        # are guaranteed to write the correct model type (partial or full settings)
+        # to the file. Serialize before opening the file so that a failure to
+        # serialize cannot truncate an existing settings file.
+        json_data = settings.model_dump_json(indent=4)
+        with file.open("w", encoding=ENCODING) as f:
+            f.write(json_data)
+
         if full_settings:
+            # Now that the full settings that supersede the partial settings
+            # are safely on disk, the partial settings file can be disposed
+            # of. Doing this only after a successful write means a failed
+            # write cannot destroy the partial settings, which may be the
+            # only copy of some values.
+            #
             # Preserve the on-disk partial settings as .bak, instead of
             # deleting them, whenever some of their information would
             # otherwise be lost: either the file could not be read at all, or
             # it is readable but has a non-None value that differs from what
-            # is about to be written as the full settings. self._partial_settings
+            # was just written as the full settings. self._partial_settings
             # still reflects whatever was loaded from disk at the top of this
             # method -- none of the full-settings code paths above reassign it
             # -- so this comparison is against the pre-save partial settings.
@@ -521,35 +599,10 @@ class PhotometryWorkingDirSettings:
                 for k, v in self._partial_settings.model_dump().items()
             )
             if unreadable_partial or partial_values_lost:
-                # Use replace rather than rename so that an existing .bak
-                # file is overwritten on all platforms.
-                self._partial_settings_file.replace(
-                    self._partial_settings_file.with_name(
-                        self._partial_settings_file.name + ".bak"
-                    )
-                )
+                self._move_aside(self._partial_settings_file)
             else:
                 self._partial_settings_file.unlink(missing_ok=True)
             self._partial_settings = None
-
-        # If the file we are about to write exists but could not be read, rename
-        # it aside so its contents are preserved rather than overwritten.
-        if file == self._settings_file and unreadable_full:
-            self._settings_file.replace(
-                self._settings_file.with_name(self._settings_file.name + ".bak")
-            )
-        elif file == self._partial_settings_file and unreadable_partial:
-            self._partial_settings_file.replace(
-                self._partial_settings_file.with_name(
-                    self._partial_settings_file.name + ".bak"
-                )
-            )
-
-        # Write the settings to a file. The settings themselves are models, so we
-        # are guaranteed to write the correct model type (partial or full settings)
-        # to the file.
-        with file.open("w", encoding=ENCODING) as f:
-            f.write(settings.model_dump_json(indent=4))
 
     def load(self):
         """
