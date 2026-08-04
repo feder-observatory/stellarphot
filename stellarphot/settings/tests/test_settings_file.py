@@ -779,6 +779,78 @@ class TestPhotometryWorkingDirSettings:
         )
         assert not backup_file.exists()
 
+    def test_save_conflicting_partial_backed_up_despite_explicit_replacement(self):
+        # When the on-disk partial settings conflict with the on-disk full
+        # settings, the losing partial file must be preserved as .bak even
+        # when the value saved for the conflicting field was supplied
+        # explicitly -- the "caller" may just be echoing the full settings
+        # file's own value back, as the ReviewSettings construction
+        # autosaves do, in which case nobody ever chose to discard the
+        # conflicting value. It used to be deleted outright.
+        settings_file = PhotometryWorkingDirSettings()
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+        settings_file.settings_file.write_text(full_settings.model_dump_json())
+
+        conflicting_camera = Camera(**TEST_PHOTOMETRY_SETTINGS["camera"])
+        conflicting_camera.gain = 2 * conflicting_camera.gain
+        partial_content = PartialPhotometrySettings(
+            camera=conflicting_camera
+        ).model_dump_json()
+        settings_file.partial_settings_file.write_text(partial_content)
+
+        # Echo the full settings' own camera back, as an autosave would.
+        settings_file = PhotometryWorkingDirSettings()
+        settings_file.save(
+            PartialPhotometrySettings(camera=full_settings.camera), update=True
+        )
+
+        assert not settings_file.partial_settings_file.exists()
+        backup_file = settings_file.partial_settings_file.with_name(
+            settings_file.partial_settings_file.name + ".bak"
+        )
+        assert backup_file.read_text() == partial_content
+
+    def test_failed_write_leaves_unreadable_file_in_place(self, mocker):
+        # If writing the new settings fails, an unreadable file at the
+        # target name must remain in place under its original name -- not
+        # be renamed to .bak with nothing left in its place.
+        settings_file = PhotometryWorkingDirSettings()
+        bad_content = '{"pasta": "carbonara"}'
+        settings_file.settings_file.write_text(bad_content)
+
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+        mocker.patch.object(Path, "write_text", side_effect=OSError("disk full"))
+        with pytest.raises(OSError, match="disk full"):
+            settings_file.save(full_settings)
+
+        assert settings_file.settings_file.read_text() == bad_content
+        assert not settings_file.settings_file.with_name(
+            settings_file.settings_file.name + ".bak"
+        ).exists()
+
+    def test_save_survives_oserror_from_bookkeeping_load(self, mocker):
+        # load() raises OSError, not ValueError, when tidying a duplicate
+        # partial settings file fails (e.g. in a read-only directory).
+        # save() must treat that like any other failed bookkeeping load
+        # instead of crashing -- ReviewSettings calls save() during widget
+        # construction.
+        settings_file = PhotometryWorkingDirSettings()
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+        settings_file.settings_file.write_text(full_settings.model_dump_json())
+        settings_file.partial_settings_file.write_text(
+            PartialPhotometrySettings(**TEST_PHOTOMETRY_SETTINGS).model_dump_json()
+        )
+
+        mocker.patch.object(
+            settings_files.PhotometryWorkingDirSettings,
+            "_resolve_full_partial_conflict",
+            side_effect=OSError("Read-only file system"),
+        )
+
+        camera = Camera.model_validate_json(CAMERA)
+        settings_file.save(PartialPhotometrySettings(camera=camera), update=True)
+        assert settings_file.settings.camera == camera
+
     def test_save_suppresses_non_settings_warnings_from_load(self, mocker):
         # save() calls load() internally for bookkeeping. Warnings from that
         # load (e.g. library warnings) were already shown when the settings

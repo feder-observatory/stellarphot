@@ -475,7 +475,12 @@ class PhotometryWorkingDirSettings:
         case where the partial settings conflict with the full settings.
         Partial values that differ from the written settings only because
         the ``settings`` argument explicitly replaced them do not trigger
-        the backup: the caller supplied the new value deliberately.
+        the backup: the caller supplied the new value deliberately. That
+        exclusion does not apply when the on-disk partial settings
+        conflicted with the on-disk full settings -- the "caller" may just
+        be echoing the full settings back, as the
+        `~stellarphot.gui.ReviewSettings` autosaves do -- so the losing
+        partial file is then always preserved.
         Existing backups are never overwritten; if a ``.bak`` file already
         exists, numbered suffixes (``.bak1``, ``.bak2``, ...) are used
         instead.
@@ -493,13 +498,14 @@ class PhotometryWorkingDirSettings:
                 warnings.simplefilter("ignore")
                 warnings.simplefilter("default", PhotometrySettingsWarning)
                 _ = self.load()
-        except ValueError:
+        except (ValueError, OSError):
             # load() raises ValueError when there are no settings files at
             # all, when a file exists but cannot be read, and when readable
-            # partial and full settings conflict. The save proceeds in every
-            # one of those cases; the unreadable-file cases rely on the
-            # snapshot below so the problem file is set aside as .bak
-            # rather than destroyed.
+            # partial and full settings conflict; it raises OSError when
+            # tidying a duplicate partial settings file fails (e.g. in a
+            # read-only directory). The save proceeds in every one of those
+            # cases; the unreadable-file cases rely on the flags below so
+            # the problem file is set aside as .bak rather than destroyed.
             pass
 
         # Whether each existing settings file failed to parse during the
@@ -509,6 +515,20 @@ class PhotometryWorkingDirSettings:
         # about to be replaced is renamed aside instead of destroyed.
         unreadable_full = self.full_settings_unreadable
         unreadable_partial = self.partial_settings_unreadable
+
+        # After a successful load at most one of the in-memory settings is
+        # non-None (a duplicate partial file is tidied away). Both being
+        # non-None means the load above raised with the partial file
+        # unresolved: the files conflicted, or tidying failed. Either way
+        # the partial file's differing values were never confirmed as
+        # replaced by anyone -- a save "replacing" a value may just be
+        # echoing the full settings file back, as the ReviewSettings
+        # construction autosaves do -- so the explicit-replacement
+        # exclusion at disposal time does not apply and the partial file
+        # is backed up whenever any of its values would be lost.
+        partial_unresolved = (
+            self._settings is not None and self._partial_settings is not None
+        )
 
         match settings:
             case PartialPhotometrySettings():
@@ -599,13 +619,15 @@ class PhotometryWorkingDirSettings:
                     f"not {type(settings)}"
                 )
 
-        # If the file we are about to write exists but could not be read, rename
-        # it aside so its contents are preserved rather than overwritten. This
-        # must happen before the write below, which would clobber the file.
-        if file == self._settings_file and unreadable_full:
-            self._move_aside(self._settings_file)
-        elif file == self._partial_settings_file and unreadable_partial:
-            self._move_aside(self._partial_settings_file)
+        # If the file we are about to write exists but could not be read, its
+        # contents must be set aside rather than overwritten. The rename
+        # happens between writing the temporary file and the replace below,
+        # so a failure while writing the new content leaves the unreadable
+        # file in place under its original name instead of leaving no
+        # settings file at all.
+        set_aside_target = (file == self._settings_file and unreadable_full) or (
+            file == self._partial_settings_file and unreadable_partial
+        )
 
         # Write the settings to a file. The settings themselves are models, so we
         # are guaranteed to write the correct model type (partial or full settings)
@@ -616,6 +638,8 @@ class PhotometryWorkingDirSettings:
         tmp_file = file.with_name(file.name + ".tmp")
         try:
             tmp_file.write_text(json_data, encoding=ENCODING)
+            if set_aside_target:
+                self._move_aside(file)
             tmp_file.replace(file)
         finally:
             # After a successful replace the temporary file no longer exists,
@@ -639,7 +663,9 @@ class PhotometryWorkingDirSettings:
             # -- so this comparison is against the pre-save partial settings.
             written = settings.model_dump()
             partial_values_lost = self._partial_settings is not None and any(
-                v is not None and written.get(k) != v and k not in explicitly_replaced
+                v is not None
+                and written.get(k) != v
+                and (partial_unresolved or k not in explicitly_replaced)
                 for k, v in self._partial_settings.model_dump().items()
             )
             if unreadable_partial or partial_values_lost:

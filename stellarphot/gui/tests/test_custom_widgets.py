@@ -1611,6 +1611,37 @@ class TestReviewSettings:
         assert "conflicting partial settings file will be preserved" in banner_text
         assert "partial_photometry_settings.json.bak" in banner_text
 
+    def test_construction_autosave_preserves_conflicting_partial(self):
+        # The save observers fire during construction with values taken
+        # from the full settings file (the fallback when the two settings
+        # files conflict), so the save that resolves the conflict is just
+        # echoing the full file's own camera back. It must still preserve
+        # the losing partial settings file -- whose camera value exists
+        # nowhere else -- as .bak, as the banner promises; it used to be
+        # deleted outright because the echoed camera counted as an
+        # explicit replacement.
+        saved = SavedSettings()
+        saved.add_item(Camera(**TEST_CAMERA_VALUES))
+
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+        wd_settings = PhotometryWorkingDirSettings()
+        wd_settings.settings_file.write_text(full_settings.model_dump_json())
+
+        conflicting_camera = Camera(**TEST_CAMERA_VALUES)
+        conflicting_camera.gain = 2 * conflicting_camera.gain
+        partial_content = PartialPhotometrySettings(
+            camera=conflicting_camera
+        ).model_dump_json()
+        wd_settings.partial_settings_file.write_text(partial_content)
+
+        ReviewSettings([Camera])
+
+        assert not wd_settings.partial_settings_file.exists()
+        backup = wd_settings.partial_settings_file.with_name(
+            wd_settings.partial_settings_file.name + ".bak"
+        )
+        assert backup.read_text() == partial_content
+
     def test_banner_handles_invalid_utf8_settings_file(self):
         # Bytes that are not valid UTF-8 raise a UnicodeDecodeError while
         # reading the settings file; that must be handled the same as any
@@ -1748,17 +1779,13 @@ class TestReviewSettings:
         )
 
     def test_autosave_reemits_non_settings_warnings(self, mocker):
-        # The autosave suppression exists to keep PhotometrySettingsWarning
-        # from being printed once per autosave (the banner already shows
-        # it), but its recording context swallows every warning raised
-        # during the save. Anything that is not a PhotometrySettingsWarning
-        # (e.g. a serialization or file warning) must be re-emitted so the
-        # suppression does not eat unrelated warnings.
+        # The autosave suppression's recording context swallows every
+        # warning raised during the save. Anything that is not a
+        # PhotometrySettingsWarning (e.g. a serialization or file warning)
+        # must be re-emitted so the suppression does not eat unrelated
+        # warnings.
         def fake_save(_self, _settings, update=False):  # noqa: ARG001
             warnings.warn("unrelated library warning", UserWarning, stacklevel=2)
-            warnings.warn(
-                "Settings were migrated", PhotometrySettingsWarning, stacklevel=2
-            )
 
         mocker.patch.object(
             settings_files.PhotometryWorkingDirSettings, "save", fake_save
@@ -1770,11 +1797,28 @@ class TestReviewSettings:
             # autosaved during construction.
             ReviewSettings([PhotometryApertures])
 
-        messages = [str(w.message) for w in recorded]
-        assert "unrelated library warning" in messages
-        assert not any(
-            issubclass(w.category, PhotometrySettingsWarning) for w in recorded
+        assert "unrelated library warning" in [str(w.message) for w in recorded]
+
+    def test_autosave_reemits_unshown_settings_warnings(self, mocker):
+        # The autosave suppression exists because the banner already shows
+        # the PhotometrySettingsWarnings raised by the widget's own loads.
+        # A PhotometrySettingsWarning the banner has *not* shown -- e.g.
+        # one raised on the save path rather than by load() -- must be
+        # re-emitted rather than silenced.
+        def fake_save(_self, _settings, update=False):  # noqa: ARG001
+            warnings.warn(
+                "Problem while saving", PhotometrySettingsWarning, stacklevel=2
+            )
+
+        mocker.patch.object(
+            settings_files.PhotometryWorkingDirSettings, "save", fake_save
         )
+
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter("always")
+            ReviewSettings([PhotometryApertures])
+
+        assert "Problem while saving" in [str(w.message) for w in recorded]
 
     def test_accordion_collapse_does_not_error(self):
         # An accordion with every section collapsed has selected_index None,

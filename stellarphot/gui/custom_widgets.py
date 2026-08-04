@@ -843,7 +843,9 @@ class ReviewSettings(ipw.VBox):
                 widget = ui_generator(setting)
                 val_to_set = widget
 
-            _add_saving_to_widget(widget)
+            _add_saving_to_widget(
+                widget, warning_already_shown=self._banner_shows_warning
+            )
             name = to_snake(setting.__name__)
             plain_name = " ".join(name.split("_"))
             self._plain_names.append(plain_name)
@@ -1225,6 +1227,16 @@ class ReviewSettings(ipw.VBox):
             self._banner_html.value = ""
             self._banner.layout.display = "none"
 
+    def _banner_shows_warning(self, message):
+        """
+        True when a warning with this message text is displayed in the
+        banner, or was displayed and dismissed by the user. Used by the
+        autosave plumbing to decide whether a ``PhotometrySettingsWarning``
+        intercepted during a save has already been surfaced to the user.
+        """
+        key = html.escape(message)
+        return key in self._banner_messages or key in self._dismissed
+
     def _dismiss_banner(self, _=None):
         """
         Dismiss every message currently shown, hiding the banner. There is
@@ -1329,7 +1341,7 @@ class ReviewSettings(ipw.VBox):
         return observer
 
 
-def _add_saving_to_widget(setting_widget):
+def _add_saving_to_widget(setting_widget, warning_already_shown=None):
     """
     Add an observer to a widget that autosaves the settings for that widget to
     the working directory.
@@ -1338,7 +1350,20 @@ def _add_saving_to_widget(setting_widget):
     ----------
     setting_widget : ChooseOrMakeNew
         The widget to add the observer to.
+
+    warning_already_shown : callable, optional
+        Called with the message text of a `PhotometrySettingsWarning`
+        intercepted during an autosave; returns True when that warning is
+        already displayed to the user (e.g. in the
+        `~stellarphot.gui.ReviewSettings` banner), in which case the
+        warning is not re-emitted. By default no warning is considered
+        shown, so every intercepted warning is re-emitted.
     """
+    if warning_already_shown is None:
+
+        def warning_already_shown(_message):
+            return False
+
     wd_settings = PhotometryWorkingDirSettings()
 
     # Define name here so that it is available in the save_wd function. Its
@@ -1362,18 +1387,23 @@ def _add_saving_to_widget(setting_widget):
             # which always outranks a filter set by an outer caller.
             # Recording intercepts it regardless of nesting.
             wd_settings.save(pps, update=True)
-        # Recording swallows every warning raised during the save, but only
-        # PhotometrySettingsWarning is covered by the banner; anything else
-        # raised while saving (e.g. a serialization or file warning) still
-        # belongs to the caller, so re-emit it under the ambient filters.
+        # Recording swallows every warning raised during the save; re-emit
+        # everything under the ambient filters except a
+        # PhotometrySettingsWarning the user has already been shown. In
+        # particular, a PhotometrySettingsWarning raised on the save path
+        # -- which the banner never records, since it only collects
+        # warnings from its own loads -- is re-emitted, not silenced.
         for warning in recorded:
-            if not issubclass(warning.category, PhotometrySettingsWarning):
-                warnings.warn_explicit(
-                    warning.message,
-                    warning.category,
-                    warning.filename,
-                    warning.lineno,
-                )
+            if issubclass(
+                warning.category, PhotometrySettingsWarning
+            ) and warning_already_shown(str(warning.message)):
+                continue
+            warnings.warn_explicit(
+                warning.message,
+                warning.category,
+                warning.filename,
+                warning.lineno,
+            )
 
     if hasattr(setting_widget, "_choose_existing"):
         setting_widget._choose_existing.observe(save_wd, "value")
