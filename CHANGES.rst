@@ -55,7 +55,9 @@ Other Changes and Additions
   defaults. ``PhotometryWorkingDirSettings.save`` no longer overwrites or
   deletes a settings file whose contents could not be read, or a partial
   settings file whose values are not carried into the full settings being
-  written; such files are preserved with a ``.bak`` suffix instead, and
+  written (partial values the settings passed to ``save`` explicitly
+  replace are excluded -- replacing them was the point of the save); such
+  files are preserved with a ``.bak`` suffix instead, and
   existing ``.bak`` backups are never overwritten (numbered ``.bak1``,
   ``.bak2``... suffixes are used instead). Warnings raised while loading the
   settings are shown in the banner only when they are of the new

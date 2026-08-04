@@ -756,6 +756,29 @@ class TestPhotometryWorkingDirSettings:
             settings_file.settings_file.name + ".tmp"
         ).exists()
 
+    def test_save_completing_partial_no_backup_for_replaced_value(self):
+        # A partial update that both replaces a previously saved partial
+        # value and completes the full settings deletes the on-disk partial
+        # file without a backup when its only divergence is the value the
+        # caller explicitly replaced -- replacing it was the point of the
+        # save, so nothing is lost.
+        settings_file = PhotometryWorkingDirSettings()
+        old_camera = Camera.model_validate_json(CAMERA)
+        settings_file.partial_settings_file.write_text(
+            PartialPhotometrySettings(camera=old_camera).model_dump_json()
+        )
+
+        new_settings = PartialPhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+        assert new_settings.camera != old_camera
+        settings_file.save(new_settings, update=True)
+
+        assert settings_file.settings.camera == new_settings.camera
+        assert not settings_file.partial_settings_file.exists()
+        backup_file = settings_file.partial_settings_file.with_name(
+            settings_file.partial_settings_file.name + ".bak"
+        )
+        assert not backup_file.exists()
+
     def test_save_suppresses_non_settings_warnings_from_load(self, mocker):
         # save() calls load() internally for bookkeeping. Warnings from that
         # load (e.g. library warnings) were already shown when the settings

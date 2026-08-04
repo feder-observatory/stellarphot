@@ -1347,9 +1347,9 @@ class TestReviewSettings:
         # during construction writes a readable partial settings file, which
         # changes the wording composed around the error on later refreshes;
         # dismissal must stick anyway because it is keyed on the load
-        # error's fixed identity plus a fingerprint of its first line, and
-        # that first line stays stable across these refreshes even though
-        # the surrounding wording changes.
+        # error's fixed identity plus a fingerprint of its full text, and
+        # that text stays stable across these refreshes even though the
+        # wording composed around it changes.
         wd_settings = PhotometryWorkingDirSettings()
         wd_settings.settings_file.write_text('{"pasta": "carbonara"}')
 
@@ -1445,6 +1445,45 @@ class TestReviewSettings:
 
         assert review._banner.layout.display == "flex"
         assert "There is a problem with the saved settings" in review._banner_html.value
+
+    def test_dismissed_load_error_reappears_when_error_detail_changes(self):
+        # Two different corruptions of the same file can share the same
+        # generic first line ("Error loading settings: N validation errors
+        # for ..."); a dismissal of one must not suppress the other, so the
+        # fingerprint is the full error text.
+        wd_settings = PhotometryWorkingDirSettings()
+        wd_settings.settings_file.write_text('{"camera": 12}')
+
+        review = ReviewSettings([Camera])
+        review._banner_dismiss.click()
+        assert review._banner.layout.display == "none"
+
+        # A different corruption with the same number of validation errors,
+        # so the first line of the error is unchanged but the details are
+        # not. Verify the premise so this test fails loudly if pydantic's
+        # error formatting changes.
+        wd_settings.settings_file.write_text('{"observatory": 17}')
+        with pytest.raises(ValueError) as exc_info:
+            PhotometryWorkingDirSettings().load()
+        assert "validation error" in str(exc_info.value).splitlines()[0]
+
+        review._refresh()
+        assert review._banner.layout.display == "flex"
+
+    def test_tab_selection_refreshes_banner_even_with_positive_badge(self):
+        # A problem that arises after construction must surface in the
+        # banner on the next tab selection even when the selected tab's
+        # badge is positive, i.e. when no badge re-derivation from disk
+        # would otherwise happen.
+        wd_settings = PhotometryWorkingDirSettings()
+        review = ReviewSettings([Camera, PhotometryApertures])
+        assert review._banner.layout.display == "none"
+
+        review._setting_widgets[1].badge = SaveStatus.SETTING_IS_SAVED
+        wd_settings.settings_file.write_text('{"pasta": "carbonara"}')
+
+        review._container.selected_index = 1
+        assert review._banner.layout.display == "flex"
 
     def test_banner_marks_resolved_problem(self):
         # When an autosave triggered by a tab selection cures the underlying

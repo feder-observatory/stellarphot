@@ -476,6 +476,9 @@ class PhotometryWorkingDirSettings:
         renamed with a ``.bak`` suffix, rather than deleted, when a save
         writes full settings -- this includes, but is not limited to, the
         case where the partial settings conflict with the full settings.
+        Partial values that differ from the written settings only because
+        the ``settings`` argument explicitly replaced them do not trigger
+        the backup: the caller supplied the new value deliberately.
         Existing backups are never overwritten; if a ``.bak`` file already
         exists, numbered suffixes (``.bak1``, ``.bak2``, ...) are used
         instead.
@@ -516,6 +519,15 @@ class PhotometryWorkingDirSettings:
             case PartialPhotometrySettings():
                 # This case MUST come first, because PartialPhotometrySettings is a
                 # subclass of PhotometrySettings.
+
+                # Values the caller explicitly provided. Used at disposal
+                # time below: a partial value on disk that differs from the
+                # written settings only because the caller replaced it is
+                # deleted rather than backed up -- replacing it was the
+                # point of the save.
+                explicitly_replaced = {
+                    k for k, v in settings.model_dump().items() if v is not None
+                }
 
                 # Are there already full settings?
                 if self._settings_file.exists():
@@ -577,6 +589,11 @@ class PhotometryWorkingDirSettings:
                     self._partial_settings = settings
                     file = self._partial_settings_file
             case PhotometrySettings():
+                # A full-settings save replaces everything wholesale; it
+                # carries no signal about which partial values the caller
+                # looked at, so none are treated as deliberate replacements
+                # and any differing partial value still gets a backup.
+                explicitly_replaced = set()
                 self._settings = settings
                 file = self._settings_file
                 full_settings = True
@@ -627,7 +644,7 @@ class PhotometryWorkingDirSettings:
             # -- so this comparison is against the pre-save partial settings.
             written = settings.model_dump()
             partial_values_lost = self._partial_settings is not None and any(
-                v is not None and written.get(k) != v
+                v is not None and written.get(k) != v and k not in explicitly_replaced
                 for k, v in self._partial_settings.model_dump().items()
             )
             if unreadable_partial or partial_values_lost:
@@ -642,8 +659,15 @@ class PhotometryWorkingDirSettings:
 
         Returns
         -------
-        PhotometrySettings | PartialPhotometrySettings | None
-            The settings loaded from disk, or None if there are no settings files.
+        PhotometrySettings | PartialPhotometrySettings
+            The settings loaded from disk.
+
+        Raises
+        ------
+        ValueError
+            If no settings file exists, if a settings file exists but cannot
+            be read, or if the partial and full settings files are both
+            readable but conflict with each other.
         """
         self._load_attempted = True
 

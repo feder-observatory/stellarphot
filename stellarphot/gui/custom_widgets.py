@@ -202,6 +202,14 @@ class ChooseOrMakeNew(ipw.VBox):
         return self._item_widget.model(**self._item_widget.value)
 
     @property
+    def is_mid_interaction(self):
+        """
+        True while the user is making a new item or editing an existing one,
+        i.e. while the displayed value may not match anything saved.
+        """
+        return self._making_new or self._editing
+
+    @property
     def display_details(self):
         """
         Whether the details box is displayed. Returns the value of the details checkbox
@@ -711,7 +719,7 @@ class SettingWithTitle(ipw.VBox):
         """
         # Unless we are making a new item or editing an item then what is displayed
         # is saved.
-        if not self._widget._making_new and not self._widget._editing:
+        if not self._widget.is_mid_interaction:
             self.badge = SaveStatus.SETTING_IS_SAVED
         else:
             self.badge = SaveStatus.SETTING_NOT_SAVED
@@ -976,8 +984,8 @@ class ReviewSettings(ipw.VBox):
         instead of a near-duplicate being appended.
 
         Because a key can outlive the incident it first named, each entry in
-        ``current`` also carries a fingerprint (the load error's escaped
-        first line, or a warning's own text). A dismissed key stays
+        ``current`` also carries a fingerprint (the load error's full
+        escaped text, or a warning's own text). A dismissed key stays
         dismissed only while its fingerprint matches what was dismissed; a
         different fingerprint under the same key means a new, unrelated
         incident, which is shown normally.
@@ -1004,10 +1012,14 @@ class ReviewSettings(ipw.VBox):
                 warnings.simplefilter("ignore")
                 warnings.simplefilter("always", PhotometrySettingsWarning)
                 loaded = wd_settings.load()
-        except ValueError as e:
+        except (ValueError, OSError) as e:
             # load() parses both files before raising, so whichever of these
             # is not None was actually readable and can be used as a
             # fallback instead of falling all the way back to empty settings.
+            # OSError can escape load() when tidying a duplicate partial
+            # settings file fails (e.g. in a read-only directory); it is
+            # reported like any other load problem instead of crashing
+            # widget construction.
             loaded = (
                 wd_settings.settings
                 or wd_settings.partial_settings
@@ -1072,23 +1084,35 @@ class ReviewSettings(ipw.VBox):
                         "numbered backup if that name is already taken)."
                     )
                 else:
-                    # Both files were readable, so this is the conflicting-
-                    # values case; the unreadable-file wording above would be
-                    # misleading here.
-                    partial_name = html.escape(wd_settings.partial_settings_file.name)
-                    message += (
-                        " Saving full settings here will resolve the "
-                        "conflict; the conflicting partial settings file "
-                        f"will be preserved as {partial_name}.bak (or the "
-                        "next available numbered backup)."
-                    )
+                    # Both files were readable. For a ValueError that means
+                    # the conflicting-values case (the unreadable-file
+                    # wording above would be misleading); an OSError instead
+                    # means the load failed while tidying the files (e.g.
+                    # deleting a duplicate partial settings file in a
+                    # read-only directory), where conflict advice would be
+                    # misleading, so no advice is added.
+                    if isinstance(e, ValueError):
+                        partial_name = html.escape(
+                            wd_settings.partial_settings_file.name
+                        )
+                        message += (
+                            " Saving full settings here will resolve the "
+                            "conflict; the conflicting partial settings file "
+                            f"will be preserved as {partial_name}.bak (or the "
+                            "next available numbered backup)."
+                        )
 
                 if detail := "\n".join(error_lines[1:]):
                     message += (
                         "<details><summary>Full error</summary>"
                         f"<pre>{html.escape(detail)}</pre></details>"
                     )
-                current.append((_LOAD_ERROR_KEY, first_line, message))
+                # The fingerprint is the full error text, not the displayed
+                # first line: pydantic first lines are generic ("1 validation
+                # error for ..."), so two different corruptions of the same
+                # file can share one, and a dismissal must not carry over
+                # from one to the other.
+                current.append((_LOAD_ERROR_KEY, html.escape(str(e)), message))
         # Add the warnings outside the try/except so they are reported even
         # when load() raises after emitting them; ``recorded`` stays bound
         # because catch_warnings exits normally during exception propagation.
@@ -1183,6 +1207,12 @@ class ReviewSettings(ipw.VBox):
 
         new_selected = change["new"]
 
+        # Reload from disk on every selection change so the snapshot and
+        # the banner stay current even when the selected tab's badge needs
+        # no re-deriving below (e.g. a settings file corrupted after
+        # construction while every tab reads as saved).
+        self._refresh()
+
         # An accordion reports a selection of None when every section is
         # collapsed; there is nothing to update in that case.
         if new_selected is None:
@@ -1196,20 +1226,27 @@ class ReviewSettings(ipw.VBox):
         # here would report the still-saved on-disk value as SAVED while the
         # user is mid-edit, so trust its badge unconditionally.
         chooser = setting_widget._widget
-        mid_interaction = isinstance(chooser, ChooseOrMakeNew) and (
-            chooser._making_new or chooser._editing
+        mid_interaction = (
+            isinstance(chooser, ChooseOrMakeNew) and chooser.is_mid_interaction
         )
-        if setting_badge is not None and (
-            mid_interaction or setting_badge != SaveStatus.SETTING_NOT_SAVED
+        if mid_interaction:
+            # Mid-interaction, even a badge of None is not re-derived from
+            # disk -- the comparison could report the still-saved on-disk
+            # value as SAVED while the user is mid-edit. The chooser sets
+            # its badge on the next value change anyway.
+            if setting_badge is not None:
+                self.badges[new_selected] = setting_badge
+        elif setting_badge is not None and (
+            setting_badge != SaveStatus.SETTING_NOT_SAVED
         ):
             self.badges[new_selected] = setting_badge
         else:
-            # A badge of None or NOT_SAVED is re-derived from disk rather
-            # than trusted, so a save made outside this widget's own
-            # observers (e.g. by another widget writing the settings file)
-            # is picked up.
+            # A badge of None or NOT_SAVED is re-derived from the snapshot
+            # refreshed above rather than trusted, so a save made outside
+            # this widget's own observers (e.g. by another widget writing
+            # the settings file) is picked up.
             snake_name = to_snake(setting_widget._autoui_widget.model.__name__)
-            disk_value = getattr(self._refresh(), snake_name)
+            disk_value = getattr(self.current_settings, snake_name)
             if disk_value is None:
                 setting_widget.badge = SaveStatus.SETTING_NOT_SAVED
             else:
