@@ -1257,10 +1257,12 @@ class ReviewSettings(ipw.VBox):
         """
         # Once the user has clicked on the tab, the status badge for the tab
         # should be the badge for the widget it holds when that badge reports
-        # a positive status. A badge of None or NOT_SAVED is instead
-        # re-derived by comparing the widget value to the saved value, so a
-        # badge latched at NOT_SAVED can recover when the setting gets saved
-        # by something other than this widget's own observers.
+        # a positive status and the setting still exists on disk. A badge of
+        # None or NOT_SAVED is instead re-derived by comparing the widget
+        # value to the saved value, so a badge latched at NOT_SAVED can
+        # recover when the setting gets saved by something other than this
+        # widget's own observers -- and a positive badge whose setting has
+        # disappeared from disk drops back to NOT_SAVED.
 
         new_selected = change["new"]
 
@@ -1293,20 +1295,24 @@ class ReviewSettings(ipw.VBox):
             # its badge on the next value change anyway.
             if setting_badge is not None:
                 self.badges[new_selected] = setting_badge
-        elif setting_badge is not None and (
-            setting_badge != SaveStatus.SETTING_NOT_SAVED
-        ):
-            self.badges[new_selected] = setting_badge
         else:
-            # A badge of None or NOT_SAVED is re-derived from the snapshot
-            # refreshed above rather than trusted, so a save made outside
-            # this widget's own observers (e.g. by another widget writing
-            # the settings file) is picked up.
             snake_name = to_snake(setting_widget._autoui_widget.model.__name__)
             disk_value = getattr(self.current_settings, snake_name)
             if disk_value is None:
+                # No saved value on disk: even a positive badge is stale
+                # here (e.g. the settings file was deleted outside this
+                # widget) -- the mirror image of the latched-NOT_SAVED
+                # recovery below.
                 setting_widget.badge = SaveStatus.SETTING_NOT_SAVED
+            elif setting_badge is not None and (
+                setting_badge != SaveStatus.SETTING_NOT_SAVED
+            ):
+                self.badges[new_selected] = setting_badge
             else:
+                # A badge of None or NOT_SAVED is re-derived from the
+                # snapshot refreshed above rather than trusted, so a save
+                # made outside this widget's own observers (e.g. by another
+                # widget writing the settings file) is picked up.
                 try:
                     value_from_widget = (
                         setting_widget._autoui_widget.model.model_validate(

@@ -1460,6 +1460,8 @@ class TestReviewSettings:
         # fingerprint is the full error text.
         wd_settings = PhotometryWorkingDirSettings()
         wd_settings.settings_file.write_text('{"camera": 12}')
+        with pytest.raises(ValueError) as first_exc:
+            PhotometryWorkingDirSettings().load()
 
         review = ReviewSettings([Camera])
         review._banner_dismiss.click()
@@ -1467,12 +1469,18 @@ class TestReviewSettings:
 
         # A different corruption with the same number of validation errors,
         # so the first line of the error is unchanged but the details are
-        # not. Verify the premise so this test fails loudly if pydantic's
-        # error formatting changes.
+        # not. Verify both halves of that premise so this test fails loudly
+        # if pydantic's error formatting changes: with differing first
+        # lines, the test would pass under a first-line fingerprint too and
+        # stop discriminating.
         wd_settings.settings_file.write_text('{"observatory": 17}')
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(ValueError) as second_exc:
             PhotometryWorkingDirSettings().load()
-        assert "validation error" in str(exc_info.value).splitlines()[0]
+        assert (
+            str(first_exc.value).splitlines()[0]
+            == str(second_exc.value).splitlines()[0]
+        )
+        assert str(first_exc.value) != str(second_exc.value)
 
         review._refresh()
         assert review._banner.layout.display == "flex"
@@ -1888,6 +1896,31 @@ class TestReviewSettings:
         review._container.selected_index = 0
         assert review.badges[0] == SaveStatus.SETTING_IS_SAVED
         assert SaveStatus.SETTING_IS_SAVED in review._container.titles[0]
+
+    def test_tab_selection_drops_stale_positive_badge(self):
+        # The mirror image of the latched-NOT_SAVED recovery above: a badge
+        # latched at SETTING_IS_SAVED must drop to SETTING_NOT_SAVED when
+        # the setting disappears from disk (e.g. the settings files are
+        # deleted outside the widget), instead of being trusted
+        # unconditionally while current_settings says the setting does not
+        # exist.
+        wd_settings = PhotometryWorkingDirSettings()
+        review = ReviewSettings([PhotometryApertures, Camera])
+
+        # Select the apertures tab so its badge is derived from the value
+        # autosaved during construction.
+        review._container.selected_index = 1
+        review._container.selected_index = 0
+        assert review.badges[0] == SaveStatus.SETTING_IS_SAVED
+
+        # Delete the settings files outside the widget.
+        wd_settings.partial_settings_file.unlink(missing_ok=True)
+        wd_settings.settings_file.unlink(missing_ok=True)
+
+        review._container.selected_index = 1
+        review._container.selected_index = 0
+        assert review.badges[0] == SaveStatus.SETTING_NOT_SAVED
+        assert SaveStatus.SETTING_NOT_SAVED in review._container.titles[0]
 
 
 def test_add_saving_with_unrecognized_widget():

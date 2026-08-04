@@ -689,6 +689,9 @@ class PhotometryWorkingDirSettings:
             If no settings file exists, if a settings file exists but cannot
             be read, or if the partial and full settings files are both
             readable but conflict with each other.
+        OSError
+            If deleting a partial settings file that exactly duplicates the
+            full settings file fails (e.g. in a read-only directory).
         """
         # Assume we have nothing to begin....
         self._partial_settings = None
