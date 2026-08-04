@@ -48,37 +48,21 @@ Other Changes and Additions
   ``klims`` workaround for pytransit's ``RoadRunnerModel`` with a regression
   test at the maximum allowed planet radius. [#653]
 + ``ReviewSettings`` now shows a dismissible banner above the settings when
-  the saved settings in the working directory cannot be read or when loading
-  them generates warnings; previously such problems were silently swallowed
-  and the widget came up with defaults and no explanation. When one of the
-  settings files is readable, the widget now starts from it instead of from
-  defaults. ``PhotometryWorkingDirSettings.save`` no longer overwrites or
-  deletes a settings file whose contents could not be read, or a partial
-  settings file whose values are not carried into the full settings being
-  written (partial values the settings passed to ``save`` explicitly
-  replace are excluded -- replacing them was the point of the save); such
-  files are preserved with a ``.bak`` suffix instead, and
-  existing ``.bak`` backups are never overwritten (numbered ``.bak1``,
-  ``.bak2``... suffixes are used instead). Warnings raised while loading the
-  settings are shown in the banner only when they are of the new
-  ``stellarphot.settings.PhotometrySettingsWarning`` category, so plain
-  ``UserWarning``\\s from libraries on the load path stay out of it.
-  ``PhotometryWorkingDirSettings.save`` suppresses repeated warnings from
-  its internal bookkeeping load, but lets ``PhotometrySettingsWarning``
-  through so a caller whose first interaction with the settings is a save
-  still sees user-actionable problems (the ``ReviewSettings`` autosaves
-  suppress that pass-through, since the widget already shows the warning
-  in its banner; warnings of any other category raised during an autosave
-  are re-emitted rather than swallowed). A banner message whose underlying
-  problem is no longer reproduced by the latest reload is reworded in the
-  past tense and marked "no longer detected" instead
-  of continuing to read as a current problem, and dismissing a load-error
-  message does not suppress a later, different load error. Note that
-  ``ReviewSettings.current_settings`` is now a snapshot rather than a
-  live re-read of the settings files; the snapshot is refreshed at the end
-  of widget construction and on each tab selection (refreshing is not a
-  pure read: as before this change, loading deletes a partial settings
-  file that exactly duplicates the full settings file). [#657]
+  the saved settings in the working directory cannot be read or when
+  loading them raises a warning of the new
+  ``stellarphot.settings.PhotometrySettingsWarning`` category (other
+  warning categories stay out of the banner); previously such problems
+  were silently ignored and the widget came up with defaults and no
+  explanation. When one of the settings files is readable, the widget now
+  starts from it instead of from defaults.
+  ``PhotometryWorkingDirSettings.save`` no longer overwrites or deletes a
+  settings file whose contents could not be read, or a partial settings
+  file with values not carried into the full settings being written; such
+  files are preserved with a ``.bak`` suffix (or the next available
+  numbered ``.bak1``, ``.bak2``, ... -- existing backups are never
+  overwritten). Note that ``ReviewSettings.current_settings`` is now a
+  snapshot rather than a live re-read of the settings files, refreshed at
+  the end of widget construction and on each tab selection. [#657]
 
 Bug Fixes
 ^^^^^^^^^
@@ -103,29 +87,16 @@ Bug Fixes
   above ``max_adu``. [#651]
 + ``PhotometryWorkingDirSettings.save(partial_settings, update=True)`` no
   longer raises ``AttributeError`` when an existing full settings file
-  cannot be read. Settings files that cannot be read because of an encoding
-  or operating-system error (not just invalid JSON) are now reported the
-  same way as corrupt files instead of crashing ``ReviewSettings``. When a
-  save writes full settings, the partial settings file is no longer deleted
-  before the new settings file has been successfully written, so a failed
-  write cannot destroy the only copy of the partial settings. Settings
-  files are now written to a temporary file that atomically replaces the
-  target, so a failure partway through a write can no longer truncate an
-  existing readable settings file. The error raised for conflicting
-  partial and full settings files no longer advises deleting one of the
-  files (a save resolves the conflict and preserves the losing partial
-  settings file as ``.bak``), and the error raised by
-  ``save(partial, update=False)`` no longer claims full settings "already
-  exist" when the existing full settings file could not be read. The
-  ``full_settings_unreadable``/``partial_settings_unreadable`` properties
-  are False before ``load`` has been called, instead of reporting an
-  existing readable file as unreadable, and report the outcome of the most
-  recent ``load`` rather than the live state of the disk. In
-  ``ReviewSettings``, collapsing every section of an accordion no longer
-  raises, selecting a tab whose setting is not saved now actually marks
-  the tab as not saved, and a tab badge stuck at not-saved now recovers
-  when the setting is saved outside the widget (e.g. by another widget
-  writing the settings file). [#657]
+  cannot be read, and a settings file unreadable because of an encoding or
+  operating-system error (not just invalid JSON) is reported like a
+  corrupt file instead of crashing ``ReviewSettings``. Settings files are
+  now written to a temporary file that atomically replaces the target, and
+  the partial settings file is disposed of only after new full settings
+  are safely on disk, so a failed write can no longer truncate or destroy
+  existing settings. In ``ReviewSettings``, collapsing every section of an
+  accordion no longer raises, selecting a tab whose setting is not saved
+  now actually marks the tab as not saved, and a tab badge stuck at
+  not-saved recovers when the setting is saved outside the widget. [#657]
 
 2.1.2 (2026-07-19)
 -------------------
