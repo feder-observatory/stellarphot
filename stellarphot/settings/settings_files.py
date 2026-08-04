@@ -555,7 +555,8 @@ class PhotometryWorkingDirSettings:
                                 f"exists at {self._settings_file} but could not be "
                                 "read. Fix or remove that file, or save with "
                                 "update=True, which saves the partial settings and "
-                                "leaves the unreadable file in place."
+                                "preserves the unreadable file -- in place, or as a "
+                                ".bak backup if the save produces complete settings."
                             )
                         raise ValueError(
                             "Cannot save partial settings when full "
