@@ -756,17 +756,16 @@ class TestPhotometryWorkingDirSettings:
             settings_file.settings_file.name + ".tmp"
         ).exists()
 
-    def test_save_completing_partial_no_backup_for_replaced_value(self):
+    def test_save_completing_partial_backs_up_replaced_value(self):
         # A partial update that both replaces a previously saved partial
-        # value and completes the full settings deletes the on-disk partial
-        # file without a backup when its only divergence is the value the
-        # caller explicitly replaced -- replacing it was the point of the
-        # save, so nothing is lost.
+        # value and completes the full settings preserves the on-disk
+        # partial file as .bak: one of its non-None values was not carried
+        # into the full settings that were written, and the backup rule
+        # does not try to guess whether the caller replaced it on purpose.
         settings_file = PhotometryWorkingDirSettings()
         old_camera = Camera.model_validate_json(CAMERA)
-        settings_file.partial_settings_file.write_text(
-            PartialPhotometrySettings(camera=old_camera).model_dump_json()
-        )
+        partial_content = PartialPhotometrySettings(camera=old_camera).model_dump_json()
+        settings_file.partial_settings_file.write_text(partial_content)
 
         new_settings = PartialPhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
         assert new_settings.camera != old_camera
@@ -777,7 +776,7 @@ class TestPhotometryWorkingDirSettings:
         backup_file = settings_file.partial_settings_file.with_name(
             settings_file.partial_settings_file.name + ".bak"
         )
-        assert not backup_file.exists()
+        assert backup_file.read_text() == partial_content
 
     def test_save_conflicting_partial_backed_up_despite_explicit_replacement(self):
         # When the on-disk partial settings conflict with the on-disk full
@@ -893,6 +892,30 @@ class TestPhotometryWorkingDirSettings:
         settings_file = PhotometryWorkingDirSettings()
         camera = Camera.model_validate_json(CAMERA)
         with pytest.warns(PhotometrySettingsWarning, match="migrated"):
+            settings_file.save(PartialPhotometrySettings(camera=camera), update=True)
+
+    def test_save_settings_warnings_respect_caller_filters(self, mocker):
+        # save() re-emits PhotometrySettingsWarning outside its internal
+        # filter context, so a caller that has already surfaced the warning
+        # elsewhere (like the ReviewSettings banner) can suppress it with an
+        # ordinary warning filter.
+        real_load = PhotometryWorkingDirSettings.load
+
+        def warning_load(_self):
+            warnings.warn(
+                "Settings were migrated", PhotometrySettingsWarning, stacklevel=2
+            )
+            return real_load(_self)
+
+        mocker.patch.object(
+            settings_files.PhotometryWorkingDirSettings, "load", warning_load
+        )
+
+        settings_file = PhotometryWorkingDirSettings()
+        camera = Camera.model_validate_json(CAMERA)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            warnings.simplefilter("ignore", PhotometrySettingsWarning)
             settings_file.save(PartialPhotometrySettings(camera=camera), update=True)
 
     def test_load_conflicting_partial_and_full_settings(self):

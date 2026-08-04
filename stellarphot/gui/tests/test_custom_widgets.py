@@ -1380,26 +1380,24 @@ class TestReviewSettings:
         # The automatic save for PhotometryApertures fires during
         # construction and renames the bad partial settings file to .bak,
         # so the refresh at the end of construction already finds the
-        # problem cured -- the message is shown, in its resolved wording.
+        # problem cured -- the message is shown, marked as no longer
+        # detected.
         review_settings = ReviewSettings([Camera, PhotometryApertures])
         assert review_settings._banner.layout.display == "flex"
         banner_text = review_settings._banner_html.value
-        assert "A problem with the saved settings" in banner_text
+        assert "There is a problem with the saved settings" in banner_text
 
         # Selecting the PhotometryApertures tab triggers another refresh.
         # The load succeeds now, but the message should still be shown
-        # because the user never dismissed it -- now in its past-tense
-        # resolved wording instead of asserting the (no longer true)
-        # original claim or making a future-tense .bak promise about a
-        # rename that already happened.
+        # because the user never dismissed it -- prefixed with "no longer
+        # detected" so the original report is clearly framed as past, and
+        # its mention of the .bak file still tells the user where the
+        # renamed content went.
         review_settings._container.selected_index = 1
         assert review_settings._banner.layout.display == "flex"
         banner_text = review_settings._banner_html.value
-        assert "A problem with the saved settings" in banner_text
-        assert "no longer detected as of the latest reload" in banner_text
-        assert "There is a problem" not in banner_text
-        assert "will not be overwritten" not in banner_text
-        assert "was preserved as" in banner_text
+        assert "No longer detected as of the latest reload" in banner_text
+        assert "There is a problem with the saved settings" in banner_text
         assert "partial_photometry_settings.json.bak" in banner_text
 
         # Dismissing hides it...
@@ -1515,7 +1513,7 @@ class TestReviewSettings:
         review._container.selected_index = 1
 
         assert review._banner.layout.display == "flex"
-        assert "no longer detected as of the latest reload" in review._banner_html.value
+        assert "No longer detected as of the latest reload" in review._banner_html.value
 
     def test_banner_message_updates_instead_of_duplicating(self):
         # The wording composed around a load error can change between
@@ -1750,7 +1748,7 @@ class TestReviewSettings:
 
         banner_text = review_settings._banner_html.value
         # The autosave cures the problem during construction, so the message
-        # is already in its past-tense resolved wording by this point.
+        # is already marked "no longer detected" by this point.
         assert "problem with the saved settings" in banner_text
         backup = wd_settings.partial_settings_file.with_name(
             wd_settings.partial_settings_file.name + ".bak"
@@ -1759,12 +1757,10 @@ class TestReviewSettings:
 
     def test_autosave_does_not_print_settings_warnings(self, mocker):
         # A settings-migration warning raised while loading should reach the
-        # banner exactly once. Without the fix, it would also be printed to
-        # the console once per autosaved setting: the widget's own explicit
-        # loads (which feed the banner) route the warning through their own
-        # recording context, but the autosave triggered during construction
-        # calls save(), whose internal bookkeeping load deliberately lets
-        # PhotometrySettingsWarning through.
+        # banner exactly once. Without the suppression, it would also be
+        # printed to the console once per autosaved setting: the autosave
+        # triggered during construction calls save(), which re-emits any
+        # PhotometrySettingsWarning from its internal bookkeeping load.
         def fake_load(_self):
             warnings.warn(
                 "Settings were migrated", PhotometrySettingsWarning, stacklevel=2
@@ -1787,11 +1783,10 @@ class TestReviewSettings:
         )
 
     def test_autosave_reemits_non_settings_warnings(self, mocker):
-        # The autosave suppression's recording context swallows every
-        # warning raised during the save. Anything that is not a
-        # PhotometrySettingsWarning (e.g. a serialization or file warning)
-        # must be re-emitted so the suppression does not eat unrelated
-        # warnings.
+        # The autosave suppression is a filter scoped to
+        # PhotometrySettingsWarning. Anything else raised during the save
+        # (e.g. a serialization or file warning) must still get out so the
+        # suppression does not eat unrelated warnings.
         def fake_save(_self, _settings, update=False):  # noqa: ARG001
             warnings.warn("unrelated library warning", UserWarning, stacklevel=2)
 
@@ -1807,12 +1802,13 @@ class TestReviewSettings:
 
         assert "unrelated library warning" in [str(w.message) for w in recorded]
 
-    def test_autosave_reemits_unshown_settings_warnings(self, mocker):
-        # The autosave suppression exists because the banner already shows
-        # the PhotometrySettingsWarnings raised by the widget's own loads.
-        # A PhotometrySettingsWarning the banner has *not* shown -- e.g.
-        # one raised on the save path rather than by load() -- must be
-        # re-emitted rather than silenced.
+    def test_autosave_silences_all_settings_warnings(self, mocker):
+        # The banner is the display channel for PhotometrySettingsWarning,
+        # so autosaves silence the whole category -- including one raised on
+        # the save path itself that the banner has not shown. Such a warning
+        # reaches the banner on the next refresh if it also comes from
+        # load(); a warning unique to the save path is dropped, which is the
+        # accepted price of keeping the suppression a simple filter.
         def fake_save(_self, _settings, update=False):  # noqa: ARG001
             warnings.warn(
                 "Problem while saving", PhotometrySettingsWarning, stacklevel=2
@@ -1826,7 +1822,7 @@ class TestReviewSettings:
             warnings.simplefilter("always")
             ReviewSettings([PhotometryApertures])
 
-        assert "Problem while saving" in [str(w.message) for w in recorded]
+        assert "Problem while saving" not in [str(w.message) for w in recorded]
 
     def test_accordion_collapse_does_not_error(self):
         # An accordion with every section collapsed has selected_index None,

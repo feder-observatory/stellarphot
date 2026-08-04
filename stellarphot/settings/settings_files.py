@@ -471,16 +471,7 @@ class PhotometryWorkingDirSettings:
         written. A readable partial settings file whose non-None values are
         not all carried into the full settings being written is likewise
         renamed with a ``.bak`` suffix, rather than deleted, when a save
-        writes full settings -- this includes, but is not limited to, the
-        case where the partial settings conflict with the full settings.
-        Partial values that differ from the written settings only because
-        the ``settings`` argument explicitly replaced them do not trigger
-        the backup: the caller supplied the new value deliberately. That
-        exclusion does not apply when the on-disk partial settings
-        conflicted with the on-disk full settings -- the "caller" may just
-        be echoing the full settings back, as the
-        `~stellarphot.gui.ReviewSettings` autosaves do -- so the losing
-        partial file is then always preserved.
+        writes full settings -- it may hold the only copy of those values.
         Existing backups are never overwritten; if a ``.bak`` file already
         exists, numbered suffixes (``.bak1``, ``.bak2``, ...) are used
         instead.
@@ -490,14 +481,16 @@ class PhotometryWorkingDirSettings:
         try:
             # This load is internal bookkeeping. Library warnings it
             # generates were already surfaced when the settings were first
-            # loaded, so don't repeat them on every save -- but let
-            # PhotometrySettingsWarning through, so a caller whose first
-            # interaction with the settings is a save() still sees
-            # user-actionable problems such as a settings-format migration.
-            with warnings.catch_warnings():
+            # loaded, so don't repeat them on every save. Any
+            # PhotometrySettingsWarning -- a user-actionable problem such as
+            # a settings-format migration -- is recorded here and re-emitted
+            # below, outside this filter context, so that it reaches a
+            # caller whose first interaction with the settings is a save(),
+            # subject to that caller's own warning filters.
+            with warnings.catch_warnings(record=True) as recorded:
                 warnings.simplefilter("ignore")
-                warnings.simplefilter("default", PhotometrySettingsWarning)
-                _ = self.load()
+                warnings.simplefilter("always", PhotometrySettingsWarning)
+                self.load()
         except (ValueError, OSError):
             # load() raises ValueError when there are no settings files at
             # all, when a file exists but cannot be read, and when readable
@@ -507,6 +500,13 @@ class PhotometryWorkingDirSettings:
             # cases; the unreadable-file cases rely on the flags below so
             # the problem file is set aside as .bak rather than destroyed.
             pass
+        for warning in recorded:
+            warnings.warn_explicit(
+                warning.message,
+                warning.category,
+                warning.filename,
+                warning.lineno,
+            )
 
         # Whether each existing settings file failed to parse during the
         # bookkeeping load above. load() latches these flags and parses both
@@ -516,33 +516,10 @@ class PhotometryWorkingDirSettings:
         unreadable_full = self.full_settings_unreadable
         unreadable_partial = self.partial_settings_unreadable
 
-        # After a successful load at most one of the in-memory settings is
-        # non-None (a duplicate partial file is tidied away). Both being
-        # non-None means the load above raised with the partial file
-        # unresolved: the files conflicted, or tidying failed. Either way
-        # the partial file's differing values were never confirmed as
-        # replaced by anyone -- a save "replacing" a value may just be
-        # echoing the full settings file back, as the ReviewSettings
-        # construction autosaves do -- so the explicit-replacement
-        # exclusion at disposal time does not apply and the partial file
-        # is backed up whenever any of its values would be lost.
-        partial_unresolved = (
-            self._settings is not None and self._partial_settings is not None
-        )
-
         match settings:
             case PartialPhotometrySettings():
                 # This case MUST come first, because PartialPhotometrySettings is a
                 # subclass of PhotometrySettings.
-
-                # Values the caller explicitly provided. Used at disposal
-                # time below: a partial value on disk that differs from the
-                # written settings only because the caller replaced it is
-                # deleted rather than backed up -- replacing it was the
-                # point of the save.
-                explicitly_replaced = {
-                    k for k, v in settings.model_dump().items() if v is not None
-                }
 
                 # Are there already full settings?
                 if self._settings_file.exists():
@@ -605,11 +582,6 @@ class PhotometryWorkingDirSettings:
                     self._partial_settings = settings
                     file = self._partial_settings_file
             case PhotometrySettings():
-                # A full-settings save replaces everything wholesale; it
-                # carries no signal about which partial values the caller
-                # looked at, so none are treated as deliberate replacements
-                # and any differing partial value still gets a backup.
-                explicitly_replaced = set()
                 self._settings = settings
                 file = self._settings_file
                 full_settings = True
@@ -664,9 +636,7 @@ class PhotometryWorkingDirSettings:
             # -- so this comparison is against the pre-save partial settings.
             written = settings.model_dump()
             partial_values_lost = self._partial_settings is not None and any(
-                v is not None
-                and written.get(k) != v
-                and (partial_unresolved or k not in explicitly_replaced)
+                v is not None and written.get(k) != v
                 for k, v in self._partial_settings.model_dump().items()
             )
             if unreadable_partial or partial_values_lost:
