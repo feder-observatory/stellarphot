@@ -1097,6 +1097,28 @@ class TestPhotometryWorkingDirSettings:
         assert fresh_instance.full_settings_unreadable
         assert not fresh_instance.partial_settings_unreadable
 
+    def test_unreadable_properties_latch_at_load(self):
+        # The properties report the outcome of the most recent load(), not
+        # the live state of the disk: removing the corrupt file after a
+        # failed load does not clear the flag...
+        settings_file = PhotometryWorkingDirSettings()
+        settings_file.settings_file.write_text('{"pasta": "carbonara"}')
+
+        with pytest.raises(ValueError, match="Error loading settings"):
+            settings_file.load()
+        settings_file.settings_file.unlink()
+        assert settings_file.full_settings_unreadable
+
+        # ... and a corrupt file appearing after a successful load is not
+        # reported as unreadable until a load has actually tried to read it.
+        fresh = PhotometryWorkingDirSettings()
+        fresh.partial_settings_file.write_text(
+            PartialPhotometrySettings().model_dump_json()
+        )
+        fresh.load()
+        fresh.settings_file.write_text('{"pasta": "carbonara"}')
+        assert not fresh.full_settings_unreadable
+
     def test_save_partial_no_update_with_unreadable_full_settings_message(self):
         # When trying to save partial settings with update=False and the full
         # settings file exists but is unreadable, the error message should be

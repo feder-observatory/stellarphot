@@ -306,7 +306,8 @@ class PhotometryWorkingDirSettings:
         )
         self._partial_settings = None
         self._settings = None
-        self._load_attempted = False
+        self._full_settings_unreadable = False
+        self._partial_settings_unreadable = False
 
     @property
     def settings(self):
@@ -325,28 +326,24 @@ class PhotometryWorkingDirSettings:
     @property
     def full_settings_unreadable(self):
         """
-        True when the full settings file exists on disk but could not be read
-        by the most recent `load`. Always False before `load` has been called
-        on this instance.
+        True when the full settings file existed but could not be read by the
+        most recent `load` on this instance. Always False before `load` has
+        been called. The flag reflects that load, not the live state of the
+        disk: it is not cleared by the file being fixed or removed, and not
+        set by a bad file appearing, until the next `load`.
         """
-        return (
-            self._load_attempted
-            and self._settings_file.exists()
-            and self._settings is None
-        )
+        return self._full_settings_unreadable
 
     @property
     def partial_settings_unreadable(self):
         """
-        True when the partial settings file exists on disk but could not be
-        read by the most recent `load`. Always False before `load` has been
-        called on this instance.
+        True when the partial settings file existed but could not be read by
+        the most recent `load` on this instance. Always False before `load`
+        has been called. The flag reflects that load, not the live state of
+        the disk: it is not cleared by the file being fixed or removed, and
+        not set by a bad file appearing, until the next `load`.
         """
-        return (
-            self._load_attempted
-            and self._partial_settings_file.exists()
-            and self._partial_settings is None
-        )
+        return self._partial_settings_unreadable
 
     # Properties for settings file and partial settings file
     @property
@@ -505,13 +502,11 @@ class PhotometryWorkingDirSettings:
             # rather than destroyed.
             pass
 
-        # A file that is unreadable failed to parse during the load above.
-        # Snapshot the two properties now, before the code below reassigns
-        # the in-memory settings (which would change what the properties
-        # report), so that the unreadable file can be renamed aside instead
-        # of destroyed. load() parses both files before raising, so these
-        # flags are accurate even when only one of the two files is
-        # unreadable.
+        # Whether each existing settings file failed to parse during the
+        # bookkeeping load above. load() latches these flags and parses both
+        # files before raising, so they are accurate even when only one of
+        # the two files is unreadable. They decide below whether a file
+        # about to be replaced is renamed aside instead of destroyed.
         unreadable_full = self.full_settings_unreadable
         unreadable_partial = self.partial_settings_unreadable
 
@@ -669,11 +664,11 @@ class PhotometryWorkingDirSettings:
             be read, or if the partial and full settings files are both
             readable but conflict with each other.
         """
-        self._load_attempted = True
-
         # Assume we have nothing to begin....
         self._partial_settings = None
         self._settings = None
+        self._full_settings_unreadable = False
+        self._partial_settings_unreadable = False
 
         if not (self._settings_file.exists() or self._partial_settings_file.exists()):
             raise ValueError(f"Settings file {self._settings_file} does not exist")
@@ -693,6 +688,7 @@ class PhotometryWorkingDirSettings:
                     content
                 )
             except (ValidationError, OSError, UnicodeDecodeError) as e:
+                self._partial_settings_unreadable = True
                 errors.append(f"Error loading partial settings: {e}")
                 last_exc = e
 
@@ -703,6 +699,7 @@ class PhotometryWorkingDirSettings:
                     content = f.read()
                 self._settings = PhotometrySettings.model_validate_json(content)
             except (ValidationError, OSError, UnicodeDecodeError) as e:
+                self._full_settings_unreadable = True
                 errors.append(f"Error loading settings: {e}")
                 last_exc = e
 

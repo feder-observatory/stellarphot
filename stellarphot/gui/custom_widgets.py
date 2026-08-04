@@ -807,8 +807,10 @@ class ReviewSettings(ipw.VBox):
         )
         self._banner.layout.display = "none"
         # ``_banner_messages`` maps a stable key (``_LOAD_ERROR_KEY``, or a
-        # warning's own text) to the composed HTML shown for it; insertion
-        # order is display order. ``_banner_fingerprints`` maps that same
+        # warning's own text) to a pair of composed HTML variants: the
+        # active wording, and the past-tense wording used once the latest
+        # reload no longer reproduces the problem. Insertion order is
+        # display order. ``_banner_fingerprints`` maps that same
         # key to a fingerprint of the specific incident currently shown
         # under it, so a key being reused for a genuinely new incident can
         # be told apart from a reworded repeat of one already dismissed.
@@ -1039,6 +1041,16 @@ class ReviewSettings(ipw.VBox):
                     "There is a problem with the saved settings in this "
                     f"directory ({first_line})."
                 )
+                # Past-tense variant shown once a later refresh no longer
+                # reproduces the problem. It drops the claim about where the
+                # displayed values came from (stale by then) and reports the
+                # .bak rename as a possible outcome rather than a promise,
+                # since the cure may equally have been a hand-edit.
+                resolved_message = (
+                    "A problem with the saved settings in this directory "
+                    f"({first_line}) is no longer detected as of the "
+                    "latest reload."
+                )
                 # Report which file, if either, the displayed values came
                 # from. Both files are parsed before load() raises, so a
                 # non-None attribute here means that file really was read.
@@ -1052,9 +1064,8 @@ class ReviewSettings(ipw.VBox):
                     message += " None of the values below come from the saved settings."
 
                 # A file is unreadable, as opposed to merely conflicting with
-                # its counterpart, exactly when it exists on disk but load()
-                # left the corresponding in-memory attribute as None -- which
-                # is what these properties report after the load() above.
+                # its counterpart, exactly when it existed on disk but could
+                # not be parsed -- which load() records in these properties.
                 unreadable_full = wd_settings.full_settings_unreadable
                 unreadable_partial = wd_settings.partial_settings_unreadable
                 if unreadable_full or unreadable_partial:
@@ -1069,10 +1080,24 @@ class ReviewSettings(ipw.VBox):
                         joined_names = names[0]
                         joined_baks = f"{names[0]}.bak"
                         replace_clause = "if a save needs to replace it, it"
+                        resolved_clause = (
+                            f" If a save replaced {joined_names}, its "
+                            "original content was preserved as "
+                            f"{joined_baks} (or the next available numbered "
+                            "backup); it may instead have been fixed or "
+                            "removed outside this widget."
+                        )
                     else:
                         joined_names = " and ".join(names)
                         joined_baks = " and ".join(f"{name}.bak" for name in names)
                         replace_clause = "if a save needs to replace them, they"
+                        resolved_clause = (
+                            f" If a save replaced {joined_names}, their "
+                            "original content was preserved as "
+                            f"{joined_baks} (or the next available numbered "
+                            "backups); they may instead have been fixed or "
+                            "removed outside this widget."
+                        )
                     # The .bak rename happens only when a save actually
                     # replaces that specific file -- a partial-settings save
                     # leaves an unreadable full settings file in place -- so
@@ -1083,6 +1108,7 @@ class ReviewSettings(ipw.VBox):
                         f"preserved as {joined_baks} (or the next available "
                         "numbered backup if that name is already taken)."
                     )
+                    resolved_message += resolved_clause
                 else:
                     # Both files were readable. For a ValueError that means
                     # the conflicting-values case (the unreadable-file
@@ -1101,18 +1127,28 @@ class ReviewSettings(ipw.VBox):
                             f"will be preserved as {partial_name}.bak (or the "
                             "next available numbered backup)."
                         )
+                        resolved_message += (
+                            " If a save resolved the conflict, the "
+                            "conflicting partial settings file was preserved "
+                            f"as {partial_name}.bak (or the next available "
+                            "numbered backup)."
+                        )
 
                 if detail := "\n".join(error_lines[1:]):
-                    message += (
+                    details_html = (
                         "<details><summary>Full error</summary>"
                         f"<pre>{html.escape(detail)}</pre></details>"
                     )
+                    message += details_html
+                    resolved_message += details_html
                 # The fingerprint is the full error text, not the displayed
                 # first line: pydantic first lines are generic ("1 validation
                 # error for ..."), so two different corruptions of the same
                 # file can share one, and a dismissal must not carry over
                 # from one to the other.
-                current.append((_LOAD_ERROR_KEY, html.escape(str(e)), message))
+                current.append(
+                    (_LOAD_ERROR_KEY, html.escape(str(e)), message, resolved_message)
+                )
         # Add the warnings outside the try/except so they are reported even
         # when load() raises after emitting them; ``recorded`` stays bound
         # because catch_warnings exits normally during exception propagation.
@@ -1120,9 +1156,17 @@ class ReviewSettings(ipw.VBox):
         # and its own fingerprint.
         for warning in recorded:
             warning_text = html.escape(str(warning.message))
-            current.append((warning_text, warning_text, warning_text))
+            current.append(
+                (
+                    warning_text,
+                    warning_text,
+                    warning_text,
+                    "<em>No longer detected as of the latest reload:</em> "
+                    f"{warning_text}",
+                )
+            )
 
-        current_keys = {key for key, _, _ in current}
+        current_keys = {key for key, *_ in current}
         # A dismissal is remembered only for as long as its key keeps being
         # produced, so it cannot grow without bound with stale entries; if a
         # problem goes away and later recurs, showing it again is correct.
@@ -1131,7 +1175,7 @@ class ReviewSettings(ipw.VBox):
             for key, fingerprint in self._dismissed.items()
             if key in current_keys
         }
-        for key, fingerprint, msg in current:
+        for key, fingerprint, msg, resolved_msg in current:
             dismissed_fingerprint = self._dismissed.get(key)
             if dismissed_fingerprint is not None:
                 if dismissed_fingerprint == fingerprint:
@@ -1142,7 +1186,7 @@ class ReviewSettings(ipw.VBox):
                 del self._dismissed[key]
             # Assignment updates an already-shown key in place instead of
             # appending a duplicate.
-            self._banner_messages[key] = msg
+            self._banner_messages[key] = (msg, resolved_msg)
             self._banner_fingerprints[key] = fingerprint
 
         # A sticky message whose key this refresh no longer produces is
@@ -1160,19 +1204,20 @@ class ReviewSettings(ipw.VBox):
         """
         Show the banner if there are any (sticky, un-dismissed) messages,
         hide it otherwise. A message whose key is in ``self._resolved_keys``
-        is marked as no longer detected instead of as an active problem.
+        is shown using its past-tense resolved variant instead of its
+        active wording, so the banner does not keep asserting a problem the
+        latest reload no longer reproduces.
         """
         if self._banner_messages:
             # A div rather than a p because a message may contain a details
             # element, which is not allowed inside a p.
             content = "".join(
                 (
-                    "<div>✓ <em>No longer detected as of the latest "
-                    f"reload:</em> {msg}</div>"
+                    f"<div>✓ {resolved_msg}</div>"
                     if key in self._resolved_keys
                     else f"<div>⚠️ {msg}</div>"
                 )
-                for key, msg in self._banner_messages.items()
+                for key, (msg, resolved_msg) in self._banner_messages.items()
             )
             self._banner_html.value = content
             self._banner.layout.display = "flex"
@@ -1308,16 +1353,27 @@ def _add_saving_to_widget(setting_widget):
             # editing one
             return
         # We have a validated setting so save it.
-        with warnings.catch_warnings(record=True):
+        with warnings.catch_warnings(record=True) as recorded:
             # The widget already shows PhotometrySettingsWarning in its
             # banner via its own load, so save()'s bookkeeping load must not
             # also print it once per autosaved setting. A plain filter
             # cannot suppress it here: save()'s own nested catch_warnings
             # sets PhotometrySettingsWarning to "default" after this point,
             # which always outranks a filter set by an outer caller.
-            # Recording (and discarding) intercepts it regardless of
-            # nesting.
+            # Recording intercepts it regardless of nesting.
             wd_settings.save(pps, update=True)
+        # Recording swallows every warning raised during the save, but only
+        # PhotometrySettingsWarning is covered by the banner; anything else
+        # raised while saving (e.g. a serialization or file warning) still
+        # belongs to the caller, so re-emit it under the ambient filters.
+        for warning in recorded:
+            if not issubclass(warning.category, PhotometrySettingsWarning):
+                warnings.warn_explicit(
+                    warning.message,
+                    warning.category,
+                    warning.filename,
+                    warning.lineno,
+                )
 
     if hasattr(setting_widget, "_choose_existing"):
         setting_widget._choose_existing.observe(save_wd, "value")

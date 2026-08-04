@@ -68,8 +68,10 @@ Other Changes and Additions
   through so a caller whose first interaction with the settings is a save
   still sees user-actionable problems (the ``ReviewSettings`` autosaves
   suppress that pass-through, since the widget already shows the warning
-  in its banner). A banner message whose underlying problem is no longer
-  reproduced by the latest reload is marked "No longer detected" instead
+  in its banner; warnings of any other category raised during an autosave
+  are re-emitted rather than swallowed). A banner message whose underlying
+  problem is no longer reproduced by the latest reload is reworded in the
+  past tense and marked "no longer detected" instead
   of continuing to read as a current problem, and dismissing a load-error
   message does not suppress a later, different load error. Note that
   ``ReviewSettings.current_settings`` is now a snapshot rather than a
@@ -117,7 +119,8 @@ Bug Fixes
   exist" when the existing full settings file could not be read. The
   ``full_settings_unreadable``/``partial_settings_unreadable`` properties
   are False before ``load`` has been called, instead of reporting an
-  existing readable file as unreadable. In
+  existing readable file as unreadable, and report the outcome of the most
+  recent ``load`` rather than the live state of the disk. In
   ``ReviewSettings``, collapsing every section of an accordion no longer
   raises, selecting a tab whose setting is not saved now actually marks
   the tab as not saved, and a tab badge stuck at not-saved now recovers

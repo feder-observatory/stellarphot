@@ -1379,21 +1379,28 @@ class TestReviewSettings:
 
         # The automatic save for PhotometryApertures fires during
         # construction and renames the bad partial settings file to .bak,
-        # which means the *next* load from disk will succeed.
+        # so the refresh at the end of construction already finds the
+        # problem cured -- the message is shown, in its resolved wording.
         review_settings = ReviewSettings([Camera, PhotometryApertures])
         assert review_settings._banner.layout.display == "flex"
         banner_text = review_settings._banner_html.value
-        assert "There is a problem with the saved settings" in banner_text
+        assert "A problem with the saved settings" in banner_text
 
         # Selecting the PhotometryApertures tab triggers another refresh.
         # The load succeeds now, but the message should still be shown
-        # because the user never dismissed it -- now marked as resolved
-        # instead of asserting the (no longer true) original claim.
+        # because the user never dismissed it -- now in its past-tense
+        # resolved wording instead of asserting the (no longer true)
+        # original claim or making a future-tense .bak promise about a
+        # rename that already happened.
         review_settings._container.selected_index = 1
         assert review_settings._banner.layout.display == "flex"
         banner_text = review_settings._banner_html.value
-        assert "There is a problem with the saved settings" in banner_text
-        assert "No longer detected as of the latest reload" in banner_text
+        assert "A problem with the saved settings" in banner_text
+        assert "no longer detected as of the latest reload" in banner_text
+        assert "There is a problem" not in banner_text
+        assert "will not be overwritten" not in banner_text
+        assert "was preserved as" in banner_text
+        assert "partial_photometry_settings.json.bak" in banner_text
 
         # Dismissing hides it...
         review_settings._banner_dismiss.click()
@@ -1500,7 +1507,7 @@ class TestReviewSettings:
         review._container.selected_index = 1
 
         assert review._banner.layout.display == "flex"
-        assert "No longer detected as of the latest reload" in review._banner_html.value
+        assert "no longer detected as of the latest reload" in review._banner_html.value
 
     def test_banner_message_updates_instead_of_duplicating(self):
         # The wording composed around a load error can change between
@@ -1553,6 +1560,13 @@ class TestReviewSettings:
 
         review_settings = ReviewSettings([Camera])
 
+        # The Camera save observer fires during construction and sets the
+        # unreadable partial file aside, curing the problem before
+        # construction finishes. Re-corrupt the file and refresh so the
+        # active wording -- the point of this test -- can be observed.
+        wd_settings.partial_settings_file.write_text('{"pasta": "carbonara"}')
+        review_settings._refresh()
+
         banner_text = review_settings._banner_html.value
         assert review_settings._banner.layout.display == "flex"
         assert "come from the full settings file" in banner_text
@@ -1580,6 +1594,14 @@ class TestReviewSettings:
         )
 
         review_settings = ReviewSettings([Camera])
+
+        # The Camera save observer fires during construction and resolves
+        # the conflict, so recreate it and refresh to observe the active
+        # conflict wording -- the point of this test.
+        wd_settings.partial_settings_file.write_text(
+            PartialPhotometrySettings(camera=conflicting_camera).model_dump_json()
+        )
+        review_settings._refresh()
 
         banner_text = review_settings._banner_html.value
         assert review_settings._banner.layout.display == "flex"
@@ -1688,7 +1710,9 @@ class TestReviewSettings:
         review_settings = ReviewSettings([Camera, PhotometryApertures])
 
         banner_text = review_settings._banner_html.value
-        assert "There is a problem with the saved settings" in banner_text
+        # The autosave cures the problem during construction, so the message
+        # is already in its past-tense resolved wording by this point.
+        assert "problem with the saved settings" in banner_text
         backup = wd_settings.partial_settings_file.with_name(
             wd_settings.partial_settings_file.name + ".bak"
         )
@@ -1719,6 +1743,35 @@ class TestReviewSettings:
             review_settings = ReviewSettings([PhotometryApertures])
 
         assert "Settings were migrated" in review_settings._banner_html.value
+        assert not any(
+            issubclass(w.category, PhotometrySettingsWarning) for w in recorded
+        )
+
+    def test_autosave_reemits_non_settings_warnings(self, mocker):
+        # The autosave suppression exists to keep PhotometrySettingsWarning
+        # from being printed once per autosave (the banner already shows
+        # it), but its recording context swallows every warning raised
+        # during the save. Anything that is not a PhotometrySettingsWarning
+        # (e.g. a serialization or file warning) must be re-emitted so the
+        # suppression does not eat unrelated warnings.
+        def fake_save(_self, _settings, update=False):  # noqa: ARG001
+            warnings.warn("unrelated library warning", UserWarning, stacklevel=2)
+            warnings.warn(
+                "Settings were migrated", PhotometrySettingsWarning, stacklevel=2
+            )
+
+        mocker.patch.object(
+            settings_files.PhotometryWorkingDirSettings, "save", fake_save
+        )
+
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter("always")
+            # PhotometryApertures can be built from defaults, so it is
+            # autosaved during construction.
+            ReviewSettings([PhotometryApertures])
+
+        messages = [str(w.message) for w in recorded]
+        assert "unrelated library warning" in messages
         assert not any(
             issubclass(w.category, PhotometrySettingsWarning) for w in recorded
         )
