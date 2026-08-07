@@ -863,9 +863,10 @@ class ReviewSettings(ipw.VBox):
     settings. While a load error is active -- which, since construction and
     every save cure such problems automatically, means the settings files
     changed outside this widget -- the settings below the banner are greyed
-    out and the banner's buttons are the only way forward; once the problem
-    is resolved (or when there are only warnings) the banner turns a calm
-    green and can be dismissed with its close button.
+    out and the banner's buttons are the only way forward, though the tabs
+    can still be browsed to inspect the values those buttons would save;
+    once the problem is resolved (or when there are only warnings) the
+    banner turns a calm green and can be dismissed with its close button.
     """
 
     def __init__(self, settings, style="tabs", *args, **kwargs) -> None:
@@ -1389,10 +1390,11 @@ class ReviewSettings(ipw.VBox):
         While a load error is active -- which, since construction and every
         save cure such problems automatically, means the settings changed
         outside this widget -- the banner is modal: the settings below are
-        greyed out and inert, the dismiss button is hidden, and the
-        banner's own buttons (which of them depends on the kind of error)
-        are the only affordance. Once every entry is resolved, or when only
-        warnings remain, the banner turns a calm green and is dismissable.
+        greyed out and inert (though the tabs stay navigable for
+        inspection), the dismiss button is hidden, and the banner's own
+        buttons (which of them depends on the kind of error) are the only
+        affordance. Once every entry is resolved, or when only warnings
+        remain, the banner turns a calm green and is dismissable.
 
         A resolved message -- one whose problem the latest reload no longer
         reproduces -- is kept visible in a resolved wording, so the banner
@@ -1428,15 +1430,26 @@ class ReviewSettings(ipw.VBox):
         self._banner_reload.layout.display = "" if error_active else "none"
         self._banner_dismiss.layout.display = "none" if error_active else ""
 
-        # Grey out and disable the settings while an error is active. The
-        # container does not exist yet during the refresh at the top of
-        # __init__; the refresh at the end of construction re-runs this.
+        # The settings file name is per-instance, so the keep button's
+        # label can only name the conflict's winning file here, once the
+        # loading instance exists.
+        if active_kind == "conflict":
+            self._banner_keep.description = (
+                f"Keep the values from {self._wd_settings.settings_file.name}"
+            )
+
+        # Grey out and disable the settings panes while an error is
+        # active, leaving the tab bar (or accordion titles) live so the
+        # user can browse the values the banner's buttons offer to save.
+        # The container does not exist yet during the refresh at the top
+        # of __init__; the refresh at the end of construction re-runs this.
         container = getattr(self, "_container", None)
         if container is not None:
-            if error_active:
-                container.add_class(_INERT_CLASS)
-            else:
-                container.remove_class(_INERT_CLASS)
+            for pane in container.children:
+                if error_active:
+                    pane.add_class(_INERT_CLASS)
+                else:
+                    pane.remove_class(_INERT_CLASS)
 
     def _dismiss_banner(self, _=None):
         """
@@ -1621,10 +1634,10 @@ class ReviewSettings(ipw.VBox):
 
         # While a load error is active, the on-disk state is broken rather
         # than missing: the banner is the sole indicator of that, and the
-        # settings below it are greyed out. Badges are never re-derived
-        # from the broken (fallback) snapshot. The CSS inertness is an
-        # affordance only -- programmatic selection bypasses it -- so this
-        # early return is the real guard.
+        # settings below it are greyed out, though the tabs themselves stay
+        # navigable so the user can inspect the values the banner offers to
+        # save. Badges are never re-derived from the broken (fallback)
+        # snapshot, so this early return is the real guard.
         if self._load_error_active:
             return
 

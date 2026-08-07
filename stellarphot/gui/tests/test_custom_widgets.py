@@ -53,6 +53,16 @@ TEST_PASSBAND_MAP = deepcopy(TEST_PASSBAND_MAP)
 TEST_PHOTOMETRY_SETTINGS = deepcopy(TEST_PHOTOMETRY_SETTINGS)
 
 
+def _settings_panes_inert(review):
+    """
+    True when every settings pane is greyed out, False when none is;
+    fails the test if the panes disagree.
+    """
+    flags = {_INERT_CLASS in pane._dom_classes for pane in review._container.children}
+    assert len(flags) == 1
+    return flags.pop()
+
+
 # See test_settings_file.TestSavedSettings for a detailed description of what the
 # following fixture does. In brief, it patches the settings_files.PlatformDirs class
 # so that the user_data_dir method returns the temporary directory.
@@ -1298,7 +1308,7 @@ class TestReviewSettings:
         assert review_settings._banner_dismiss.layout.display == "none"
         assert review_settings._banner_fix.layout.display == ""
         assert review_settings._banner_reload.layout.display == ""
-        assert _INERT_CLASS in review_settings._container._dom_classes
+        assert _settings_panes_inert(review_settings)
 
         # The visible message stays short; the whole error, first line
         # included, is inside a collapsed details element, formatted in a
@@ -1337,7 +1347,7 @@ class TestReviewSettings:
         # enabled, and no fix button.
         assert review_settings._banner.layout.border == _CALM_BORDER
         assert review_settings._banner_dismiss.layout.display == ""
-        assert _INERT_CLASS not in review_settings._container._dom_classes
+        assert not _settings_panes_inert(review_settings)
         assert review_settings._banner_fix.layout.display == "none"
 
     def test_banner_reports_both_files_unreadable(self):
@@ -1676,7 +1686,7 @@ class TestReviewSettings:
         assert review_settings._banner_fix.layout.display == "none"
         assert review_settings._banner_keep.layout.display == ""
         assert review_settings._banner_reload.layout.display == ""
-        assert _INERT_CLASS in review_settings._container._dom_classes
+        assert _settings_panes_inert(review_settings)
 
     def test_banner_keep_values_button_resolves_conflict(self):
         # Clicking "Keep the values shown" saves the displayed values --
@@ -1722,7 +1732,7 @@ class TestReviewSettings:
         )
         assert backup.read_text() == conflicting_content
         assert review._banner_keep.layout.display == "none"
-        assert _INERT_CLASS not in review._container._dom_classes
+        assert not _settings_panes_inert(review)
 
     def test_banner_reload_button_after_hand_repair(self):
         # The Reload button is the repair-by-hand path: once the user fixes
@@ -1735,7 +1745,7 @@ class TestReviewSettings:
         review = ReviewSettings([Camera])
         assert review._load_error_active
         assert review._banner_reload.layout.display == ""
-        assert _INERT_CLASS in review._container._dom_classes
+        assert _settings_panes_inert(review)
 
         # The user deletes the broken file by hand, then clicks Reload.
         wd_settings.settings_file.unlink()
@@ -1752,7 +1762,7 @@ class TestReviewSettings:
         assert ".bak" not in banner_text
         assert review._banner_reload.layout.display == "none"
         assert review._banner_dismiss.layout.display == ""
-        assert _INERT_CLASS not in review._container._dom_classes
+        assert not _settings_panes_inert(review)
 
     def test_banner_duplicate_partial_oserror(self, mocker):
         # When the partial settings file is an exact duplicate of the full
