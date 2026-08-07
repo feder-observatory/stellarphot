@@ -671,6 +671,12 @@ class SaveStatus(StrEnum):
     SETTING_SHOULD_BE_REVIEWED = "🔆"
 
 
+# Shown beside the save button of a setting that is not in the saved settings
+# for this directory, so that a tab badged SETTING_NOT_SAVED says how to fix
+# itself instead of just reporting a problem.
+SAVE_PROMPT_MESSAGE = "<i>not saved in this directory — click save to add it</i>"
+
+
 class SettingWithTitle(ipw.VBox):
     """
     Class that adds a title to a setting widget made by ipyautoui and
@@ -750,12 +756,60 @@ class SettingWithTitle(ipw.VBox):
         else:
             self.badge = SaveStatus.SETTING_IS_SAVED
 
+    def prompt_save(self):
+        """
+        Ask the save button bar to advertise that this setting needs saving.
+
+        The status light next to the save button reports whether the *form*
+        has been edited since the last save, so it happily says "SAFE" while
+        the setting is missing from the working directory entirely -- which
+        contradicts a SETTING_NOT_SAVED badge and makes the enabled save
+        button look inert. Setting ``unsaved_changes`` puts the light in its
+        "changes since last save" state and points at the button that fixes
+        things.
+        """
+        if isinstance(self._widget, ChooseOrMakeNew):
+            # A ChooseOrMakeNew is fixed by picking or making an item in its
+            # dropdown, not by a save button -- one it keeps hidden while an
+            # existing item is displayed. Its ``unsaved_changes`` observer is
+            # _choose_existing_observer, which derives the badge from
+            # is_mid_interaction and so could report SAVED here.
+            return
+        self._autoui_widget.savebuttonbar.unsaved_changes = True
+        self._autoui_widget.savebuttonbar.message.value = SAVE_PROMPT_MESSAGE
+
+    def clear_save_prompt(self):
+        """
+        Undo `prompt_save`, for a setting that is on disk again.
+        """
+        if isinstance(self._widget, ChooseOrMakeNew):
+            return
+        self._autoui_widget.savebuttonbar.unsaved_changes = False
+        # Only our own prompt is cleared; a genuine "changes saved: ..." or
+        # "UI reverted to last save" from ipyautoui stays put.
+        if self._autoui_widget.savebuttonbar.message.value == SAVE_PROMPT_MESSAGE:
+            self._autoui_widget.savebuttonbar.message.value = ""
+
 
 # Fixed identity key for the (at most one) load-error banner message, so
 # that a refresh which reworks the message for the same incident updates it
 # in place rather than appending a near-duplicate. Not plausible warning
 # text, since a warning is keyed on its own text in the same dict.
 _LOAD_ERROR_KEY = "__settings-load-error__"
+
+# CSS class (and the style sheet that gives it meaning) applied to the
+# settings container while a load error is active: the tabs are greyed out
+# and inert, making the banner's buttons the only affordance. The greying
+# is an affordance only -- programmatic changes bypass CSS -- so the
+# selection observer separately refuses to re-derive badges while an error
+# is active.
+_INERT_CLASS = "stellarphot-settings-inert"
+_INERT_CSS = f"<style>.{_INERT_CLASS} {{pointer-events: none; opacity: 0.5;}}</style>"
+
+# Banner border colors: amber while a load error is unresolved, a calm
+# light green once every problem is resolved or only warnings remain.
+_ERROR_BORDER = "2px solid #ffc107"
+_CALM_BORDER = "2px solid #a3cfbb"
 
 
 @dataclass
@@ -764,17 +818,21 @@ class _BannerEntry:
     One message shown in the `ReviewSettings` banner.
     """
 
-    # Identifies the specific incident shown under a key: the load error's
-    # full escaped text, or a warning's own text. A key can outlive the
-    # incident that first produced it, so a dismissal is honored only while
-    # the fingerprint matches the one that was dismissed.
-    fingerprint: str
+    # What kind of incident this entry reports; drives which banner
+    # buttons are shown while the entry is active and how its resolved
+    # wording is composed. One of "unreadable", "conflict", "oserror",
+    # or "warning".
+    kind: str
     # Composed, already-escaped HTML for the message, in its active wording.
     message: str
+    # Paths (relative to the working directory) the incident is about;
+    # used to look up -- and purge -- recorded backups when composing the
+    # resolved wording.
+    files: tuple = ()
     # True when the most recent refresh no longer reproduces the problem;
-    # the message is then shown with a "no longer detected" prefix instead
-    # of being removed, so the user still learns e.g. that a file was set
-    # aside as .bak.
+    # the message is then shown in a resolved wording instead of being
+    # removed, so the user still learns e.g. that a file was set aside
+    # as .bak.
     resolved: bool = False
 
 
@@ -802,46 +860,115 @@ class ReviewSettings(ipw.VBox):
 
     If the saved settings in the working directory cannot be read, or reading them
     generates warnings, a banner describing the problem is displayed above the
-    settings.
+    settings. While a load error is active -- which, since construction and
+    every save cure such problems automatically, means the settings files
+    changed outside this widget -- the settings below the banner are greyed
+    out and the banner's buttons are the only way forward; once the problem
+    is resolved (or when there are only warnings) the banner turns a calm
+    green and can be dismissed with its close button.
     """
 
     def __init__(self, settings, style="tabs", *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         # Banner for messages about problems loading saved settings. It is
-        # hidden unless there is a message to show, and can be dismissed
-        # with its close button. Dismissed messages stay dismissed even
-        # though the settings are reloaded on every tab selection.
+        # hidden unless there is a message to show. Which of its buttons
+        # are visible -- and whether it can be dismissed at all -- depends
+        # on the state of the entries; see _update_banner.
         self._banner_html = ipw.HTML(layout=ipw.Layout(flex="1 1 auto"))
         self._banner_dismiss = ipw.Button(
             description="✕",
             tooltip="Dismiss these messages",
-            layout=ipw.Layout(width="2.5em"),
+            # Sizing the button to its label rather than to a fixed width:
+            # JupyterLab's button padding eats most of a 2.5em box, so the
+            # glyph overflows and CSS text-overflow appends an ellipsis,
+            # making the ✕ look like it has a period after it. flex keeps the
+            # button from shrinking when the message beside it is long.
+            layout=ipw.Layout(width="auto", flex="0 0 auto"),
         )
         self._banner_dismiss.on_click(self._dismiss_banner)
+        # One-click fix for an unreadable settings file: rename it to .bak
+        # and re-save the values the widget is showing. Only shown while an
+        # unreadable-file load error is active -- visibility is managed by
+        # _update_banner.
+        self._banner_fix = ipw.Button(
+            description="Set aside broken file(s) and keep the values shown",
+            tooltip=(
+                "Rename the unreadable settings file(s) to a .bak backup "
+                "and save the values currently displayed below"
+            ),
+            button_style="warning",
+            layout=ipw.Layout(width="auto", flex="0 0 auto"),
+        )
+        self._banner_fix.layout.display = "none"
+        self._banner_fix.on_click(self._fix_unreadable_files)
+        # Resolution for a full/partial conflict: save the displayed values
+        # (which come from the full settings file), preserving the losing
+        # partial file as a .bak backup. Only shown while a conflict is
+        # active.
+        self._banner_keep = ipw.Button(
+            description="Keep the values shown",
+            tooltip=(
+                "Save the values currently displayed below, resolving the "
+                "conflict; the conflicting partial settings file is kept "
+                "as a .bak backup"
+            ),
+            button_style="warning",
+            layout=ipw.Layout(width="auto", flex="0 0 auto"),
+        )
+        self._banner_keep.layout.display = "none"
+        self._banner_keep.on_click(self._keep_displayed_values)
+        # Reload the settings from disk -- the repair-by-hand path, and the
+        # only resolution for a load failure nothing in the banner can fix
+        # (e.g. a read-only directory). Shown while any load error is
+        # active.
+        self._banner_reload = ipw.Button(
+            description="Reload",
+            tooltip="Reload the settings from the working directory",
+            button_style="warning",
+            layout=ipw.Layout(width="auto", flex="0 0 auto"),
+        )
+        self._banner_reload.layout.display = "none"
+        self._banner_reload.on_click(self._reload)
         self._banner = ipw.HBox(
-            [self._banner_html, self._banner_dismiss],
+            [
+                self._banner_html,
+                self._banner_fix,
+                self._banner_keep,
+                self._banner_reload,
+                self._banner_dismiss,
+            ],
             layout=ipw.Layout(
                 align_items="center",
-                border="2px solid #ffc107",
+                border=_ERROR_BORDER,
                 padding="0.25em 1em",
             ),
         )
         self._banner.layout.display = "none"
         # ``_banner_entries`` maps a stable key (``_LOAD_ERROR_KEY``, or a
         # warning's own text) to a `_BannerEntry`; insertion order is
-        # display order. ``_dismissed`` maps a dismissed key to the
-        # fingerprint it was dismissed at.
+        # display order. ``_dismissed`` is the set of dismissed keys.
         self._banner_entries = {}
-        self._dismissed = {}
+        self._dismissed = set()
+        # ``_backups_made`` accumulates, across refreshes, the backups the
+        # save machinery reports having made (original path -> backup
+        # path), so resolved banner messages can name the actual .bak
+        # file. ``_saver`` is the PhotometryWorkingDirSettings instance
+        # every save goes through; created below, after the early refresh.
+        self._backups_made = {}
+        self._saver = None
 
         # Get a copy of whatever settings may have already been saved.
         self._refresh()
 
         self._setting_widgets = []
         self._plain_names = []
-        self.badges = []
 
         self._settings = settings
+
+        # One shared instance for every save this widget makes, so the
+        # backups those saves create are recorded somewhere the banner can
+        # find them (see _collect_backups).
+        self._saver = PhotometryWorkingDirSettings()
 
         for setting in settings:
             # Track whether we are using the ChooseOrMakeNew or not
@@ -854,7 +981,11 @@ class ReviewSettings(ipw.VBox):
                 widget = ui_generator(setting)
                 val_to_set = widget
 
-            _add_saving_to_widget(widget)
+            _add_saving_to_widget(
+                widget,
+                wd_settings=self._saver,
+                on_save_error=self._note_save_failure,
+            )
             name = to_snake(setting.__name__)
             plain_name = " ".join(name.split("_"))
             self._plain_names.append(plain_name)
@@ -881,8 +1012,11 @@ class ReviewSettings(ipw.VBox):
                         f"by editing your saved {name} settings or by deleting the "
                         "working directory settings."
                     ) from e
-                # Add symbol to title to indicate that the setting needs review
-                self.badges.append(SaveStatus.SETTING_SHOULD_BE_REVIEWED)
+                # Add symbol to title to indicate that the setting needs
+                # review. The widget's badge is the single source of truth;
+                # this explicit write lands after the save side effects
+                # above, so it wins over whatever those observers set.
+                self._setting_widgets[-1].badge = SaveStatus.SETTING_SHOULD_BE_REVIEWED
 
             elif is_choose_or_make_new:
                 if len(widget._choose_existing.options) > 1:
@@ -894,10 +1028,12 @@ class ReviewSettings(ipw.VBox):
                     default_item = val_to_set.value
                     val_to_set.value = None
                     val_to_set.value = default_item
-                    self.badges.append(SaveStatus.SETTING_SHOULD_BE_REVIEWED)
+                    self._setting_widgets[-1].badge = (
+                        SaveStatus.SETTING_SHOULD_BE_REVIEWED
+                    )
                 else:
                     # This setting needs to be made, not reviewed
-                    self.badges.append(SaveStatus.SETTING_NOT_SAVED)
+                    self._setting_widgets[-1].badge = SaveStatus.SETTING_NOT_SAVED
             else:
                 # We got here because there was not a setting saved in the working
                 # directory, and this is not a ChooseOrMakeNew, which might have
@@ -913,15 +1049,14 @@ class ReviewSettings(ipw.VBox):
                 except ValidationError:  # pragma: no cover
                     # This should never happen with the code base as of 2024-06-27 but
                     # might in the future.
-                    self.badges.append(SaveStatus.SETTING_NOT_SAVED)
+                    self._setting_widgets[-1].badge = SaveStatus.SETTING_NOT_SAVED
                 else:
                     # This setting can be made from default values, so we save it to the
                     # working directory.
                     val_to_set.savebuttonbar.bn_save.click()
-                    self.badges.append(SaveStatus.SETTING_SHOULD_BE_REVIEWED)
-
-        # Check that everything is consistent....
-        assert len(self.badges) == len(self._plain_names)
+                    self._setting_widgets[-1].badge = (
+                        SaveStatus.SETTING_SHOULD_BE_REVIEWED
+                    )
 
         if style == "tabs":
             self._container = ipw.Tab()
@@ -931,21 +1066,27 @@ class ReviewSettings(ipw.VBox):
         self._container.children = self._setting_widgets
         self._container.titles = self._make_titles()
 
-        self.children = [self._banner, self._container]
+        # The style sheet that lets _update_banner grey out and disable the
+        # settings container while a load error is active.
+        self._inert_style = ipw.HTML(_INERT_CSS)
+        self.children = [self._inert_style, self._banner, self._container]
 
         # Set up an observer to run when a tab is selected
         self._container.observe(self._observe_tab_selection, names="selected_index")
 
         # Set up observer for each of the widget badges
-        for idx, widget in enumerate(self._setting_widgets):
-            widget.observe(self._observe_badge_change(idx), names="badge")
+        for widget in self._setting_widgets:
+            widget.observe(self._observe_badge_change, names="badge")
 
         # Construction itself may have changed what is on disk -- default-
         # constructible settings were autosaved above, and setting a
         # ChooseOrMakeNew value triggers its save observer -- so refresh
         # once more so that current_settings (and the banner) reflect the
         # post-construction state instead of the pre-save snapshot taken at
-        # the top of this method.
+        # the top of this method. This refresh also harvests the backups
+        # those construction-time saves recorded on self._saver, so a
+        # problem cured during construction is reported with the actual
+        # .bak name.
         self._refresh()
 
     def _make_titles(self):
@@ -956,6 +1097,15 @@ class ReviewSettings(ipw.VBox):
             f"{badge} {plain}"
             for badge, plain in zip(self.badges, self._plain_names, strict=True)
         ]
+
+    @property
+    def badges(self):
+        """
+        The badge of each setting widget, in display order. The widgets
+        themselves are the single source of truth; this is a read-only
+        view of their badges.
+        """
+        return [widget.badge for widget in self._setting_widgets]
 
     @property
     def current_settings(self):
@@ -977,6 +1127,36 @@ class ReviewSettings(ipw.VBox):
         """
         self._current_settings = self._load_working_dir_settings()
 
+    def _collect_backups(self):
+        """
+        Merge the backups recorded by the load-side and save-side
+        `PhotometryWorkingDirSettings` instances into ``_backups_made``,
+        which survives the per-refresh rebinding of ``_wd_settings``.
+        Every instance builds its paths relative to ``Path(".")``, so the
+        keys from different instances merge correctly.
+        """
+        for source in (
+            getattr(self, "_wd_settings", None),
+            getattr(self, "_saver", None),
+        ):
+            if source is not None:
+                self._backups_made.update(source.backups_made)
+                # Drain the source once harvested: ``_backups_made`` is the
+                # single accumulator. Re-merging an already-harvested record
+                # on a later refresh would resurrect entries the
+                # new-incident purge dropped and let an old record from one
+                # instance overwrite a newer backup made through the other.
+                source._backups_made.clear()
+
+    @property
+    def _load_error_active(self):
+        """
+        True while the banner holds an unresolved load-error entry, i.e.
+        while the on-disk settings are broken rather than merely missing.
+        """
+        entry = self._banner_entries.get(_LOAD_ERROR_KEY)
+        return entry is not None and not entry.resolved
+
     def _load_working_dir_settings(self):
         """
         Load settings from the working directory, routing any warnings the load
@@ -995,13 +1175,6 @@ class ReviewSettings(ipw.VBox):
         reproduces an already-shown key, its wording is updated in place
         instead of a near-duplicate being appended.
 
-        Because a key can outlive the incident it first named, each entry in
-        ``current`` also carries a fingerprint (the load error's full
-        escaped text, or a warning's own text). A dismissed key stays
-        dismissed only while its fingerprint matches what was dismissed; a
-        different fingerprint under the same key means a new, unrelated
-        incident, which is shown normally.
-
         Banner messages are also sticky: once shown, an entry stays in
         ``self._banner_entries`` until the user dismisses it, even if a
         later refresh no longer produces its key (e.g. an automatic save
@@ -1010,6 +1183,10 @@ class ReviewSettings(ipw.VBox):
         entries are marked resolved instead of being removed -- see
         ``_update_banner`` -- and only ``_dismiss_banner`` removes them.
         """
+        # Harvest backup records before this refresh rebinds
+        # self._wd_settings below, or they would be lost with the old
+        # instance.
+        self._collect_backups()
         wd_settings = PhotometryWorkingDirSettings()
         current = []
         try:
@@ -1041,26 +1218,7 @@ class ReviewSettings(ipw.VBox):
                 or wd_settings.partial_settings_file.exists()
             )
             if settings_file_exists:
-                # The full error can run to dozens of lines for a pydantic
-                # ValidationError, so only its first line is shown; the rest
-                # goes into a collapsed details element.
                 error_lines = str(e).splitlines()
-                first_line = html.escape(error_lines[0])
-                message = (
-                    "There is a problem with the saved settings in this "
-                    f"directory ({first_line})."
-                )
-                # Report which file, if either, the displayed values came
-                # from. Both files are parsed before load() raises, so a
-                # non-None attribute here means that file really was read.
-                # The full settings win when both were readable (the
-                # conflicting-values case below).
-                if wd_settings.settings is not None:
-                    message += " The values below come from the full settings file."
-                elif wd_settings.partial_settings is not None:
-                    message += " The values below come from the partial settings file."
-                else:
-                    message += " None of the values below come from the saved settings."
 
                 # A file is unreadable, as opposed to merely conflicting with
                 # its counterpart, exactly when it existed on disk but could
@@ -1068,91 +1226,99 @@ class ReviewSettings(ipw.VBox):
                 unreadable_full = wd_settings.full_settings_unreadable
                 unreadable_partial = wd_settings.partial_settings_unreadable
                 if unreadable_full or unreadable_partial:
-                    names = []
+                    files = []
                     if unreadable_full:
-                        names.append(html.escape(wd_settings.settings_file.name))
+                        files.append(wd_settings.settings_file)
                     if unreadable_partial:
-                        names.append(
-                            html.escape(wd_settings.partial_settings_file.name)
-                        )
-                    joined_names = " and ".join(names)
-                    joined_baks = " and ".join(f"{name}.bak" for name in names)
-                    replace_clause = (
-                        "if a save needs to replace them, they"
-                        if len(names) > 1
-                        else "if a save needs to replace it, it"
+                        files.append(wd_settings.partial_settings_file)
+                    joined_names = " and ".join(html.escape(f.name) for f in files)
+                    file_word = "files" if len(files) > 1 else "file"
+                    # Construction and every save cure unreadable files
+                    # automatically, so an *active* error provably means
+                    # the file changed outside this widget.
+                    message = (
+                        f"The settings {file_word} {joined_names} changed "
+                        "outside this widget and could not be read."
                     )
-                    # The .bak rename happens only when a save actually
-                    # replaces that specific file -- a partial-settings save
-                    # leaves an unreadable full settings file in place -- so
-                    # promise it only for a file a save needs to replace.
-                    message += (
-                        f" If settings are saved here, {joined_names} will "
-                        f"not be overwritten; {replace_clause} will first be "
-                        f"preserved as {joined_baks} (or the next available "
-                        "numbered backup if that name is already taken)."
+                    kind = "unreadable"
+                elif isinstance(e, ValueError):
+                    # Both files were readable, so this is the
+                    # conflicting-values case. The partial settings file is
+                    # the one preserved as .bak when a save resolves the
+                    # conflict, so it is the file this incident is about.
+                    full_name = html.escape(wd_settings.settings_file.name)
+                    partial_name = html.escape(wd_settings.partial_settings_file.name)
+                    message = (
+                        f"The files {full_name} and {partial_name} changed "
+                        "outside this widget and now disagree; the values "
+                        f"shown come from {full_name}."
                     )
+                    kind = "conflict"
+                    files = [wd_settings.partial_settings_file]
                 else:
-                    # Both files were readable. For a ValueError that means
-                    # the conflicting-values case (the unreadable-file
-                    # wording above would be misleading); an OSError instead
-                    # means the load failed while tidying the files (e.g.
-                    # deleting a duplicate partial settings file in a
-                    # read-only directory), where conflict advice would be
-                    # misleading, so no advice is added.
-                    if isinstance(e, ValueError):
-                        partial_name = html.escape(
-                            wd_settings.partial_settings_file.name
-                        )
-                        message += (
-                            " Saving full settings here will resolve the "
-                            "conflict; the conflicting partial settings file "
-                            f"will be preserved as {partial_name}.bak (or the "
-                            "next available numbered backup)."
-                        )
+                    # OSError with both files readable: the load failed
+                    # while deleting the partial settings file, which it
+                    # only does when that file is an exact duplicate of the
+                    # full settings file (e.g. in a read-only directory).
+                    full_name = html.escape(wd_settings.settings_file.name)
+                    partial_name = html.escape(wd_settings.partial_settings_file.name)
+                    message = (
+                        f"The file {partial_name} is an exact duplicate of "
+                        f"{full_name} but could not be deleted. It is safe "
+                        "to delete by hand; make this directory writable "
+                        "or delete the file, then click Reload."
+                    )
+                    kind = "oserror"
+                    files = []
 
-                if detail := "\n".join(error_lines[1:]):
+                # The full error is long -- dozens of lines for a pydantic
+                # ValidationError -- so all of it, first line included,
+                # goes into a collapsed details element.
+                if detail := "\n".join(error_lines):
                     message += (
                         "<details><summary>Full error</summary>"
                         f"<pre>{html.escape(detail)}</pre></details>"
                     )
-                # The fingerprint is the full error text, not the displayed
-                # first line: pydantic first lines are generic ("1 validation
-                # error for ..."), so two different corruptions of the same
-                # file can share one, and a dismissal must not carry over
-                # from one to the other.
-                current.append((_LOAD_ERROR_KEY, html.escape(str(e)), message))
+                current.append((_LOAD_ERROR_KEY, kind, message, tuple(files)))
         # Add the warnings outside the try/except so they are reported even
         # when load() raises after emitting them; ``recorded`` stays bound
         # because catch_warnings exits normally during exception propagation.
-        # A warning's text is stable across refreshes, so it is its own key
-        # and its own fingerprint.
+        # A warning's text is stable across refreshes, so it is its own key.
         for warning in recorded:
             warning_text = html.escape(str(warning.message))
-            current.append((warning_text, warning_text, warning_text))
+            current.append((warning_text, "warning", warning_text, ()))
+
+        # Retain the instance that performed this load: its unreadable
+        # flags identify the files an active load error is about, which
+        # the banner's fix button consults, and its backup records are
+        # harvested by the next refresh.
+        self._wd_settings = wd_settings
 
         current_keys = {key for key, *_ in current}
         # A dismissal is remembered only for as long as its key keeps being
         # produced, so it cannot grow without bound with stale entries; if a
         # problem goes away and later recurs, showing it again is correct.
-        self._dismissed = {
-            key: fingerprint
-            for key, fingerprint in self._dismissed.items()
-            if key in current_keys
-        }
-        for key, fingerprint, msg in current:
-            dismissed_fingerprint = self._dismissed.get(key)
-            if dismissed_fingerprint is not None:
-                if dismissed_fingerprint == fingerprint:
-                    # Same incident as the one dismissed.
-                    continue
-                # A different incident reusing this key -- e.g. a second
-                # file has now gone bad -- so it is shown again.
-                del self._dismissed[key]
+        self._dismissed &= current_keys
+        for key, kind, msg, files in current:
+            if key in self._dismissed:
+                # Only warnings can be dismissed while still active, and a
+                # warning's text is stable, so a dismissed key that is
+                # still produced is the same incident. Keep it dismissed.
+                continue
+            previous = self._banner_entries.get(key)
+            if key == _LOAD_ERROR_KEY and (previous is None or previous.resolved):
+                # A fresh incident: a backup recorded before this problem
+                # was detected cannot be what cures it, so drop any stale
+                # records for the files involved lest a resolved message
+                # later name a backup that predates the problem.
+                for path in files:
+                    self._backups_made.pop(path, None)
             # Assignment updates an already-shown key in place instead of
             # appending a duplicate.
             self._banner_entries[key] = _BannerEntry(
-                fingerprint=fingerprint, message=msg
+                kind=kind,
+                message=msg,
+                files=files,
             )
 
         # A sticky entry whose key this refresh no longer produces is marked
@@ -1164,32 +1330,113 @@ class ReviewSettings(ipw.VBox):
         self._update_banner()
         return loaded
 
+    def _compose_resolved_text(self, entry):
+        """
+        Compose the wording for a resolved entry from what is actually
+        known: backups recorded for the entry's files are named exactly;
+        with no recorded backup the problem is reported as no longer
+        detected, with no speculation about how it was cured (the user may
+        simply have repaired or removed the file by hand).
+        """
+        if entry.kind == "unreadable":
+            moved = {
+                path: self._backups_made[path]
+                for path in entry.files
+                if path in self._backups_made
+            }
+            if moved:
+                originals = " and ".join(html.escape(p.name) for p in moved)
+                backups = " and ".join(html.escape(p.name) for p in moved.values())
+                was_were = "originals were" if len(moved) > 1 else "original was"
+                return (
+                    f"There was a problem with {originals}; "
+                    f"the {was_were} saved as {backups}."
+                )
+            names = " and ".join(html.escape(p.name) for p in entry.files)
+            return f"A problem with {names} is no longer detected."
+        if entry.kind == "conflict":
+            full_name = html.escape(self._wd_settings.settings_file.name)
+            partial_name = html.escape(self._wd_settings.partial_settings_file.name)
+            text = (
+                f"The files {full_name} and {partial_name} disagreed; "
+                "the conflict has been resolved"
+            )
+            backup = next(
+                (
+                    self._backups_made[path]
+                    for path in entry.files
+                    if path in self._backups_made
+                ),
+                None,
+            )
+            if backup is not None:
+                text += (
+                    ", and the conflicting partial file was saved as "
+                    f"{html.escape(backup.name)}."
+                )
+            else:
+                text += "."
+            return text
+        # Warnings and OSError entries resolve generically.
+        return (
+            "<em>No longer detected as of the latest reload:</em> " f"{entry.message}"
+        )
+
     def _update_banner(self):
         """
-        Show the banner if there are any (sticky, un-dismissed) messages,
-        hide it otherwise. A resolved message -- one whose problem the
-        latest reload no longer reproduces -- is shown with a "no longer
-        detected" prefix, so the banner does not keep asserting a stale
-        problem while the user still learns e.g. that a file was set aside
-        as ``.bak``.
+        Render the banner from the current entries.
+
+        While a load error is active -- which, since construction and every
+        save cure such problems automatically, means the settings changed
+        outside this widget -- the banner is modal: the settings below are
+        greyed out and inert, the dismiss button is hidden, and the
+        banner's own buttons (which of them depends on the kind of error)
+        are the only affordance. Once every entry is resolved, or when only
+        warnings remain, the banner turns a calm green and is dismissable.
+
+        A resolved message -- one whose problem the latest reload no longer
+        reproduces -- is kept visible in a resolved wording, so the banner
+        does not keep asserting a stale problem while the user still
+        learns e.g. that a file was set aside as ``.bak``.
         """
+        error_entry = self._banner_entries.get(_LOAD_ERROR_KEY)
+        error_active = error_entry is not None and not error_entry.resolved
+
         if self._banner_entries:
             # A div rather than a p because a message may contain a details
             # element, which is not allowed inside a p.
-            content = "".join(
-                (
-                    "<div>✓ <em>No longer detected as of the latest "
-                    f"reload:</em> {entry.message}</div>"
-                    if entry.resolved
-                    else f"<div>⚠️ {entry.message}</div>"
-                )
-                for entry in self._banner_entries.values()
-            )
-            self._banner_html.value = content
+            parts = []
+            for entry in self._banner_entries.values():
+                if entry.resolved:
+                    parts.append(f"<div>✓ {self._compose_resolved_text(entry)}</div>")
+                else:
+                    parts.append(f"<div>⚠️ {entry.message}</div>")
+            self._banner_html.value = "".join(parts)
             self._banner.layout.display = "flex"
+            self._banner.layout.border = _ERROR_BORDER if error_active else _CALM_BORDER
         else:
             self._banner_html.value = ""
             self._banner.layout.display = "none"
+
+        # Which buttons apply depends on the kind of active error; none of
+        # them apply to a resolved entry or a warnings-only banner, and an
+        # active error cannot be dismissed -- resolving it is the only way
+        # forward.
+        active_kind = error_entry.kind if error_active else None
+        self._banner_fix.layout.display = "" if active_kind == "unreadable" else "none"
+        self._banner_keep.layout.display = "" if active_kind == "conflict" else "none"
+        self._banner_reload.layout.display = "" if error_active else "none"
+        self._banner_dismiss.layout.display = "none" if error_active else ""
+
+        # Grey out and disable the settings while an error is active. The
+        # container does not exist yet during the refresh at the top of
+        # __init__; the refresh at the end of construction re-runs this.
+        container = getattr(self, "_container", None)
+        if container is not None:
+            if error_active:
+                container.add_class(_INERT_CLASS)
+            else:
+                container.remove_class(_INERT_CLASS)
 
     def _dismiss_banner(self, _=None):
         """
@@ -1197,24 +1444,167 @@ class ReviewSettings(ipw.VBox):
         no per-message dismissal: the single close button clears all
         messages at once, including any that arrived after the one the
         user meant to dismiss.
+
+        Only an entry that is still active -- with the dismiss button
+        hidden while a load error is active, that means a warning -- is
+        recorded as dismissed. A resolved entry is simply removed, so a
+        recurrence of the underlying problem is always shown fresh.
         """
         for key, entry in self._banner_entries.items():
-            self._dismissed[key] = entry.fingerprint
+            if not entry.resolved:
+                self._dismissed.add(key)
+            # The entry's story is over; its backup records must not leak
+            # into some future incident's resolved wording.
+            for path in entry.files:
+                self._backups_made.pop(path, None)
         self._banner_entries = {}
         self._update_banner()
+
+    def _note_save_failure(self, e, lead):
+        """
+        Route a failed save or rename (e.g. a read-only directory) into
+        the banner instead of letting it raise out of a click handler or
+        observer.
+
+        Parameters
+        ----------
+        e : OSError
+            The exception describing the failure.
+        lead : str
+            Plain-text lead-in for the message, e.g. "The displayed
+            values could not be saved".
+        """
+        first_line = html.escape(str(e).splitlines()[0])
+        message = (
+            f"{lead} ({first_line}); check that this directory and its "
+            "files are writable."
+        )
+        entry = self._banner_entries.get(_LOAD_ERROR_KEY)
+        if entry is None:
+            self._banner_entries[_LOAD_ERROR_KEY] = _BannerEntry(
+                kind="oserror", message=message
+            )
+        else:
+            # Reuse the existing entry (keeping its kind, so e.g. the fix
+            # button stays available for a retry after the user makes the
+            # directory writable). Transient by design: the next refresh
+            # recomposes the standard active wording.
+            entry.message = message
+            entry.resolved = False
+        self._update_banner()
+
+    def _fix_unreadable_files(self, _=None):
+        """
+        Set aside the settings file(s) the last load found unreadable, save
+        the values currently displayed so the directory loads cleanly
+        again, and refresh so the banner reports the outcome -- naming the
+        actual backups from the records the save machinery keeps.
+        """
+        try:
+            self._wd_settings.set_aside_unreadable()
+        except OSError as e:
+            self._note_save_failure(
+                e, "The broken settings file(s) could not be set aside"
+            )
+            return
+        self._save_displayed_values()
+        self._refresh()
+
+    def _keep_displayed_values(self, _=None):
+        """
+        Resolve a full/partial conflict by saving the values currently
+        displayed -- which came from the full settings file -- so the
+        losing partial settings file is preserved as a .bak backup.
+        """
+        self._save_displayed_values()
+        self._refresh()
+
+    def _reload(self, _=None):
+        """
+        Reload the settings from disk. When the user has repaired or
+        removed the problem file(s) by hand, this resolves the banner and
+        un-greys the settings.
+        """
+        self._refresh()
+
+    def _save_displayed_values(self):
+        """
+        Save the values currently displayed in the setting widgets to the
+        working directory in one aggregate save, skipping any widget whose
+        value is incomplete or invalid.
+        """
+        values = {}
+        for setting_widget in self._setting_widgets:
+            widget = setting_widget._widget
+            if hasattr(widget, "_choose_existing"):
+                name = to_snake(widget._item_type_name)
+            else:
+                name = to_snake(widget.model.__name__)
+            try:
+                PartialPhotometrySettings(**{name: widget.value})
+            except ValidationError:
+                # Mirrors the per-widget autosave: an in-progress or
+                # incomplete tab is skipped.
+                continue
+            values[name] = widget.value
+        if not values:
+            return
+        # The banner is the display channel for PhotometrySettingsWarning,
+        # so the warning save() re-emits from its bookkeeping load is
+        # silenced rather than printed.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", PhotometrySettingsWarning)
+            try:
+                self._wd_settings.save(PartialPhotometrySettings(**values), update=True)
+            except OSError as e:
+                self._note_save_failure(e, "The displayed values could not be saved")
+
+    def _resave_chooser_value(self, setting_widget):
+        """
+        Re-save a `ChooseOrMakeNew`'s displayed value when its setting has
+        disappeared from disk. A chooser shows no save button while an
+        existing item is displayed, so stamping its tab not-saved would
+        leave the user with no way to fix it from the widget; instead the
+        displayed value is saved again, mirroring the save that
+        construction performs. A chooser whose displayed value is
+        incomplete falls back to the not-saved stamp.
+        """
+        widget = setting_widget._widget
+        name = to_snake(widget._item_type_name)
+        try:
+            pps = PartialPhotometrySettings(**{name: widget.value})
+        except ValidationError:
+            # No complete value to save; prompt_save is a no-op for a
+            # chooser, so this is just the not-saved stamp.
+            setting_widget.prompt_save()
+            setting_widget.badge = SaveStatus.SETTING_NOT_SAVED
+            return
+        # The banner is the display channel for PhotometrySettingsWarning,
+        # so the warning save() re-emits from its bookkeeping load is
+        # silenced rather than printed.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", PhotometrySettingsWarning)
+            try:
+                self._saver.save(pps, update=True)
+            except OSError as e:
+                self._note_save_failure(e, "The displayed values could not be saved")
+                return
+        self._refresh()
+        setting_widget.badge = SaveStatus.SETTING_IS_SAVED
 
     def _observe_tab_selection(self, change):
         """
         Observer for the tab or accordion selection.
         """
         # Once the user has clicked on the tab, the status badge for the tab
-        # should be the badge for the widget it holds when that badge reports
-        # a positive status and the setting still exists on disk. A badge of
-        # None or NOT_SAVED is instead re-derived by comparing the widget
-        # value to the saved value, so a badge latched at NOT_SAVED can
-        # recover when the setting gets saved by something other than this
-        # widget's own observers -- and a positive badge whose setting has
-        # disappeared from disk drops back to NOT_SAVED.
+        # should stay as-is when the widget reports the setting saved and it
+        # still exists on disk. Any other badge is re-derived by comparing
+        # the widget value to the saved value, so a badge latched at
+        # NOT_SAVED can recover when the setting gets saved by something
+        # other than this widget's own observers, a needs-review badge
+        # settles once the user has looked at the tab -- and a positive
+        # badge whose setting has disappeared from disk drops back to
+        # NOT_SAVED.
 
         new_selected = change["new"]
 
@@ -1229,42 +1619,52 @@ class ReviewSettings(ipw.VBox):
         if new_selected is None:
             return
 
+        # While a load error is active, the on-disk state is broken rather
+        # than missing: the banner is the sole indicator of that, and the
+        # settings below it are greyed out. Badges are never re-derived
+        # from the broken (fallback) snapshot. The CSS inertness is an
+        # affordance only -- programmatic selection bypasses it -- so this
+        # early return is the real guard.
+        if self._load_error_active:
+            return
+
         setting_widget = self._setting_widgets[new_selected]
         setting_badge = setting_widget.badge
 
         # A ChooseOrMakeNew that is making a new item or editing one manages
         # its own badge through _choose_existing_observer; a disk comparison
         # here would report the still-saved on-disk value as SAVED while the
-        # user is mid-edit, so trust its badge unconditionally.
+        # user is mid-edit, so trust its badge unconditionally. The chooser
+        # sets its badge on the next value change anyway.
         chooser = setting_widget._widget
         mid_interaction = (
             isinstance(chooser, ChooseOrMakeNew) and chooser.is_mid_interaction
         )
-        if mid_interaction:
-            # Mid-interaction, even a badge of None is not re-derived from
-            # disk -- the comparison could report the still-saved on-disk
-            # value as SAVED while the user is mid-edit. The chooser sets
-            # its badge on the next value change anyway.
-            if setting_badge is not None:
-                self.badges[new_selected] = setting_badge
-        else:
+        if not mid_interaction:
             snake_name = to_snake(setting_widget._autoui_widget.model.__name__)
             disk_value = getattr(self.current_settings, snake_name)
-            if disk_value is None:
+            if disk_value is None and isinstance(chooser, ChooseOrMakeNew):
+                # A chooser is fixed by re-saving its displayed value, not
+                # by a save button it keeps hidden.
+                self._resave_chooser_value(setting_widget)
+            elif disk_value is None:
                 # No saved value on disk: even a positive badge is stale
                 # here (e.g. the settings file was deleted outside this
                 # widget) -- the mirror image of the latched-NOT_SAVED
                 # recovery below.
+                setting_widget.prompt_save()
                 setting_widget.badge = SaveStatus.SETTING_NOT_SAVED
-            elif setting_badge is not None and (
-                setting_badge != SaveStatus.SETTING_NOT_SAVED
-            ):
-                self.badges[new_selected] = setting_badge
+            elif setting_badge == SaveStatus.SETTING_IS_SAVED:
+                # Saved, and the setting exists on disk: nothing to
+                # re-derive.
+                pass
             else:
-                # A badge of None or NOT_SAVED is re-derived from the
-                # snapshot refreshed above rather than trusted, so a save
-                # made outside this widget's own observers (e.g. by another
-                # widget writing the settings file) is picked up.
+                # Any other badge (None, NOT_SAVED, or needs-review) is
+                # re-derived from the snapshot refreshed above rather than
+                # trusted, so a save made outside this widget's own
+                # observers (e.g. by another widget writing the settings
+                # file) is picked up, and a needs-review badge settles to
+                # SAVED once the user has looked at the tab.
                 try:
                     value_from_widget = (
                         setting_widget._autoui_widget.model.model_validate(
@@ -1273,33 +1673,33 @@ class ReviewSettings(ipw.VBox):
                     )
                 except ValidationError:
                     # The widget holds an incomplete/invalid value; whatever
-                    # is on disk, it does not match what is displayed.
+                    # is on disk, it does not match what is displayed. Also
+                    # prompt for a save, so a red badge never coexists with
+                    # a green save light -- the invalid value keeps the
+                    # save button disabled until it is fixed.
+                    setting_widget.prompt_save()
                     setting_widget.badge = SaveStatus.SETTING_NOT_SAVED
                 else:
                     # A valid widget value that differs from disk deliberately
                     # leaves the badge unchanged, as before this re-derivation
                     # existed.
                     if disk_value == value_from_widget:
+                        # The setting is on disk again, so drop any prompt a
+                        # previous selection left on the save bar.
+                        setting_widget.clear_save_prompt()
                         setting_widget.badge = SaveStatus.SETTING_IS_SAVED
 
         self._container.titles = self._make_titles()
 
-    def _observe_badge_change(self, index):
+    def _observe_badge_change(self, _=None):
         """
-        Observer for the badge of a setting widget.
+        Observer for the badge of any setting widget: the titles are
+        re-derived from the badges, which live on the widgets themselves.
         """
-
-        def observer(change):
-            self.badges[index] = change["new"]
-
-            # This should only be called when a badge changes, so we can just
-            # update the titles.
-            self._container.titles = self._make_titles()
-
-        return observer
+        self._container.titles = self._make_titles()
 
 
-def _add_saving_to_widget(setting_widget):
+def _add_saving_to_widget(setting_widget, wd_settings=None, on_save_error=None):
     """
     Add an observer to a widget that autosaves the settings for that widget to
     the working directory.
@@ -1308,8 +1708,20 @@ def _add_saving_to_widget(setting_widget):
     ----------
     setting_widget : ChooseOrMakeNew
         The widget to add the observer to.
+
+    wd_settings : `~stellarphot.settings.PhotometryWorkingDirSettings`, optional
+        The instance to save through. By default a fresh instance is
+        constructed, which preserves standalone use of this function;
+        `ReviewSettings` passes its shared instance so that the backups
+        these saves make are recorded where the banner can report them.
+
+    on_save_error : callable, optional
+        Called as ``on_save_error(exception, lead_text)`` when the save
+        raises `OSError` (e.g. in a read-only directory). When not
+        provided, the error propagates.
     """
-    wd_settings = PhotometryWorkingDirSettings()
+    if wd_settings is None:
+        wd_settings = PhotometryWorkingDirSettings()
 
     # Define name here so that it is available in the save_wd function. Its
     # value will be set in the if/elif block below.
@@ -1330,7 +1742,12 @@ def _add_saving_to_widget(setting_widget):
         # unaffected.
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", PhotometrySettingsWarning)
-            wd_settings.save(pps, update=True)
+            try:
+                wd_settings.save(pps, update=True)
+            except OSError as e:
+                if on_save_error is None:
+                    raise
+                on_save_error(e, "The displayed values could not be saved")
 
     if hasattr(setting_widget, "_choose_existing"):
         setting_widget._choose_existing.observe(save_wd, "value")

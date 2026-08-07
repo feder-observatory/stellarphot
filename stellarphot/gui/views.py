@@ -1,3 +1,5 @@
+import logging
+
 from ipyautoui import AutoUi
 from ipywidgets import Layout
 
@@ -7,6 +9,22 @@ from stellarphot.settings.models import (
 )
 
 __all__ = ["ui_generator"]
+
+
+def _drop_missing_path_warning(record):
+    return "path given doesnt exist" not in record.getMessage()
+
+
+# ipyautoui's FileChooser logs a warning whenever it is built with a path that
+# does not exist. Settings like SourceLocationSettings default to a file name
+# that is not there yet in a new working directory, so this fires on every
+# fresh widget to report an entirely normal situation -- and the message names
+# no path, so there is nothing actionable to lose by dropping it. A filter on
+# the one message, rather than raising the logger's level, keeps anything else
+# that module logs. This is a process-wide mutation of a third-party logger at
+# import time, accepted because the alternative is threading suppression
+# scaffolding through widget construction to silence a single string.
+logging.getLogger("ipyautoui.custom.filechooser").addFilter(_drop_missing_path_warning)
 
 
 def ui_generator(model, max_field_width=None, file_chooser_max_width=None):

@@ -47,22 +47,44 @@ Other Changes and Additions
   assertions to the settings JSON/table round-trip tests; and pinned the
   ``klims`` workaround for pytransit's ``RoadRunnerModel`` with a regression
   test at the maximum allowed planet radius. [#653]
-+ ``ReviewSettings`` now shows a dismissible banner above the settings when
-  the saved settings in the working directory cannot be read or when
-  loading them raises a warning of the new
++ ``ReviewSettings`` now shows a banner above the settings when the saved
+  settings in the working directory cannot be read or when loading them
+  raises a warning of the new
   ``stellarphot.settings.PhotometrySettingsWarning`` category (other
   warning categories stay out of the banner); previously such problems
   were silently ignored and the widget came up with defaults and no
-  explanation. When one of the settings files is readable, the widget now
-  starts from it instead of from defaults.
-  ``PhotometryWorkingDirSettings.save`` no longer overwrites or deletes a
-  settings file whose contents could not be read, or a partial settings
-  file with values not carried into the full settings being written; such
-  files are preserved with a ``.bak`` suffix (or the next available
-  numbered ``.bak1``, ``.bak2``, ... -- existing backups are never
-  overwritten). Note that ``ReviewSettings.current_settings`` is now a
-  snapshot rather than a live re-read of the settings files, refreshed at
-  the end of widget construction and on each tab selection. [#657]
+  explanation. Each problem is reported as a single short line, with the
+  full error behind a collapsed "Full error" disclosure. Because widget
+  construction and every save repair broken settings files
+  automatically, a problem that is still active means the files changed
+  outside the widget; the banner says so, turns amber, greys out the
+  settings below, and cannot be dismissed -- its buttons are the way
+  forward. For an unreadable settings file that is a "Set aside broken
+  file(s) and keep the values shown" button that renames the file to a
+  ``.bak`` backup and re-saves the displayed values; for settings files
+  that disagree with each other, a "Keep the values shown" button that
+  resolves the conflict the same way; and for every active problem a
+  "Reload" button for repairs made by hand. Once no problem remains --
+  including one cured by an automatic save before the user ever saw the
+  banner -- the banner turns a calm green, becomes dismissable, and
+  names the actual ``.bak`` file(s) that were created rather than
+  guessing about them. When one of the settings files is readable, the
+  widget now starts from it instead of from defaults.
+  ``PhotometryWorkingDirSettings.save`` no longer overwrites or
+  deletes a settings file whose contents could not be read, or a partial
+  settings file with values not carried into the full settings being
+  written; such files are preserved with a ``.bak`` suffix (or the next
+  available numbered ``.bak1``, ``.bak2``, ... -- existing backups are
+  never overwritten), and a save now sets aside every settings file its
+  pre-save load found unreadable, not just the file being rewritten, so
+  any save leaves the directory readable again.
+  ``PhotometryWorkingDirSettings`` also gains a public
+  ``set_aside_unreadable`` method that renames the file(s) the most
+  recent load found unreadable to ``.bak`` backups, and a read-only
+  ``backups_made`` property recording the backups an instance has
+  created. Note that ``ReviewSettings.current_settings`` is now a
+  snapshot rather than a live re-read of the settings files, refreshed
+  at the end of widget construction and on each tab selection. [#657]
 
 Bug Fixes
 ^^^^^^^^^
@@ -96,7 +118,27 @@ Bug Fixes
   existing settings. In ``ReviewSettings``, collapsing every section of an
   accordion no longer raises, selecting a tab whose setting is not saved
   now actually marks the tab as not saved, and a tab badge stuck at
-  not-saved recovers when the setting is saved outside the widget. [#657]
+  not-saved recovers when the setting is saved outside the widget. A tab
+  badge also drops back to not-saved when its setting disappears from disk,
+  and a tab marked not-saved now shows its save button as having unsaved
+  changes, with a note saying the setting is not saved in this directory,
+  so it can be fixed with a single click instead of appearing inert.
+  While a settings file is unreadable or the settings files conflict,
+  tabs are no longer stamped not-saved one by one as they are selected --
+  the banner is the sole indicator of that problem; the not-saved
+  stamping still applies when a setting is simply missing from disk.
+  A tab whose setting is chosen from saved items (camera, observatory,
+  passband map) now re-saves its displayed value when the setting
+  disappears from disk, instead of latching a not-saved badge such a tab
+  offers no save button to clear, and a tab whose displayed value is
+  invalid is prompted for a save when selected instead of pairing a
+  not-saved badge with a save bar that claims there is nothing to save.
+  A failed automatic save (e.g. in a directory that has become
+  read-only) is now reported in the banner instead of raising out of the
+  widget's observers.
+  Finally, a spurious "path given doesnt exist" warning from ipyautoui's
+  file chooser no longer appears above settings widgets in a working
+  directory that does not yet contain a source list file. [#657]
 
 2.1.2 (2026-07-19)
 -------------------

@@ -308,6 +308,7 @@ class PhotometryWorkingDirSettings:
         self._settings = None
         self._full_settings_unreadable = False
         self._partial_settings_unreadable = False
+        self._backups_made = {}
 
     @property
     def settings(self):
@@ -344,6 +345,17 @@ class PhotometryWorkingDirSettings:
         not set by a bad file appearing, until the next `load`.
         """
         return self._partial_settings_unreadable
+
+    @property
+    def backups_made(self):
+        """
+        Mapping of each original `pathlib.Path` this instance has renamed
+        to a backup -- whether by `save` or by `set_aside_unreadable` -- to
+        the `pathlib.Path` of its backup. When the same file has been set
+        aside more than once, the most recent backup wins. A copy is
+        returned, so mutating it does not affect the instance's records.
+        """
+        return dict(self._backups_made)
 
     # Properties for settings file and partial settings file
     @property
@@ -434,7 +446,46 @@ class PhotometryWorkingDirSettings:
         # widget-driven code accepts. rename() would not close it either:
         # os.rename also silently replaces an existing file on POSIX.
         path.replace(backup)
+        # Record the rename so callers (e.g. the ReviewSettings banner) can
+        # report the actual backup name instead of guessing at it.
+        self._backups_made[path] = backup
         return backup
+
+    def set_aside_unreadable(self):
+        """
+        Rename any settings file the most recent `load` on this instance
+        found unreadable to a ``.bak`` name (or the next free numbered
+        backup) and return a dict mapping each original path to its backup
+        path.
+
+        A file that has been removed or repaired-and-reloaded since that
+        load is skipped. The corresponding unreadable flag is cleared for
+        each file set aside, so the flags keep describing the directory
+        contents.
+
+        Returns
+        -------
+        dict
+            Mapping of each original `pathlib.Path` that was renamed to the
+            `pathlib.Path` of its backup. Empty when there was nothing to
+            set aside.
+
+        Raises
+        ------
+        OSError
+            If a rename fails (e.g. the directory is not writable). Any
+            file already renamed stays renamed.
+        """
+        moved = {}
+        if self._full_settings_unreadable and self._settings_file.exists():
+            moved[self._settings_file] = self._move_aside(self._settings_file)
+            self._full_settings_unreadable = False
+        if self._partial_settings_unreadable and self._partial_settings_file.exists():
+            moved[self._partial_settings_file] = self._move_aside(
+                self._partial_settings_file
+            )
+            self._partial_settings_unreadable = False
+        return moved
 
     def save(self, settings, update=False):
         """
@@ -468,13 +519,16 @@ class PhotometryWorkingDirSettings:
 
         An existing settings file that cannot be read is never overwritten in
         place; it is renamed with a ``.bak`` suffix before the new settings are
-        written. A readable partial settings file whose non-None values are
-        not all carried into the full settings being written is likewise
-        renamed with a ``.bak`` suffix, rather than deleted, when a save
-        writes full settings -- it may hold the only copy of those values.
-        Existing backups are never overwritten; if a ``.bak`` file already
-        exists, numbered suffixes (``.bak1``, ``.bak2``, ...) are used
-        instead.
+        written. A save also sets aside, with the same ``.bak`` naming, any
+        settings file its pre-save load found unreadable even when the save
+        does not rewrite that particular file -- a save never leaves behind a
+        file it knows is unreadable. A readable partial settings file whose
+        non-None values are not all carried into the full settings being
+        written is likewise renamed with a ``.bak`` suffix, rather than
+        deleted, when a save writes full settings -- it may hold the only
+        copy of those values. Existing backups are never overwritten; if a
+        ``.bak`` file already exists, numbered suffixes (``.bak1``,
+        ``.bak2``, ...) are used instead.
         """
         full_settings = False
 
@@ -532,8 +586,8 @@ class PhotometryWorkingDirSettings:
                                 f"exists at {self._settings_file} but could not be "
                                 "read. Fix or remove that file, or save with "
                                 "update=True, which saves the partial settings and "
-                                "preserves the unreadable file -- in place, or as a "
-                                ".bak backup if the save produces complete settings."
+                                "sets the unreadable full settings file aside as a "
+                                ".bak backup."
                             )
                         raise ValueError(
                             "Cannot save partial settings when full "
@@ -618,6 +672,14 @@ class PhotometryWorkingDirSettings:
             # After a successful replace the temporary file no longer exists,
             # so this only cleans up after a failed write.
             tmp_file.unlink(missing_ok=True)
+
+        if not full_settings and unreadable_full and self._settings_file.exists():
+            # This save wrote only the partial file, but the bookkeeping load
+            # found the full settings file unreadable. Leaving that file
+            # behind would keep every future load failing, so it is set
+            # aside now that the new partial settings are safely on disk.
+            self._move_aside(self._settings_file)
+            self._settings = None
 
         if full_settings:
             # Now that the full settings that supersede the partial settings
