@@ -427,7 +427,7 @@ class PhotometryWorkingDirSettings:
                             "Cannot save partial settings when full "
                             "settings already exist."
                         )
-                    else:
+                    elif self._settings is not None:
                         # Load the full settings and update them with the
                         # partial settings
                         disk_settings = self._settings.model_dump()
@@ -439,6 +439,10 @@ class PhotometryWorkingDirSettings:
                         disk_settings = PhotometrySettings.model_validate(disk_settings)
 
                         settings = disk_settings
+                    # If the settings file exists but could not be read then
+                    # self._settings is None and there is nothing to merge the
+                    # partial settings into. The partial settings are saved on
+                    # their own.
 
                 # Are we updating or replacing partial settings?
                 if update and self._partial_settings is not None:
