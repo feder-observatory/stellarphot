@@ -1,3 +1,4 @@
+import warnings
 from copy import deepcopy
 from pathlib import Path
 
@@ -26,6 +27,7 @@ from stellarphot.settings import (
     PassbandMap,
     PhotometryApertures,
     PhotometryOptionalSettings,
+    PhotometrySettingsWarning,
     PhotometryWorkingDirSettings,
     SavedSettings,
     SourceLocationSettings,
@@ -1286,6 +1288,158 @@ class TestReviewSettings:
         # the badge list and the tab title.
         assert review_settings.badges[0] == SaveStatus.SETTING_NOT_SAVED
         assert SaveStatus.SETTING_NOT_SAVED in review_settings._container.titles[0]
+
+    @staticmethod
+    def _patch_load_to_warn(mocker, message, category, raise_after=False):
+        # Patch PhotometryWorkingDirSettings.load to warn with the given
+        # message and category; with raise_after, the load then fails with
+        # ValueError, mimicking a file that warns during parsing but is
+        # still unusable.
+        def fake_load(_self):
+            warnings.warn(message, category, stacklevel=2)
+            if raise_after:
+                raise ValueError("settings file is unreadable")
+            return PartialPhotometrySettings()
+
+        mocker.patch.object(
+            settings_files.PhotometryWorkingDirSettings, "load", fake_load
+        )
+
+    def test_banner_hidden_when_no_settings_files(self):
+        # With no saved settings there is nothing to report, so the banner
+        # is empty and hidden.
+        review_settings = ReviewSettings([Camera])
+        assert review_settings._banner_html.value == ""
+        assert review_settings._banner.layout.display == "none"
+
+    def test_banner_shows_warnings_from_loading_settings(self, mocker):
+        # Warnings of the PhotometrySettingsWarning category generated while
+        # loading settings (e.g. a settings-format migration) should be
+        # displayed in the banner.
+        self._patch_load_to_warn(
+            mocker, "Settings were migrated", PhotometrySettingsWarning
+        )
+        review_settings = ReviewSettings([Camera])
+
+        assert "Settings were migrated" in review_settings._banner_html.value
+        assert review_settings._banner.layout.display == "flex"
+
+    @pytest.mark.parametrize("category", [DeprecationWarning, UserWarning])
+    def test_banner_ignores_other_warning_categories(self, mocker, category):
+        # Only PhotometrySettingsWarning is user-actionable; anything else
+        # raised on the load path -- a DeprecationWarning from a library
+        # internal, or a plain UserWarning such as a pydantic serializer
+        # warning -- should stay out of the banner.
+        self._patch_load_to_warn(mocker, "some library warning", category)
+        review_settings = ReviewSettings([Camera])
+
+        assert review_settings._banner_html.value == ""
+        assert review_settings._banner.layout.display == "none"
+
+    def test_banner_escapes_html_in_warning_text(self, mocker):
+        # Warning text is escaped so markup in a message cannot inject HTML
+        # into the banner.
+        self._patch_load_to_warn(
+            mocker, "Settings were <b>migrated</b>", PhotometrySettingsWarning
+        )
+        review_settings = ReviewSettings([Camera])
+
+        assert "&lt;b&gt;migrated&lt;/b&gt;" in review_settings._banner_html.value
+        assert "<b>migrated</b>" not in review_settings._banner_html.value
+
+    def test_banner_shows_warning_recorded_before_load_raises(self, mocker):
+        # A warning recorded before the load raises ValueError still reaches
+        # the banner -- the path a settings file that is migrated but still
+        # unreadable will hit.
+        self._patch_load_to_warn(
+            mocker,
+            "Settings were migrated",
+            PhotometrySettingsWarning,
+            raise_after=True,
+        )
+        review_settings = ReviewSettings([Camera])
+
+        assert "Settings were migrated" in review_settings._banner_html.value
+        assert review_settings._banner.layout.display == "flex"
+        assert review_settings.current_settings == PartialPhotometrySettings()
+
+    def test_banner_is_sticky_across_reloads(self, mocker):
+        # Once shown, the banner stays up even after a later load emits no
+        # warning -- e.g. after an autosave has rewritten the settings file
+        # in a format that no longer warns. Selecting a tab reloads the
+        # settings and must not clear the notice.
+        self._patch_load_to_warn(
+            mocker, "Settings were migrated", PhotometrySettingsWarning
+        )
+        review_settings = ReviewSettings([Camera, PhotometryApertures])
+
+        # Later loads are clean, as they would be after the file was
+        # re-saved in the new format.
+        mocker.patch.object(
+            settings_files.PhotometryWorkingDirSettings,
+            "load",
+            lambda _self: PartialPhotometrySettings(),
+        )
+        review_settings._container.selected_index = 1
+
+        assert "Settings were migrated" in review_settings._banner_html.value
+        assert review_settings._banner.layout.display == "flex"
+
+    def test_banner_dismiss_button_hides_banner(self, mocker):
+        # The banner never clears itself (it is sticky across reloads), so
+        # the dismiss button is the one way to hide it once it is shown.
+        self._patch_load_to_warn(
+            mocker, "Settings were migrated", PhotometrySettingsWarning
+        )
+        review_settings = ReviewSettings([Camera])
+        assert review_settings._banner.layout.display == "flex"
+
+        review_settings._banner_dismiss.click()
+
+        assert review_settings._banner.layout.display == "none"
+
+    def test_banner_dismiss_button_matches_banner_style(self, mocker):
+        # The dismiss button is styled with the same color as the banner
+        # border.
+        self._patch_load_to_warn(
+            mocker, "Settings were migrated", PhotometrySettingsWarning
+        )
+        review_settings = ReviewSettings([Camera])
+
+        button_color = review_settings._banner_dismiss.style.button_color
+        assert button_color is not None
+        assert f"solid {button_color}" in review_settings._banner_html.value
+
+    def test_widget_saves_do_not_leak_settings_warnings(self, mocker):
+        # Constructing the widget autosaves settings, and every save does a
+        # bookkeeping load that re-raises any settings warning. Those
+        # repeats must not escape to the notebook log -- the banner is the
+        # only display channel. PhotometryApertures is used because it is
+        # saveable from defaults, which triggers the autosave.
+        self._patch_load_to_warn(
+            mocker, "Settings were migrated", PhotometrySettingsWarning
+        )
+        with warnings.catch_warnings(record=True) as leaked:
+            warnings.simplefilter("always")
+            review_settings = ReviewSettings([PhotometryApertures])
+
+        assert not [
+            w for w in leaked if issubclass(w.category, PhotometrySettingsWarning)
+        ]
+        # The warning still reached the banner.
+        assert "Settings were migrated" in review_settings._banner_html.value
+
+    def test_widget_children_structure(self):
+        # The banner rides above the settings container and holds the
+        # message plus its dismiss button.
+        review_settings = ReviewSettings([Camera])
+        banner, container = review_settings.children
+        assert banner is review_settings._banner
+        assert container is review_settings._container
+        assert banner.children == (
+            review_settings._banner_html,
+            review_settings._banner_dismiss,
+        )
 
 
 def test_add_saving_with_unrecognized_widget():

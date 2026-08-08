@@ -47,6 +47,12 @@ Other Changes and Additions
   assertions to the settings JSON/table round-trip tests; and pinned the
   ``klims`` workaround for pytransit's ``RoadRunnerModel`` with a regression
   test at the maximum allowed planet radius. [#653]
++ ``ReviewSettings`` now displays warnings of the new
+  ``stellarphot.settings.PhotometrySettingsWarning`` category, raised while
+  loading the working-directory settings, in a dismissible banner above the
+  settings instead of letting them disappear into the notebook log. Nothing
+  emits the warning yet; the settings-format migration that will is being
+  added in #656. [#663]
 
 Bug Fixes
 ^^^^^^^^^
