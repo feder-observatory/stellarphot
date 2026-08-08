@@ -32,6 +32,12 @@ __all__ = ["ChooseOrMakeNew", "Confirm", "SettingWithTitle"]
 
 DEFAULT_BUTTON_WIDTH = "300px"
 
+# Colors for the settings-warning banner in ReviewSettings; the dismiss
+# button is styled to match the banner border.
+_BANNER_BORDER_COLOR = "#ffc107"
+_BANNER_TEXT_COLOR = "#664d03"
+_BANNER_BACKGROUND_COLOR = "#fff3cd"
+
 
 class ChooseOrMakeNew(ipw.VBox):
     """
@@ -768,19 +774,36 @@ class ReviewSettings(ipw.VBox):
     `~stellarphot.settings.PhotometrySettingsWarning` category (e.g. a
     settings-format migration), the warning is displayed in a banner above
     the settings instead of being lost in the notebook log. Other warning
-    categories stay out of the banner.
+    categories stay out of the banner. The banner stays up until the user
+    dismisses it, even though later reloads of the settings -- which happen
+    on every tab selection -- may no longer raise the warning.
     """
 
     def __init__(self, settings, style="tabs", *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         # Banner for messages about the saved settings. It is hidden unless
-        # there is a message to show.
-        self._banner = ipw.HTML()
-        self._banner.layout.display = "none"
-        self._banner_messages = []
+        # there is a message to show, and once shown it stays up until the
+        # user dismisses it.
+        self._banner_html = ipw.HTML()
+        self._banner_dismiss = ipw.Button(
+            description="✕",
+            tooltip="Dismiss this message",
+            layout=ipw.Layout(width="2.5em"),
+        )
+        self._banner_dismiss.style.button_color = _BANNER_BORDER_COLOR
+        self._banner_dismiss.style.text_color = _BANNER_TEXT_COLOR
+        self._banner = ipw.HBox([self._banner_html, self._banner_dismiss])
 
-        # Get a copy of whatever settings may have already been saved.
-        self._current_settings = self._load_working_dir_settings()
+        def dismiss_banner(_):
+            self._banner.layout.display = "none"
+
+        self._banner_dismiss.on_click(dismiss_banner)
+
+        # Get a copy of whatever settings may have already been saved,
+        # showing any warnings the load raised in the banner. This is the
+        # only place the banner is set: reloads by the current_settings
+        # property must not clear a notice the user has not yet dismissed.
+        self._update_banner(self._load_working_dir_settings())
 
         self._setting_widgets = []
         self._plain_names = []
@@ -899,16 +922,16 @@ class ReviewSettings(ipw.VBox):
         """
         The current settings in the widget.
         """
-        self._current_settings = self._load_working_dir_settings()
+        self._load_working_dir_settings()
         return self._current_settings
 
     def _load_working_dir_settings(self):
         """
-        Load settings from the working directory, routing any
-        `~stellarphot.settings.PhotometrySettingsWarning` the load generates
-        into the banner instead of letting it be lost in the notebook log.
+        Load settings from the working directory into
+        ``self._current_settings`` and return the messages of any
+        `~stellarphot.settings.PhotometrySettingsWarning` the load
+        generated, for display in the banner instead of the notebook log.
         """
-        recorded = []
         try:
             # Only PhotometrySettingsWarning -- the category for
             # user-actionable problems with the saved settings, such as a
@@ -922,29 +945,30 @@ class ReviewSettings(ipw.VBox):
                 loaded = PhotometryWorkingDirSettings().load()
         except ValueError:
             # No readable settings in the working directory; start from
-            # defaults, keeping any warnings recorded before the error.
+            # defaults, keeping any warnings recorded before the error --
+            # recorded is bound by the with statement before anything in
+            # its body can raise.
             loaded = PartialPhotometrySettings()
 
-        self._banner_messages = [str(warning.message) for warning in recorded]
-        self._update_banner()
-        return loaded
+        self._current_settings = loaded
+        return [str(warning.message) for warning in recorded]
 
-    def _update_banner(self):
+    def _update_banner(self, messages):
         """
         Show the banner if there are messages, hide it if there are none.
         """
-        if self._banner_messages:
-            content = "".join(
-                f"<p>⚠️ {html.escape(msg)}</p>" for msg in self._banner_messages
-            )
-            self._banner.value = (
-                "<div style='border: 2px solid #ffc107; border-radius: 4px; "
-                "background-color: #fff3cd; color: #664d03; "
+        if messages:
+            content = "".join(f"<p>⚠️ {html.escape(msg)}</p>" for msg in messages)
+            self._banner_html.value = (
+                f"<div style='border: 2px solid {_BANNER_BORDER_COLOR}; "
+                f"border-radius: 4px; "
+                f"background-color: {_BANNER_BACKGROUND_COLOR}; "
+                f"color: {_BANNER_TEXT_COLOR}; "
                 f"padding: 0.25em 1em;'>{content}</div>"
             )
             self._banner.layout.display = "flex"
         else:
-            self._banner.value = ""
+            self._banner_html.value = ""
             self._banner.layout.display = "none"
 
     def _observe_tab_selection(self, change):
@@ -1026,8 +1050,14 @@ def _add_saving_to_widget(setting_widget):
             # This can happen while making a new item, or while in the process of
             # editing one
             return
-        # We have a validated setting so save it.
-        wd_settings.save(pps, update=True)
+        # We have a validated setting so save it. The save does a
+        # bookkeeping load of the settings file, which can re-raise a
+        # PhotometrySettingsWarning that the ReviewSettings banner has
+        # already displayed; suppress that category, and only that
+        # category, so the repeat stays out of the notebook log.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", PhotometrySettingsWarning)
+            wd_settings.save(pps, update=True)
 
     if hasattr(setting_widget, "_choose_existing"):
         setting_widget._choose_existing.observe(save_wd, "value")
