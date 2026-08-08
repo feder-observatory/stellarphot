@@ -23,6 +23,10 @@ from stellarphot.core import (
     coords_in_frame,
 )
 from stellarphot.settings import Camera, Observatory, PassbandMap
+from stellarphot.settings.models import (
+    PHOTOMETRY_SETTINGS_FORMAT_VERSION,
+    PhotometrySettingsWarning,
+)
 
 # Create several test descriptions for use in base_enhanced_table tests.
 test_descript = {
@@ -682,6 +686,32 @@ def test_photometry_roundtrip_ecsv(tmp_path, feder_cg_16m, feder_passbands, fede
     # Check a couple of the columns that are not standard types
     assert phot_data["date-obs"] == phot_data2["date-obs"]
     assert phot_data["ra"] == phot_data2["ra"]
+
+
+def test_photometry_read_with_too_new_settings_in_meta(
+    tmp_path, feder_cg_16m, feder_passbands, feder_obs
+):
+    # A photometry file whose metadata embeds settings written by a newer
+    # stellarphot must still open; the too-new settings are left in the
+    # metadata as a plain dictionary rather than failing the whole read.
+    file_path = tmp_path / "test_photometry.ecsv"
+    phot_data = PhotometryData(
+        observatory=feder_obs,
+        camera=feder_cg_16m,
+        passband_map=feder_passbands,
+        input_data=testphot_clean,
+    )
+    too_new = {
+        "_model_name": "PhotometrySettings",
+        "settings_version": PHOTOMETRY_SETTINGS_FORMAT_VERSION + 1,
+    }
+    phot_data.meta["photometry_settings"] = dict(too_new)
+    phot_data.write(file_path)
+
+    with pytest.warns(PhotometrySettingsWarning, match="newer version"):
+        phot_data2 = PhotometryData.read(file_path)
+    assert phot_data2.meta["photometry_settings"] == too_new
+    assert phot_data2["ra"] == phot_data["ra"]
 
 
 def test_photometry_slicing(feder_cg_16m, feder_passbands, feder_obs):

@@ -35,9 +35,6 @@ from .astropy_pydantic import (
     _UnitQuantTypePydanticAnnotation,
 )
 
-# NOTE: Everything in __all__ must be a class, because table_representations
-# builds a tuple from it that is passed to isinstance(). Module-level
-# constants like PHOTOMETRY_SETTINGS_FORMAT_VERSION must NOT be listed here.
 __all__ = [
     "Camera",
     "FwhmMethods",
@@ -1292,7 +1289,10 @@ class PhotometrySettings(BaseModelWithTableRep):
                 "This message will not appear again once the settings are "
                 "saved.",
                 PhotometrySettingsMigrationWarning,
-                stacklevel=2,
+                # No stack level is meaningful from inside a validator, so
+                # attribute the warning to this call site rather than to
+                # pydantic internals.
+                stacklevel=1,
             )
         return data
 

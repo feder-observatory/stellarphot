@@ -1,10 +1,28 @@
 import json
+import warnings
 
 from astropy.io.misc.yaml import AstropyDumper, AstropyLoader
+from pydantic import BaseModel
 
 from stellarphot.settings import models
 
 __all__ = []
+
+
+def _known_model_classes():
+    """
+    Mapping of class name to class for the pydantic models in
+    `stellarphot.settings.models`.
+
+    ``models.__all__`` also lists classes that are not pydantic models --
+    exceptions, warning categories, and the FwhmMethods enum. Those have no
+    table representation, so they are excluded here.
+    """
+    return {
+        name: obj
+        for name in models.__all__
+        if isinstance(obj := getattr(models, name), type) and issubclass(obj, BaseModel)
+    }
 
 
 def generate_table_representers(cls):
@@ -53,7 +71,7 @@ def serialize_models_in_table_meta(table_meta):
     table_meta : dict
         The metadata dictionary of the table.
     """
-    model_classes = tuple(getattr(models, model_name) for model_name in models.__all__)
+    model_classes = tuple(_known_model_classes().values())
 
     for key, value in table_meta.items():
         # If the value is a model instance, serialize it
@@ -104,9 +122,7 @@ def deserialize_models_in_table_meta(table_meta):
     table_meta : dict
         The metadata dictionary of the table.
     """
-    known_models = {
-        model_name: getattr(models, model_name) for model_name in models.__all__
-    }
+    known_models = _known_model_classes()
 
     model_keys_in_meta = []
     for key, value in table_meta.items():
@@ -121,8 +137,26 @@ def deserialize_models_in_table_meta(table_meta):
                 deserialize_models_in_table_meta(value)
 
     for key in model_keys_in_meta:
-        model_name = table_meta[key].pop("_model_name")
-        table_meta[key] = known_models[model_name].model_validate(table_meta[key])
+        model_dict = dict(table_meta[key])
+        model_name = model_dict.pop("_model_name")
+        try:
+            table_meta[key] = known_models[model_name].model_validate(model_dict)
+        except models.NewerFormatError as e:
+            # The model was written by a newer version of stellarphot than
+            # this one. The table's data are still perfectly readable, so
+            # leave the entry as the plain dictionary -- _model_name
+            # included, so re-serializing keeps it readable by the newer
+            # version -- rather than failing the whole read.
+            warnings.warn(
+                f"The {model_name} in this table's metadata was written by "
+                f"a newer version of stellarphot and is left as a plain "
+                f"dictionary: {e}",
+                models.PhotometrySettingsWarning,
+                # The caller several frames up is astropy's table reader;
+                # pointing there would not help anyone. Attribute the
+                # warning to this call site.
+                stacklevel=1,
+            )
 
 
 def _generate_old_table_representers():
@@ -130,6 +164,5 @@ def _generate_old_table_representers():
     This provides what is needed to read the "old-style" data tables in
     which the models were stored as objects in the table metadata.
     """
-    for model_name in models.__all__:
-        model_class = getattr(models, model_name)
+    for model_class in _known_model_classes().values():
         generate_table_representers(model_class)
