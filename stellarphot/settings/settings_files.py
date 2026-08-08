@@ -111,11 +111,24 @@ def _copy_aside(path):
     """
     backup = _backup_path(path)
     # Copy bytes, not text -- the file being set aside may not be
-    # decodable. Exclusive creation ("x") preserves the guarantee that
-    # an existing backup is never overwritten even if the chosen name
-    # appears between _backup_path and this write.
-    with backup.open("xb") as f:
-        f.write(path.read_bytes())
+    # decodable. Reading before the backup is created means a source
+    # that cannot be read leaves nothing behind. Exclusive creation
+    # ("x") preserves the guarantee that an existing backup is never
+    # overwritten even if the chosen name appears between _backup_path
+    # and this write.
+    data = path.read_bytes()
+    try:
+        with backup.open("xb") as f:
+            f.write(data)
+    except FileExistsError:
+        # The exclusive open created nothing -- the file at the backup
+        # name belongs to another writer, so it must not be removed.
+        raise
+    except OSError:
+        # A failed write leaves an empty or truncated backup that later
+        # set-asides would skip past; remove it before propagating.
+        backup.unlink(missing_ok=True)
+        raise
     return backup
 
 

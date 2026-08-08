@@ -381,6 +381,73 @@ class TestSavedSettings:
         assert loaded_camera == camera
 
 
+class TestCopyAside:
+    # _copy_aside must never leave a partial backup behind: an empty or
+    # truncated .bak would make later set-asides skip to .bak1 while a
+    # user recovering by hand finds the useless .bak first.
+
+    def test_read_failure_creates_no_backup(self, tmp_path, mocker):
+        # The source is read before the backup is created, so a source
+        # that cannot be read leaves nothing behind.
+        source = tmp_path / "settings.json"
+        source.write_text("important stuff")
+
+        mocker.patch.object(Path, "read_bytes", side_effect=PermissionError("denied"))
+        with pytest.raises(PermissionError, match="denied"):
+            settings_files._copy_aside(source)
+
+        assert not bak_path(source).exists()
+
+    def test_write_failure_removes_partial_backup(self, tmp_path, mocker):
+        source = tmp_path / "settings.json"
+        source.write_text("important stuff")
+
+        real_open = Path.open
+
+        class FailingWriter:
+            def __init__(self, handle):
+                self._handle = handle
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                self._handle.close()
+                return False
+
+            def write(self, _data):
+                raise OSError("no space left on device")
+
+        def failing_open(self, mode="r", *args, **kwargs):
+            handle = real_open(self, mode, *args, **kwargs)
+            return FailingWriter(handle) if "x" in mode else handle
+
+        mocker.patch.object(Path, "open", failing_open)
+        with pytest.raises(OSError, match="no space"):
+            settings_files._copy_aside(source)
+
+        assert not bak_path(source).exists()
+        assert source.read_text() == "important stuff"
+
+    def test_lost_backup_name_race_does_not_delete_existing_backup(
+        self, tmp_path, mocker
+    ):
+        # If another writer claims the chosen backup name between
+        # _backup_path and the exclusive open, the FileExistsError that
+        # results must not delete the other writer's file -- only a
+        # backup this call actually created may be cleaned up.
+        source = tmp_path / "settings.json"
+        source.write_text("new corruption")
+        existing = bak_path(source)
+        existing.write_text("previous backup")
+
+        mocker.patch.object(settings_files, "_backup_path", return_value=existing)
+        with pytest.raises(FileExistsError):
+            settings_files._copy_aside(source)
+
+        assert existing.read_text() == "previous backup"
+
+
 class TestPhotometryWorkingDirSettings:
     def setup_class(cls):
         cls.temp_dir = TemporaryDirectory()
@@ -498,78 +565,60 @@ class TestPhotometryWorkingDirSettings:
         else:
             assert settings_file.settings.camera.name == full_settings.camera.name
 
-    def test_save_partial_update_with_unreadable_full_settings(self):
-        # An existing full settings file that cannot be read used to make
-        # save(partial, update=True) crash with an AttributeError, because
-        # the failed load left self._settings as None. There is nothing to
-        # merge the partial settings into in that case, so the partial
-        # settings are saved on their own and the unreadable file is set
-        # aside as .bak -- a save never leaves behind a file it knows is
-        # unreadable.
+    # Each case corrupts one settings file, saves new settings, and checks
+    # that the save lands in the right file while the corrupt content is
+    # preserved as a .bak backup rather than overwritten or deleted. The
+    # first case is also a regression test: an unreadable full settings
+    # file used to make save(partial, update=True) crash with an
+    # AttributeError because the failed load left self._settings as None.
+    @pytest.mark.parametrize(
+        "corrupt, saved, expect_full",
+        [
+            # unreadable full + incomplete partial save: partial written,
+            # full set aside
+            ("full", "partial", False),
+            # unreadable partial + incomplete partial save: new partial
+            # written, old partial set aside
+            ("partial", "partial", False),
+            # unreadable full + complete partial save: full written
+            ("full", "complete", True),
+            # unreadable partial + full save: full written, partial set
+            # aside instead of the usual deletion
+            ("partial", "full", True),
+        ],
+    )
+    def test_save_with_unreadable_settings_file_makes_backup(
+        self, corrupt, saved, expect_full
+    ):
         settings_file = PhotometryWorkingDirSettings()
         bad_content = '{"pasta": "carbonara"}'
-        settings_file.settings_file.write_text(bad_content)
+        corrupt_path = (
+            settings_file.settings_file
+            if corrupt == "full"
+            else settings_file.partial_settings_file
+        )
+        corrupt_path.write_text(bad_content)
 
-        camera = Camera.model_validate_json(CAMERA)
-        partial_settings = PartialPhotometrySettings(camera=camera)
-        settings_file.save(partial_settings, update=True)
+        if saved == "full":
+            to_save = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+            settings_file.save(to_save)
+        else:
+            to_save = (
+                PartialPhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+                if saved == "complete"
+                else PartialPhotometrySettings(
+                    camera=Camera.model_validate_json(CAMERA)
+                )
+            )
+            settings_file.save(to_save, update=True)
 
-        assert settings_file.partial_settings_file.exists()
-        assert settings_file.partial_settings == partial_settings
-        assert not settings_file.settings_file.exists()
-        backup_file = bak_path(settings_file.settings_file)
-        assert backup_file.read_text() == bad_content
-
-    def test_save_partial_with_unreadable_partial_settings_makes_backup(self):
-        # An existing partial settings file that cannot be read should not be
-        # overwritten by a partial save. The new partial settings are written
-        # and the unreadable original is preserved with a .bak suffix.
-        settings_file = PhotometryWorkingDirSettings()
-        bad_content = '{"pasta": "carbonara"}'
-        settings_file.partial_settings_file.write_text(bad_content)
-
-        camera = Camera.model_validate_json(CAMERA)
-        partial_settings = PartialPhotometrySettings(camera=camera)
-        settings_file.save(partial_settings, update=True)
-
-        assert settings_file.partial_settings_file.exists()
-        assert settings_file.partial_settings == partial_settings
-        backup_file = bak_path(settings_file.partial_settings_file)
-        assert backup_file.read_text() == bad_content
-
-    def test_save_full_with_unreadable_full_settings_makes_backup(self):
-        # An existing full settings file that cannot be read should not be
-        # overwritten when partial settings that are actually complete are
-        # saved to the full settings file. The new full settings are written
-        # and the unreadable original is preserved with a .bak suffix.
-        settings_file = PhotometryWorkingDirSettings()
-        bad_content = '{"pasta": "amatriciana"}'
-        settings_file.settings_file.write_text(bad_content)
-
-        settings = PartialPhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
-        settings_file.save(settings, update=True)
-
-        assert settings_file.settings_file.exists()
-        assert settings_file.settings == settings
-        backup_file = bak_path(settings_file.settings_file)
-        assert backup_file.read_text() == bad_content
-
-    def test_save_full_with_unreadable_partial_settings_makes_backup(self):
-        # Saving full settings normally deletes any partial settings file. If
-        # the partial settings file cannot be read it should instead be
-        # preserved with a .bak suffix.
-        settings_file = PhotometryWorkingDirSettings()
-        bad_content = '{"pasta": "puttanesca"}'
-        settings_file.partial_settings_file.write_text(bad_content)
-
-        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
-        settings_file.save(full_settings)
-
-        assert settings_file.settings_file.exists()
-        assert settings_file.settings == full_settings
-        assert not settings_file.partial_settings_file.exists()
-        backup_file = bak_path(settings_file.partial_settings_file)
-        assert backup_file.read_text() == bad_content
+        assert settings_file.settings_file.exists() == expect_full
+        assert settings_file.partial_settings_file.exists() != expect_full
+        if expect_full:
+            assert settings_file.settings == to_save
+        else:
+            assert settings_file.partial_settings == to_save
+        assert bak_path(corrupt_path).read_text() == bad_content
 
     def test_save_partial_update_with_corrupt_partial_and_valid_full(self):
         # Test that when both a valid full settings file and a corrupt partial
