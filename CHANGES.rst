@@ -13,8 +13,14 @@ New Features
   FWHM and photometry done with it should be redone (see issue ``#654``);
   fixed-aperture settings load unchanged. A settings file written by a newer
   version of stellarphot raises ``NewerFormatError`` instead of being
-  misread or overwritten. Settings embedded in the metadata of existing
-  photometry tables are read as-is, with no migration. [#656]
+  misread or overwritten; a photometry table whose metadata embeds such
+  settings still opens, with the settings left as a plain dictionary.
+  Settings embedded in the metadata of existing photometry tables are read
+  as-is, with no migration. Note that *older* versions of stellarphot
+  cannot read settings files written by this version: they fail with a
+  pydantic validation error reporting that the ``settings_version`` field
+  is not permitted (``extra_forbidden``); the fix is to upgrade
+  stellarphot. [#656]
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
