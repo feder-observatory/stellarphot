@@ -1,6 +1,21 @@
 2.2.0 (unreleased)
 -------------------
 
+New Features
+^^^^^^^^^^^^
++ Saved photometry settings files now carry a ``settings_version`` field that
+  records the version of the settings format (currently ``2``). Files written
+  before the field existed are treated as format ``1`` and are migrated when
+  loaded through ``PhotometryWorkingDirSettings``: settings with
+  ``variable_aperture=True`` have their ``gap`` and ``annulus_width`` reset to
+  the current defaults, with a prominent warning, because the old
+  variable-aperture geometry did not scale the sky annulus with the per-image
+  FWHM and photometry done with it should be redone (see issue ``#654``);
+  fixed-aperture settings load unchanged. A settings file written by a newer
+  version of stellarphot raises ``NewerFormatError`` instead of being
+  misread or overwritten. Settings embedded in the metadata of existing
+  photometry tables are read as-is, with no migration. [#656]
+
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 + Documentation improvements: fixed docstring default values, expanded

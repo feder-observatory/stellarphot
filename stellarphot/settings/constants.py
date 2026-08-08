@@ -2,6 +2,8 @@
 # non-test places too. Putting them here ensures they can be imported
 # without needing test dependencies.
 
+from .models import PHOTOMETRY_SETTINGS_FORMAT_VERSION
+
 TEST_APERTURE_SETTINGS = dict(
     variable_aperture=False,
     radius=5,
@@ -91,6 +93,7 @@ TEST_SOURCE_LOCATION_SETTINGS = dict(
 )
 
 TEST_PHOTOMETRY_SETTINGS = dict(
+    settings_version=PHOTOMETRY_SETTINGS_FORMAT_VERSION,
     camera=TEST_CAMERA_VALUES,
     observatory=TEST_OBSERVATORY_SETTINGS,
     photometry_apertures=TEST_APERTURE_SETTINGS,

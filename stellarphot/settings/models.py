@@ -1,6 +1,7 @@
 # Objects that contains the user settings for the program.
 
 import re
+import warnings
 from copy import deepcopy
 from enum import StrEnum
 from pathlib import Path
@@ -34,10 +35,14 @@ from .astropy_pydantic import (
     _UnitQuantTypePydanticAnnotation,
 )
 
+# NOTE: Everything in __all__ must be a class, because table_representations
+# builds a tuple from it that is passed to isinstance(). Module-level
+# constants like PHOTOMETRY_SETTINGS_FORMAT_VERSION must NOT be listed here.
 __all__ = [
     "Camera",
     "FwhmMethods",
     "LoggingSettings",
+    "NewerFormatError",
     "PartialPhotometrySettings",
     "PassbandMap",
     "PhotometryApertures",
@@ -45,11 +50,34 @@ __all__ = [
     "PhotometryRunSettings",
     "PhotometrySettings",
     "PhotometrySettingsWarning",
+    "PhotometrySettingsMigrationWarning",
     "PhotometryOptionalSettings",
     "Exoplanet",
     "Observatory",
     "SourceLocationSettings",
 ]
+
+
+# Version of the on-disk settings file format, NOT the version of stellarphot.
+# Settings files written before this field existed are format 1. Increment
+# this when the meaning of saved settings changes, add migration logic to
+# PhotometrySettings._migrate_settings_file and add tests to
+# TestPriorVersionsCompatibility. This is separate from SETTINGS_FILE_VERSION
+# in settings_files.py, which versions the *directory* in which the global
+# camera/observatory/passband settings are stored.
+PHOTOMETRY_SETTINGS_FORMAT_VERSION = 2
+
+
+class NewerFormatError(Exception):
+    """
+    Raised when settings were written by a newer version of stellarphot than
+    the one reading them.
+
+    This deliberately does NOT subclass ValueError: pydantic turns a
+    ValueError raised inside a validator into a ValidationError, and this
+    error needs to reach the caller unchanged so a too-new settings file is
+    not mistaken for an invalid one (and, for example, overwritten).
+    """
 
 
 class PhotometrySettingsWarning(UserWarning):
@@ -58,6 +86,12 @@ class PhotometrySettingsWarning(UserWarning):
     settings files (e.g. a settings-format migration). Warnings of this
     category are shown to the user in the `~stellarphot.gui.ReviewSettings`
     banner; plain `UserWarning`\\s from libraries on the load path are not.
+    """
+
+
+class PhotometrySettingsMigrationWarning(PhotometrySettingsWarning):
+    """
+    Warning issued when settings from an older format are modified on load.
     """
 
 
@@ -136,8 +170,10 @@ class BaseModelWithTableRep(BaseModel):
     # NOTE WELL that this will set the configuration for all subclasses of this
     model_config = MODEL_DEFAULT_CONFIGURATION
 
-    def __init__(self, *arg, **kwargs):
-        super().__init__(*arg, **kwargs)
+    # NOTE: Do not define __init__ here. A custom __init__, even one that just
+    # calls super().__init__(), makes pydantic construct instances through it
+    # during model_validate/model_validate_json, which silently drops the
+    # validation context that the settings-file migration relies on.
 
 
 class Camera(BaseModelWithTableRep):
@@ -1107,6 +1143,10 @@ class PhotometrySettings(BaseModelWithTableRep):
         Settings for logging. See the documentation for
         `~stellarphot.settings.LoggingSettings` for details.
 
+    settings_version : int, optional
+        Version of the settings format, managed automatically and included
+        in saved settings files. Do not set this by hand.
+
     """
 
     # This ensures that just the first line of the docstring is used as the
@@ -1121,6 +1161,22 @@ class PhotometrySettings(BaseModelWithTableRep):
         )
     )
 
+    # First field so that it comes first in saved settings files. Disabled
+    # because it describes the settings format itself and is not something
+    # the user should edit.
+    settings_version: Annotated[
+        int,
+        Field(
+            default=PHOTOMETRY_SETTINGS_FORMAT_VERSION,
+            ge=1,
+            disabled=True,
+            title="Settings version",
+            description=(
+                "Version of the stellarphot settings format "
+                "(managed automatically; do not edit)"
+            ),
+        ),
+    ]
     camera: Annotated[
         Camera,
         Field(
@@ -1171,6 +1227,75 @@ class PhotometrySettings(BaseModelWithTableRep):
         ),
     ]
 
+    @field_validator("settings_version")
+    @classmethod
+    def check_format_version_not_newer(cls, value):
+        """
+        Refuse settings whose format is newer than this code understands.
+        """
+        if value > PHOTOMETRY_SETTINGS_FORMAT_VERSION:
+            raise NewerFormatError(
+                f"These settings have settings_version {value}, but this "
+                "version of stellarphot only understands settings_version "
+                f"{PHOTOMETRY_SETTINGS_FORMAT_VERSION} or earlier. The settings "
+                "were written by a newer version of stellarphot; please upgrade "
+                "stellarphot to use them."
+            )
+        return value
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_settings_file(cls, data, info):
+        """
+        Migrate settings read from a file in an older format.
+
+        Only settings read from a settings file on disk are migrated; the
+        context is set in `PhotometryWorkingDirSettings.load`. Without this
+        gate, settings constructed in code -- for example from GUI widget
+        values, which have no settings_version key either -- would be
+        "migrated" too.
+        """
+        context = info.context or {}
+        if not context.get("settings_file") or not isinstance(data, dict):
+            return data
+        if data.get("settings_version") is not None:
+            return data
+
+        # The file predates the settings_version field, i.e. it is format 1.
+        # In format 1, variable_aperture=True scaled the aperture with each
+        # image's measured FWHM but the sky annulus stayed fixed, a geometry
+        # that contaminates the sky estimate in bad seeing (see issue #654),
+        # so the annulus settings are reset to the current defaults.
+        apertures = data.get("photometry_apertures")
+        if isinstance(apertures, dict) and apertures.get("variable_aperture"):
+            gap_default = PhotometryApertures.model_fields["gap"].default
+            width_default = PhotometryApertures.model_fields["annulus_width"].default
+            data = data | {
+                "photometry_apertures": apertures
+                | {"gap": gap_default, "annulus_width": width_default}
+            }
+            warnings.warn(
+                "\nIMPORTANT: your saved photometry settings were created by "
+                "an older version of stellarphot and have "
+                "variable_aperture=True.\n\n"
+                "In older versions the sky annulus did NOT scale with the "
+                "per-image FWHM even though the aperture did, so "
+                "variable-aperture photometry done with those versions is "
+                "biased and should be redone. See "
+                "https://github.com/feder-observatory/stellarphot/issues/654 "
+                "for details.\n\n"
+                "Your 'radius', 'fwhm_estimate' and 'variable_aperture' "
+                "settings have been kept, but 'gap' and 'annulus_width' have "
+                f"been RESET to their defaults (gap={gap_default}, "
+                f"annulus_width={width_default}). Please review and re-save "
+                "your photometry aperture settings before running photometry. "
+                "This message will not appear again once the settings are "
+                "saved.",
+                PhotometrySettingsMigrationWarning,
+                stacklevel=2,
+            )
+        return data
+
 
 # The code for _make_partial_model is adapted from
 # https://github.com/pydantic/pydantic/issues/3120#issuecomment-1528030416
@@ -1183,8 +1308,12 @@ def _make_partial_model[BaseModelT: BaseModel](
 
     for field_name, field_info in model.model_fields.items():
         new = deepcopy(field_info)
-        new.default = default
-        new.annotation = field_info.annotation | None  # type: ignore  # noqa: UP007
+        # Only required fields need a new default; fields that already have a
+        # default (like settings_version) keep it, so that, for example, a
+        # partial settings file still records which format it was written in.
+        if field_info.is_required():
+            new.default = default
+            new.annotation = field_info.annotation | None  # type: ignore  # noqa: UP007
         new_fields[field_name] = (new.annotation, new)
     return create_model(  # type: ignore
         f"Partial{model.__name__}",
