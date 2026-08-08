@@ -18,6 +18,7 @@ from .models import (
 __all__ = [
     "SavedSettings",
     "SETTINGS_FILE_VERSION",
+    "PhotometrySettingsWarning",
     "PhotometryWorkingDirSettings",
     "SettingsFileReadError",
 ]
@@ -27,6 +28,15 @@ __all__ = [
 SETTINGS_FILE_VERSION = "2"  # value chosen to match major version of stellarphot
 
 ENCODING = "utf-8"
+
+
+class PhotometrySettingsWarning(UserWarning):
+    """
+    Warning category for user-actionable problems with saved photometry
+    settings files (e.g. a settings-format migration). Warnings of this
+    category are shown to the user in the `~stellarphot.gui.ReviewSettings`
+    banner; plain `UserWarning`\\s from libraries on the load path are not.
+    """
 
 
 class SettingsFileReadError(ValueError):

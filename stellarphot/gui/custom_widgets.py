@@ -1,6 +1,8 @@
 # Some settings require custom widgets to be displayed in the GUI. These are defined in
 # this module.
 
+import html
+import warnings
 from enum import StrEnum
 
 import ipywidgets as ipw
@@ -21,6 +23,7 @@ from stellarphot.settings import (
     PartialPhotometrySettings,
     PassbandMap,
     PhotometryRunSettings,
+    PhotometrySettingsWarning,
     PhotometryWorkingDirSettings,
     SavedSettings,
 )
@@ -761,15 +764,23 @@ class ReviewSettings(ipw.VBox):
     4. Creating a new one of those saveable settings also saves it to the working
        directory settings.
 
+    If loading the saved settings raises a warning of the
+    `~stellarphot.settings.PhotometrySettingsWarning` category (e.g. a
+    settings-format migration), the warning is displayed in a banner above
+    the settings instead of being lost in the notebook log. Other warning
+    categories stay out of the banner.
     """
 
     def __init__(self, settings, style="tabs", *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        # Banner for messages about the saved settings. It is hidden unless
+        # there is a message to show.
+        self._banner = ipw.HTML()
+        self._banner.layout.display = "none"
+        self._banner_messages = []
+
         # Get a copy of whatever settings may have already been saved.
-        try:
-            self._current_settings = PhotometryWorkingDirSettings().load()
-        except ValueError:
-            self._current_settings = PartialPhotometrySettings()
+        self._current_settings = self._load_working_dir_settings()
 
         self._setting_widgets = []
         self._plain_names = []
@@ -865,7 +876,7 @@ class ReviewSettings(ipw.VBox):
         self._container.children = self._setting_widgets
         self._container.titles = self._make_titles()
 
-        self.children = [self._container]
+        self.children = [self._banner, self._container]
 
         # Set up an observer to run when a tab is selected
         self._container.observe(self._observe_tab_selection, names="selected_index")
@@ -888,12 +899,53 @@ class ReviewSettings(ipw.VBox):
         """
         The current settings in the widget.
         """
-        try:
-            self._current_settings = PhotometryWorkingDirSettings().load()
-        except ValueError:
-            self._current_settings = PartialPhotometrySettings()
-
+        self._current_settings = self._load_working_dir_settings()
         return self._current_settings
+
+    def _load_working_dir_settings(self):
+        """
+        Load settings from the working directory, routing any
+        `~stellarphot.settings.PhotometrySettingsWarning` the load generates
+        into the banner instead of letting it be lost in the notebook log.
+        """
+        recorded = []
+        try:
+            # Only PhotometrySettingsWarning -- the category for
+            # user-actionable problems with the saved settings, such as a
+            # settings-format migration -- belongs in the banner. Warnings
+            # of other categories raised by libraries on the load path are
+            # not aimed at the user of this widget, so they are suppressed
+            # here rather than displayed.
+            with warnings.catch_warnings(record=True) as recorded:
+                warnings.simplefilter("ignore")
+                warnings.simplefilter("always", PhotometrySettingsWarning)
+                loaded = PhotometryWorkingDirSettings().load()
+        except ValueError:
+            # No readable settings in the working directory; start from
+            # defaults, keeping any warnings recorded before the error.
+            loaded = PartialPhotometrySettings()
+
+        self._banner_messages = [str(warning.message) for warning in recorded]
+        self._update_banner()
+        return loaded
+
+    def _update_banner(self):
+        """
+        Show the banner if there are messages, hide it if there are none.
+        """
+        if self._banner_messages:
+            content = "".join(
+                f"<p>⚠️ {html.escape(msg)}</p>" for msg in self._banner_messages
+            )
+            self._banner.value = (
+                "<div style='border: 2px solid #ffc107; border-radius: 4px; "
+                "background-color: #fff3cd; color: #664d03; "
+                f"padding: 0.25em 1em;'>{content}</div>"
+            )
+            self._banner.layout.display = "flex"
+        else:
+            self._banner.value = ""
+            self._banner.layout.display = "none"
 
     def _observe_tab_selection(self, change):
         """

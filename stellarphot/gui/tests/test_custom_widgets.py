@@ -1,3 +1,4 @@
+import warnings
 from copy import deepcopy
 from pathlib import Path
 
@@ -26,6 +27,7 @@ from stellarphot.settings import (
     PassbandMap,
     PhotometryApertures,
     PhotometryOptionalSettings,
+    PhotometrySettingsWarning,
     PhotometryWorkingDirSettings,
     SavedSettings,
     SourceLocationSettings,
@@ -1286,6 +1288,75 @@ class TestReviewSettings:
         # the badge list and the tab title.
         assert review_settings.badges[0] == SaveStatus.SETTING_NOT_SAVED
         assert SaveStatus.SETTING_NOT_SAVED in review_settings._container.titles[0]
+
+    def test_banner_hidden_when_no_settings_files(self):
+        # With no saved settings there is nothing to report, so the banner
+        # is empty and hidden.
+        review_settings = ReviewSettings([Camera])
+        assert review_settings._banner.value == ""
+        assert review_settings._banner.layout.display == "none"
+
+    def test_banner_shows_warnings_from_loading_settings(self, mocker):
+        # Warnings of the PhotometrySettingsWarning category generated while
+        # loading settings (e.g. a settings-format migration) should be
+        # displayed in the banner.
+        def fake_load(_self):
+            warnings.warn(
+                "Settings were migrated", PhotometrySettingsWarning, stacklevel=2
+            )
+            return PartialPhotometrySettings()
+
+        mocker.patch.object(
+            settings_files.PhotometryWorkingDirSettings, "load", fake_load
+        )
+        review_settings = ReviewSettings([Camera])
+
+        assert "Settings were migrated" in review_settings._banner.value
+        assert review_settings._banner.layout.display == "flex"
+
+    @pytest.mark.parametrize("category", [DeprecationWarning, UserWarning])
+    def test_banner_ignores_other_warning_categories(self, mocker, category):
+        # Only PhotometrySettingsWarning is user-actionable; anything else
+        # raised on the load path -- a DeprecationWarning from a library
+        # internal, or a plain UserWarning such as a pydantic serializer
+        # warning -- should stay out of the banner.
+        def fake_load(_self):
+            warnings.warn("some library warning", category, stacklevel=2)
+            return PartialPhotometrySettings()
+
+        mocker.patch.object(
+            settings_files.PhotometryWorkingDirSettings, "load", fake_load
+        )
+        review_settings = ReviewSettings([Camera])
+
+        assert review_settings._banner.value == ""
+        assert review_settings._banner.layout.display == "none"
+
+    def test_banner_escapes_html_in_warning_text(self, mocker):
+        # Warning text is escaped so markup in a message cannot inject HTML
+        # into the banner.
+        def fake_load(_self):
+            warnings.warn(
+                "Settings were <b>migrated</b>",
+                PhotometrySettingsWarning,
+                stacklevel=2,
+            )
+            return PartialPhotometrySettings()
+
+        mocker.patch.object(
+            settings_files.PhotometryWorkingDirSettings, "load", fake_load
+        )
+        review_settings = ReviewSettings([Camera])
+
+        assert "&lt;b&gt;migrated&lt;/b&gt;" in review_settings._banner.value
+        assert "<b>migrated</b>" not in review_settings._banner.value
+
+    def test_widget_children_structure(self):
+        # The banner rides above the settings container.
+        review_settings = ReviewSettings([Camera])
+        banner, container = review_settings.children
+        assert banner is review_settings._banner
+        assert container is review_settings._container
 
 
 def test_add_saving_with_unrecognized_widget():
