@@ -69,6 +69,14 @@ Bug Fixes
   to original-image pixel coordinates with an off-by-0.5 formula), and it no
   longer mutates the caller's ``CCDData.mask`` in place when flagging pixels
   above ``max_adu``. [#651]
++ ``PhotometryWorkingDirSettings.save(partial_settings, update=True)`` no
+  longer raises ``AttributeError`` when an existing full settings file
+  cannot be read; the partial settings are saved on their own since there
+  is nothing to merge them into. In ``ReviewSettings``, collapsing every
+  section of an accordion no longer raises ``TypeError``, and selecting a
+  tab whose setting is not saved on disk now actually marks the tab as not
+  saved (the selection observer previously rebound a local variable
+  instead of setting the badge). [#661]
 
 2.1.2 (2026-07-19)
 -------------------

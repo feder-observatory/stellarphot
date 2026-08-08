@@ -907,6 +907,11 @@ class ReviewSettings(ipw.VBox):
         # Get the index
         new_selected = change["new"]
 
+        # An accordion reports a selection of None when every section is
+        # collapsed; there is nothing to update in that case.
+        if new_selected is None:
+            return
+
         setting_badge = self._setting_widgets[new_selected].badge
         if setting_badge is not None:
             self.badges[new_selected] = setting_badge
@@ -919,7 +924,7 @@ class ReviewSettings(ipw.VBox):
             disk_value = getattr(self.current_settings, snake_name)
             if disk_value is None:
                 # The setting is not saved
-                setting_widget = SaveStatus.SETTING_NOT_SAVED
+                setting_widget.badge = SaveStatus.SETTING_NOT_SAVED
             else:
                 # Set the badge to saved if it has been saved.
                 value_from_widget = setting_widget._autoui_widget.model.model_validate(
