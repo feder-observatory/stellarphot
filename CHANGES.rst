@@ -77,6 +77,18 @@ Bug Fixes
   tab whose setting is not saved on disk now actually marks the tab as not
   saved (the selection observer previously rebound a local variable
   instead of setting the badge). [#661]
++ ``PhotometryWorkingDirSettings`` no longer destroys settings on failed
+  or conflicting writes. Settings are written to a temporary file that
+  atomically replaces the target, so an interrupted write cannot
+  truncate an existing settings file; the partial settings file is
+  disposed of only after new full settings are safely on disk; and a
+  settings file that exists but cannot be read is renamed to a ``.bak``
+  backup (numbered ``.bak1``, ``.bak2``, ... if needed) instead of being
+  silently overwritten or deleted. ``load()`` now parses both settings
+  files before raising so a save can merge into whichever file was
+  readable, and a file that is unreadable because of an encoding or
+  operating-system error is reported the same way as corrupt JSON
+  instead of raising an unexpected exception type. [#662]
 
 2.1.2 (2026-07-19)
 -------------------
