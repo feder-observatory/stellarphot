@@ -364,7 +364,9 @@ class TestPhotometryWorkingDirSettings:
         # Need to accept the second argument, but don't use it.
         self.original_wdir = Path.cwd()
         os.chdir(self.temp_dir.name)
-        for file in Path.cwd().glob("*.json"):
+        # The glob pattern also matches the .json.bak and .json.tmp files
+        # some tests leave behind.
+        for file in Path.cwd().glob("*.json*"):
             file.unlink()
 
     def teardown_method(self, _):
@@ -472,8 +474,10 @@ class TestPhotometryWorkingDirSettings:
         # An existing full settings file that cannot be read used to make
         # save(partial, update=True) crash with an AttributeError, because
         # the failed load left self._settings as None. There is nothing to
-        # merge the partial settings into in that case, so they are saved
-        # on their own and the unreadable file is left in place.
+        # merge the partial settings into in that case, so the partial
+        # settings are saved on their own and the unreadable file is set
+        # aside as .bak -- a save never leaves behind a file it knows is
+        # unreadable.
         settings_file = PhotometryWorkingDirSettings()
         bad_content = '{"pasta": "carbonara"}'
         settings_file.settings_file.write_text(bad_content)
@@ -484,7 +488,264 @@ class TestPhotometryWorkingDirSettings:
 
         assert settings_file.partial_settings_file.exists()
         assert settings_file.partial_settings == partial_settings
+        assert not settings_file.settings_file.exists()
+        backup_file = settings_file.settings_file.with_name(
+            settings_file.settings_file.name + ".bak"
+        )
+        assert backup_file.read_text() == bad_content
+
+    def test_save_partial_with_unreadable_partial_settings_makes_backup(self):
+        # An existing partial settings file that cannot be read should not be
+        # overwritten by a partial save. The new partial settings are written
+        # and the unreadable original is preserved with a .bak suffix.
+        settings_file = PhotometryWorkingDirSettings()
+        bad_content = '{"pasta": "carbonara"}'
+        settings_file.partial_settings_file.write_text(bad_content)
+
+        camera = Camera.model_validate_json(CAMERA)
+        partial_settings = PartialPhotometrySettings(camera=camera)
+        settings_file.save(partial_settings, update=True)
+
+        assert settings_file.partial_settings_file.exists()
+        assert settings_file.partial_settings == partial_settings
+        backup_file = settings_file.partial_settings_file.with_name(
+            settings_file.partial_settings_file.name + ".bak"
+        )
+        assert backup_file.read_text() == bad_content
+
+    def test_save_full_with_unreadable_full_settings_makes_backup(self):
+        # An existing full settings file that cannot be read should not be
+        # overwritten when partial settings that are actually complete are
+        # saved to the full settings file. The new full settings are written
+        # and the unreadable original is preserved with a .bak suffix.
+        settings_file = PhotometryWorkingDirSettings()
+        bad_content = '{"pasta": "amatriciana"}'
+        settings_file.settings_file.write_text(bad_content)
+
+        settings = PartialPhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+        settings_file.save(settings, update=True)
+
+        assert settings_file.settings_file.exists()
+        assert settings_file.settings == settings
+        backup_file = settings_file.settings_file.with_name(
+            settings_file.settings_file.name + ".bak"
+        )
+        assert backup_file.read_text() == bad_content
+
+    def test_save_full_with_unreadable_partial_settings_makes_backup(self):
+        # Saving full settings normally deletes any partial settings file. If
+        # the partial settings file cannot be read it should instead be
+        # preserved with a .bak suffix.
+        settings_file = PhotometryWorkingDirSettings()
+        bad_content = '{"pasta": "puttanesca"}'
+        settings_file.partial_settings_file.write_text(bad_content)
+
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+        settings_file.save(full_settings)
+
+        assert settings_file.settings_file.exists()
+        assert settings_file.settings == full_settings
+        assert not settings_file.partial_settings_file.exists()
+        backup_file = settings_file.partial_settings_file.with_name(
+            settings_file.partial_settings_file.name + ".bak"
+        )
+        assert backup_file.read_text() == bad_content
+
+    def test_save_partial_update_with_corrupt_partial_and_valid_full(self):
+        # Test that when both a valid full settings file and a corrupt partial
+        # settings file exist, a partial save with update=True will:
+        # 1. Rename the corrupt partial file to .bak
+        # 2. Merge the new partial into the valid full settings
+        # 3. Save the result as a full settings file (since the partial is
+        #    compatible with full)
+        settings_file = PhotometryWorkingDirSettings()
+
+        # Write a valid full settings file
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+        settings_file.settings_file.write_text(full_settings.model_dump_json(indent=4))
+
+        # Write a corrupt partial settings file
+        corrupt_partial_content = '{"pasta": "carbonara"}'
+        settings_file.partial_settings_file.write_text(corrupt_partial_content)
+
+        # Create a fresh instance to trigger load()
+        settings_file = PhotometryWorkingDirSettings()
+
+        # Save a new partial settings with a different camera
+        camera = Camera.model_validate_json(CAMERA)
+        new_partial = PartialPhotometrySettings(camera=camera)
+        settings_file.save(new_partial, update=True)
+
+        # Assert: corrupt partial file is renamed to .bak
+        assert not settings_file.partial_settings_file.exists()
+        backup_file = settings_file.partial_settings_file.with_name(
+            settings_file.partial_settings_file.name + ".bak"
+        )
+        assert backup_file.exists()
+        assert backup_file.read_text() == corrupt_partial_content
+
+        # Assert: subsequent load succeeds and returns merged settings
+        fresh_instance = PhotometryWorkingDirSettings()
+        loaded = fresh_instance.load()
+        # The loaded settings should have the new camera and all other fields
+        # from the original full settings
+        assert loaded.camera == camera
+        assert (
+            loaded.observatory
+            == PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS).observatory
+        )
+
+    def test_save_partial_update_with_corrupt_full_and_valid_partial(self):
+        # Test that when both a corrupt full settings file and a valid partial
+        # settings file exist, a partial save with update=True will:
+        # 1. Set the corrupt full file aside as .bak, content preserved
+        # 2. Merge into the valid partial and save the result
+        # 3. Leave the directory loadable again
+        settings_file = PhotometryWorkingDirSettings()
+
+        # Write a valid partial settings file with a camera
+        camera = Camera.model_validate_json(CAMERA)
+        partial_settings = PartialPhotometrySettings(camera=camera)
+        settings_file.partial_settings_file.write_text(
+            partial_settings.model_dump_json(indent=4)
+        )
+
+        # Write a corrupt full settings file
+        corrupt_full_content = '{"pasta": "carbonara"}'
+        settings_file.settings_file.write_text(corrupt_full_content)
+
+        # Create a fresh instance
+        settings_file = PhotometryWorkingDirSettings()
+
+        # Save a new partial settings with an observatory
+        observatory = Observatory(**TEST_PHOTOMETRY_SETTINGS["observatory"])
+        new_partial = PartialPhotometrySettings(observatory=observatory)
+        settings_file.save(new_partial, update=True)
+
+        # Assert: corrupt full file was set aside as .bak, content preserved
+        assert not settings_file.settings_file.exists()
+        backup_file = settings_file.settings_file.with_name(
+            settings_file.settings_file.name + ".bak"
+        )
+        assert backup_file.read_text() == corrupt_full_content
+
+        # Assert: with the corrupt file out of the way, load() succeeds and
+        # returns the merged settings (old camera + new observatory).
+        loaded = PhotometryWorkingDirSettings().load()
+        assert loaded.camera == camera
+        assert loaded.observatory == observatory
+
+    def test_save_does_not_overwrite_existing_backup(self):
+        # A .bak file may hold the only copy of settings from an earlier
+        # corruption, so a save that needs to set aside another unreadable
+        # file must use a numbered backup name (.bak1, .bak2, ...) rather
+        # than overwriting the existing .bak.
+        settings_file = PhotometryWorkingDirSettings()
+        old_backup_content = '{"pasta": "amatriciana"}'
+        backup_file = settings_file.settings_file.with_name(
+            settings_file.settings_file.name + ".bak"
+        )
+        backup_file.write_text(old_backup_content)
+
+        bad_content = '{"pasta": "carbonara"}'
+        settings_file.settings_file.write_text(bad_content)
+
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+        settings_file.save(full_settings)
+
+        # The earlier backup is untouched and the unreadable file went to
+        # the next available numbered name.
+        assert backup_file.read_text() == old_backup_content
+        numbered_backup = settings_file.settings_file.with_name(
+            settings_file.settings_file.name + ".bak1"
+        )
+        assert numbered_backup.read_text() == bad_content
+        assert settings_file.settings == full_settings
+
+    def test_failed_write_preserves_partial_settings_file(self, mocker):
+        # Saving full settings disposes of the partial settings file, whose
+        # non-None values may exist nowhere else if the write of the full
+        # settings then fails. The disposal must therefore happen only after
+        # the full settings are safely on disk.
+        settings_file = PhotometryWorkingDirSettings()
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+        # The partial camera matches the full settings being saved, which is
+        # the case where save() would simply delete (not back up) the
+        # partial settings file.
+        partial_content = PartialPhotometrySettings(
+            camera=full_settings.camera
+        ).model_dump_json()
+        settings_file.partial_settings_file.write_text(partial_content)
+
+        # Serialization happens before the settings file is opened for
+        # writing, so this failure stands in for any failure to get the new
+        # settings onto disk.
+        mocker.patch.object(
+            PhotometrySettings, "model_dump_json", side_effect=RuntimeError("disk full")
+        )
+        with pytest.raises(RuntimeError, match="disk full"):
+            settings_file.save(full_settings)
+
+        assert settings_file.partial_settings_file.read_text() == partial_content
+
+    def test_failed_write_leaves_existing_settings_intact(self, mocker):
+        # A failure partway through writing the new settings must not
+        # truncate or destroy the existing readable settings file; the
+        # write goes to a temporary file that atomically replaces the
+        # target only on success.
+        settings_file = PhotometryWorkingDirSettings()
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+        settings_file.save(full_settings)
+        original = settings_file.settings_file.read_text()
+
+        mocker.patch.object(Path, "write_text", side_effect=OSError("disk full"))
+        with pytest.raises(OSError, match="disk full"):
+            PhotometryWorkingDirSettings().save(full_settings)
+
+        assert settings_file.settings_file.read_text() == original
+        assert not settings_file.settings_file.with_name(
+            settings_file.settings_file.name + ".tmp"
+        ).exists()
+
+    def test_failed_write_leaves_unreadable_file_in_place(self, mocker):
+        # If writing the new settings fails, an unreadable file at the
+        # target name must remain in place under its original name -- not
+        # be renamed to .bak with nothing left in its place.
+        settings_file = PhotometryWorkingDirSettings()
+        bad_content = '{"pasta": "carbonara"}'
+        settings_file.settings_file.write_text(bad_content)
+
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+        mocker.patch.object(Path, "write_text", side_effect=OSError("disk full"))
+        with pytest.raises(OSError, match="disk full"):
+            settings_file.save(full_settings)
+
         assert settings_file.settings_file.read_text() == bad_content
+        assert not settings_file.settings_file.with_name(
+            settings_file.settings_file.name + ".bak"
+        ).exists()
+
+    def test_load_settings_file_invalid_utf8(self):
+        # A settings file that is not valid UTF-8 should be treated the same
+        # as a ValidationError: load() reports it as a readable-but-bad file,
+        # and a subsequent save preserves the original bytes as a .bak rather
+        # than silently overwriting them.
+        settings_file = PhotometryWorkingDirSettings()
+        bad_bytes = b"\xff\xfe not utf8"
+        settings_file.settings_file.write_bytes(bad_bytes)
+
+        with pytest.raises(ValueError, match="Error loading settings"):
+            settings_file.load()
+
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+        settings_file.save(full_settings)
+
+        assert settings_file.settings_file.exists()
+        assert settings_file.settings == full_settings
+        backup_file = settings_file.settings_file.with_name(
+            settings_file.settings_file.name + ".bak"
+        )
+        assert backup_file.read_bytes() == bad_bytes
 
     def test_load_conflicting_partial_and_full_settings(self):
         # Make a valid partial settings file and a valid full settings file
