@@ -44,11 +44,22 @@ __all__ = [
     "PhotometryFileSettings",
     "PhotometryRunSettings",
     "PhotometrySettings",
+    "PhotometrySettingsWarning",
     "PhotometryOptionalSettings",
     "Exoplanet",
     "Observatory",
     "SourceLocationSettings",
 ]
+
+
+class PhotometrySettingsWarning(UserWarning):
+    """
+    Warning category for user-actionable problems with saved photometry
+    settings files (e.g. a settings-format migration). Warnings of this
+    category are shown to the user in the `~stellarphot.gui.ReviewSettings`
+    banner; plain `UserWarning`\\s from libraries on the load path are not.
+    """
+
 
 # Most models should use the default configuration, but it can be customized if needed.
 MODEL_DEFAULT_CONFIGURATION = ConfigDict(
