@@ -14,11 +14,18 @@ from stellarphot.settings import (
     PhotometrySettings,
     PhotometryWorkingDirSettings,
     SavedSettings,
+    SettingsFileReadError,
     settings_files,  # This import is needed for mocking -- see TestSavedSettings
 )
 from stellarphot.settings.constants import TEST_PHOTOMETRY_SETTINGS
 
 TEST_PHOTOMETRY_SETTINGS = deepcopy(TEST_PHOTOMETRY_SETTINGS)
+
+
+def bak_path(path, suffix=".bak"):
+    """Return the backup name save() uses when setting aside ``path``."""
+    return path.with_name(path.name + suffix)
+
 
 CAMERA = """
 {
@@ -489,9 +496,7 @@ class TestPhotometryWorkingDirSettings:
         assert settings_file.partial_settings_file.exists()
         assert settings_file.partial_settings == partial_settings
         assert not settings_file.settings_file.exists()
-        backup_file = settings_file.settings_file.with_name(
-            settings_file.settings_file.name + ".bak"
-        )
+        backup_file = bak_path(settings_file.settings_file)
         assert backup_file.read_text() == bad_content
 
     def test_save_partial_with_unreadable_partial_settings_makes_backup(self):
@@ -508,9 +513,7 @@ class TestPhotometryWorkingDirSettings:
 
         assert settings_file.partial_settings_file.exists()
         assert settings_file.partial_settings == partial_settings
-        backup_file = settings_file.partial_settings_file.with_name(
-            settings_file.partial_settings_file.name + ".bak"
-        )
+        backup_file = bak_path(settings_file.partial_settings_file)
         assert backup_file.read_text() == bad_content
 
     def test_save_full_with_unreadable_full_settings_makes_backup(self):
@@ -527,9 +530,7 @@ class TestPhotometryWorkingDirSettings:
 
         assert settings_file.settings_file.exists()
         assert settings_file.settings == settings
-        backup_file = settings_file.settings_file.with_name(
-            settings_file.settings_file.name + ".bak"
-        )
+        backup_file = bak_path(settings_file.settings_file)
         assert backup_file.read_text() == bad_content
 
     def test_save_full_with_unreadable_partial_settings_makes_backup(self):
@@ -546,9 +547,7 @@ class TestPhotometryWorkingDirSettings:
         assert settings_file.settings_file.exists()
         assert settings_file.settings == full_settings
         assert not settings_file.partial_settings_file.exists()
-        backup_file = settings_file.partial_settings_file.with_name(
-            settings_file.partial_settings_file.name + ".bak"
-        )
+        backup_file = bak_path(settings_file.partial_settings_file)
         assert backup_file.read_text() == bad_content
 
     def test_save_partial_update_with_corrupt_partial_and_valid_full(self):
@@ -578,9 +577,7 @@ class TestPhotometryWorkingDirSettings:
 
         # Assert: corrupt partial file is renamed to .bak
         assert not settings_file.partial_settings_file.exists()
-        backup_file = settings_file.partial_settings_file.with_name(
-            settings_file.partial_settings_file.name + ".bak"
-        )
+        backup_file = bak_path(settings_file.partial_settings_file)
         assert backup_file.exists()
         assert backup_file.read_text() == corrupt_partial_content
 
@@ -624,9 +621,7 @@ class TestPhotometryWorkingDirSettings:
 
         # Assert: corrupt full file was set aside as .bak, content preserved
         assert not settings_file.settings_file.exists()
-        backup_file = settings_file.settings_file.with_name(
-            settings_file.settings_file.name + ".bak"
-        )
+        backup_file = bak_path(settings_file.settings_file)
         assert backup_file.read_text() == corrupt_full_content
 
         # Assert: with the corrupt file out of the way, load() succeeds and
@@ -642,9 +637,7 @@ class TestPhotometryWorkingDirSettings:
         # than overwriting the existing .bak.
         settings_file = PhotometryWorkingDirSettings()
         old_backup_content = '{"pasta": "amatriciana"}'
-        backup_file = settings_file.settings_file.with_name(
-            settings_file.settings_file.name + ".bak"
-        )
+        backup_file = bak_path(settings_file.settings_file)
         backup_file.write_text(old_backup_content)
 
         bad_content = '{"pasta": "carbonara"}'
@@ -656,9 +649,7 @@ class TestPhotometryWorkingDirSettings:
         # The earlier backup is untouched and the unreadable file went to
         # the next available numbered name.
         assert backup_file.read_text() == old_backup_content
-        numbered_backup = settings_file.settings_file.with_name(
-            settings_file.settings_file.name + ".bak1"
-        )
+        numbered_backup = bak_path(settings_file.settings_file, ".bak1")
         assert numbered_backup.read_text() == bad_content
         assert settings_file.settings == full_settings
 
@@ -703,9 +694,9 @@ class TestPhotometryWorkingDirSettings:
             PhotometryWorkingDirSettings().save(full_settings)
 
         assert settings_file.settings_file.read_text() == original
-        assert not settings_file.settings_file.with_name(
-            settings_file.settings_file.name + ".tmp"
-        ).exists()
+        # The temporary file has a randomized name, so check that nothing
+        # matching its pattern was left behind.
+        assert not list(settings_file.settings_file.parent.glob("*.tmp"))
 
     def test_failed_write_leaves_unreadable_file_in_place(self, mocker):
         # If writing the new settings fails, an unreadable file at the
@@ -721,20 +712,72 @@ class TestPhotometryWorkingDirSettings:
             settings_file.save(full_settings)
 
         assert settings_file.settings_file.read_text() == bad_content
-        assert not settings_file.settings_file.with_name(
-            settings_file.settings_file.name + ".bak"
-        ).exists()
+        assert not bak_path(settings_file.settings_file).exists()
+
+    def test_failed_replace_leaves_unreadable_file_in_place(self, mocker):
+        # If the atomic replace of the target file itself fails, the
+        # unreadable file being set aside must still be present under its
+        # original name -- the backup is a copy, not a rename, until the
+        # new settings are actually in place.
+        settings_file = PhotometryWorkingDirSettings()
+        bad_content = '{"pasta": "carbonara"}'
+        settings_file.settings_file.write_text(bad_content)
+
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+
+        # Fail only the replace whose target is the settings file, so any
+        # rename to a backup name still succeeds.
+        real_replace = Path.replace
+
+        def flaky_replace(self, target):
+            if target == settings_file.settings_file:
+                raise OSError("sharing violation")
+            return real_replace(self, target)
+
+        mocker.patch.object(Path, "replace", flaky_replace)
+        with pytest.raises(OSError, match="sharing violation"):
+            settings_file.save(full_settings)
+
+        assert settings_file.settings_file.read_text() == bad_content
+        # The backup copy made before the replace is still around, and no
+        # temporary file is left behind.
+        assert bak_path(settings_file.settings_file).read_text() == bad_content
+        assert not list(settings_file.settings_file.parent.glob("*.tmp"))
+
+    def test_load_oserror_raises_settings_file_read_error(self, mocker):
+        # An OS-level failure to read a settings file is a different
+        # situation than a file with bad contents: the settings may be
+        # perfectly valid. load() signals that with SettingsFileReadError,
+        # which subclasses ValueError so existing callers are unaffected.
+        settings_file = PhotometryWorkingDirSettings()
+        full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
+        settings_file.save(full_settings)
+
+        mocker.patch.object(Path, "open", side_effect=PermissionError("denied"))
+        with pytest.raises(SettingsFileReadError, match="denied"):
+            settings_file.load()
+
+    def test_load_corrupt_json_raises_plain_value_error(self):
+        # A file that can be read but contains invalid settings is not a
+        # read error; it raises plain ValueError, not SettingsFileReadError.
+        settings_file = PhotometryWorkingDirSettings()
+        settings_file.settings_file.write_text('{"pasta": "carbonara"}')
+
+        with pytest.raises(ValueError, match="Error loading settings") as exc_info:
+            settings_file.load()
+
+        assert not isinstance(exc_info.value, SettingsFileReadError)
 
     def test_load_settings_file_invalid_utf8(self):
-        # A settings file that is not valid UTF-8 should be treated the same
-        # as a ValidationError: load() reports it as a readable-but-bad file,
-        # and a subsequent save preserves the original bytes as a .bak rather
+        # A settings file that is not valid UTF-8 cannot be read at all, so
+        # load() raises SettingsFileReadError (a ValueError subclass), and a
+        # subsequent save preserves the original bytes as a .bak rather
         # than silently overwriting them.
         settings_file = PhotometryWorkingDirSettings()
         bad_bytes = b"\xff\xfe not utf8"
         settings_file.settings_file.write_bytes(bad_bytes)
 
-        with pytest.raises(ValueError, match="Error loading settings"):
+        with pytest.raises(SettingsFileReadError, match="Error loading settings"):
             settings_file.load()
 
         full_settings = PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
@@ -742,9 +785,7 @@ class TestPhotometryWorkingDirSettings:
 
         assert settings_file.settings_file.exists()
         assert settings_file.settings == full_settings
-        backup_file = settings_file.settings_file.with_name(
-            settings_file.settings_file.name + ".bak"
-        )
+        backup_file = bak_path(settings_file.settings_file)
         assert backup_file.read_bytes() == bad_bytes
 
     def test_load_conflicting_partial_and_full_settings(self):

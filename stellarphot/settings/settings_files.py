@@ -1,4 +1,6 @@
+import os
 import re
+import tempfile
 from pathlib import Path
 from typing import ClassVar
 
@@ -13,13 +15,30 @@ from .models import (
     PhotometrySettings,
 )
 
-__all__ = ["SavedSettings", "SETTINGS_FILE_VERSION", "PhotometryWorkingDirSettings"]
+__all__ = [
+    "SavedSettings",
+    "SETTINGS_FILE_VERSION",
+    "PhotometryWorkingDirSettings",
+    "SettingsFileReadError",
+]
 
 # We will have to version settings formats, I think. Hopefully this changes rarely
 # or never.
 SETTINGS_FILE_VERSION = "2"  # value chosen to match major version of stellarphot
 
 ENCODING = "utf-8"
+
+
+class SettingsFileReadError(ValueError):
+    """
+    Raised when a settings file exists but cannot be read because of an
+    operating-system or encoding error, as opposed to a readable file that
+    contains invalid settings.
+
+    Subclasses `ValueError` so callers that catch `ValueError` are
+    unaffected, while letting a caller distinguish "your settings exist but
+    could not be read" from "no or invalid settings".
+    """
 
 
 class SavedFileOperations:
@@ -407,8 +426,8 @@ class PhotometryWorkingDirSettings:
         settings are saved.
 
         An existing settings file that cannot be read is never overwritten in
-        place; it is renamed with a ``.bak`` suffix before the new settings
-        are written, and a save also sets aside, with the same ``.bak``
+        place; it is preserved under a ``.bak`` name before the new settings
+        replace it, and a save also sets aside, with the same ``.bak``
         naming, any settings file its pre-save load found unreadable even
         when the save does not rewrite that particular file. Existing backups
         are never overwritten; if a ``.bak`` file already exists, numbered
@@ -431,10 +450,11 @@ class PhotometryWorkingDirSettings:
             pass
 
         # Whether each existing settings file failed to parse during the
-        # bookkeeping load above. load() latches these flags and parses both
-        # files before raising, so they are accurate even when only one of
-        # the two files is unreadable. They decide below whether a file
-        # about to be replaced is renamed aside instead of destroyed.
+        # bookkeeping load above. load() records these flags on the instance
+        # before raising, and it parses both files before raising, so the
+        # flags are accurate even when only one of the two files is
+        # unreadable. They decide below whether a file about to be replaced
+        # is set aside as a backup instead of destroyed.
         unreadable_full = self._full_settings_unreadable
         unreadable_partial = self._partial_settings_unreadable
 
@@ -506,11 +526,10 @@ class PhotometryWorkingDirSettings:
                 )
 
         # If the file we are about to write exists but could not be read, its
-        # contents must be set aside rather than overwritten. The rename
-        # happens between writing the temporary file and the replace below,
-        # so a failure while writing the new content leaves the unreadable
-        # file in place under its original name instead of leaving no
-        # settings file at all.
+        # contents must be set aside rather than overwritten. The backup is a
+        # copy made between writing the temporary file and the replace below,
+        # so a failure at either point leaves the unreadable file in place
+        # under its original name instead of leaving no settings file at all.
         set_aside_target = (file == self._settings_file and unreadable_full) or (
             file == self._partial_settings_file and unreadable_partial
         )
@@ -520,12 +539,18 @@ class PhotometryWorkingDirSettings:
         # to the file. Write to a temporary file in the same directory and then
         # atomically replace the target, so that a failure at any point during
         # serialization or writing leaves any existing settings file untouched.
+        # mkstemp creates the file exclusively with a unique name, so
+        # overlapping saves cannot collide on the temporary file.
         json_data = settings.model_dump_json(indent=4)
-        tmp_file = file.with_name(file.name + ".tmp")
+        tmp_fd, tmp_name = tempfile.mkstemp(
+            dir=file.parent, prefix=file.name + ".", suffix=".tmp"
+        )
+        os.close(tmp_fd)
+        tmp_file = Path(tmp_name)
         try:
             tmp_file.write_text(json_data, encoding=ENCODING)
             if set_aside_target:
-                self._move_aside(file)
+                self._copy_aside(file)
             tmp_file.replace(file)
         finally:
             # After a successful replace the temporary file no longer exists,
@@ -554,26 +579,80 @@ class PhotometryWorkingDirSettings:
                     self._partial_settings_file.unlink()
             self._partial_settings = None
 
-    def _move_aside(self, path):
+    @staticmethod
+    def _backup_path(path):
         """
-        Rename ``path`` to a backup name that does not already exist and
-        return the backup path.
+        Choose a backup name for a file that does not already exist.
 
-        The first available of ``path.bak``, ``path.bak1``, ``path.bak2``,
-        ... is used, so an earlier backup -- which may hold the only copy of
-        settings from a previous corruption -- is never overwritten.
+        Parameters
+        ----------
+        path : `pathlib.Path`
+            The file a backup name is needed for.
+
+        Returns
+        -------
+        `pathlib.Path`
+            The first available of ``<name>.bak``, ``<name>.bak1``,
+            ``<name>.bak2``, ... so an earlier backup -- which may hold
+            the only copy of settings from a previous corruption -- is
+            never overwritten.
         """
         backup = path.with_name(path.name + ".bak")
         counter = 0
         while backup.exists():
             counter += 1
             backup = path.with_name(f"{path.name}.bak{counter}")
+        return backup
+
+    def _move_aside(self, path):
+        """
+        Rename a file to a backup name that does not already exist.
+
+        Parameters
+        ----------
+        path : `pathlib.Path`
+            The file to rename.
+
+        Returns
+        -------
+        `pathlib.Path`
+            The path the file was renamed to.
+        """
+        backup = self._backup_path(path)
         # replace() gives deterministic cross-platform behavior. In the
         # (unlikely) race where the chosen backup name is created between
-        # the exists() check above and this call, the just-created file is
-        # silently overwritten -- a narrow window this single-user,
-        # widget-driven code accepts.
+        # the exists() check in _backup_path and this call, the
+        # just-created file is silently overwritten -- a narrow window
+        # this single-user, widget-driven code accepts.
         path.replace(backup)
+        return backup
+
+    def _copy_aside(self, path):
+        """
+        Copy a file to a backup name that does not already exist, leaving
+        the original in place.
+
+        Used instead of `_move_aside` when the original must survive at its
+        own name until a subsequent step succeeds -- a failure after the
+        copy leaves the file where it was.
+
+        Parameters
+        ----------
+        path : `pathlib.Path`
+            The file to copy.
+
+        Returns
+        -------
+        `pathlib.Path`
+            The path of the backup copy.
+        """
+        backup = self._backup_path(path)
+        # Copy bytes, not text -- the file being set aside may not be
+        # decodable. Exclusive creation ("x") preserves the guarantee that
+        # an existing backup is never overwritten even if the chosen name
+        # appears between _backup_path and this write.
+        with backup.open("xb") as f:
+            f.write(path.read_bytes())
         return backup
 
     def load(self):
@@ -588,9 +667,13 @@ class PhotometryWorkingDirSettings:
         Raises
         ------
         ValueError
-            If no settings file exists, if a settings file exists but cannot
-            be read, or if the partial and full settings files are both
-            readable but conflict with each other.
+            If no settings file exists, if a settings file can be read but
+            contains invalid settings, or if the partial and full settings
+            files are both readable but conflict with each other.
+        SettingsFileReadError
+            If a settings file exists but cannot be read because of an
+            operating-system or encoding error. This is a subclass of
+            `ValueError`.
         """
         # Assume we have nothing to begin....
         self._partial_settings = None
@@ -601,46 +684,72 @@ class PhotometryWorkingDirSettings:
         if not (self._settings_file.exists() or self._partial_settings_file.exists()):
             raise ValueError(f"Settings file {self._settings_file} does not exist")
 
-        errors = []
-        last_exc = None
-
-        # Load PartialPhotometrySettings first, if it exists. A read failure
-        # (ValidationError, or an OSError/UnicodeDecodeError while opening or
-        # decoding the file) leaves self._partial_settings as None, exactly
-        # like the missing-file case.
-        if self._partial_settings_file.exists():
-            try:
-                with self._partial_settings_file.open(encoding=ENCODING) as f:
-                    content = f.read()
-                self._partial_settings = PartialPhotometrySettings.model_validate_json(
-                    content
-                )
-            except (ValidationError, OSError, UnicodeDecodeError) as e:
-                self._partial_settings_unreadable = True
-                errors.append(f"Error loading partial settings: {e}")
-                last_exc = e
+        # Load PartialPhotometrySettings first, if it exists. A failure
+        # leaves self._partial_settings as None, exactly like the
+        # missing-file case.
+        self._partial_settings, partial_exc = self._try_load(
+            self._partial_settings_file, PartialPhotometrySettings
+        )
+        self._partial_settings_unreadable = partial_exc is not None
 
         # Now load full settings if they exist
-        if self._settings_file.exists():
-            try:
-                with self._settings_file.open(encoding=ENCODING) as f:
-                    content = f.read()
-                self._settings = PhotometrySettings.model_validate_json(content)
-            except (ValidationError, OSError, UnicodeDecodeError) as e:
-                self._full_settings_unreadable = True
-                errors.append(f"Error loading settings: {e}")
-                last_exc = e
+        self._settings, full_exc = self._try_load(
+            self._settings_file, PhotometrySettings
+        )
+        self._full_settings_unreadable = full_exc is not None
 
         # Both files are parsed before any error is raised so that the
         # in-memory settings reflect every file that could be read; save()
-        # relies on that to merge into readable settings and to rename only
-        # genuinely unreadable files to .bak.
+        # relies on that to merge into readable settings and to set aside
+        # only genuinely unreadable files as .bak.
+        errors = []
+        if partial_exc is not None:
+            errors.append(f"Error loading partial settings: {partial_exc}")
+        if full_exc is not None:
+            errors.append(f"Error loading settings: {full_exc}")
         if errors:
-            raise ValueError("\n".join(errors)) from last_exc
+            # An OS-level or encoding failure means the settings themselves
+            # may be perfectly valid, so it is reported with a distinct
+            # (ValueError-subclass) exception type.
+            exceptions = [e for e in (partial_exc, full_exc) if e is not None]
+            error_class = (
+                SettingsFileReadError
+                if any(isinstance(e, (OSError, UnicodeDecodeError)) for e in exceptions)
+                else ValueError
+            )
+            raise error_class("\n".join(errors)) from exceptions[-1]
 
         # Handle case where we have valid partial and valid full settings
         self._resolve_full_partial_conflict()
         return self._settings or self._partial_settings
+
+    @staticmethod
+    def _try_load(path, model_cls):
+        """
+        Parse one settings file.
+
+        Parameters
+        ----------
+        path : `pathlib.Path`
+            The settings file to parse.
+
+        model_cls : type
+            The pydantic model class to validate the file contents against.
+
+        Returns
+        -------
+        model, exception : (``model_cls`` or None, Exception or None)
+            The parsed settings and ``None`` on success; ``None`` and the
+            exception when the file is missing or cannot be read (the
+            exception is ``None`` for a missing file).
+        """
+        if not path.exists():
+            return None, None
+        try:
+            with path.open(encoding=ENCODING) as f:
+                return model_cls.model_validate_json(f.read()), None
+        except (ValidationError, OSError, UnicodeDecodeError) as e:
+            return None, e
 
     def _resolve_full_partial_conflict(self):
         """
