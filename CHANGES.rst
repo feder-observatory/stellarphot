@@ -83,7 +83,11 @@ Bug Fixes
   full settings are safely on disk, and an unreadable settings file is
   set aside as a numbered ``.bak`` backup instead of being overwritten.
   Encoding and OS errors while reading settings now raise
-  ``SettingsFileReadError``, a ``ValueError`` subclass. [#662]
+  ``SettingsFileReadError``, a ``ValueError`` subclass. A partial save
+  no longer resurrects values from a conflicting partial settings file;
+  the conflicting file is set aside as a ``.bak`` backup. Saved cameras,
+  observatories, and passband maps are now also written with an atomic
+  replace. [#662]
 
 2.1.2 (2026-07-19)
 -------------------

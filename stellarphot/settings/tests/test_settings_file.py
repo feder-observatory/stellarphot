@@ -170,6 +170,27 @@ class TestSavedSettings:
         ):
             saved_settings.add_item(item)
 
+    def test_failed_write_leaves_saved_item_file_intact(self, mocker):
+        # An interrupted write of cameras.json (or the other saved-item
+        # files) must not truncate the existing file; the write goes to a
+        # temporary file that atomically replaces the target only on
+        # success.
+        saved_settings = SavedSettings()
+        camera = Camera.model_validate_json(CAMERA)
+        saved_settings.add_item(camera)
+        file_path = saved_settings.settings_path / "cameras.json"
+        original = file_path.read_text()
+
+        camera2 = Camera.model_validate_json(
+            CAMERA.replace("Aspen CG 16m", "Aspen CG 16m 2")
+        )
+        mocker.patch.object(Path, "write_text", side_effect=OSError("disk full"))
+        with pytest.raises(OSError, match="disk full"):
+            saved_settings.add_item(camera2)
+
+        assert file_path.read_text() == original
+        assert not list(file_path.parent.glob("*.tmp"))
+
     def test_adding_multiple_types_of_items(self):
         # Test that adding multiple types of items works.
         saved_settings = SavedSettings()
@@ -756,6 +777,40 @@ class TestPhotometryWorkingDirSettings:
         mocker.patch.object(Path, "open", side_effect=PermissionError("denied"))
         with pytest.raises(SettingsFileReadError, match="denied"):
             settings_file.load()
+
+    def test_save_partial_update_with_conflicting_partial_and_full(self):
+        # When a valid full settings file and a conflicting valid partial
+        # file both exist, a partial save with update=True merges into the
+        # full settings. The conflicting partial's values must not leak into
+        # the result -- a field the full settings legitimately set to None
+        # must stay None -- and the conflicting partial file, whose
+        # differing values are being discarded, is set aside as .bak rather
+        # than deleted.
+        settings_file = PhotometryWorkingDirSettings()
+        full_dict = deepcopy(TEST_PHOTOMETRY_SETTINGS)
+        full_dict["passband_map"] = None
+        full_settings = PhotometrySettings(**full_dict)
+        settings_file.settings_file.write_text(full_settings.model_dump_json(indent=4))
+
+        stale_partial = PartialPhotometrySettings(
+            passband_map=PassbandMap.model_validate_json(PASSBAND_MAP)
+        )
+        stale_content = stale_partial.model_dump_json(indent=4)
+        settings_file.partial_settings_file.write_text(stale_content)
+
+        settings_file = PhotometryWorkingDirSettings()
+        camera = Camera.model_validate_json(CAMERA)
+        settings_file.save(PartialPhotometrySettings(camera=camera), update=True)
+
+        loaded = PhotometryWorkingDirSettings().load()
+        assert loaded.camera == camera
+        # The stale partial's passband_map must not be resurrected.
+        assert loaded.passband_map is None
+        # The conflicting partial file is preserved, not deleted.
+        assert not settings_file.partial_settings_file.exists()
+        assert (
+            bak_path(settings_file.partial_settings_file).read_text() == stale_content
+        )
 
     def test_load_corrupt_json_raises_plain_value_error(self):
         # A file that can be read but contains invalid settings is not a

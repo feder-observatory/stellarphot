@@ -41,6 +41,125 @@ class SettingsFileReadError(ValueError):
     """
 
 
+def _backup_path(path):
+    """
+    Choose a backup name for a file that does not already exist.
+
+    Parameters
+    ----------
+    path : `pathlib.Path`
+        The file a backup name is needed for.
+
+    Returns
+    -------
+    `pathlib.Path`
+        The first available of ``<name>.bak``, ``<name>.bak1``,
+        ``<name>.bak2``, ... so an earlier backup -- which may hold
+        the only copy of settings from a previous corruption -- is
+        never overwritten.
+    """
+    backup = path.with_name(path.name + ".bak")
+    counter = 0
+    while backup.exists():
+        counter += 1
+        backup = path.with_name(f"{path.name}.bak{counter}")
+    return backup
+
+
+def _move_aside(path):
+    """
+    Rename a file to a backup name that does not already exist.
+
+    Parameters
+    ----------
+    path : `pathlib.Path`
+        The file to rename.
+
+    Returns
+    -------
+    `pathlib.Path`
+        The path the file was renamed to.
+    """
+    backup = _backup_path(path)
+    # replace() gives deterministic cross-platform behavior. In the
+    # (unlikely) race where the chosen backup name is created between
+    # the exists() check in _backup_path and this call, the
+    # just-created file is silently overwritten -- a narrow window
+    # this single-user, widget-driven code accepts.
+    path.replace(backup)
+    return backup
+
+
+def _copy_aside(path):
+    """
+    Copy a file to a backup name that does not already exist, leaving
+    the original in place.
+
+    Used instead of `_move_aside` when the original must survive at its
+    own name until a subsequent step succeeds -- a failure after the
+    copy leaves the file where it was.
+
+    Parameters
+    ----------
+    path : `pathlib.Path`
+        The file to copy.
+
+    Returns
+    -------
+    `pathlib.Path`
+        The path of the backup copy.
+    """
+    backup = _backup_path(path)
+    # Copy bytes, not text -- the file being set aside may not be
+    # decodable. Exclusive creation ("x") preserves the guarantee that
+    # an existing backup is never overwritten even if the chosen name
+    # appears between _backup_path and this write.
+    with backup.open("xb") as f:
+        f.write(path.read_bytes())
+    return backup
+
+
+def _atomic_write_json(file, json_data, set_aside_target=False):
+    """
+    Write JSON content to a file so that a failure at any point leaves
+    any existing file at the target untouched.
+
+    The content goes to a temporary file in the same directory that
+    atomically replaces the target on success. mkstemp creates the
+    temporary file exclusively with a unique name, so overlapping writes
+    cannot collide on it.
+
+    Parameters
+    ----------
+    file : `pathlib.Path`
+        The destination file.
+
+    json_data : str
+        The JSON content to write.
+
+    set_aside_target : bool, optional
+        If True, preserve the existing (presumably unreadable) file at
+        the target as a ``.bak`` copy before it is replaced. The backup
+        is a copy made between writing the temporary file and the
+        replace, so a failure at either point leaves the target in place
+        under its original name.
+    """
+    tmp_fd, tmp_name = tempfile.mkstemp(
+        dir=file.parent, prefix=file.name + ".", suffix=".tmp"
+    )
+    os.close(tmp_fd)
+    tmp_file = Path(tmp_name)
+    try:
+        tmp_file.write_text(json_data, encoding=ENCODING)
+        if set_aside_target:
+            _copy_aside(file)
+        tmp_file.replace(file)
+    finally:
+        # After a successful replace the temporary file no longer exists,
+        # so this only cleans up after a failed write.
+        tmp_file.unlink(missing_ok=True)
+
+
 class SavedFileOperations:
     # Provide a place to store the path to the settings file. Annotate as a ClassVar
     # so that pydantic doesn't think it is a field. Also mark it as private to
@@ -50,8 +169,7 @@ class SavedFileOperations:
     def save(self):
         file_path = self._settings_path / self._file_name
         json_data = self.model_dump_json(indent=4)
-        with file_path.open("w", encoding=ENCODING) as f:
-            f.write(json_data)
+        _atomic_write_json(file_path, json_data)
 
     def get(self, name):
         """
@@ -458,6 +576,17 @@ class PhotometryWorkingDirSettings:
         unreadable_full = self._full_settings_unreadable
         unreadable_partial = self._partial_settings_unreadable
 
+        # When both files were readable, load() either removed a partial
+        # file that matched the full settings or raised because the two
+        # conflict. Both still being loaded therefore means the partial
+        # settings conflict with the full settings: their values must not
+        # leak into what is saved, and the partial file -- which may hold
+        # the only copy of the conflicting values -- is preserved as a
+        # backup below instead of deleted.
+        conflicting_partial = (
+            self._settings is not None and self._partial_settings is not None
+        )
+
         match settings:
             case PartialPhotometrySettings():
                 # This case MUST come first, because PartialPhotometrySettings is a
@@ -490,8 +619,16 @@ class PhotometryWorkingDirSettings:
                     # their own and the unreadable file is renamed with a .bak
                     # suffix once the new settings are safely on disk.
 
-                # Are we updating or replacing partial settings?
-                if update and self._partial_settings is not None:
+                # Are we updating or replacing partial settings? A
+                # conflicting partial is skipped: the settings here have
+                # already been merged into the full settings above, and
+                # merging them into the stale partial would resurrect any
+                # of its values the full settings legitimately set to None.
+                if (
+                    update
+                    and not conflicting_partial
+                    and (self._partial_settings is not None)
+                ):
                     # Get the partial settings that were loaded from disk
                     existing_partial_settings = self._partial_settings.model_dump()
 
@@ -536,124 +673,31 @@ class PhotometryWorkingDirSettings:
 
         # Write the settings to a file. The settings themselves are models, so we
         # are guaranteed to write the correct model type (partial or full settings)
-        # to the file. Write to a temporary file in the same directory and then
-        # atomically replace the target, so that a failure at any point during
-        # serialization or writing leaves any existing settings file untouched.
-        # mkstemp creates the file exclusively with a unique name, so
-        # overlapping saves cannot collide on the temporary file.
+        # to the file.
         json_data = settings.model_dump_json(indent=4)
-        tmp_fd, tmp_name = tempfile.mkstemp(
-            dir=file.parent, prefix=file.name + ".", suffix=".tmp"
-        )
-        os.close(tmp_fd)
-        tmp_file = Path(tmp_name)
-        try:
-            tmp_file.write_text(json_data, encoding=ENCODING)
-            if set_aside_target:
-                self._copy_aside(file)
-            tmp_file.replace(file)
-        finally:
-            # After a successful replace the temporary file no longer exists,
-            # so this only cleans up after a failed write.
-            tmp_file.unlink(missing_ok=True)
+        _atomic_write_json(file, json_data, set_aside_target=set_aside_target)
 
         if not full_settings and unreadable_full and self._settings_file.exists():
             # This save wrote only the partial file, but the bookkeeping load
             # found the full settings file unreadable. Leaving that file
             # behind would keep every future load failing, so it is set
             # aside now that the new partial settings are safely on disk.
-            self._move_aside(self._settings_file)
+            _move_aside(self._settings_file)
             self._settings = None
 
         if full_settings:
             # Now that the full settings that supersede the partial settings
             # are safely on disk, the partial settings file can be disposed
             # of. Doing this only after a successful write means a failed
-            # write cannot destroy the partial settings. An unreadable
-            # partial settings file is preserved as .bak instead of deleted
-            # -- it may hold the only copy of some values.
+            # write cannot destroy the partial settings. An unreadable or
+            # conflicting partial settings file is preserved as .bak instead
+            # of deleted -- it may hold the only copy of some values.
             if self._partial_settings_file.exists():
-                if unreadable_partial:
-                    self._move_aside(self._partial_settings_file)
+                if unreadable_partial or conflicting_partial:
+                    _move_aside(self._partial_settings_file)
                 else:
                     self._partial_settings_file.unlink()
             self._partial_settings = None
-
-    @staticmethod
-    def _backup_path(path):
-        """
-        Choose a backup name for a file that does not already exist.
-
-        Parameters
-        ----------
-        path : `pathlib.Path`
-            The file a backup name is needed for.
-
-        Returns
-        -------
-        `pathlib.Path`
-            The first available of ``<name>.bak``, ``<name>.bak1``,
-            ``<name>.bak2``, ... so an earlier backup -- which may hold
-            the only copy of settings from a previous corruption -- is
-            never overwritten.
-        """
-        backup = path.with_name(path.name + ".bak")
-        counter = 0
-        while backup.exists():
-            counter += 1
-            backup = path.with_name(f"{path.name}.bak{counter}")
-        return backup
-
-    def _move_aside(self, path):
-        """
-        Rename a file to a backup name that does not already exist.
-
-        Parameters
-        ----------
-        path : `pathlib.Path`
-            The file to rename.
-
-        Returns
-        -------
-        `pathlib.Path`
-            The path the file was renamed to.
-        """
-        backup = self._backup_path(path)
-        # replace() gives deterministic cross-platform behavior. In the
-        # (unlikely) race where the chosen backup name is created between
-        # the exists() check in _backup_path and this call, the
-        # just-created file is silently overwritten -- a narrow window
-        # this single-user, widget-driven code accepts.
-        path.replace(backup)
-        return backup
-
-    def _copy_aside(self, path):
-        """
-        Copy a file to a backup name that does not already exist, leaving
-        the original in place.
-
-        Used instead of `_move_aside` when the original must survive at its
-        own name until a subsequent step succeeds -- a failure after the
-        copy leaves the file where it was.
-
-        Parameters
-        ----------
-        path : `pathlib.Path`
-            The file to copy.
-
-        Returns
-        -------
-        `pathlib.Path`
-            The path of the backup copy.
-        """
-        backup = self._backup_path(path)
-        # Copy bytes, not text -- the file being set aside may not be
-        # decodable. Exclusive creation ("x") preserves the guarantee that
-        # an existing backup is never overwritten even if the chosen name
-        # appears between _backup_path and this write.
-        with backup.open("xb") as f:
-            f.write(path.read_bytes())
-        return backup
 
     def load(self):
         """
