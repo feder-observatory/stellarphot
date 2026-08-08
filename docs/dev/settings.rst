@@ -49,6 +49,8 @@ If you change the *meaning* of any saved setting:
 #. Extend ``PhotometrySettings._migrate_settings_file`` to migrate files
    written in the older formats, warning with
    ``PhotometrySettingsMigrationWarning`` if a saved value is modified.
+   That warning is a ``PhotometrySettingsWarning``, the category the
+   ``ReviewSettings`` widget displays in a banner to the user.
 #. Add tests to ``TestPriorVersionsCompatibility`` in
    ``settings/tests/test_models.py`` and to the format-version tests in
    ``settings/tests/test_settings_file.py``.

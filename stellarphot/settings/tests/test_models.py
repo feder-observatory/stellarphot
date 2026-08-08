@@ -40,6 +40,7 @@ from stellarphot.settings.models import (
     PhotometryOptionalSettings,
     PhotometrySettings,
     PhotometrySettingsMigrationWarning,
+    PhotometrySettingsWarning,
     SourceLocationSettings,
 )
 
@@ -419,6 +420,12 @@ class TestPriorVersionsCompatibility:
     Each method in this test class should contain the release version number
     of the version it is checking for compatibility.
     """
+
+    def test_migration_warning_is_a_photometry_settings_warning(self):
+        # The ReviewSettings banner displays warnings of the
+        # PhotometrySettingsWarning category; the migration warning must be
+        # in that category or the banner will never show it.
+        assert issubclass(PhotometrySettingsMigrationWarning, PhotometrySettingsWarning)
 
     @pytest.mark.parametrize(
         "old_setting,new_setting",

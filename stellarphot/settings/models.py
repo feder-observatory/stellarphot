@@ -89,7 +89,7 @@ class PhotometrySettingsWarning(UserWarning):
     """
 
 
-class PhotometrySettingsMigrationWarning(UserWarning):
+class PhotometrySettingsMigrationWarning(PhotometrySettingsWarning):
     """
     Warning issued when settings from an older format are modified on load.
     """
