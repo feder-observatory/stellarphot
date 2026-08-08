@@ -1386,6 +1386,8 @@ class TestReviewSettings:
         assert review_settings._banner.layout.display == "flex"
 
     def test_banner_dismiss_button_hides_banner(self, mocker):
+        # The banner never clears itself (it is sticky across reloads), so
+        # the dismiss button is the one way to hide it once it is shown.
         self._patch_load_to_warn(
             mocker, "Settings were migrated", PhotometrySettingsWarning
         )
