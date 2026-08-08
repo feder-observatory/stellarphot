@@ -77,6 +77,13 @@ Bug Fixes
   tab whose setting is not saved on disk now actually marks the tab as not
   saved (the selection observer previously rebound a local variable
   instead of setting the badge). [#661]
++ Saving settings can no longer destroy existing ones: all settings files
+  (including saved cameras, observatories, and passband maps) are written
+  via an atomic temporary-file replace, unreadable or conflicting files
+  are set aside as numbered ``.bak`` backups instead of being overwritten,
+  and a partial save no longer resurrects stale values from a conflicting
+  partial settings file. Encoding and OS errors while reading settings now
+  raise ``SettingsFileReadError``, a ``ValueError`` subclass. [#662]
 
 2.1.2 (2026-07-19)
 -------------------
