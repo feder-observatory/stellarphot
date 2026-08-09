@@ -73,6 +73,12 @@ __all__ = [
 # version -- see the comment there.
 PHOTOMETRY_SETTINGS_FORMAT_VERSION = 2
 
+# Defaults for PhotometryApertures when variable_aperture is True, i.e. when
+# radius, gap and annulus_width are multiples of the per-image measured FWHM
+# rather than pixels. The fixed-mode (pixel) defaults are the field defaults
+# on PhotometryApertures.
+VARIABLE_APERTURE_DEFAULTS = dict(radius=1.5, gap=2.0, annulus_width=1.5)
+
 
 class NewerFormatError(Exception):
     """
@@ -488,6 +494,30 @@ class PhotometryApertures(BaseModelWithTableRep):
             ),
         ),
     ]
+
+    @model_validator(mode="before")
+    @classmethod
+    def _apply_variable_aperture_defaults(cls, data):
+        """
+        In variable-aperture mode radius, gap and annulus_width are multiples
+        of the FWHM, so the pixel-sized field defaults would be nonsense.
+        Inject the variable-mode defaults for any of the three the caller did
+        not supply; fixed mode falls through to the field defaults.
+
+        Note: pydantic v2 does not run before-validators on assignment, so
+        flipping ``variable_aperture`` on an existing instance reinterprets
+        the existing numbers rather than replacing them -- a unit
+        re-declaration must not silently rewrite user values.
+        """
+        if isinstance(data, dict) and data.get("variable_aperture"):
+            missing = {
+                k: v for k, v in VARIABLE_APERTURE_DEFAULTS.items() if k not in data
+            }
+            if missing:
+                # Copy -- never mutate the caller's dict (the GUI passes in
+                # live dicts).
+                data = {**data, **missing}
+        return data
 
     @property
     def inner_annulus(self):
