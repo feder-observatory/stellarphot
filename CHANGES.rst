@@ -9,7 +9,7 @@ New Features
   defaults ``radius=1.5``, ``gap=2.0``, and ``annulus_width=1.5`` (in FWHM
   units). Previously only the radius scaled with FWHM while gap and annulus
   width remained in pixels, which could cause the sky annulus to overlap the
-  star in poor seeing. [#654, #XXX]
+  star in poor seeing. [#654, #666]
 + Saved photometry settings files now carry a ``settings_version`` field;
   files without it are format ``1``. On load, format-1 settings with
   ``variable_aperture=True`` get their ``gap`` and ``annulus_width`` reset
