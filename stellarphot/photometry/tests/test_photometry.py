@@ -106,7 +106,9 @@ def photometry_apertures():
         radius=FAKE_CCD_IMAGE.sources["aperture"][0],
         gap=FAKE_CCD_IMAGE.sources["aperture"][0],
         annulus_width=FAKE_CCD_IMAGE.sources["aperture"][0],
-        fwhm_estimate=FAKE_CCD_IMAGE.sources["x_stddev"].mean(),
+        # x_stddev is a Gaussian sigma, not a FWHM
+        fwhm_estimate=gaussian_sigma_to_fwhm
+        * FAKE_CCD_IMAGE.sources["x_stddev"].mean(),
     )
 
 
@@ -1147,6 +1149,120 @@ class TestAperturePhotometry:
             )
             # The aperture must never reach into its own sky annulus
             assert np.all(group["aperture"].value < group["annulus_inner"].value)
+
+    def _run_single_image_capturing_log(self, caplog, tmp_path, photometry_settings):
+        # Run photometry on a copy of FAKE_CCD_IMAGE with caplog attached to
+        # the single_image_photometry logger, which sets propagate=False and
+        # so is invisible to caplog's root-logger handler.
+        fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
+        image_file = tmp_path / "fake_image.fits"
+        fake_CCDimage.write(image_file, overwrite=True)
+
+        found_sources = source_detection(
+            fake_CCDimage, fwhm=fake_CCDimage.sources["x_stddev"].mean(), threshold=10
+        )
+        source_list_file = tmp_path / "source_list.ecsv"
+        found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
+        photometry_settings.source_location_settings.source_list_file = str(
+            source_list_file
+        )
+
+        target_logger = logging.getLogger("single_image_photometry")
+        target_logger.addHandler(caplog.handler)
+        try:
+            with caplog.at_level(logging.INFO, logger="single_image_photometry"):
+                ap_phot = AperturePhotometry(settings=photometry_settings)
+                phot_data = ap_phot(image_file)
+        finally:
+            target_logger.removeHandler(caplog.handler)
+        return phot_data
+
+    @staticmethod
+    def _true_fwhm():
+        return gaussian_sigma_to_fwhm * FAKE_CCD_IMAGE.sources["x_stddev"].mean()
+
+    def test_variable_aperture_stale_fwhm_estimate_warns(
+        self, caplog, tmp_path, photometry_settings_for_test
+    ):
+        # A stale fwhm_estimate seeds the per-image FWHM measurement, so the
+        # pipeline should suggest updating it when the measured FWHM is far
+        # from the estimate. See #654.
+        apertures = photometry_settings_for_test.photometry_apertures
+        apertures.variable_aperture = True
+        apertures.radius = 1.5
+        apertures.gap = 2.0
+        apertures.annulus_width = 1.5
+        apertures.fwhm_estimate = 5 * self._true_fwhm()
+
+        self._run_single_image_capturing_log(
+            caplog, tmp_path, photometry_settings_for_test
+        )
+        assert any(
+            "update fwhm_estimate" in record.message for record in caplog.records
+        )
+
+    def test_variable_aperture_healthy_fwhm_estimate_no_warning(
+        self, caplog, tmp_path, photometry_settings_for_test
+    ):
+        # An accurate fwhm_estimate must not produce warning spam.
+        apertures = photometry_settings_for_test.photometry_apertures
+        apertures.variable_aperture = True
+        apertures.radius = 1.5
+        apertures.gap = 2.0
+        apertures.annulus_width = 1.5
+        apertures.fwhm_estimate = self._true_fwhm()
+
+        self._run_single_image_capturing_log(
+            caplog, tmp_path, photometry_settings_for_test
+        )
+        for record in caplog.records:
+            assert "update fwhm_estimate" not in record.message
+            assert "smaller than the measured FWHM" not in record.message
+
+    def test_fixed_aperture_small_radius_warns(
+        self, caplog, tmp_path, photometry_settings_for_test
+    ):
+        # In fixed mode a pixel radius smaller than the actual FWHM loses a
+        # large, seeing-dependent fraction of the flux, so the pipeline
+        # should point that out, including the measured FWHM so the user can
+        # re-derive their geometry. See #654.
+        apertures = photometry_settings_for_test.photometry_apertures
+        true_fwhm = self._true_fwhm()
+        apertures.fwhm_estimate = true_fwhm
+        apertures.radius = 0.5 * true_fwhm
+
+        self._run_single_image_capturing_log(
+            caplog, tmp_path, photometry_settings_for_test
+        )
+        assert any(
+            "smaller than the measured FWHM" in record.message
+            for record in caplog.records
+        )
+
+    def test_fixed_aperture_fwhm_check_failure_does_not_break_run(
+        self, caplog, tmp_path, monkeypatch, photometry_settings_for_test
+    ):
+        # In fixed mode the FWHM is measured purely for the consistency
+        # check, so a measurement failure must degrade to "no warning" and
+        # never break the photometry itself.
+        from stellarphot.photometry import photometry as phot_module
+
+        def raise_error(*_args, **_kwargs):
+            raise RuntimeError("simulated FWHM measurement failure")
+
+        monkeypatch.setattr(phot_module, "fast_fwhm_from_image", raise_error)
+
+        apertures = photometry_settings_for_test.photometry_apertures
+        apertures.fwhm_estimate = self._true_fwhm()
+
+        phot_data = self._run_single_image_capturing_log(
+            caplog, tmp_path, photometry_settings_for_test
+        )
+        assert phot_data is not None
+        assert len(phot_data) > 0
+        for record in caplog.records:
+            assert "update fwhm_estimate" not in record.message
+            assert "smaller than the measured FWHM" not in record.message
 
     def test_invalid_path(self, photometry_settings_for_test):
         ap = AperturePhotometry(settings=photometry_settings_for_test)

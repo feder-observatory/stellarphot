@@ -45,6 +45,12 @@ __all__ = [
 # Allowed FITS header keywords for exposure values
 EXPOSURE_KEYWORDS = ["EXPOSURE", "EXPTIME", "TELAPSE", "ELAPTIME", "ONTIME", "LIVETIME"]
 
+# Warn when the FWHM measured from an image and the fwhm_estimate in the
+# settings differ by more than this factor in either direction. The estimate
+# seeds the FWHM measurement and the per-source FWHM fits, so a stale value
+# degrades the measurement itself.
+FWHM_ESTIMATE_TOLERANCE_FACTOR = 2.0
+
 # Attribute used to tag logging handlers that stellarphot itself created, so
 # that we can later remove only those and leave any caller-supplied handlers
 # (and the root logger's handlers) untouched. See issue #153.
@@ -188,6 +194,42 @@ def _remove_our_handlers(logger):
     for handler in logger.handlers[:]:
         if getattr(handler, _STELLARPHOT_HANDLER, False):
             logger.removeHandler(handler)
+
+
+def _warn_fwhm_inconsistencies(photometry_apertures, measured_fwhm, logger, logline):
+    """
+    Warn when the aperture settings are inconsistent with the FWHM actually
+    measured from the image; ``measured_fwhm`` of `None` means the
+    measurement failed and there is nothing to check. See #654.
+    """
+    if measured_fwhm is None:
+        return
+
+    fwhm_estimate = photometry_apertures.fwhm_estimate
+    ratio = measured_fwhm / fwhm_estimate
+    if not (
+        1 / FWHM_ESTIMATE_TOLERANCE_FACTOR <= ratio <= FWHM_ESTIMATE_TOLERANCE_FACTOR
+    ):
+        logger.warning(
+            f"{logline} SUGGESTION: fwhm_estimate is {fwhm_estimate:.2f} "
+            f"pixels but the measured FWHM of this image is "
+            f"{measured_fwhm:.2f} pixels; update fwhm_estimate in your "
+            "aperture settings. The estimate seeds the FWHM measurement "
+            "and the per-source FWHM fits, so a stale value degrades them."
+        )
+
+    if (
+        not photometry_apertures.variable_aperture
+        and photometry_apertures.radius < measured_fwhm
+    ):
+        logger.warning(
+            f"{logline} SUGGESTION: aperture radius "
+            f"{photometry_apertures.radius:.2f} pixels is smaller than the "
+            f"measured FWHM of this image ({measured_fwhm:.2f} pixels), so "
+            "a large, seeing-dependent fraction of the light falls outside "
+            "the aperture. Consider a larger radius or setting "
+            "variable_aperture to True."
+        )
 
 
 def single_image_photometry(
@@ -404,16 +446,37 @@ def single_image_photometry(
 
     if photometry_apertures.variable_aperture:
         # Get a fast, robust estimate of the FWHM of the sources for setting
-        # the aperture size.
+        # the aperture size. The measurement sets the aperture geometry here,
+        # so a failure should propagate.
         fwhm = fast_fwhm_from_image(
             ccd_image,
             photometry_apertures.fwhm_estimate,
             noise=camera.read_noise.value,
             max_adu=camera.max_data_value.value,
         )
+        measured_fwhm = fwhm
     else:
-        # Use the FWHM from the settings
+        # Use the FWHM from the settings for the geometry, but measure the
+        # FWHM anyway to check the settings against the actual seeing. The
+        # measurement is only used for that check, so a failure must degrade
+        # to "no check", never break the photometry.
         fwhm = photometry_apertures.fwhm_estimate
+        try:
+            measured_fwhm = fast_fwhm_from_image(
+                ccd_image,
+                photometry_apertures.fwhm_estimate,
+                noise=camera.read_noise.value,
+                max_adu=camera.max_data_value.value,
+            )
+        except Exception as err:
+            measured_fwhm = None
+            logger.info(
+                f"{logline} Could not measure the image FWHM to check the "
+                f"aperture settings ({type(err).__name__}: {err}); "
+                "skipping the check."
+            )
+
+    _warn_fwhm_inconsistencies(photometry_apertures, measured_fwhm, logger, logline)
 
     # Reject sources that are within an aperture diameter of each other.
     dropped_sources = []
