@@ -5,14 +5,8 @@ New Features
 ^^^^^^^^^^^^
 + In variable-aperture photometry, the ``gap`` and ``annulus_width`` now
   scale with each image's measured FWHM, just like the aperture radius. All
-  three quantities are interpreted as multiples of the per-image FWHM with
-  defaults ``radius=1.5``, ``gap=2.0``, and ``annulus_width=1.5`` (in FWHM
-  units). Previously only the radius scaled with FWHM while gap and annulus
-  width remained in pixels, which could cause the sky annulus to overlap the
-  star in poor seeing. In fixed-aperture mode the default ``gap`` and
-  ``annulus_width`` are now 5 and 15 pixels (previously 1 and 1), matching
-  the values the seeing-profile widget has always used. The per-source FWHM
-  fits reported in the ``fwhm_x``/``fwhm_y`` columns are now seeded with the
+  three quantities are interpreted as multiples of the per-image FWHM. The
+  per-source FWHM fits reported in the ``fwhm_x``/``fwhm_y`` columns are now seeded with the
   FWHM measured from each image (falling back to ``fwhm_estimate`` from the
   settings only when the measurement fails), and in fixed-aperture mode a
   multi-image run measures the image FWHM once instead of once per image,
@@ -22,13 +16,8 @@ New Features
   files without it are format ``1``. On load, format-1 settings with
   ``variable_aperture=True`` get their ``gap`` and ``annulus_width`` reset
   to the variable-aperture defaults (multiples of the measured FWHM, not
-  pixels), with a warning, because the old variable-aperture annulus
-  geometry biased the photometry (see issue ``#654``). A file written by a
-  newer stellarphot raises ``NewerFormatError`` instead of being misread
-  or overwritten, and older stellarphot versions fail on the new files
-  with a pydantic error about the unexpected ``settings_version`` field.
-  The in-file ``settings_version`` is now the only settings versioning
-  mechanism; the global settings directory version is frozen at ``2``. [#656]
+  pixels), with a warning (see issue ``#654``). A file written by a
+  newer stellarphot raises ``NewerFormatError``. [#656]
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -84,7 +73,7 @@ Other Changes and Additions
   added in #656. [#663]
 + When the settings-format migration resets the variable-aperture geometry,
   ``ReviewSettings`` marks the aperture settings as having unsaved
-  changes so they can actually be saved and displays a dismissable banner indicating that 
+  changes so they can actually be saved and displays a dismissable banner indicating that
   settings have been migrated to the new format. [#666]
 + ``stellarphot.transit_fitting`` now imports its transit-model classes
   lazily. [#666]
