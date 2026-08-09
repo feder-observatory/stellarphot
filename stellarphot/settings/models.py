@@ -1321,23 +1321,27 @@ class PhotometrySettings(BaseModelWithTableRep):
 
         # The file predates the settings_version field, i.e. it is format 1.
         # In format 1, variable_aperture=True scaled the aperture with each
-        # image's measured FWHM but the sky annulus stayed fixed, a geometry
-        # that contaminates the sky estimate in bad seeing (see issue #654),
-        # so the annulus settings are reset to the current defaults.
+        # image's measured FWHM but the sky annulus stayed fixed in pixels, a
+        # geometry that contaminates the sky estimate in bad seeing (see
+        # issue #654). The old pixel values are meaningless in the new unit
+        # system (gap and annulus_width are multiples of FWHM in variable
+        # mode), so drop them and let the PhotometryApertures
+        # before-validator fill in the variable-aperture defaults -- one
+        # source of truth for those values. The radius is kept: in format 1
+        # a variable radius already meant a multiple of FWHM.
         apertures = data.get("photometry_apertures")
         if isinstance(apertures, dict) and apertures.get("variable_aperture"):
-            gap_default = PhotometryApertures.model_fields["gap"].default
-            width_default = PhotometryApertures.model_fields["annulus_width"].default
-            data = data | {
-                "photometry_apertures": apertures
-                | {"gap": gap_default, "annulus_width": width_default}
+            apertures = {
+                k: v for k, v in apertures.items() if k not in ("gap", "annulus_width")
             }
+            data = data | {"photometry_apertures": apertures}
             warnings.warn(
                 "Aperture settings 'gap' and 'annulus_width' were RESET to "
-                "their defaults because of a bug in older versions of "
-                "stellarphot; please review and re-save your aperture "
-                "settings. Details, including why variable-aperture "
-                "photometry done with older versions should be redone: "
+                "the variable-aperture defaults, which are now multiples of "
+                "the measured FWHM rather than pixels; please review and "
+                "re-save your aperture settings. Details, including why "
+                "variable-aperture photometry done with older versions "
+                "should be redone: "
                 "https://github.com/feder-observatory/stellarphot/issues/654",
                 PhotometrySettingsMigrationWarning,
                 # No stack level is meaningful from inside a validator, so

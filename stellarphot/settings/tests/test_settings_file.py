@@ -15,7 +15,6 @@ from stellarphot.settings import (
     Observatory,
     PartialPhotometrySettings,
     PassbandMap,
-    PhotometryApertures,
     PhotometrySettings,
     PhotometrySettingsMigrationWarning,
     PhotometryWorkingDirSettings,
@@ -24,7 +23,10 @@ from stellarphot.settings import (
     settings_files,  # This import is needed for mocking -- see TestSavedSettings
 )
 from stellarphot.settings.constants import TEST_PHOTOMETRY_SETTINGS
-from stellarphot.settings.models import PHOTOMETRY_SETTINGS_FORMAT_VERSION
+from stellarphot.settings.models import (
+    PHOTOMETRY_SETTINGS_FORMAT_VERSION,
+    VARIABLE_APERTURE_DEFAULTS,
+)
 
 TEST_PHOTOMETRY_SETTINGS = deepcopy(TEST_PHOTOMETRY_SETTINGS)
 
@@ -1083,12 +1085,10 @@ class TestPhotometryWorkingDirSettings:
         assert (
             apertures.fwhm_estimate == original["photometry_apertures"]["fwhm_estimate"]
         )
-        # ...but the annulus geometry is reset to the current defaults.
-        assert apertures.gap == PhotometryApertures.model_fields["gap"].default
-        assert (
-            apertures.annulus_width
-            == PhotometryApertures.model_fields["annulus_width"].default
-        )
+        # ...but the annulus geometry is reset to the variable-aperture
+        # defaults, which are multiples of the measured FWHM.
+        assert apertures.gap == VARIABLE_APERTURE_DEFAULTS["gap"]
+        assert apertures.annulus_width == VARIABLE_APERTURE_DEFAULTS["annulus_width"]
         assert loaded.settings_version == PHOTOMETRY_SETTINGS_FORMAT_VERSION
 
     def test_format1_file_upgraded_on_save(self):
@@ -1132,11 +1132,8 @@ class TestPhotometryWorkingDirSettings:
         apertures = loaded.photometry_apertures
         assert apertures.variable_aperture is True
         assert apertures.radius == partial["photometry_apertures"]["radius"]
-        assert apertures.gap == PhotometryApertures.model_fields["gap"].default
-        assert (
-            apertures.annulus_width
-            == PhotometryApertures.model_fields["annulus_width"].default
-        )
+        assert apertures.gap == VARIABLE_APERTURE_DEFAULTS["gap"]
+        assert apertures.annulus_width == VARIABLE_APERTURE_DEFAULTS["annulus_width"]
         assert loaded.settings_version == PHOTOMETRY_SETTINGS_FORMAT_VERSION
 
     def test_load_partial_format1_no_apertures_no_warning(self):
@@ -1245,8 +1242,5 @@ class TestPhotometryWorkingDirSettings:
         assert (
             apertures.fwhm_estimate == original["photometry_apertures"]["fwhm_estimate"]
         )
-        assert apertures.gap == PhotometryApertures.model_fields["gap"].default
-        assert (
-            apertures.annulus_width
-            == PhotometryApertures.model_fields["annulus_width"].default
-        )
+        assert apertures.gap == VARIABLE_APERTURE_DEFAULTS["gap"]
+        assert apertures.annulus_width == VARIABLE_APERTURE_DEFAULTS["annulus_width"]

@@ -477,6 +477,13 @@ class TestPriorVersionsCompatibility:
         # current version by default.
         assert phot_settings.settings_version == PHOTOMETRY_SETTINGS_FORMAT_VERSION
 
+        # Context-less validation (old table metadata, in-code construction)
+        # intentionally does not migrate: the file's pixel-sized gap loads
+        # unchanged and is silently reinterpreted as a multiple of FWHM in
+        # variable-aperture mode. The protected path is file load with
+        # context. See #654.
+        assert phot_settings.photometry_apertures.gap == 5.0
+
     @staticmethod
     def _format_1_settings(variable_aperture):
         """
@@ -542,12 +549,10 @@ class TestPriorVersionsCompatibility:
             apertures.fwhm_estimate
             == old_style["photometry_apertures"]["fwhm_estimate"]
         )
-        # ...but the annulus geometry is reset to the current defaults.
-        assert apertures.gap == PhotometryApertures.model_fields["gap"].default
-        assert (
-            apertures.annulus_width
-            == PhotometryApertures.model_fields["annulus_width"].default
-        )
+        # ...but the annulus geometry is reset to the variable-aperture
+        # defaults, which are multiples of the measured FWHM.
+        assert apertures.gap == VARIABLE_APERTURE_DEFAULTS["gap"]
+        assert apertures.annulus_width == VARIABLE_APERTURE_DEFAULTS["annulus_width"]
         assert settings.settings_version == PHOTOMETRY_SETTINGS_FORMAT_VERSION
 
     def test_no_migration_of_unversioned_fixed_aperture_with_context(self):
