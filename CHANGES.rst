@@ -3,24 +3,14 @@
 
 New Features
 ^^^^^^^^^^^^
-+ Saved photometry settings files now carry a ``settings_version`` field that
-  records the version of the settings format (currently ``2``). Files written
-  before the field existed are treated as format ``1`` and are migrated when
-  loaded through ``PhotometryWorkingDirSettings``: settings with
-  ``variable_aperture=True`` have their ``gap`` and ``annulus_width`` reset to
-  the current defaults, with a prominent warning, because the old
-  variable-aperture geometry did not scale the sky annulus with the per-image
-  FWHM and photometry done with it should be redone (see issue ``#654``);
-  fixed-aperture settings load unchanged. A settings file written by a newer
-  version of stellarphot raises ``NewerFormatError`` instead of being
-  misread or overwritten; a photometry table whose metadata embeds such
-  settings still opens, with the settings left as a plain dictionary.
-  Settings embedded in the metadata of existing photometry tables are read
-  as-is, with no migration. Note that *older* versions of stellarphot
-  cannot read settings files written by this version: they fail with a
-  pydantic validation error reporting that the ``settings_version`` field
-  is not permitted (``extra_forbidden``); the fix is to upgrade
-  stellarphot. [#656]
++ Saved photometry settings files now carry a ``settings_version`` field;
+  files without it are format ``1``. On load, format-1 settings with
+  ``variable_aperture=True`` get their ``gap`` and ``annulus_width`` reset
+  to defaults, with a warning, because the old variable-aperture annulus
+  geometry biased the photometry (see issue ``#654``). A file written by a
+  newer stellarphot raises ``NewerFormatError`` instead of being misread
+  or overwritten, and older stellarphot versions fail on the new files
+  with a pydantic error about the unexpected ``settings_version`` field. [#656]
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -488,6 +488,11 @@ class TestPriorVersionsCompatibility:
         return old_style
 
     def test_settings_version_defaults_to_current(self):
+        # Settings constructed without an explicit settings_version -- the
+        # normal case in code, since only files carry the field -- must get
+        # the current format version and must write it out on dump, so that
+        # every file the current code saves is marked with the format it was
+        # written in.
         settings = PhotometrySettings(**self._format_1_settings(False))
         assert settings.settings_version == PHOTOMETRY_SETTINGS_FORMAT_VERSION
         dumped = json.loads(settings.model_dump_json())
@@ -519,6 +524,10 @@ class TestPriorVersionsCompatibility:
         assert settings.settings_version == PHOTOMETRY_SETTINGS_FORMAT_VERSION
 
     def test_migration_of_unversioned_variable_aperture_with_context(self):
+        # The positive migration case at the model-validation level: with the
+        # settings-file context, a format 1 file with variable_aperture=True
+        # is migrated -- with a warning -- because the old variable-aperture
+        # annulus geometry biased the photometry (issue #654).
         old_style = self._format_1_settings(True)
         with pytest.warns(PhotometrySettingsMigrationWarning, match="RESET"):
             settings = PhotometrySettings.model_validate_json(
