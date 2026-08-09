@@ -74,6 +74,17 @@ PASSBAND_MAP = """
 """
 
 
+def test_settings_file_version_is_frozen():
+    # SETTINGS_FILE_VERSION must never be bumped. It is a fossil in the
+    # global settings path, not a versioning mechanism: there is no
+    # look-back/copy/migration code for the global store, so bumping it
+    # silently orphans every user's saved cameras, observatories, and
+    # passband maps. Settings are versioned by the in-file
+    # settings_version field (see PHOTOMETRY_SETTINGS_FORMAT_VERSION in
+    # settings/models.py) instead.
+    assert SETTINGS_FILE_VERSION == "2"
+
+
 # Keep this test out of the class so that it uses the real settings path.
 def test_settings_path_contains_package_and_version():
     # Make sure that the path to the settings file contains the package name and

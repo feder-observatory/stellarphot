@@ -59,9 +59,18 @@ __all__ = [
 # Settings files written before this field existed are format 1. Increment
 # this when the meaning of saved settings changes, add migration logic to
 # PhotometrySettings._migrate_settings_file and add tests to
-# TestPriorVersionsCompatibility. This is separate from SETTINGS_FILE_VERSION
-# in settings_files.py, which versions the *directory* in which the global
-# camera/observatory/passband settings are stored.
+# TestPriorVersionsCompatibility.
+#
+# The settings_version a file carries has minimum-reader semantics: it records
+# the format at which the schema of *that* model last changed, i.e. "you must
+# understand format >= N to read this file" -- not "the current format". So a
+# future bump that changes only one model's schema must update the stamped
+# default only on that model, leaving files saved by unchanged models readable
+# by older stellarphot versions.
+#
+# This in-file field is the single versioning mechanism for all saved
+# settings. SETTINGS_FILE_VERSION in settings_files.py is frozen and is not a
+# version -- see the comment there.
 PHOTOMETRY_SETTINGS_FORMAT_VERSION = 2
 
 
@@ -1142,7 +1151,8 @@ class PhotometrySettings(BaseModelWithTableRep):
 
     settings_version : int, optional
         Version of the settings format, managed automatically and included
-        in saved settings files. Do not set this by hand.
+        in saved settings files. It records the oldest settings format that
+        can read the file. Do not set this by hand.
 
     """
 
@@ -1169,8 +1179,8 @@ class PhotometrySettings(BaseModelWithTableRep):
             disabled=True,
             title="Settings version",
             description=(
-                "Version of the stellarphot settings format "
-                "(managed automatically; do not edit)"
+                "Oldest stellarphot settings format that can read this "
+                "file (managed automatically; do not edit)"
             ),
         ),
     ]

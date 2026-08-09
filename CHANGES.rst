@@ -10,7 +10,9 @@ New Features
   geometry biased the photometry (see issue ``#654``). A file written by a
   newer stellarphot raises ``NewerFormatError`` instead of being misread
   or overwritten, and older stellarphot versions fail on the new files
-  with a pydantic error about the unexpected ``settings_version`` field. [#656]
+  with a pydantic error about the unexpected ``settings_version`` field.
+  The in-file ``settings_version`` is now the only settings versioning
+  mechanism; the global settings directory version is frozen at ``2``. [#656]
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^

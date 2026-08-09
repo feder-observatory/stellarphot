@@ -22,10 +22,13 @@ __all__ = [
     "SettingsFileReadError",
 ]
 
-# This versions the *directory* in which the global camera/observatory/passband
-# settings are stored, via PlatformDirs below. The version of the on-disk
-# settings file *format* is PHOTOMETRY_SETTINGS_FORMAT_VERSION in models.py.
-SETTINGS_FILE_VERSION = "2"  # value chosen to match major version of stellarphot
+# Frozen at "2" permanently. This is a component of the path to the global
+# camera/observatory/passband settings (via PlatformDirs below), and bumping it
+# would silently orphan every user's saved settings -- there is no migration
+# code for the global store. The directory is not a versioning mechanism;
+# settings are versioned by the in-file settings_version field (see
+# PHOTOMETRY_SETTINGS_FORMAT_VERSION in models.py).
+SETTINGS_FILE_VERSION = "2"
 
 ENCODING = "utf-8"
 
