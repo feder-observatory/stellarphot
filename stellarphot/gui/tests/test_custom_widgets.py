@@ -1,3 +1,4 @@
+import json
 import warnings
 from copy import deepcopy
 from pathlib import Path
@@ -1323,6 +1324,26 @@ class TestReviewSettings:
 
         assert "Settings were migrated" in review_settings._banner_html.value
         assert review_settings._banner.layout.display == "flex"
+
+    def test_banner_shows_real_migration_warning(self):
+        # The other banner tests patch load() to emit a stand-in warning;
+        # this one drives the real path end to end: a format 1 settings
+        # file with variable_aperture=True on disk is migrated on load, and
+        # the resulting PhotometrySettingsMigrationWarning -- a
+        # PhotometrySettingsWarning subclass -- must land in the banner.
+        old_style = deepcopy(TEST_PHOTOMETRY_SETTINGS)
+        old_style.pop("settings_version", None)
+        old_style["photometry_apertures"]["variable_aperture"] = True
+        wd_settings = PhotometryWorkingDirSettings()
+        wd_settings.settings_file.write_text(json.dumps(old_style))
+
+        review_settings = ReviewSettings([PhotometryApertures])
+
+        assert review_settings._banner.layout.display == "flex"
+        # The banner text is the real migration message, which names the
+        # reset settings and points at the issue explaining the reset.
+        assert "RESET" in review_settings._banner_html.value
+        assert "issues/654" in review_settings._banner_html.value
 
     @pytest.mark.parametrize("category", [DeprecationWarning, UserWarning])
     def test_banner_ignores_other_warning_categories(self, mocker, category):
