@@ -105,7 +105,22 @@ class PhotometrySettingsWarning(UserWarning):
 class PhotometrySettingsMigrationWarning(PhotometrySettingsWarning):
     """
     Warning issued when settings from an older format are modified on load.
+
+    Parameters
+    ----------
+    message : str
+        The warning message.
+
+    migrated : str, optional
+        Name of the top-level `PhotometrySettings` field whose value was
+        changed by the migration, e.g. ``"photometry_apertures"``. Used by
+        `~stellarphot.gui.ReviewSettings` to mark that setting as needing
+        to be saved.
     """
+
+    def __init__(self, message, migrated=None):
+        super().__init__(message)
+        self.migrated = migrated
 
 
 # Most models should use the default configuration, but it can be customized if needed.
@@ -814,8 +829,7 @@ class SourceLocationSettings(BaseModelWithTableRep):
         NonNegativeFloat,
         Field(
             description=(
-                "Maximum shift between source position in list and "
-                "in image, in pixels"
+                "Maximum shift between source position in list and in image, in pixels"
             )
         ),
     ] = 5.0
@@ -1340,14 +1354,13 @@ class PhotometrySettings(BaseModelWithTableRep):
             }
             data = data | {"photometry_apertures": apertures}
             warnings.warn(
-                "Aperture settings 'gap' and 'annulus_width' were RESET to "
-                "the variable-aperture defaults, which are now multiples of "
-                "the measured FWHM rather than pixels; please review and "
-                "re-save your aperture settings. Details, including why "
-                "variable-aperture photometry done with older versions "
-                "should be redone: "
-                "https://github.com/feder-observatory/stellarphot/issues/654",
-                PhotometrySettingsMigrationWarning,
+                PhotometrySettingsMigrationWarning(
+                    "Variable-aperture settings 'gap' and 'annulus_width' "
+                    "were reset to new defaults; review and save your "
+                    "aperture settings if you have not already. Details: "
+                    "https://github.com/feder-observatory/stellarphot/issues/654",
+                    migrated="photometry_apertures",
+                ),
                 # No stack level is meaningful from inside a validator, so
                 # attribute the warning to this call site rather than to
                 # pydantic internals.

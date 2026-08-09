@@ -1076,7 +1076,7 @@ class TestPhotometryWorkingDirSettings:
         original = self._write_format_1_file(
             settings_file.settings_file, variable_aperture=True
         )
-        with pytest.warns(PhotometrySettingsMigrationWarning, match="RESET"):
+        with pytest.warns(PhotometrySettingsMigrationWarning, match="reset"):
             loaded = settings_file.load()
         apertures = loaded.photometry_apertures
         # The user's aperture choice survives...
@@ -1127,7 +1127,7 @@ class TestPhotometryWorkingDirSettings:
         partial["photometry_apertures"]["variable_aperture"] = True
         settings_file.partial_settings_file.write_text(json.dumps(partial))
 
-        with pytest.warns(PhotometrySettingsMigrationWarning, match="RESET"):
+        with pytest.warns(PhotometrySettingsMigrationWarning, match="reset"):
             loaded = settings_file.load()
         apertures = loaded.photometry_apertures
         assert apertures.variable_aperture is True
@@ -1234,7 +1234,7 @@ class TestPhotometryWorkingDirSettings:
 
         settings_file = PhotometryWorkingDirSettings()
         settings_file.settings_file.write_text(golden.read_text())
-        with pytest.warns(PhotometrySettingsMigrationWarning, match="RESET"):
+        with pytest.warns(PhotometrySettingsMigrationWarning, match="reset"):
             loaded = settings_file.load()
         apertures = loaded.photometry_apertures
         assert apertures.variable_aperture is True

@@ -76,6 +76,17 @@ Other Changes and Additions
   settings instead of letting them disappear into the notebook log. Nothing
   emits the warning yet; the settings-format migration that will is being
   added in #656. [#663]
++ When the settings-format migration resets the variable-aperture geometry,
+  ``ReviewSettings`` now marks the aperture settings as having unsaved
+  changes so they can actually be saved -- which writes the file in the
+  current format and stops the warning from recurring. The migration
+  message is shorter, the banner renders the issue URL as a clickable
+  link, and the banner's dismiss button uses an icon so it no longer
+  renders as an ellipsis. [#666]
++ ``stellarphot.transit_fitting`` now imports its transit-model classes
+  lazily, so importing the GUI (which reaches
+  ``stellarphot.transit_fitting.io`` for ``get_tic_info``) no longer pays
+  for the slow, warning-prone ``pytransit`` import. [#666]
 
 Bug Fixes
 ^^^^^^^^^

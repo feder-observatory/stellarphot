@@ -537,10 +537,18 @@ class TestPriorVersionsCompatibility:
         # is migrated -- with a warning -- because the old variable-aperture
         # annulus geometry biased the photometry (issue #654).
         old_style = self._format_1_settings(True)
-        with pytest.warns(PhotometrySettingsMigrationWarning, match="RESET"):
+        with pytest.warns(PhotometrySettingsMigrationWarning, match="reset") as record:
             settings = PhotometrySettings.model_validate_json(
                 json.dumps(old_style), context={"settings_file": True}
             )
+        # The warning names the migrated top-level setting so that
+        # ReviewSettings can mark that setting as needing to be saved.
+        migration_warnings = [
+            w.message
+            for w in record
+            if isinstance(w.message, PhotometrySettingsMigrationWarning)
+        ]
+        assert [w.migrated for w in migration_warnings] == ["photometry_apertures"]
         apertures = settings.photometry_apertures
         # The user's aperture choice is kept...
         assert apertures.variable_aperture is True
