@@ -3,10 +3,18 @@
 
 New Features
 ^^^^^^^^^^^^
++ In variable-aperture photometry, the ``gap`` and ``annulus_width`` now
+  scale with each image's measured FWHM, just like the aperture radius. All
+  three quantities are interpreted as multiples of the per-image FWHM with
+  defaults ``radius=1.5``, ``gap=2.0``, and ``annulus_width=1.5`` (in FWHM
+  units). Previously only the radius scaled with FWHM while gap and annulus
+  width remained in pixels, which could cause the sky annulus to overlap the
+  star in poor seeing. [#654, #XXX]
 + Saved photometry settings files now carry a ``settings_version`` field;
   files without it are format ``1``. On load, format-1 settings with
   ``variable_aperture=True`` get their ``gap`` and ``annulus_width`` reset
-  to defaults, with a warning, because the old variable-aperture annulus
+  to the variable-aperture defaults (multiples of the measured FWHM, not
+  pixels), with a warning, because the old variable-aperture annulus
   geometry biased the photometry (see issue ``#654``). A file written by a
   newer stellarphot raises ``NewerFormatError`` instead of being misread
   or overwritten, and older stellarphot versions fail on the new files
