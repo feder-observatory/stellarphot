@@ -27,6 +27,7 @@ from stellarphot.settings import (
 from stellarphot.settings.constants import (
     TEST_CAMERA_VALUES,
 )
+from stellarphot.settings.models import VARIABLE_APERTURE_DEFAULTS
 
 TEST_CAMERA_VALUES = deepcopy(TEST_CAMERA_VALUES)
 
@@ -105,6 +106,12 @@ def test_seeing_profile_properties(tmp_path, profile_stars):
         # The FWHM should be close to 9.6
         assert 9 < profile_widget.aperture_settings.value["fwhm_estimate"] < 10
 
+        # variable_aperture defaults to False, so the click should leave it
+        # False and use the fixed-pixel gap/annulus_width, not clobber it.
+        assert profile_widget.aperture_settings.value["variable_aperture"] is False
+        assert profile_widget.aperture_settings.value["gap"] == 5
+        assert profile_widget.aperture_settings.value["annulus_width"] == 15
+
         # The click also marks the star. The style must be set explicitly:
         # the astro-image-display-api default size is 5, half the size this
         # marker has always rendered at.
@@ -123,6 +130,48 @@ def test_seeing_profile_properties(tmp_path, profile_stars):
         # Make sure the settings are updated
         phot_aps["radius"] = new_radius
         assert profile_widget.aperture_settings.value == phot_aps
+
+
+def test_seeing_profile_click_variable_aperture(tmp_path, profile_stars):
+    # When variable_aperture is checked before a star click, the click should
+    # keep it True and fill radius/gap/annulus_width with the variable-mode
+    # defaults (multiples of FWHM), not the fixed-pixel values. See #654.
+    profile_widget = spf.SeeingProfileWidget(
+        camera=Camera(**TEST_CAMERA_VALUES), _testing_path=tmp_path
+    )
+
+    image = make_gaussian_sources_image(SHAPE, profile_stars) + make_noise_image(
+        SHAPE, mean=10, stddev=100, seed=RANDOM_SEED
+    )
+
+    ccd = CCDData(image, unit="adu")
+    ccd.header["exposure"] = 30.0
+    ccd.header["object"] = "test"
+    file_name = tmp_path / "test.fits"
+    ccd.write(file_name)
+
+    profile_widget.fits_file.set_file("test.fits", tmp_path)
+    profile_widget.load_fits()
+
+    # Check the variable_aperture box, as a user would, before clicking a star.
+    profile_widget.aperture_settings.di_widgets["variable_aperture"].value = True
+
+    star_loc_x, star_loc_y = profile_stars["x_mean"][0], profile_stars["y_mean"][0]
+    matplotlib.use("agg")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        profile_widget._on_click_message(
+            profile_widget.iw._astro_im.interaction,
+            make_click_event(star_loc_x, star_loc_y),
+            [],
+        )
+
+        ap_value = profile_widget.aperture_settings.value
+        assert ap_value["variable_aperture"] is True
+        assert ap_value["radius"] == VARIABLE_APERTURE_DEFAULTS["radius"]
+        assert ap_value["gap"] == VARIABLE_APERTURE_DEFAULTS["gap"]
+        assert ap_value["annulus_width"] == VARIABLE_APERTURE_DEFAULTS["annulus_width"]
+        assert ap_value["fwhm_estimate"] == profile_widget.rad_prof.FWHM
 
 
 def test_load_fits_logs_matched_exposure_keyword(caplog, tmp_path):
