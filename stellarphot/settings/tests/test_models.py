@@ -1,6 +1,7 @@
 import json
 import random
 import re
+import warnings
 from copy import deepcopy
 from pathlib import Path
 
@@ -25,10 +26,12 @@ from stellarphot.settings.constants import (
     TEST_SOURCE_LOCATION_SETTINGS,
 )
 from stellarphot.settings.models import (
+    PHOTOMETRY_SETTINGS_FORMAT_VERSION,
     Camera,
     Exoplanet,
     FwhmMethods,
     LoggingSettings,
+    NewerFormatError,
     Observatory,
     PartialPhotometrySettings,
     PassbandMap,
@@ -36,6 +39,8 @@ from stellarphot.settings.models import (
     PhotometryApertures,
     PhotometryOptionalSettings,
     PhotometrySettings,
+    PhotometrySettingsMigrationWarning,
+    PhotometrySettingsWarning,
     SourceLocationSettings,
 )
 
@@ -416,6 +421,12 @@ class TestPriorVersionsCompatibility:
     of the version it is checking for compatibility.
     """
 
+    def test_migration_warning_is_a_photometry_settings_warning(self):
+        # The ReviewSettings banner displays warnings of the
+        # PhotometrySettingsWarning category; the migration warning must be
+        # in that category or the banner will never show it.
+        assert issubclass(PhotometrySettingsMigrationWarning, PhotometrySettingsWarning)
+
     @pytest.mark.parametrize(
         "old_setting,new_setting",
         (
@@ -459,6 +470,112 @@ class TestPriorVersionsCompatibility:
         assert hasattr(
             phot_settings.photometry_optional_settings, "partial_pixel_method"
         )
+
+        # These files predate the settings_version field; validated directly
+        # (i.e. not through PhotometryWorkingDirSettings.load) they get the
+        # current version by default.
+        assert phot_settings.settings_version == PHOTOMETRY_SETTINGS_FORMAT_VERSION
+
+    @staticmethod
+    def _format_1_settings(variable_aperture):
+        """
+        Settings dict as written by stellarphot before the settings_version
+        field existed, i.e. settings format 1.
+        """
+        old_style = deepcopy(TEST_PHOTOMETRY_SETTINGS)
+        old_style.pop("settings_version", None)
+        old_style["photometry_apertures"]["variable_aperture"] = variable_aperture
+        return old_style
+
+    def test_settings_version_defaults_to_current(self):
+        # Settings constructed without an explicit settings_version -- the
+        # normal case in code, since only files carry the field -- must get
+        # the current format version and must write it out on dump, so that
+        # every file the current code saves is marked with the format it was
+        # written in.
+        settings = PhotometrySettings(**self._format_1_settings(False))
+        assert settings.settings_version == PHOTOMETRY_SETTINGS_FORMAT_VERSION
+        dumped = json.loads(settings.model_dump_json())
+        assert dumped["settings_version"] == PHOTOMETRY_SETTINGS_FORMAT_VERSION
+
+    def test_partial_settings_version_not_none(self):
+        # Unlike the other fields, settings_version must NOT default to None
+        # in the partial model: a null version in a saved partial file would
+        # make it look like a format 1 file.
+        pps = PartialPhotometrySettings()
+        assert pps.settings_version == PHOTOMETRY_SETTINGS_FORMAT_VERSION
+        dumped = json.loads(pps.model_dump_json())
+        assert dumped["settings_version"] == PHOTOMETRY_SETTINGS_FORMAT_VERSION
+
+    def test_no_migration_of_unversioned_input_without_context(self):
+        # Without the settings-file validation context, unversioned input --
+        # e.g. settings constructed in code, or settings embedded in the
+        # metadata of an old photometry table -- is not migrated.
+        old_style = self._format_1_settings(True)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            settings = PhotometrySettings.model_validate_json(json.dumps(old_style))
+        apertures = settings.photometry_apertures
+        assert apertures.gap == old_style["photometry_apertures"]["gap"]
+        assert (
+            apertures.annulus_width
+            == old_style["photometry_apertures"]["annulus_width"]
+        )
+        assert settings.settings_version == PHOTOMETRY_SETTINGS_FORMAT_VERSION
+
+    def test_migration_of_unversioned_variable_aperture_with_context(self):
+        # The positive migration case at the model-validation level: with the
+        # settings-file context, a format 1 file with variable_aperture=True
+        # is migrated -- with a warning -- because the old variable-aperture
+        # annulus geometry biased the photometry (issue #654).
+        old_style = self._format_1_settings(True)
+        with pytest.warns(PhotometrySettingsMigrationWarning, match="RESET"):
+            settings = PhotometrySettings.model_validate_json(
+                json.dumps(old_style), context={"settings_file": True}
+            )
+        apertures = settings.photometry_apertures
+        # The user's aperture choice is kept...
+        assert apertures.variable_aperture is True
+        assert apertures.radius == old_style["photometry_apertures"]["radius"]
+        assert (
+            apertures.fwhm_estimate
+            == old_style["photometry_apertures"]["fwhm_estimate"]
+        )
+        # ...but the annulus geometry is reset to the current defaults.
+        assert apertures.gap == PhotometryApertures.model_fields["gap"].default
+        assert (
+            apertures.annulus_width
+            == PhotometryApertures.model_fields["annulus_width"].default
+        )
+        assert settings.settings_version == PHOTOMETRY_SETTINGS_FORMAT_VERSION
+
+    def test_no_migration_of_unversioned_fixed_aperture_with_context(self):
+        # Fixed-aperture settings from format 1 have unchanged meaning, so
+        # they load as-is with no warning.
+        old_style = self._format_1_settings(False)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            settings = PhotometrySettings.model_validate_json(
+                json.dumps(old_style), context={"settings_file": True}
+            )
+        apertures = settings.photometry_apertures
+        assert apertures.gap == old_style["photometry_apertures"]["gap"]
+        assert (
+            apertures.annulus_width
+            == old_style["photometry_apertures"]["annulus_width"]
+        )
+
+    def test_newer_format_version_raises(self):
+        # A settings_version newer than the code understands raises an error
+        # on every validation path, with no context needed.
+        newer = deepcopy(TEST_PHOTOMETRY_SETTINGS)
+        newer["settings_version"] = PHOTOMETRY_SETTINGS_FORMAT_VERSION + 1
+        with pytest.raises(NewerFormatError, match="newer version of stellarphot"):
+            PhotometrySettings.model_validate_json(json.dumps(newer))
+        # NewerFormatError must not be a ValueError, or pydantic would fold it
+        # into a ValidationError inside the validator that raises it.
+        assert not issubclass(NewerFormatError, ValueError)
+        assert not issubclass(NewerFormatError, ValidationError)
 
 
 def test_partial_photometry_settings():

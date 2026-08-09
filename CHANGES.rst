@@ -1,6 +1,19 @@
 2.2.0 (unreleased)
 -------------------
 
+New Features
+^^^^^^^^^^^^
++ Saved photometry settings files now carry a ``settings_version`` field;
+  files without it are format ``1``. On load, format-1 settings with
+  ``variable_aperture=True`` get their ``gap`` and ``annulus_width`` reset
+  to defaults, with a warning, because the old variable-aperture annulus
+  geometry biased the photometry (see issue ``#654``). A file written by a
+  newer stellarphot raises ``NewerFormatError`` instead of being misread
+  or overwritten, and older stellarphot versions fail on the new files
+  with a pydantic error about the unexpected ``settings_version`` field.
+  The in-file ``settings_version`` is now the only settings versioning
+  mechanism; the global settings directory version is frozen at ``2``. [#656]
+
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 + Documentation improvements: fixed docstring default values, expanded
@@ -75,14 +88,11 @@ Bug Fixes
   to original-image pixel coordinates with an off-by-0.5 formula), and it no
   longer mutates the caller's ``CCDData.mask`` in place when flagging pixels
   above ``max_adu``. [#651]
-+ ``PhotometryWorkingDirSettings.save(partial_settings, update=True)`` no
-  longer raises ``AttributeError`` when an existing full settings file
-  cannot be read; the partial settings are saved on their own since there
-  is nothing to merge them into. In ``ReviewSettings``, collapsing every
-  section of an accordion no longer raises ``TypeError``, and selecting a
-  tab whose setting is not saved on disk now actually marks the tab as not
-  saved (the selection observer previously rebound a local variable
-  instead of setting the badge). [#661]
++ ``PhotometryWorkingDirSettings.save(..., update=True)`` no longer raises
+  ``AttributeError`` when the existing full settings file is unreadable. In
+  ``ReviewSettings``, collapsing every accordion section no longer raises
+  ``TypeError``, and selecting a tab whose setting is not saved on disk now
+  actually marks the tab as not saved. [#661]
 + Saving settings can no longer destroy existing ones: all settings files
   (including saved cameras, observatories, and passband maps) are written
   via an atomic temporary-file replace, unreadable or conflicting files

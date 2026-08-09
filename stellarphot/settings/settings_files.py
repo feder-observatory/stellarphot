@@ -22,9 +22,13 @@ __all__ = [
     "SettingsFileReadError",
 ]
 
-# We will have to version settings formats, I think. Hopefully this changes rarely
-# or never.
-SETTINGS_FILE_VERSION = "2"  # value chosen to match major version of stellarphot
+# Frozen at "2" permanently. This is a component of the path to the global
+# camera/observatory/passband settings (via PlatformDirs below), and bumping it
+# would silently orphan every user's saved settings -- there is no migration
+# code for the global store. The directory is not a versioning mechanism;
+# settings are versioned by the in-file settings_version field (see
+# PHOTOMETRY_SETTINGS_FORMAT_VERSION in models.py).
+SETTINGS_FILE_VERSION = "2"
 
 ENCODING = "utf-8"
 
@@ -804,7 +808,15 @@ class PhotometryWorkingDirSettings:
             return None, None
         try:
             with path.open(encoding=ENCODING) as f:
-                return model_cls.model_validate_json(f.read()), None
+                # The context tells the model that these settings come from a
+                # settings file, so that settings saved in an older format are
+                # migrated -- see PhotometrySettings._migrate_settings_file.
+                return (
+                    model_cls.model_validate_json(
+                        f.read(), context={"settings_file": True}
+                    ),
+                    None,
+                )
         except (ValidationError, OSError, UnicodeDecodeError) as e:
             return None, e
 

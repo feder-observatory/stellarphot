@@ -1,23 +1,30 @@
+import json
 import os
+import warnings
 from copy import deepcopy
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import pytest
+from astropy.utils.data import get_pkg_data_path
 
 from stellarphot.settings import (
     SETTINGS_FILE_VERSION,
     Camera,
+    NewerFormatError,
     Observatory,
     PartialPhotometrySettings,
     PassbandMap,
+    PhotometryApertures,
     PhotometrySettings,
+    PhotometrySettingsMigrationWarning,
     PhotometryWorkingDirSettings,
     SavedSettings,
     SettingsFileReadError,
     settings_files,  # This import is needed for mocking -- see TestSavedSettings
 )
 from stellarphot.settings.constants import TEST_PHOTOMETRY_SETTINGS
+from stellarphot.settings.models import PHOTOMETRY_SETTINGS_FORMAT_VERSION
 
 TEST_PHOTOMETRY_SETTINGS = deepcopy(TEST_PHOTOMETRY_SETTINGS)
 
@@ -65,6 +72,17 @@ PASSBAND_MAP = """
     ]
 }
 """
+
+
+def test_settings_file_version_is_frozen():
+    # SETTINGS_FILE_VERSION must never be bumped. It is a fossil in the
+    # global settings path, not a versioning mechanism: there is no
+    # look-back/copy/migration code for the global store, so bumping it
+    # silently orphans every user's saved cameras, observatories, and
+    # passband maps. Settings are versioned by the in-file
+    # settings_version field (see PHOTOMETRY_SETTINGS_FORMAT_VERSION in
+    # settings/models.py) instead.
+    assert SETTINGS_FILE_VERSION == "2"
 
 
 # Keep this test out of the class so that it uses the real settings path.
@@ -1017,3 +1035,218 @@ class TestPhotometryWorkingDirSettings:
         assert from_file2 == PhotometrySettings(**TEST_PHOTOMETRY_SETTINGS)
         # Make sure we have no partial settings
         assert settings_file.partial_settings is None
+
+    # The tests below check the handling of settings format versions. Files
+    # written before the settings_version field existed are "format 1" files.
+    @staticmethod
+    def _write_format_1_file(file_name, variable_aperture):
+        """
+        Write a settings file the way stellarphot did before the
+        settings_version field existed, returning the dict that was written.
+        """
+        old_style = deepcopy(TEST_PHOTOMETRY_SETTINGS)
+        old_style.pop("settings_version", None)
+        old_style["photometry_apertures"]["variable_aperture"] = variable_aperture
+        Path(file_name).write_text(json.dumps(old_style))
+        return old_style
+
+    def test_load_format1_fixed_aperture_loads_unchanged_no_warning(self):
+        # Fixed-aperture settings have unchanged meaning, so a format 1 file
+        # loads as-is, silently.
+        settings_file = PhotometryWorkingDirSettings()
+        original = self._write_format_1_file(
+            settings_file.settings_file, variable_aperture=False
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            loaded = settings_file.load()
+        apertures = loaded.photometry_apertures.model_dump()
+        for key, value in original["photometry_apertures"].items():
+            assert apertures[key] == value
+        assert loaded.settings_version == PHOTOMETRY_SETTINGS_FORMAT_VERSION
+
+    def test_load_format1_variable_aperture_migrates_and_warns(self):
+        # The positive migration case through the full load() path: a format
+        # 1 file with variable_aperture=True is migrated -- with a warning --
+        # because the old variable-aperture annulus geometry biased the
+        # photometry (issue #654).
+        settings_file = PhotometryWorkingDirSettings()
+        original = self._write_format_1_file(
+            settings_file.settings_file, variable_aperture=True
+        )
+        with pytest.warns(PhotometrySettingsMigrationWarning, match="RESET"):
+            loaded = settings_file.load()
+        apertures = loaded.photometry_apertures
+        # The user's aperture choice survives...
+        assert apertures.variable_aperture is True
+        assert apertures.radius == original["photometry_apertures"]["radius"]
+        assert (
+            apertures.fwhm_estimate == original["photometry_apertures"]["fwhm_estimate"]
+        )
+        # ...but the annulus geometry is reset to the current defaults.
+        assert apertures.gap == PhotometryApertures.model_fields["gap"].default
+        assert (
+            apertures.annulus_width
+            == PhotometryApertures.model_fields["annulus_width"].default
+        )
+        assert loaded.settings_version == PHOTOMETRY_SETTINGS_FORMAT_VERSION
+
+    def test_format1_file_upgraded_on_save(self):
+        # A format 1 file must not stay format 1 forever: once the user
+        # saves, the file on disk carries the current settings_version, so
+        # the migration -- and its warning -- happen at most until the first
+        # save, not on every load for the rest of time.
+        settings_file = PhotometryWorkingDirSettings()
+        self._write_format_1_file(settings_file.settings_file, variable_aperture=True)
+        with pytest.warns(PhotometrySettingsMigrationWarning):
+            loaded = settings_file.load()
+        # save() re-loads the file internally, so it warns once more.
+        with pytest.warns(PhotometrySettingsMigrationWarning):
+            settings_file.save(loaded)
+
+        raw = json.loads(settings_file.settings_file.read_text())
+        assert raw["settings_version"] == PHOTOMETRY_SETTINGS_FORMAT_VERSION
+
+        # The saved file is format 2 now, so loading it again is silent.
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            PhotometryWorkingDirSettings().load()
+
+    def test_load_partial_format1_variable_aperture_warns(self):
+        # The migration must also fire when the apertures live in the
+        # *partial* settings file, which load() validates through
+        # PartialPhotometrySettings -- a model generated by
+        # _make_partial_model, so it could plausibly lose the migration
+        # validator in a refactor. Old partial files had every key present,
+        # with null for unset ones; this reproduces that on-disk style.
+        settings_file = PhotometryWorkingDirSettings()
+        original = deepcopy(TEST_PHOTOMETRY_SETTINGS)
+        original.pop("settings_version", None)
+        partial = {key: None for key in original}
+        partial["photometry_apertures"] = original["photometry_apertures"]
+        partial["photometry_apertures"]["variable_aperture"] = True
+        settings_file.partial_settings_file.write_text(json.dumps(partial))
+
+        with pytest.warns(PhotometrySettingsMigrationWarning, match="RESET"):
+            loaded = settings_file.load()
+        apertures = loaded.photometry_apertures
+        assert apertures.variable_aperture is True
+        assert apertures.radius == partial["photometry_apertures"]["radius"]
+        assert apertures.gap == PhotometryApertures.model_fields["gap"].default
+        assert (
+            apertures.annulus_width
+            == PhotometryApertures.model_fields["annulus_width"].default
+        )
+        assert loaded.settings_version == PHOTOMETRY_SETTINGS_FORMAT_VERSION
+
+    def test_load_partial_format1_no_apertures_no_warning(self):
+        # The negative case: the migration must not fire when there is
+        # nothing to migrate. A warning that fired on every old file
+        # regardless of content would train users to ignore it; it must be
+        # reserved for files where gap/annulus_width were actually reset.
+        settings_file = PhotometryWorkingDirSettings()
+        # A format-1 partial file in the old on-disk style: every key
+        # present, null for unset values, no settings_version, and only
+        # camera actually filled in -- so there is no aperture section for
+        # the migration to touch.
+        partial = {key: None for key in TEST_PHOTOMETRY_SETTINGS}
+        partial.pop("settings_version", None)
+        partial["camera"] = TEST_PHOTOMETRY_SETTINGS["camera"]
+        settings_file.partial_settings_file.write_text(json.dumps(partial))
+
+        # simplefilter("error") promotes any warning on load, including
+        # PhotometrySettingsMigrationWarning, to a test failure.
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            loaded = settings_file.load()
+        assert loaded.camera == Camera(**TEST_PHOTOMETRY_SETTINGS["camera"])
+        # The missing settings_version picks up the current default, so the
+        # next save writes an up-to-date file.
+        assert loaded.settings_version == PHOTOMETRY_SETTINGS_FORMAT_VERSION
+
+    def test_partial_saved_by_current_code_carries_version(self):
+        # Partial files written by the current code must carry the version so
+        # that they are not mistaken for format 1 files when read back.
+        settings_file = PhotometryWorkingDirSettings()
+        settings_file.save(
+            PartialPhotometrySettings(camera=Camera.model_validate_json(CAMERA))
+        )
+        raw = json.loads(settings_file.partial_settings_file.read_text())
+        assert raw["settings_version"] == PHOTOMETRY_SETTINGS_FORMAT_VERSION
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            PhotometryWorkingDirSettings().load()
+
+    # Parametrized over full/partial because load() validates the two files
+    # through separate model_validate_json calls, and both paths must refuse
+    # a too-new file. The partial path is the one that would be easy to
+    # break accidentally: PartialPhotometrySettings is generated by
+    # _make_partial_model and could plausibly lose the field validator in a
+    # refactor.
+    @pytest.mark.parametrize("full_settings", [True, False])
+    def test_load_newer_format_version_raises(self, full_settings):
+        # A file claiming a settings_version greater than this code
+        # understands -- i.e. written by a future stellarphot -- must raise
+        # NewerFormatError rather than be mis-read under current-format
+        # assumptions.
+        settings_file = PhotometryWorkingDirSettings()
+        newer = deepcopy(TEST_PHOTOMETRY_SETTINGS)
+        newer["settings_version"] = PHOTOMETRY_SETTINGS_FORMAT_VERSION + 1
+        if full_settings:
+            file = settings_file.settings_file
+        else:
+            file = settings_file.partial_settings_file
+        file.write_text(json.dumps(newer))
+
+        with pytest.raises(NewerFormatError, match="newer version of stellarphot"):
+            settings_file.load()
+
+    def test_save_refuses_to_clobber_newer_format_file(self):
+        # The data-loss guard. It pins the design decision that
+        # NewerFormatError subclasses Exception rather than ValueError:
+        # save() starts by calling load() and treats a ValueError as
+        # "nothing usable on disk, safe to write". If NewerFormatError were
+        # a ValueError -- or were raised inside a validator as one, which
+        # pydantic folds into ValidationError and load() re-raises as
+        # ValueError -- save() would swallow it and overwrite a file
+        # written by a newer stellarphot with a downgraded one.
+        settings_file = PhotometryWorkingDirSettings()
+        newer = deepcopy(TEST_PHOTOMETRY_SETTINGS)
+        newer["settings_version"] = PHOTOMETRY_SETTINGS_FORMAT_VERSION + 1
+        content = json.dumps(newer)
+        settings_file.settings_file.write_text(content)
+
+        # The two asserts check both halves of the guarantee: the error
+        # propagates out of save(), and the bytes on disk are unchanged.
+        partial = PartialPhotometrySettings(camera=Camera.model_validate_json(CAMERA))
+        with pytest.raises(NewerFormatError, match="newer version of stellarphot"):
+            settings_file.save(partial, update=True)
+        assert settings_file.settings_file.read_text() == content
+
+    def test_load_golden_2_0_0alpha_file_migrates(self):
+        # An actual settings file from a 2.0.0 alpha release, which is a
+        # format 1 file with variable_aperture=True. Unlike the other tests
+        # here, which build format 1 files with a helper, this one guards
+        # against the helper itself drifting from what old versions of
+        # stellarphot actually wrote.
+        golden = Path(
+            get_pkg_data_path("data/sample_photometry_settings_2.0.0alpha.json")
+        )
+        original = json.loads(golden.read_text())
+
+        settings_file = PhotometryWorkingDirSettings()
+        settings_file.settings_file.write_text(golden.read_text())
+        with pytest.warns(PhotometrySettingsMigrationWarning, match="RESET"):
+            loaded = settings_file.load()
+        apertures = loaded.photometry_apertures
+        assert apertures.variable_aperture is True
+        assert apertures.radius == original["photometry_apertures"]["radius"]
+        assert (
+            apertures.fwhm_estimate == original["photometry_apertures"]["fwhm_estimate"]
+        )
+        assert apertures.gap == PhotometryApertures.model_fields["gap"].default
+        assert (
+            apertures.annulus_width
+            == PhotometryApertures.model_fields["annulus_width"].default
+        )
