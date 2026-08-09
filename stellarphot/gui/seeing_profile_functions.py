@@ -410,8 +410,6 @@ class SeeingProfileWidget:
         """
         profile_size = 60
         centering_cutout_size = 20
-        default_gap = 5  # pixels
-        default_annulus_width = 15  # pixels
         if self.save_toggle:
             self.save_toggle.disabled = False
 
@@ -488,12 +486,11 @@ class SeeingProfileWidget:
                 fwhm_estimate=rad_prof.FWHM,
             )
         else:
-            # Default is 1.5 times FWHM
+            # Default is 1.5 times FWHM; gap and annulus_width fall through
+            # to the model's fixed-mode field defaults.
             aperture_radius = np.round(1.5 * rad_prof.FWHM, 0)
             ap_settings = PhotometryApertures(
                 radius=aperture_radius,
-                gap=default_gap,
-                annulus_width=default_annulus_width,
                 fwhm_estimate=rad_prof.FWHM,
             )
 

@@ -837,6 +837,24 @@ class TestPhotometryApertureSettings:
         with pytest.raises(ValidationError, match="radius"):
             PhotometryApertures(variable_aperture=True, radius=None)
 
+    def test_variable_aperture_rejects_textual_booleans(self):
+        # The default-injection validator sees the raw input, so a value
+        # like "false" -- truthy in Python but False after lax coercion --
+        # could inject variable-mode defaults into a fixed-aperture model.
+        # The field is strict so such input is rejected outright and the
+        # raw value the validator sees always agrees with the final field.
+        for textual in ("false", "true", 0, 1):
+            with pytest.raises(ValidationError, match="variable_aperture"):
+                PhotometryApertures(variable_aperture=textual)
+
+    def test_fixed_aperture_defaults_match_seeing_widget(self):
+        # The fixed-mode field defaults are the recommended pixel values
+        # the seeing-profile widget has always used, so the model is the
+        # single source of these defaults for the GUI.
+        ap_set = PhotometryApertures()
+        assert ap_set.gap == 5
+        assert ap_set.annulus_width == 15
+
     def test_variable_aperture_defaults_with_fwhm_alias(self):
         # The old "fwhm" alias for fwhm_estimate passes through the
         # default-injection validator untouched.

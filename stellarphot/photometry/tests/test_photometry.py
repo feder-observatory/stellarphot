@@ -102,13 +102,13 @@ FAKE_CCD_IMAGE = FakeCCDImage(seed=SEED)
 # Build default PhotometryOptions for the tests based on the fake image
 @pytest.fixture
 def photometry_apertures():
+    # x_stddev is a Gaussian sigma, not a FWHM
+    mean_sigma = FAKE_CCD_IMAGE.sources["x_stddev"].mean()
     return PhotometryApertures(
         radius=FAKE_CCD_IMAGE.sources["aperture"][0],
         gap=FAKE_CCD_IMAGE.sources["aperture"][0],
         annulus_width=FAKE_CCD_IMAGE.sources["aperture"][0],
-        # x_stddev is a Gaussian sigma, not a FWHM
-        fwhm_estimate=gaussian_sigma_to_fwhm
-        * FAKE_CCD_IMAGE.sources["x_stddev"].mean(),
+        fwhm_estimate=gaussian_sigma_to_fwhm * mean_sigma,
     )
 
 
@@ -1311,6 +1311,56 @@ class TestAperturePhotometry:
         for record in caplog.records:
             assert "update fwhm_estimate" not in record.message
             assert "smaller than the measured FWHM" not in record.message
+
+    def test_fixed_aperture_nan_fwhm_measurement_no_warning(
+        self, caplog, tmp_path, monkeypatch, photometry_settings_for_test
+    ):
+        # A failed measurement is not always an exception:
+        # fast_fwhm_from_image can return NaN (mean of an empty fit set)
+        # when the estimate is far below the actual FWHM. In fixed mode
+        # that must degrade to "no check", not a nonsense "measured FWHM
+        # is nan" warning.
+        from stellarphot.photometry import photometry as phot_module
+
+        monkeypatch.setattr(
+            phot_module, "fast_fwhm_from_image", lambda *_args, **_kwargs: np.nan
+        )
+
+        apertures = photometry_settings_for_test.photometry_apertures
+        apertures.fwhm_estimate = self._true_fwhm()
+
+        phot_data = self._run_single_image_capturing_log(
+            caplog, tmp_path, photometry_settings_for_test
+        )
+        assert phot_data is not None
+        assert len(phot_data) > 0
+        for record in caplog.records:
+            assert "update fwhm_estimate" not in record.message
+            assert "smaller than the measured FWHM" not in record.message
+
+    def test_variable_aperture_nan_fwhm_measurement_raises(
+        self, caplog, tmp_path, monkeypatch, photometry_settings_for_test
+    ):
+        # In variable mode the measured FWHM sets the aperture geometry, so
+        # a NaN measurement must fail loudly instead of silently producing
+        # NaN apertures and NaN photometry.
+        from stellarphot.photometry import photometry as phot_module
+
+        monkeypatch.setattr(
+            phot_module, "fast_fwhm_from_image", lambda *_args, **_kwargs: np.nan
+        )
+
+        apertures = photometry_settings_for_test.photometry_apertures
+        apertures.variable_aperture = True
+        apertures.radius = 1.5
+        apertures.gap = 2.0
+        apertures.annulus_width = 1.5
+        apertures.fwhm_estimate = self._true_fwhm()
+
+        with pytest.raises(RuntimeError, match="FWHM"):
+            self._run_single_image_capturing_log(
+                caplog, tmp_path, photometry_settings_for_test
+            )
 
     def test_invalid_path(self, photometry_settings_for_test):
         ap = AperturePhotometry(settings=photometry_settings_for_test)

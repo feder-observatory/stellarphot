@@ -222,9 +222,8 @@ def test_seeing_profile_save_apertures(tmp_path):
 
     settings = phot_settings.load()
     assert settings.camera == Camera(**TEST_CAMERA_VALUES)
-    assert settings.photometry_apertures == PhotometryApertures(
-        radius=1, annulus_width=1, gap=1
-    )
+    # Nothing was clicked, so the widget saves the model's field defaults.
+    assert settings.photometry_apertures == PhotometryApertures()
 
 
 def test_seeing_profile_save_writes_widget_radius_to_settings_file(tmp_path):

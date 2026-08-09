@@ -20,6 +20,7 @@ from pydantic import (
     Field,
     NonNegativeFloat,
     PositiveFloat,
+    StrictBool,
     create_model,
     field_validator,
     model_validator,
@@ -438,8 +439,11 @@ class PhotometryApertures(BaseModelWithTableRep):
         )
     )
 
+    # Strict so the raw value the before-validator sees always agrees with
+    # the coerced field value: lax coercion would turn "false" into False
+    # while the validator saw a truthy string.
     variable_aperture: Annotated[
-        bool,
+        StrictBool,
         Field(
             default=False,  # To match the original default
             description=(
@@ -461,7 +465,7 @@ class PhotometryApertures(BaseModelWithTableRep):
     gap: Annotated[
         PositiveFloat,
         Field(
-            default=1,
+            default=5,
             description=(
                 "Size of gap between aperture and annulus, in pixels or "
                 "multiple of FWHM"
@@ -472,7 +476,7 @@ class PhotometryApertures(BaseModelWithTableRep):
     annulus_width: Annotated[
         PositiveFloat,
         Field(
-            default=1,
+            default=15,
             description=(
                 "distance between inner and outer radii of annulus, in "
                 "pixels or multiple of FWHM"

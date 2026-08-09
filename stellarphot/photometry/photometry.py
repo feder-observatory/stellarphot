@@ -199,10 +199,11 @@ def _remove_our_handlers(logger):
 def _warn_fwhm_inconsistencies(photometry_apertures, measured_fwhm, logger, logline):
     """
     Warn when the aperture settings are inconsistent with the FWHM actually
-    measured from the image; ``measured_fwhm`` of `None` means the
-    measurement failed and there is nothing to check. See #654.
+    measured from the image; a ``measured_fwhm`` of `None` or NaN (the mean
+    of an empty fit set) means the measurement failed and there is nothing
+    to check. See #654.
     """
-    if measured_fwhm is None:
+    if measured_fwhm is None or not np.isfinite(measured_fwhm):
         return
 
     fwhm_estimate = photometry_apertures.fwhm_estimate
@@ -214,8 +215,9 @@ def _warn_fwhm_inconsistencies(photometry_apertures, measured_fwhm, logger, logl
             f"{logline} SUGGESTION: fwhm_estimate is {fwhm_estimate:.2f} "
             f"pixels but the measured FWHM of this image is "
             f"{measured_fwhm:.2f} pixels; update fwhm_estimate in your "
-            "aperture settings. The estimate seeds the FWHM measurement "
-            "and the per-source FWHM fits, so a stale value degrades them."
+            "aperture settings. The estimate sets the size of the region "
+            "used to fit each star; if it is far below the actual FWHM, "
+            "the FWHM measurement fails outright."
         )
 
     if (
@@ -454,6 +456,16 @@ def single_image_photometry(
             noise=camera.read_noise.value,
             max_adu=camera.max_data_value.value,
         )
+        if not np.isfinite(fwhm):
+            # A measurement failure can also surface as NaN (the mean of an
+            # empty fit set); without this check it would silently turn
+            # every aperture, and all of the photometry, into NaN.
+            raise RuntimeError(
+                f"Measurement of the image FWHM failed (got {fwhm}), so the "
+                "variable aperture sizes cannot be set. Check fwhm_estimate "
+                "in the aperture settings -- an estimate far below the "
+                "actual FWHM makes the measurement fail."
+            )
         measured_fwhm = fwhm
     else:
         # Use the FWHM from the settings for the geometry, but measure the
