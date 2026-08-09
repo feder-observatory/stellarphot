@@ -1272,22 +1272,12 @@ class PhotometrySettings(BaseModelWithTableRep):
                 | {"gap": gap_default, "annulus_width": width_default}
             }
             warnings.warn(
-                "\nIMPORTANT: your saved photometry settings were created by "
-                "an older version of stellarphot and have "
-                "variable_aperture=True.\n\n"
-                "In older versions the sky annulus did NOT scale with the "
-                "per-image FWHM even though the aperture did, so "
-                "variable-aperture photometry done with those versions is "
-                "biased and should be redone. See "
-                "https://github.com/feder-observatory/stellarphot/issues/654 "
-                "for details.\n\n"
-                "Your 'radius', 'fwhm_estimate' and 'variable_aperture' "
-                "settings have been kept, but 'gap' and 'annulus_width' have "
-                f"been RESET to their defaults (gap={gap_default}, "
-                f"annulus_width={width_default}). Please review and re-save "
-                "your photometry aperture settings before running photometry. "
-                "This message will not appear again once the settings are "
-                "saved.",
+                "Aperture settings 'gap' and 'annulus_width' were RESET to "
+                "their defaults because of a bug in older versions of "
+                "stellarphot; please review and re-save your aperture "
+                "settings. Details, including why variable-aperture "
+                "photometry done with older versions should be redone: "
+                "https://github.com/feder-observatory/stellarphot/issues/654",
                 PhotometrySettingsMigrationWarning,
                 # No stack level is meaningful from inside a validator, so
                 # attribute the warning to this call site rather than to
