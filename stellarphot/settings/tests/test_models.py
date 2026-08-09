@@ -727,15 +727,16 @@ class TestPhotometryApertureSettings:
         ap_set.variable_aperture = variable_aperture
         ap_set.radius = radius
         if variable_aperture:
+            # In variable mode radius, gap and annulus_width are all
+            # multiples of the FWHM. See #654.
             expected_inner = (
-                radius * TEST_APERTURE_SETTINGS["fwhm_estimate"]
-                + TEST_APERTURE_SETTINGS["gap"]
-            )
+                radius + TEST_APERTURE_SETTINGS["gap"]
+            ) * TEST_APERTURE_SETTINGS["fwhm_estimate"]
             expected_outer = (
-                radius * TEST_APERTURE_SETTINGS["fwhm_estimate"]
+                radius
                 + TEST_APERTURE_SETTINGS["gap"]
                 + TEST_APERTURE_SETTINGS["annulus_width"]
-            )
+            ) * TEST_APERTURE_SETTINGS["fwhm_estimate"]
         else:
             expected_inner = radius + TEST_APERTURE_SETTINGS["gap"]
             expected_outer = (
@@ -743,8 +744,8 @@ class TestPhotometryApertureSettings:
                 + TEST_APERTURE_SETTINGS["gap"]
                 + TEST_APERTURE_SETTINGS["annulus_width"]
             )
-        assert ap_set.inner_annulus == expected_inner
-        assert ap_set.outer_annulus == expected_outer
+        assert ap_set.inner_annulus == pytest.approx(expected_inner)
+        assert ap_set.outer_annulus == pytest.approx(expected_outer)
 
     def test_create_aperture_settings_variable_aperture(self):
         # Check that the variable aperture flag is set correctly
@@ -780,10 +781,13 @@ class TestPhotometryApertureSettings:
         # Deliberately different from the settings' fwhm_estimate
         fwhm = 2 * settings["fwhm_estimate"]
         if variable_aperture:
-            expected_inner = radius * fwhm + settings["gap"]
+            # radius, gap and annulus_width are all multiples of the FWHM
+            # in variable mode. See #654.
+            expected_inner = (radius + settings["gap"]) * fwhm
+            expected_outer = expected_inner + settings["annulus_width"] * fwhm
         else:
             expected_inner = radius + settings["gap"]
-        expected_outer = expected_inner + settings["annulus_width"]
+            expected_outer = expected_inner + settings["annulus_width"]
 
         assert ap_set.inner_annulus_pixels(fwhm) == pytest.approx(expected_inner)
         assert ap_set.outer_annulus_pixels(fwhm) == pytest.approx(expected_outer)
@@ -795,6 +799,27 @@ class TestPhotometryApertureSettings:
         assert ap_set.outer_annulus == pytest.approx(
             ap_set.outer_annulus_pixels(settings["fwhm_estimate"])
         )
+
+    def test_variable_aperture_geometry_identities(self):
+        # In variable mode every geometry number is an exact multiple of the
+        # FWHM: inner = (radius + gap) * fwhm and
+        # outer = (radius + gap + annulus_width) * fwhm. These identities are
+        # the core of the #654 semantics change, so pin them exactly.
+        settings = deepcopy(TEST_APERTURE_SETTINGS)
+        settings["variable_aperture"] = True
+        settings["radius"] = 1.5
+        settings["gap"] = 2.0
+        settings["annulus_width"] = 1.5
+        ap_set = PhotometryApertures(**settings)
+
+        for fwhm in [1.0, 3.7, 10.0]:
+            assert ap_set.radius_pixels(fwhm) == pytest.approx(1.5 * fwhm, rel=1e-12)
+            assert ap_set.inner_annulus_pixels(fwhm) == pytest.approx(
+                (1.5 + 2.0) * fwhm, rel=1e-12
+            )
+            assert ap_set.outer_annulus_pixels(fwhm) == pytest.approx(
+                (1.5 + 2.0 + 1.5) * fwhm, rel=1e-12
+            )
 
 
 @pytest.mark.parametrize("bad_one", ["radius", "gap", "annulus_width"])

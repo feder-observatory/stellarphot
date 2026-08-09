@@ -1064,6 +1064,11 @@ class TestAperturePhotometry:
         # Set the aperture radius to be a function of the FWHM
         aperture_settings.radius = fwhm_multiplier
         aperture_settings.variable_aperture = True
+        # In variable mode gap and annulus_width are multiples of the FWHM
+        # too, so replace the fixture's pixel-sized values with multiples.
+        # See #654.
+        aperture_settings.gap = 2.0
+        aperture_settings.annulus_width = 1.5
 
         # Generate the source list for photometry
         wcs = fake_images[0].wcs
@@ -1128,9 +1133,12 @@ class TestAperturePhotometry:
                 group["aperture"].value, fwhm_multiplier * expected_fwhm, rtol=tolerance
             )
             # The annulus should track the per-image FWHM too, not the static
-            # fwhm_estimate from the settings. See #654.
-            expected_inner = fwhm_multiplier * expected_fwhm + aperture_settings.gap
-            expected_outer = expected_inner + aperture_settings.annulus_width
+            # fwhm_estimate from the settings, and gap/annulus_width are
+            # multiples of the FWHM in variable mode. See #654.
+            expected_inner = (fwhm_multiplier + aperture_settings.gap) * expected_fwhm
+            expected_outer = (
+                expected_inner + aperture_settings.annulus_width * expected_fwhm
+            )
             assert np.allclose(
                 group["annulus_inner"].value, expected_inner, rtol=tolerance
             )

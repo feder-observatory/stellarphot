@@ -371,21 +371,31 @@ class PhotometryApertures(BaseModelWithTableRep):
     """
     Settings for aperture photometry.
 
+    When ``variable_aperture`` is `True`, ``radius``, ``gap`` and
+    ``annulus_width`` are all multiples of the FWHM measured in each image;
+    when it is `False` they are all in pixels. ``fwhm_estimate`` is always
+    in pixels.
+
     Parameters
     ----------
 
-    radius : int
-        Radius of the aperture in pixels, must be greater than or equal to 1.
+    variable_aperture : bool
+        If `True`, radius, gap and annulus_width are multiples of the FWHM
+        measured in each image; if `False`, they are all in pixels.
 
-    gap : int
-        Distance between the radius and the inner annulus in pixels, must be greater
-        than or equal to 1.
+    radius : float
+        Radius of the aperture, must be greater than zero.
 
-    annulus_width : int
-        Width of the annulus in pixels, must be greater than or equal to 1.
+    gap : float
+        Distance between the radius and the inner annulus, must be greater
+        than zero.
 
-    fwhm : float
-        Full width at half maximum of the typical star in pixels.
+    annulus_width : float
+        Width of the annulus, must be greater than zero.
+
+    fwhm_estimate : float
+        Estimate of the full width at half maximum of the typical star,
+        always in pixels.
 
     Attributes
     ----------
@@ -427,8 +437,9 @@ class PhotometryApertures(BaseModelWithTableRep):
         Field(
             default=False,  # To match the original default
             description=(
-                "If True, the aperture radius is radius × the FWHM measured "
-                "in each image; if False, radius is used as-is, in pixels."
+                "If True, radius, gap, and annulus_width are multiples of "
+                "the FWHM measured in each image; if False, they are all "
+                "in pixels."
             ),
         ),
     ]
@@ -445,7 +456,10 @@ class PhotometryApertures(BaseModelWithTableRep):
         PositiveFloat,
         Field(
             default=1,
-            description="Size of gap between aperture and annulus, in pixels",
+            description=(
+                "Size of gap between aperture and annulus, in pixels or "
+                "multiple of FWHM"
+            ),
             json_schema_extra=dict(autoui="ipywidgets.BoundedFloatText"),
         ),
     ]
@@ -453,7 +467,10 @@ class PhotometryApertures(BaseModelWithTableRep):
         PositiveFloat,
         Field(
             default=1,
-            description=("distance between inner and outer radii of annulus in pixels"),
+            description=(
+                "distance between inner and outer radii of annulus, in "
+                "pixels or multiple of FWHM"
+            ),
             json_schema_extra=dict(autoui="ipywidgets.BoundedFloatText"),
         ),
     ]
@@ -464,7 +481,7 @@ class PhotometryApertures(BaseModelWithTableRep):
             disabled=True,
             default=1.0,
             title="FWHM estimate",
-            description="FWHM estimate in pixels",
+            description="FWHM estimate, always in pixels",
             validation_alias=AliasChoices(
                 "fwhm",  # for backwards compatibility,
                 "fwhm_estimate",  # yes, pydantic does make you do this
@@ -503,14 +520,18 @@ class PhotometryApertures(BaseModelWithTableRep):
         Return the inner annulus radius in pixels for the given FWHM,
         depending on whether the aperture is variable or not.
         """
-        return self.radius_pixels(fwhm) + self.gap
+        gap = self.gap * fwhm if self.variable_aperture else self.gap
+        return self.radius_pixels(fwhm) + gap
 
     def outer_annulus_pixels(self, fwhm):
         """
         Return the outer annulus radius in pixels for the given FWHM,
         depending on whether the aperture is variable or not.
         """
-        return self.inner_annulus_pixels(fwhm) + self.annulus_width
+        width = (
+            self.annulus_width * fwhm if self.variable_aperture else self.annulus_width
+        )
+        return self.inner_annulus_pixels(fwhm) + width
 
 
 class PhotometryFileSettings(BaseModelWithTableRep):
