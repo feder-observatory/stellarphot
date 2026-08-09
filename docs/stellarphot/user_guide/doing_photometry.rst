@@ -15,10 +15,12 @@ maintains proper sky-annulus geometry when seeing varies across a night. Only
 the ``fwhm_estimate`` setting is always in pixels; it seeds the per-image FWHM
 measurement.
 
-Note: For differential photometry, a radius of 1.5×FWHM optimizes
-signal-to-noise. For absolute or all-sky photometry, either use a much larger
-aperture or apply an aperture correction derived from a growth curve (see,
-e.g., Howell's *Handbook of CCD Astronomy*).
+Note: For differential photometry, a radius of about 1.5×FWHM is a good
+compromise: the formal signal-to-noise optimum is smaller (near 0.7×FWHM for
+sky-limited images), but such small apertures are much more sensitive to
+seeing changes and centroiding errors. For absolute or all-sky photometry,
+either use a much larger aperture or apply an aperture correction derived
+from a growth curve (see, e.g., Howell's *Handbook of CCD Astronomy*).
 
 To enable variable-aperture photometry, check the ``variable_aperture`` box in
 the aperture settings shown by the seeing-profile widget, or set

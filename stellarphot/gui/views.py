@@ -45,7 +45,7 @@ def ui_generator(model, max_field_width=None, file_chooser_max_width=None):
         value["source_list_file"] = name
         ui.value = value
 
-    if model == PhotometryApertures:
+    if model is PhotometryApertures:
         # variable_aperture is a unit declaration -- radius, gap and
         # annulus_width are multiples of the FWHM when it is checked, pixels
         # when it is not -- so values entered in one mode are meaningless in
@@ -58,6 +58,11 @@ def ui_generator(model, max_field_width=None, file_chooser_max_width=None):
         }
 
         def _swap_aperture_defaults(change):
+            if getattr(ui, "_silent", False):
+                # A programmatic load (ui.value = ...), not a user toggle: the
+                # loaded values are already in the right units.
+                return
+
             defaults = VARIABLE_APERTURE_DEFAULTS if change["new"] else fixed_defaults
             for name, value in defaults.items():
                 ui.di_widgets[name].value = value

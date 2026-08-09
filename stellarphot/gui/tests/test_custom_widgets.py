@@ -1416,6 +1416,26 @@ class TestReviewSettings:
         assert "&lt;b&gt;details&lt;/b&gt;" in banner_html
         assert "<b>details</b>" not in banner_html
 
+    def test_banner_renders_parenthesized_url_as_link(self, mocker):
+        # A URL immediately followed by closing punctuation -- here a
+        # parenthesis -- must not pull that punctuation into the link; the
+        # href and link text should be the bare URL, with the ")" left
+        # outside the anchor tag.
+        self._patch_load_to_warn(
+            mocker,
+            "For background (see https://example.com/page) for details.",
+            PhotometrySettingsWarning,
+        )
+        review_settings = ReviewSettings([Camera])
+
+        banner_html = review_settings._banner_html.value
+        assert '<a href="https://example.com/page"' in banner_html
+        assert (
+            '<a href="https://example.com/page" target="_blank" '
+            'style="color: inherit;">https://example.com/page</a>)' in banner_html
+        )
+        assert 'href="https://example.com/page)"' not in banner_html
+
     def test_banner_shows_warning_recorded_before_load_raises(self, mocker):
         # A warning recorded before the load raises ValueError still reaches
         # the banner -- the path a settings file that is migrated but still

@@ -39,7 +39,7 @@ _BANNER_BORDER_COLOR = "#ffc107"
 _BANNER_TEXT_COLOR = "#664d03"
 _BANNER_BACKGROUND_COLOR = "#fff3cd"
 
-_URL_RE = re.compile(r"https?://\S+")
+_URL_RE = re.compile(r"https?://[^\s<]*[^\s<.,;:!?)]")
 
 
 def _linkify(escaped_text):
@@ -49,18 +49,10 @@ def _linkify(escaped_text):
     link.
     """
 
-    def replace(match):
-        url = match.group(0)
-        trailing = ""
-        while url and url[-1] in ".,;:!?)":
-            trailing = url[-1] + trailing
-            url = url[:-1]
-        return (
-            f'<a href="{url}" target="_blank" style="color: inherit;">{url}</a>'
-            f"{trailing}"
-        )
+    def _anchor(m):
+        return f'<a href="{m[0]}" target="_blank" style="color: inherit;">{m[0]}</a>'
 
-    return _URL_RE.sub(replace, escaped_text)
+    return _URL_RE.sub(_anchor, escaped_text)
 
 
 class ChooseOrMakeNew(ipw.VBox):
@@ -885,6 +877,14 @@ class ReviewSettings(ipw.VBox):
                         f"by editing your saved {name} settings or by deleting the "
                         "working directory settings."
                     ) from e
+                # The "not is_choose_or_make_new" gate is unreachable today: migrations
+                # currently only ever produce migrated == "photometry_apertures", which
+                # is never a ChooseOrMakeNew setting. If a future migration touches a
+                # ChooseOrMakeNew-managed setting (camera, observatory, passband_map),
+                # it will fall through to the "needs review" branch below and the
+                # migrated values can never be written back here -- a ChooseOrMakeNew
+                # has no savebuttonbar, so it will need a different write-back
+                # mechanism.
                 if name in migrated_settings and not is_choose_or_make_new:
                     # A migration changed these values, so the file on disk
                     # does not match the widget; mark the widget as having

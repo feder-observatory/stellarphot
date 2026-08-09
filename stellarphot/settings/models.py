@@ -554,33 +554,33 @@ class PhotometryApertures(BaseModelWithTableRep):
         """
         return self.outer_annulus_pixels(self.fwhm_estimate)
 
+    def _fwhm_scale(self, fwhm):
+        """
+        FWHM in variable-aperture mode, 1 in fixed mode -- the unit that
+        ``radius``, ``gap`` and ``annulus_width`` are measured in.
+        """
+        return fwhm if self.variable_aperture else 1.0
+
     def radius_pixels(self, fwhm):
         """
         Return the radius in pixels, depending on whether the aperture is
         variable or not.
         """
-        if self.variable_aperture:
-            return fwhm * self.radius
-        else:
-            return self.radius
+        return self.radius * self._fwhm_scale(fwhm)
 
     def inner_annulus_pixels(self, fwhm):
         """
         Return the inner annulus radius in pixels for the given FWHM,
         depending on whether the aperture is variable or not.
         """
-        gap = self.gap * fwhm if self.variable_aperture else self.gap
-        return self.radius_pixels(fwhm) + gap
+        return (self.radius + self.gap) * self._fwhm_scale(fwhm)
 
     def outer_annulus_pixels(self, fwhm):
         """
         Return the outer annulus radius in pixels for the given FWHM,
         depending on whether the aperture is variable or not.
         """
-        width = (
-            self.annulus_width * fwhm if self.variable_aperture else self.annulus_width
-        )
-        return self.inner_annulus_pixels(fwhm) + width
+        return (self.radius + self.gap + self.annulus_width) * self._fwhm_scale(fwhm)
 
 
 class PhotometryFileSettings(BaseModelWithTableRep):

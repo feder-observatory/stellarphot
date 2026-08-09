@@ -11,7 +11,13 @@ New Features
   width remained in pixels, which could cause the sky annulus to overlap the
   star in poor seeing. In fixed-aperture mode the default ``gap`` and
   ``annulus_width`` are now 5 and 15 pixels (previously 1 and 1), matching
-  the values the seeing-profile widget has always used. [#654, #666]
+  the values the seeing-profile widget has always used. The per-source FWHM
+  fits reported in the ``fwhm_x``/``fwhm_y`` columns are now seeded with the
+  FWHM measured from each image (falling back to ``fwhm_estimate`` from the
+  settings only when the measurement fails), and in fixed-aperture mode a
+  multi-image run measures the image FWHM once instead of once per image,
+  since there the measurement only checks the settings and seeds those
+  fits. [#654, #666]
 + Saved photometry settings files now carry a ``settings_version`` field;
   files without it are format ``1``. On load, format-1 settings with
   ``variable_aperture=True`` get their ``gap`` and ``annulus_width`` reset

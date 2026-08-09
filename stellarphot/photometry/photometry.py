@@ -201,7 +201,8 @@ def _warn_fwhm_inconsistencies(photometry_apertures, measured_fwhm, logger, logl
     Warn when the aperture settings are inconsistent with the FWHM actually
     measured from the image; a ``measured_fwhm`` of `None` or NaN (the mean
     of an empty fit set) means the measurement failed and there is nothing
-    to check. See #654.
+    to check. Only fixed-aperture mode can get here with a failed
+    measurement -- in variable mode the caller has already raised. See #654.
     """
     if measured_fwhm is None or not np.isfinite(measured_fwhm):
         return
@@ -239,6 +240,7 @@ def single_image_photometry(
     photometry_settings,
     fname=None,
     logline="single_image_photometry:",
+    fwhm_cache=None,
 ):
     """
     Perform aperture photometry on a single image, with an options for estimating
@@ -270,6 +272,16 @@ def single_image_photometry(
 
     logline : str, optional (Default: "single_image_photometry:")
         String to prepend to all log messages.
+
+    fwhm_cache : dict, optional (Default: None)
+        Dictionary shared across the images of a multi-image run. In
+        fixed-aperture mode the FWHM measured from the first image is stored
+        in it and reused for the remaining images -- the measurement only
+        checks the settings and seeds the per-source FWHM fits, so there is
+        no need to pay for it, or repeat its suggestions, on every image. In
+        variable-aperture mode the measurement sets the aperture geometry of
+        each image, so it is never cached. When `None` (the default) the
+        FWHM is measured from ``ccd_image``.
 
     Returns
     -------
@@ -446,33 +458,21 @@ def single_image_photometry(
             "use_coordinates='sky' but sourcelist does not have" "RA/Dec coordinates!"
         )
 
-    if photometry_apertures.variable_aperture:
-        # Get a fast, robust estimate of the FWHM of the sources for setting
-        # the aperture size. The measurement sets the aperture geometry here,
-        # so a failure should propagate.
-        fwhm = fast_fwhm_from_image(
-            ccd_image,
-            photometry_apertures.fwhm_estimate,
-            noise=camera.read_noise.value,
-            max_adu=camera.max_data_value.value,
-        )
-        if not np.isfinite(fwhm):
-            # A measurement failure can also surface as NaN (the mean of an
-            # empty fit set); without this check it would silently turn
-            # every aperture, and all of the photometry, into NaN.
-            raise RuntimeError(
-                f"Measurement of the image FWHM failed (got {fwhm}), so the "
-                "variable aperture sizes cannot be set. Check fwhm_estimate "
-                "in the aperture settings -- an estimate far below the "
-                "actual FWHM makes the measurement fail."
-            )
-        measured_fwhm = fwhm
-    else:
-        # Use the FWHM from the settings for the geometry, but measure the
-        # FWHM anyway to check the settings against the actual seeing. The
-        # measurement is only used for that check, so a failure must degrade
-        # to "no check", never break the photometry.
-        fwhm = photometry_apertures.fwhm_estimate
+    # Get a fast, robust measurement of the FWHM of the sources in the
+    # image. In variable mode the measurement sets the aperture geometry, so
+    # it must be made on every image and a failure must propagate. In fixed
+    # mode it is used to check the settings against the actual seeing and to
+    # seed the per-source FWHM fits; a failure must degrade to "no check",
+    # never break the photometry, and -- because the result is effectively
+    # identical for every image of a run -- a value measured on an earlier
+    # image (shared through fwhm_cache by multi_image_photometry) is reused
+    # instead of paying for the measurement, and repeating its suggestions,
+    # on every image.
+    measured_fwhm = None
+    if not photometry_apertures.variable_aperture and fwhm_cache is not None:
+        measured_fwhm = fwhm_cache.get("measured_fwhm")
+
+    if measured_fwhm is None:
         try:
             measured_fwhm = fast_fwhm_from_image(
                 ccd_image,
@@ -480,15 +480,37 @@ def single_image_photometry(
                 noise=camera.read_noise.value,
                 max_adu=camera.max_data_value.value,
             )
+            if not np.isfinite(measured_fwhm):
+                # A measurement failure can also surface as NaN, the mean of
+                # an empty fit set.
+                raise RuntimeError(f"measured FWHM is {measured_fwhm}")
         except Exception as err:
+            if photometry_apertures.variable_aperture:
+                # Without this, a NaN measurement would silently turn every
+                # aperture, and all of the photometry, into NaN.
+                raise RuntimeError(
+                    "Measurement of the image FWHM failed, so the variable "
+                    "aperture sizes cannot be set. Check fwhm_estimate "
+                    "in the aperture settings -- an estimate far below the "
+                    "actual FWHM makes the measurement fail."
+                ) from err
             measured_fwhm = None
             logger.info(
                 f"{logline} Could not measure the image FWHM to check the "
                 f"aperture settings ({type(err).__name__}: {err}); "
                 "skipping the check."
             )
+        else:
+            if fwhm_cache is not None and not photometry_apertures.variable_aperture:
+                fwhm_cache["measured_fwhm"] = measured_fwhm
 
-    _warn_fwhm_inconsistencies(photometry_apertures, measured_fwhm, logger, logline)
+        _warn_fwhm_inconsistencies(photometry_apertures, measured_fwhm, logger, logline)
+
+    fwhm = (
+        measured_fwhm
+        if photometry_apertures.variable_aperture
+        else photometry_apertures.fwhm_estimate
+    )
 
     # Reject sources that are within an aperture diameter of each other.
     dropped_sources = []
@@ -755,7 +777,15 @@ def single_image_photometry(
         fwhm_x, fwhm_y = compute_fwhm(
             ccd_image,
             photom,
-            fwhm_estimate=photometry_apertures.fwhm_estimate,
+            # Seed the fits with the measured image FWHM when the
+            # measurement succeeded -- the seed sets the size of the fit
+            # region, so a settings estimate far below the actual FWHM
+            # makes the per-source fits fail.
+            fwhm_estimate=(
+                measured_fwhm
+                if measured_fwhm is not None
+                else photometry_apertures.fwhm_estimate
+            ),
             fit_method=photometry_options.fwhm_method,
             sky_per_pix_column="sky_per_pix_avg",
         )
@@ -948,6 +978,10 @@ def multi_image_photometry(
 
     n_files_processed = 0
 
+    # Shared across the images of this run so that in fixed-aperture mode
+    # the image FWHM is measured once instead of once per image.
+    fwhm_cache = {}
+
     msg = f"Starting photometry of files in {directory_with_images} ... "
     if logfile is not None:
         msg += f"logging output to {logfile_name}"
@@ -974,6 +1008,7 @@ def multi_image_photometry(
             photometry_settings,
             fname=this_fname,
             logline="    >",
+            fwhm_cache=fwhm_cache,
         )
         if (this_phot is None) or (this_missing_sources is None):
             multilogger.info("  single_image_photometry failed for this image.")

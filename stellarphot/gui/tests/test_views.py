@@ -138,10 +138,36 @@ class TestUiGenerator:
         for name, value in fixed_defaults.items():
             assert ui.di_widgets[name].value == value
 
+    def test_variable_aperture_silent_flip_does_not_swap_defaults(self):
+        # ipyautoui sets ui._silent = True while it is performing a
+        # programmatic load (e.g. ui.value = saved), and False for a user
+        # toggle. The observer must check that flag and skip the default
+        # swap during a silent, programmatic flip of variable_aperture --
+        # otherwise a loaded value would be clobbered by the mode defaults.
+        # See #654.
+        ui = ui_generator(PhotometryApertures)
+        non_default = dict(radius=2.5, gap=3.5, annulus_width=2.25)
+        for name, value in non_default.items():
+            ui.di_widgets[name].value = value
+
+        try:
+            ui._silent = True
+            ui.di_widgets["variable_aperture"].value = True
+        finally:
+            ui._silent = False
+
+        for name, value in non_default.items():
+            assert ui.di_widgets[name].value == value
+
     def test_variable_aperture_programmatic_load_keeps_values(self):
         # Loading saved variable-mode settings assigns ui.value, which also
-        # flips the checkbox and fires the observer; the loaded numbers must
-        # survive rather than being replaced by the mode defaults.
+        # flips the checkbox and fires the observer while ipyautoui has
+        # ui._silent set to True; the _silent guard in
+        # _swap_aperture_defaults is what lets the loaded numbers survive
+        # instead of being replaced by the mode defaults. (Previously this
+        # only worked by luck, because variable_aperture happens to be the
+        # first field in the model schema, so the loader re-applied the
+        # saved values after the observer had already clobbered them.)
         ui = ui_generator(PhotometryApertures)
         saved = dict(
             variable_aperture=True,
