@@ -351,24 +351,24 @@ class FakeCatalogTable(Table):
         return self
 
 
-def test_transform_to_catalog_excludes_distant_matches(mocker):
-    # A star whose nearest catalog match is far away (much more than
-    # 1 arcsec) should be excluded from the fit for the transform
-    # coefficients. See issue #588 -- an operator precedence error
-    # disabled the distance cut, so badly-matched stars polluted
-    # the fit.
-    n_good = 20
+# Zero point of the synthetic catalog below. The catalog magnitudes follow the
+# fit model exactly with a=b=c=d=0, so this is the only non-zero coefficient.
+FAKE_CATALOG_ZERO_POINT = 20.0
 
-    # Good stars sit exactly on top of their catalog counterparts.
-    ra, dec = generate_star_coordinates(n_good)
 
-    good_mags = np.linspace(-10.0, -5.0, num=n_good)
-    color = np.linspace(0.0, 1.0, num=n_good)
+def generate_fake_catalog(n_stars):
+    """
+    Generate a catalog whose magnitudes are an exact fit to the transform
+    model with a=b=c=d=0 and z=FAKE_CATALOG_ZERO_POINT.
 
-    # Catalog magnitudes follow the fit model exactly with
-    # a=b=c=d=0 and zero point z=20.
-    zero_point = 20.0
-    cat_r = good_mags + zero_point
+    Returns the catalog, the star coordinates, and the instrumental
+    magnitudes that generated the catalog magnitudes.
+    """
+    ra, dec = generate_star_coordinates(n_stars)
+
+    instrumental = np.linspace(-10.0, -5.0, num=n_stars)
+    color = np.linspace(0.0, 1.0, num=n_stars)
+    cat_r = instrumental + FAKE_CATALOG_ZERO_POINT
 
     catalog = FakeCatalogTable(
         {
@@ -379,32 +379,38 @@ def test_transform_to_catalog_excludes_distant_matches(mocker):
         }
     )
 
-    # One more observed star, a degree away from every catalog star, so
-    # its nearest catalog match is bogus. Its instrumental magnitude is
-    # chosen so that the bogus match is 0.5 magnitude off the true zero
-    # point -- close enough to survive the median-based outlier cut, so
-    # only the distance cut can remove it from the fit.
-    bad_ra = ra[0]
-    bad_dec = dec[0] - 1 * u.degree
-    bad_mag = catalog["mag_R"][0] - zero_point - 0.5
+    return catalog, ra, dec, instrumental
+
+
+def generate_observed_table(ra, dec, instrumental):
+    """
+    Generate observations in the form transform_to_catalog expects, i.e. a
+    table of a single image grouped by file name.
+    """
+    n_stars = len(instrumental)
 
     observed = Table(
         {
-            "file": ["image_1.fit"] * (n_good + 1),
-            "passband": ["R"] * (n_good + 1),
-            "ra": np.append(ra.to_value("degree"), bad_ra.to_value("degree")),
-            "dec": np.append(dec.to_value("degree"), bad_dec.to_value("degree")),
-            "mag_inst": np.append(good_mags, bad_mag),
-            "mag_error": [0.01] * (n_good + 1),
+            "file": ["image_1.fit"] * n_stars,
+            "passband": ["R"] * n_stars,
+            "ra": ra.to_value("degree"),
+            "dec": dec.to_value("degree"),
+            "mag_inst": instrumental,
+            "mag_error": [0.01] * n_stars,
         }
     )
-    observed = observed.group_by("file")
 
-    # Replace the catalog fetch with our synthetic catalog so no
-    # network access is needed.
+    return observed.group_by("file")
+
+
+def run_transform_to_catalog(mocker, catalog, observed):
+    """
+    Run transform_to_catalog against a synthetic catalog rather than a
+    fetched one, so that no network access is needed.
+    """
     mocker.patch.object(magnitude_transforms, "apass_dr9", return_value=catalog)
 
-    result = transform_to_catalog(
+    return transform_to_catalog(
         observed,
         "R",
         obs_error_column="mag_error",
@@ -412,6 +418,35 @@ def test_transform_to_catalog_excludes_distant_matches(mocker):
         cat_filter="R",
         cat_color=("R", "I"),
     )
+
+
+def test_transform_to_catalog_excludes_distant_matches(mocker):
+    # A star whose nearest catalog match is far away (much more than
+    # 1 arcsec) should be excluded from the fit for the transform
+    # coefficients. See issue #588 -- an operator precedence error
+    # disabled the distance cut, so badly-matched stars polluted
+    # the fit.
+    n_good = 20
+
+    # Good stars sit exactly on top of their catalog counterparts.
+    catalog, ra, dec, good_mags = generate_fake_catalog(n_good)
+
+    # One more observed star, a degree away from every catalog star, so
+    # its nearest catalog match is bogus. Its instrumental magnitude is
+    # chosen so that the bogus match is 0.5 magnitude off the true zero
+    # point -- close enough to survive the median-based outlier cut, so
+    # only the distance cut can remove it from the fit.
+    bad_ra = ra[0]
+    bad_dec = dec[0] - 1 * u.degree
+    bad_mag = good_mags[0] - 0.5
+
+    observed = generate_observed_table(
+        u.Quantity([*ra, bad_ra]),
+        u.Quantity([*dec, bad_dec]),
+        np.append(good_mags, bad_mag),
+    )
+
+    result = run_transform_to_catalog(mocker, catalog, observed)
 
     # The distant star has no real match, so its calibrated
     # magnitude should be NaN.
@@ -422,6 +457,69 @@ def test_transform_to_catalog_excludes_distant_matches(mocker):
     # catalog. If the bad match leaks into the fit it drags the
     # coefficients away from the true values.
     np.testing.assert_allclose(
-        result["mag_inst_cal"][:n_good], cat_r, rtol=0, atol=1e-6
+        result["mag_inst_cal"][:n_good],
+        good_mags + FAKE_CATALOG_ZERO_POINT,
+        rtol=0,
+        atol=1e-6,
     )
-    np.testing.assert_allclose(result["z"][:n_good], zero_point, rtol=0, atol=1e-6)
+    np.testing.assert_allclose(
+        result["z"][:n_good], FAKE_CATALOG_ZERO_POINT, rtol=0, atol=1e-6
+    )
+
+
+@pytest.mark.parametrize(
+    "offset, expect_nan",
+    [
+        # The VSX and APASS DR9 positions of V2480 Cyg differ by about this much.
+        (1.3 * u.arcsec, False),
+        # Far enough away that the match is no longer plausible.
+        (1.6 * u.arcsec, True),
+    ],
+)
+def test_transform_to_catalog_match_tolerance(mocker, offset, expect_nan):
+    # A star can be a little more than an arcsec from its catalog position --
+    # the VSX position of a variable need not agree that closely with its
+    # APASS position -- and should still end up with a calibrated magnitude.
+    # It should not, however, be used in the fit for the transform
+    # coefficients, which requires a match within 1 arcsec. See issue #668.
+    n_good = 20
+
+    catalog, ra, dec, good_mags = generate_fake_catalog(n_good)
+
+    # An extra observation of the first catalog star, offset in declination so
+    # that the separation from its catalog position is exactly the offset. Its
+    # instrumental magnitude is 0.5 magnitude off the true zero point -- close
+    # enough to survive the median-based outlier cut, so if it makes it into
+    # the fit it drags the zero point along with it.
+    offset_mag = good_mags[0] - 0.5
+
+    observed = generate_observed_table(
+        u.Quantity([*ra, ra[0]]),
+        u.Quantity([*dec, dec[0] + offset]),
+        np.append(good_mags, offset_mag),
+    )
+
+    result = run_transform_to_catalog(mocker, catalog, observed)
+
+    # The offset star gets a calibrated magnitude only if its match is close
+    # enough. The fit is exact, so that magnitude is just the instrumental
+    # magnitude plus the zero point.
+    if expect_nan:
+        assert np.isnan(result["mag_inst_cal"][-1])
+    else:
+        assert result["mag_inst_cal"][-1] == pytest.approx(
+            offset_mag + FAKE_CATALOG_ZERO_POINT, abs=1e-6
+        )
+
+    # Either way the offset star is more than an arcsec from its catalog
+    # position, so it should be left out of the fit, leaving the good stars
+    # as an exact fit.
+    np.testing.assert_allclose(
+        result["mag_inst_cal"][:n_good],
+        good_mags + FAKE_CATALOG_ZERO_POINT,
+        rtol=0,
+        atol=1e-6,
+    )
+    np.testing.assert_allclose(
+        result["z"][:n_good], FAKE_CATALOG_ZERO_POINT, rtol=0, atol=1e-6
+    )
