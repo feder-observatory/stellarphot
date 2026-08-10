@@ -102,11 +102,13 @@ FAKE_CCD_IMAGE = FakeCCDImage(seed=SEED)
 # Build default PhotometryOptions for the tests based on the fake image
 @pytest.fixture
 def photometry_apertures():
+    # x_stddev is a Gaussian sigma, not a FWHM
+    mean_sigma = FAKE_CCD_IMAGE.sources["x_stddev"].mean()
     return PhotometryApertures(
         radius=FAKE_CCD_IMAGE.sources["aperture"][0],
         gap=FAKE_CCD_IMAGE.sources["aperture"][0],
         annulus_width=FAKE_CCD_IMAGE.sources["aperture"][0],
-        fwhm_estimate=FAKE_CCD_IMAGE.sources["x_stddev"].mean(),
+        fwhm_estimate=gaussian_sigma_to_fwhm * mean_sigma,
     )
 
 
@@ -1024,17 +1026,24 @@ class TestAperturePhotometry:
                     object_of_interest=object_name,
                 )
 
-    def test_photometry_variable_aperture(self, tmp_path, photometry_settings_for_test):
-        # Create a series of images with sources of different FWHM and
-        # run photometry on them with a variable aperture radius.
-        fwhm_values = [5, 7.5, 10]
+    def _run_multi_image_photometry(
+        self,
+        tmp_path,
+        photometry_settings,
+        fwhm_values,
+        psf="gaussian",
+    ):
+        # Create a series of images with sources of different FWHM and run
+        # variable-aperture photometry on them, with radius/gap/annulus_width
+        # of 1.5/2.0/1.5 (multiples of the FWHM). Returns the photometry
+        # results.
 
         # Set the camera noise and use this as the noise for the image
         noise = 1 * u.electron
-        photometry_settings_for_test.camera.read_noise = noise
+        photometry_settings.camera.read_noise = noise
 
         fake_images = [
-            FakeCCDImage(seed=SEED, fwhm=fwhm, noise_dev=noise.value)
+            FakeCCDImage(seed=SEED, fwhm=fwhm, noise_dev=noise.value, psf=psf)
             for fwhm in fwhm_values
         ]
         num_files = len(fake_images)
@@ -1056,14 +1065,18 @@ class TestAperturePhotometry:
 
         # Get the expected fwhm of the sources, and make sure we use that in
         # the aperture settings.
-        aperture_settings = photometry_settings_for_test.photometry_apertures
+        aperture_settings = photometry_settings.photometry_apertures
         fwhm_est = gaussian_sigma_to_fwhm * sources["x_stddev"].mean()
         aperture_settings.fwhm_estimate = fwhm_est
 
-        fwhm_multiplier = 1.5
         # Set the aperture radius to be a function of the FWHM
-        aperture_settings.radius = fwhm_multiplier
+        aperture_settings.radius = 1.5
         aperture_settings.variable_aperture = True
+        # In variable mode gap and annulus_width are multiples of the FWHM
+        # too, so replace the fixture's pixel-sized values with multiples.
+        # See #654.
+        aperture_settings.gap = 2.0
+        aperture_settings.annulus_width = 1.5
 
         # Generate the source list for photometry
         wcs = fake_images[0].wcs
@@ -1086,9 +1099,7 @@ class TestAperturePhotometry:
         )
 
         # Make a copy of photometry options
-        phot_options = (
-            photometry_settings_for_test.photometry_optional_settings.model_copy()
-        )
+        phot_options = photometry_settings.photometry_optional_settings.model_copy()
 
         # Modify options to match test before we used phot_options
         phot_options.include_dig_noise = True
@@ -1096,9 +1107,9 @@ class TestAperturePhotometry:
         phot_options.reject_background_outliers = True
         phot_options.fwhm_method = FwhmMethods.FIT
 
-        photometry_settings_for_test.photometry_optional_settings = phot_options
-        photometry_settings_for_test.source_location_settings.use_coordinates = "sky"
-        photometry_settings_for_test.source_location_settings.source_list_file = str(
+        photometry_settings.photometry_optional_settings = phot_options
+        photometry_settings.source_location_settings.use_coordinates = "sky"
+        photometry_settings.source_location_settings.source_list_file = str(
             source_list_file
         )
         with warnings.catch_warnings():
@@ -1107,11 +1118,20 @@ class TestAperturePhotometry:
                 message="Cannot merge meta key",
                 category=MergeConflictWarning,
             )
-            ap_phot = AperturePhotometry(settings=photometry_settings_for_test)
+            ap_phot = AperturePhotometry(settings=photometry_settings)
             phot_data = ap_phot(
                 tmp_path,
                 object_of_interest=object_name,
             )
+        return phot_data
+
+    def test_photometry_variable_aperture(self, tmp_path, photometry_settings_for_test):
+        fwhm_values = [5, 7.5, 10]
+        phot_data = self._run_multi_image_photometry(
+            tmp_path, photometry_settings_for_test, fwhm_values
+        )
+        aperture_settings = photometry_settings_for_test.photometry_apertures
+        radius = aperture_settings.radius
 
         grouped = phot_data.group_by("file")
         tolerance = 0.01
@@ -1125,12 +1145,15 @@ class TestAperturePhotometry:
             # Check that the aperture radius is set correctly; use the same tolerance
             # as the fwhm
             assert np.allclose(
-                group["aperture"].value, fwhm_multiplier * expected_fwhm, rtol=tolerance
+                group["aperture"].value, radius * expected_fwhm, rtol=tolerance
             )
             # The annulus should track the per-image FWHM too, not the static
-            # fwhm_estimate from the settings. See #654.
-            expected_inner = fwhm_multiplier * expected_fwhm + aperture_settings.gap
-            expected_outer = expected_inner + aperture_settings.annulus_width
+            # fwhm_estimate from the settings, and gap/annulus_width are
+            # multiples of the FWHM in variable mode. See #654.
+            expected_inner = (radius + aperture_settings.gap) * expected_fwhm
+            expected_outer = (
+                expected_inner + aperture_settings.annulus_width * expected_fwhm
+            )
             assert np.allclose(
                 group["annulus_inner"].value, expected_inner, rtol=tolerance
             )
@@ -1139,6 +1162,124 @@ class TestAperturePhotometry:
             )
             # The aperture must never reach into its own sky annulus
             assert np.all(group["aperture"].value < group["annulus_inner"].value)
+
+    def test_photometry_variable_aperture_moffat(
+        self, tmp_path, photometry_settings_for_test
+    ):
+        # What this test establishes: the pipeline runs end-to-end on stars
+        # that are NOT Gaussian, and the FWHM measured from those stars --
+        # a Gaussian fit, biased ~15% wide by the Moffat's wings at
+        # alpha=2.5, hence the 20% tolerance -- actually reaches the
+        # aperture column. The geometry ratios between the columns are pure
+        # algebra on the settings and are pinned at the model level by
+        # test_annulus_pixels_methods and
+        # test_create_aperture_settings_variable_aperture in test_models.py,
+        # so they are not re-asserted here. See #654.
+        fwhm_values = [5, 7.5, 10]
+        phot_data = self._run_multi_image_photometry(
+            tmp_path, photometry_settings_for_test, fwhm_values, psf="moffat"
+        )
+        radius = photometry_settings_for_test.photometry_apertures.radius
+
+        grouped = phot_data.group_by("file")
+        for expected_fwhm, group in zip(fwhm_values, grouped.groups, strict=True):
+            assert np.allclose(
+                group["aperture"].value, radius * expected_fwhm, rtol=0.2
+            )
+
+    def _run_single_image_capturing_log(self, caplog, tmp_path, photometry_settings):
+        # Run photometry on a copy of FAKE_CCD_IMAGE with caplog attached to
+        # the single_image_photometry logger, which sets propagate=False and
+        # so is invisible to caplog's root-logger handler.
+        fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
+        image_file = tmp_path / "fake_image.fits"
+        fake_CCDimage.write(image_file, overwrite=True)
+
+        found_sources = source_detection(
+            fake_CCDimage, fwhm=fake_CCDimage.sources["x_stddev"].mean(), threshold=10
+        )
+        source_list_file = tmp_path / "source_list.ecsv"
+        found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
+        photometry_settings.source_location_settings.source_list_file = str(
+            source_list_file
+        )
+
+        target_logger = logging.getLogger("single_image_photometry")
+        target_logger.addHandler(caplog.handler)
+        try:
+            with caplog.at_level(logging.INFO, logger="single_image_photometry"):
+                ap_phot = AperturePhotometry(settings=photometry_settings)
+                phot_data = ap_phot(image_file)
+        finally:
+            target_logger.removeHandler(caplog.handler)
+        return phot_data
+
+    @staticmethod
+    def _true_fwhm():
+        return gaussian_sigma_to_fwhm * FAKE_CCD_IMAGE.sources["x_stddev"].mean()
+
+    def test_variable_aperture_nan_fwhm_measurement_skips_image(
+        self, caplog, tmp_path, monkeypatch, photometry_settings_for_test
+    ):
+        # In variable mode the measured FWHM sets the aperture geometry, so
+        # a NaN measurement leaves nothing to fall back on; the image is
+        # skipped with a warning instead of silently producing NaN apertures
+        # and NaN photometry. See #666.
+        from stellarphot.photometry import photometry as phot_module
+
+        monkeypatch.setattr(
+            phot_module, "fast_fwhm_from_image", lambda *_args, **_kwargs: np.nan
+        )
+
+        apertures = photometry_settings_for_test.photometry_apertures
+        apertures.variable_aperture = True
+        apertures.radius = 1.5
+        apertures.gap = 2.0
+        apertures.annulus_width = 1.5
+        apertures.fwhm_estimate = self._true_fwhm()
+
+        phot_data = self._run_single_image_capturing_log(
+            caplog, tmp_path, photometry_settings_for_test
+        )
+        # The single-image path returns the (photom, dropped_sources) tuple
+        # from single_image_photometry, so the skipped image shows up as a
+        # None photometry table rather than a None return value.
+        assert phot_data[0] is None
+        assert any("SKIPPING THIS IMAGE" in record.message for record in caplog.records)
+
+    def test_variable_aperture_fit_seed_uses_measured_fwhm(
+        self, caplog, tmp_path, monkeypatch, photometry_settings_for_test
+    ):
+        # The per-source FWHM fits are seeded with the FWHM measured from
+        # this image, not the settings estimate. See #666.
+        from stellarphot.photometry import photometry as phot_module
+
+        true_fwhm = self._true_fwhm()
+        measured = 0.75 * true_fwhm
+        monkeypatch.setattr(
+            phot_module, "fast_fwhm_from_image", lambda *_args, **_kwargs: measured
+        )
+
+        seeds = []
+        real_compute_fwhm = phot_module.compute_fwhm
+
+        def capturing_compute_fwhm(*args, **kwargs):
+            seeds.append(kwargs["fwhm_estimate"])
+            return real_compute_fwhm(*args, **kwargs)
+
+        monkeypatch.setattr(phot_module, "compute_fwhm", capturing_compute_fwhm)
+
+        apertures = photometry_settings_for_test.photometry_apertures
+        apertures.variable_aperture = True
+        apertures.radius = 1.5
+        apertures.gap = 2.0
+        apertures.annulus_width = 1.5
+        apertures.fwhm_estimate = true_fwhm
+
+        self._run_single_image_capturing_log(
+            caplog, tmp_path, photometry_settings_for_test
+        )
+        assert seeds == [measured]
 
     def test_invalid_path(self, photometry_settings_for_test):
         ap = AperturePhotometry(settings=photometry_settings_for_test)

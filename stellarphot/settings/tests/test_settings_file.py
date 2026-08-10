@@ -15,7 +15,6 @@ from stellarphot.settings import (
     Observatory,
     PartialPhotometrySettings,
     PassbandMap,
-    PhotometryApertures,
     PhotometrySettings,
     PhotometrySettingsMigrationWarning,
     PhotometryWorkingDirSettings,
@@ -24,7 +23,10 @@ from stellarphot.settings import (
     settings_files,  # This import is needed for mocking -- see TestSavedSettings
 )
 from stellarphot.settings.constants import TEST_PHOTOMETRY_SETTINGS
-from stellarphot.settings.models import PHOTOMETRY_SETTINGS_FORMAT_VERSION
+from stellarphot.settings.models import (
+    PHOTOMETRY_SETTINGS_FORMAT_VERSION,
+    VARIABLE_APERTURE_DEFAULTS,
+)
 
 TEST_PHOTOMETRY_SETTINGS = deepcopy(TEST_PHOTOMETRY_SETTINGS)
 
@@ -1071,25 +1073,14 @@ class TestPhotometryWorkingDirSettings:
         # because the old variable-aperture annulus geometry biased the
         # photometry (issue #654).
         settings_file = PhotometryWorkingDirSettings()
-        original = self._write_format_1_file(
-            settings_file.settings_file, variable_aperture=True
-        )
-        with pytest.warns(PhotometrySettingsMigrationWarning, match="RESET"):
+        self._write_format_1_file(settings_file.settings_file, variable_aperture=True)
+        with pytest.warns(PhotometrySettingsMigrationWarning, match="reset"):
             loaded = settings_file.load()
-        apertures = loaded.photometry_apertures
-        # The user's aperture choice survives...
-        assert apertures.variable_aperture is True
-        assert apertures.radius == original["photometry_apertures"]["radius"]
-        assert (
-            apertures.fwhm_estimate == original["photometry_apertures"]["fwhm_estimate"]
-        )
-        # ...but the annulus geometry is reset to the current defaults.
-        assert apertures.gap == PhotometryApertures.model_fields["gap"].default
-        assert (
-            apertures.annulus_width
-            == PhotometryApertures.model_fields["annulus_width"].default
-        )
-        assert loaded.settings_version == PHOTOMETRY_SETTINGS_FORMAT_VERSION
+        # One migrated field is enough to show load() took the migration
+        # path; the full kept-vs-reset details are pinned at the model level
+        # by test_migration_of_unversioned_variable_aperture_with_context in
+        # test_models.py.
+        assert loaded.photometry_apertures.gap == VARIABLE_APERTURE_DEFAULTS["gap"]
 
     def test_format1_file_upgraded_on_save(self):
         # A format 1 file must not stay format 1 forever: once the user
@@ -1127,17 +1118,11 @@ class TestPhotometryWorkingDirSettings:
         partial["photometry_apertures"]["variable_aperture"] = True
         settings_file.partial_settings_file.write_text(json.dumps(partial))
 
-        with pytest.warns(PhotometrySettingsMigrationWarning, match="RESET"):
+        with pytest.warns(PhotometrySettingsMigrationWarning, match="reset"):
             loaded = settings_file.load()
-        apertures = loaded.photometry_apertures
-        assert apertures.variable_aperture is True
-        assert apertures.radius == partial["photometry_apertures"]["radius"]
-        assert apertures.gap == PhotometryApertures.model_fields["gap"].default
-        assert (
-            apertures.annulus_width
-            == PhotometryApertures.model_fields["annulus_width"].default
-        )
-        assert loaded.settings_version == PHOTOMETRY_SETTINGS_FORMAT_VERSION
+        # One migrated field shows the partial path took the migration; the
+        # full details are pinned at the model level in test_models.py.
+        assert loaded.photometry_apertures.gap == VARIABLE_APERTURE_DEFAULTS["gap"]
 
     def test_load_partial_format1_no_apertures_no_warning(self):
         # The negative case: the migration must not fire when there is
@@ -1233,20 +1218,11 @@ class TestPhotometryWorkingDirSettings:
         golden = Path(
             get_pkg_data_path("data/sample_photometry_settings_2.0.0alpha.json")
         )
-        original = json.loads(golden.read_text())
 
         settings_file = PhotometryWorkingDirSettings()
         settings_file.settings_file.write_text(golden.read_text())
-        with pytest.warns(PhotometrySettingsMigrationWarning, match="RESET"):
+        with pytest.warns(PhotometrySettingsMigrationWarning, match="reset"):
             loaded = settings_file.load()
-        apertures = loaded.photometry_apertures
-        assert apertures.variable_aperture is True
-        assert apertures.radius == original["photometry_apertures"]["radius"]
-        assert (
-            apertures.fwhm_estimate == original["photometry_apertures"]["fwhm_estimate"]
-        )
-        assert apertures.gap == PhotometryApertures.model_fields["gap"].default
-        assert (
-            apertures.annulus_width
-            == PhotometryApertures.model_fields["annulus_width"].default
-        )
+        # One migrated field shows the golden file took the migration; the
+        # full details are pinned at the model level in test_models.py.
+        assert loaded.photometry_apertures.gap == VARIABLE_APERTURE_DEFAULTS["gap"]

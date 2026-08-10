@@ -2,6 +2,7 @@
 # this module.
 
 import html
+import re
 import warnings
 from enum import StrEnum
 
@@ -37,6 +38,21 @@ DEFAULT_BUTTON_WIDTH = "300px"
 _BANNER_BORDER_COLOR = "#ffc107"
 _BANNER_TEXT_COLOR = "#664d03"
 _BANNER_BACKGROUND_COLOR = "#fff3cd"
+
+_URL_RE = re.compile(r"https?://[^\s<]*[^\s<.,;:!?)]")
+
+
+def _linkify(escaped_text):
+    """
+    Wrap bare URLs in already-escaped text in anchor tags so they are
+    clickable in an HTML widget. Trailing punctuation stays outside the
+    link.
+    """
+
+    def _anchor(m):
+        return f'<a href="{m[0]}" target="_blank" style="color: inherit;">{m[0]}</a>'
+
+    return _URL_RE.sub(_anchor, escaped_text)
 
 
 class ChooseOrMakeNew(ipw.VBox):
@@ -91,7 +107,7 @@ class ChooseOrMakeNew(ipw.VBox):
 
         # Descriptive title
         self._title = ipw.HTML(
-            value=(f"Choose a {self._display_name} " "or make a new one")
+            value=(f"Choose a {self._display_name} or make a new one")
         )
 
         self._choose_detail_container = ipw.HBox(layout={"width": DEFAULT_BUTTON_WIDTH})
@@ -785,10 +801,12 @@ class ReviewSettings(ipw.VBox):
         # there is a message to show, and once shown it stays up until the
         # user dismisses it.
         self._banner_html = ipw.HTML()
+        # An icon rather than a text glyph in the description: a narrow
+        # button ellipsizes its description text, but not its icon.
         self._banner_dismiss = ipw.Button(
-            description="✕",
+            icon="times",
             tooltip="Dismiss this message",
-            layout=ipw.Layout(width="2.5em"),
+            layout=ipw.Layout(width="44px"),
         )
         self._banner_dismiss.style.button_color = _BANNER_BORDER_COLOR
         self._banner_dismiss.style.text_color = _BANNER_TEXT_COLOR
@@ -803,7 +821,17 @@ class ReviewSettings(ipw.VBox):
         # showing any warnings the load raised in the banner. This is the
         # only place the banner is set: reloads by the current_settings
         # property must not clear a notice the user has not yet dismissed.
-        self._update_banner(self._load_working_dir_settings())
+        recorded_warnings = self._load_working_dir_settings()
+        self._update_banner([str(w.message) for w in recorded_warnings])
+
+        # Settings whose loaded values differ from the file on disk because
+        # a migration changed them; their widgets must come up ready to
+        # save or the migrated values can never be written back.
+        migrated_settings = {
+            name
+            for w in recorded_warnings
+            if (name := getattr(w.message, "migrated", None)) is not None
+        }
 
         self._setting_widgets = []
         self._plain_names = []
@@ -849,8 +877,24 @@ class ReviewSettings(ipw.VBox):
                         f"by editing your saved {name} settings or by deleting the "
                         "working directory settings."
                     ) from e
-                # Add symbol to title to indicate that the setting needs review
-                self.badges.append(SaveStatus.SETTING_SHOULD_BE_REVIEWED)
+                # The "not is_choose_or_make_new" gate is unreachable today: migrations
+                # currently only ever produce migrated == "photometry_apertures", which
+                # is never a ChooseOrMakeNew setting. If a future migration touches a
+                # ChooseOrMakeNew-managed setting (camera, observatory, passband_map),
+                # it will fall through to the "needs review" branch below and the
+                # migrated values can never be written back here -- a ChooseOrMakeNew
+                # has no savebuttonbar, so it will need a different write-back
+                # mechanism.
+                if name in migrated_settings and not is_choose_or_make_new:
+                    # A migration changed these values, so the file on disk
+                    # does not match the widget; mark the widget as having
+                    # unsaved changes, which enables its save button.
+                    val_to_set.savebuttonbar.unsaved_changes = True
+                    self.badges.append(SaveStatus.SETTING_NOT_SAVED)
+                else:
+                    # Add symbol to title to indicate that the setting
+                    # needs review
+                    self.badges.append(SaveStatus.SETTING_SHOULD_BE_REVIEWED)
 
             elif is_choose_or_make_new:
                 if len(widget._choose_existing.options) > 1:
@@ -928,8 +972,8 @@ class ReviewSettings(ipw.VBox):
     def _load_working_dir_settings(self):
         """
         Load settings from the working directory into
-        ``self._current_settings`` and return the messages of any
-        `~stellarphot.settings.PhotometrySettingsWarning` the load
+        ``self._current_settings`` and return the recorded
+        `~stellarphot.settings.PhotometrySettingsWarning`\\s the load
         generated, for display in the banner instead of the notebook log.
         """
         try:
@@ -951,14 +995,16 @@ class ReviewSettings(ipw.VBox):
             loaded = PartialPhotometrySettings()
 
         self._current_settings = loaded
-        return [str(warning.message) for warning in recorded]
+        return recorded
 
     def _update_banner(self, messages):
         """
         Show the banner if there are messages, hide it if there are none.
         """
         if messages:
-            content = "".join(f"<p>⚠️ {html.escape(msg)}</p>" for msg in messages)
+            content = "".join(
+                f"<p>⚠️ {_linkify(html.escape(msg))}</p>" for msg in messages
+            )
             self._banner_html.value = (
                 f"<div style='border: 2px solid {_BANNER_BORDER_COLOR}; "
                 f"border-radius: 4px; "

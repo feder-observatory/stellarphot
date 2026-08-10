@@ -2,6 +2,8 @@ from ipyautoui import AutoUi
 from ipywidgets import Layout
 
 from stellarphot.settings.models import (
+    VARIABLE_APERTURE_DEFAULTS,
+    PhotometryApertures,
     SourceLocationSettings,
     _extract_short_description,
 )
@@ -42,6 +44,32 @@ def ui_generator(model, max_field_width=None, file_chooser_max_width=None):
         value = ui.value.copy()
         value["source_list_file"] = name
         ui.value = value
+
+    if model is PhotometryApertures:
+        # variable_aperture is a unit declaration -- radius, gap and
+        # annulus_width are multiples of the FWHM when it is checked, pixels
+        # when it is not -- so values entered in one mode are meaningless in
+        # the other. Swap in the defaults for the selected mode whenever the
+        # checkbox changes. Writing through di_widgets takes the normal
+        # change path (unsaved_changes, revalidation, value observers).
+        fixed_defaults = {
+            name: PhotometryApertures.model_fields[name].default
+            for name in VARIABLE_APERTURE_DEFAULTS
+        }
+
+        def _swap_aperture_defaults(change):
+            if getattr(ui, "_silent", False):
+                # A programmatic load (ui.value = ...), not a user toggle: the
+                # loaded values are already in the right units.
+                return
+
+            defaults = VARIABLE_APERTURE_DEFAULTS if change["new"] else fixed_defaults
+            for name, value in defaults.items():
+                ui.di_widgets[name].value = value
+
+        ui.di_widgets["variable_aperture"].observe(
+            _swap_aperture_defaults, names="value"
+        )
 
     # validation is really messy looking right now, so suppress display of
     # the validation errors. A green check or red x will still be displayed.

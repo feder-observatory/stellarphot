@@ -20,6 +20,7 @@ from pydantic import (
     Field,
     NonNegativeFloat,
     PositiveFloat,
+    StrictBool,
     create_model,
     field_validator,
     model_validator,
@@ -73,6 +74,12 @@ __all__ = [
 # version -- see the comment there.
 PHOTOMETRY_SETTINGS_FORMAT_VERSION = 2
 
+# Defaults for PhotometryApertures when variable_aperture is True, i.e. when
+# radius, gap and annulus_width are multiples of the per-image measured FWHM
+# rather than pixels. The fixed-mode (pixel) defaults are the field defaults
+# on PhotometryApertures.
+VARIABLE_APERTURE_DEFAULTS = dict(radius=1.5, gap=2.0, annulus_width=1.5)
+
 
 class NewerFormatError(Exception):
     """
@@ -98,7 +105,22 @@ class PhotometrySettingsWarning(UserWarning):
 class PhotometrySettingsMigrationWarning(PhotometrySettingsWarning):
     """
     Warning issued when settings from an older format are modified on load.
+
+    Parameters
+    ----------
+    message : str
+        The warning message.
+
+    migrated : str, optional
+        Name of the top-level `PhotometrySettings` field whose value was
+        changed by the migration, e.g. ``"photometry_apertures"``. Used by
+        `~stellarphot.gui.ReviewSettings` to mark that setting as needing
+        to be saved.
     """
+
+    def __init__(self, message, migrated=None):
+        super().__init__(message)
+        self.migrated = migrated
 
 
 # Most models should use the default configuration, but it can be customized if needed.
@@ -371,21 +393,31 @@ class PhotometryApertures(BaseModelWithTableRep):
     """
     Settings for aperture photometry.
 
+    When ``variable_aperture`` is `True`, ``radius``, ``gap`` and
+    ``annulus_width`` are all multiples of the FWHM measured in each image;
+    when it is `False` they are all in pixels. ``fwhm_estimate`` is always
+    in pixels.
+
     Parameters
     ----------
 
-    radius : int
-        Radius of the aperture in pixels, must be greater than or equal to 1.
+    variable_aperture : bool
+        If `True`, radius, gap and annulus_width are multiples of the FWHM
+        measured in each image; if `False`, they are all in pixels.
 
-    gap : int
-        Distance between the radius and the inner annulus in pixels, must be greater
-        than or equal to 1.
+    radius : float
+        Radius of the aperture, must be greater than zero.
 
-    annulus_width : int
-        Width of the annulus in pixels, must be greater than or equal to 1.
+    gap : float
+        Distance between the radius and the inner annulus, must be greater
+        than zero.
 
-    fwhm : float
-        Full width at half maximum of the typical star in pixels.
+    annulus_width : float
+        Width of the annulus, must be greater than zero.
+
+    fwhm_estimate : float
+        Estimate of the full width at half maximum of the typical star,
+        always in pixels.
 
     Attributes
     ----------
@@ -422,13 +454,17 @@ class PhotometryApertures(BaseModelWithTableRep):
         )
     )
 
+    # Strict so the raw value the before-validator sees always agrees with
+    # the coerced field value: lax coercion would turn "false" into False
+    # while the validator saw a truthy string.
     variable_aperture: Annotated[
-        bool,
+        StrictBool,
         Field(
             default=False,  # To match the original default
             description=(
-                "If True, the aperture radius is radius × the FWHM measured "
-                "in each image; if False, radius is used as-is, in pixels."
+                "If True, radius, gap, and annulus_width are multiples of "
+                "the FWHM measured in each image; if False, they are all "
+                "in pixels."
             ),
         ),
     ]
@@ -444,16 +480,22 @@ class PhotometryApertures(BaseModelWithTableRep):
     gap: Annotated[
         PositiveFloat,
         Field(
-            default=1,
-            description="Size of gap between aperture and annulus, in pixels",
+            default=5,
+            description=(
+                "Size of gap between aperture and annulus, in pixels or "
+                "multiple of FWHM"
+            ),
             json_schema_extra=dict(autoui="ipywidgets.BoundedFloatText"),
         ),
     ]
     annulus_width: Annotated[
         PositiveFloat,
         Field(
-            default=1,
-            description=("distance between inner and outer radii of annulus in pixels"),
+            default=15,
+            description=(
+                "distance between inner and outer radii of annulus, in "
+                "pixels or multiple of FWHM"
+            ),
             json_schema_extra=dict(autoui="ipywidgets.BoundedFloatText"),
         ),
     ]
@@ -464,13 +506,37 @@ class PhotometryApertures(BaseModelWithTableRep):
             disabled=True,
             default=1.0,
             title="FWHM estimate",
-            description="FWHM estimate in pixels",
+            description="FWHM estimate, always in pixels",
             validation_alias=AliasChoices(
                 "fwhm",  # for backwards compatibility,
                 "fwhm_estimate",  # yes, pydantic does make you do this
             ),
         ),
     ]
+
+    @model_validator(mode="before")
+    @classmethod
+    def _apply_variable_aperture_defaults(cls, data):
+        """
+        In variable-aperture mode radius, gap and annulus_width are multiples
+        of the FWHM, so the pixel-sized field defaults would be nonsense.
+        Inject the variable-mode defaults for any of the three the caller did
+        not supply; fixed mode falls through to the field defaults.
+
+        Note: pydantic v2 does not run before-validators on assignment, so
+        flipping ``variable_aperture`` on an existing instance reinterprets
+        the existing numbers rather than replacing them -- a unit
+        re-declaration must not silently rewrite user values.
+        """
+        if isinstance(data, dict) and data.get("variable_aperture"):
+            missing = {
+                k: v for k, v in VARIABLE_APERTURE_DEFAULTS.items() if k not in data
+            }
+            if missing:
+                # Copy -- never mutate the caller's dict (the GUI passes in
+                # live dicts).
+                data = {**data, **missing}
+        return data
 
     @property
     def inner_annulus(self):
@@ -488,29 +554,33 @@ class PhotometryApertures(BaseModelWithTableRep):
         """
         return self.outer_annulus_pixels(self.fwhm_estimate)
 
+    def _fwhm_scale(self, fwhm):
+        """
+        FWHM in variable-aperture mode, 1 in fixed mode -- the unit that
+        ``radius``, ``gap`` and ``annulus_width`` are measured in.
+        """
+        return fwhm if self.variable_aperture else 1.0
+
     def radius_pixels(self, fwhm):
         """
         Return the radius in pixels, depending on whether the aperture is
         variable or not.
         """
-        if self.variable_aperture:
-            return fwhm * self.radius
-        else:
-            return self.radius
+        return self.radius * self._fwhm_scale(fwhm)
 
     def inner_annulus_pixels(self, fwhm):
         """
         Return the inner annulus radius in pixels for the given FWHM,
         depending on whether the aperture is variable or not.
         """
-        return self.radius_pixels(fwhm) + self.gap
+        return (self.radius + self.gap) * self._fwhm_scale(fwhm)
 
     def outer_annulus_pixels(self, fwhm):
         """
         Return the outer annulus radius in pixels for the given FWHM,
         depending on whether the aperture is variable or not.
         """
-        return self.inner_annulus_pixels(fwhm) + self.annulus_width
+        return (self.radius + self.gap + self.annulus_width) * self._fwhm_scale(fwhm)
 
 
 class PhotometryFileSettings(BaseModelWithTableRep):
@@ -759,8 +829,7 @@ class SourceLocationSettings(BaseModelWithTableRep):
         NonNegativeFloat,
         Field(
             description=(
-                "Maximum shift between source position in list and "
-                "in image, in pixels"
+                "Maximum shift between source position in list and in image, in pixels"
             )
         ),
     ] = 5.0
@@ -1270,25 +1339,28 @@ class PhotometrySettings(BaseModelWithTableRep):
 
         # The file predates the settings_version field, i.e. it is format 1.
         # In format 1, variable_aperture=True scaled the aperture with each
-        # image's measured FWHM but the sky annulus stayed fixed, a geometry
-        # that contaminates the sky estimate in bad seeing (see issue #654),
-        # so the annulus settings are reset to the current defaults.
+        # image's measured FWHM but the sky annulus stayed fixed in pixels, a
+        # geometry that contaminates the sky estimate in bad seeing (see
+        # issue #654). The old pixel values are meaningless in the new unit
+        # system (gap and annulus_width are multiples of FWHM in variable
+        # mode), so drop them and let the PhotometryApertures
+        # before-validator fill in the variable-aperture defaults -- one
+        # source of truth for those values. The radius is kept: in format 1
+        # a variable radius already meant a multiple of FWHM.
         apertures = data.get("photometry_apertures")
         if isinstance(apertures, dict) and apertures.get("variable_aperture"):
-            gap_default = PhotometryApertures.model_fields["gap"].default
-            width_default = PhotometryApertures.model_fields["annulus_width"].default
-            data = data | {
-                "photometry_apertures": apertures
-                | {"gap": gap_default, "annulus_width": width_default}
+            apertures = {
+                k: v for k, v in apertures.items() if k not in ("gap", "annulus_width")
             }
+            data = data | {"photometry_apertures": apertures}
             warnings.warn(
-                "Aperture settings 'gap' and 'annulus_width' were RESET to "
-                "their defaults because of a bug in older versions of "
-                "stellarphot; please review and re-save your aperture "
-                "settings. Details, including why variable-aperture "
-                "photometry done with older versions should be redone: "
-                "https://github.com/feder-observatory/stellarphot/issues/654",
-                PhotometrySettingsMigrationWarning,
+                PhotometrySettingsMigrationWarning(
+                    "Variable-aperture settings 'gap' and 'annulus_width' "
+                    "were reset to new defaults; review and save your "
+                    "aperture settings if you have not already. Details: "
+                    "https://github.com/feder-observatory/stellarphot/issues/654",
+                    migrated="photometry_apertures",
+                ),
                 # No stack level is meaningful from inside a validator, so
                 # attribute the warning to this call site rather than to
                 # pydantic internals.

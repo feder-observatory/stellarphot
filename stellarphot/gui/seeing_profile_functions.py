@@ -410,8 +410,6 @@ class SeeingProfileWidget:
         """
         profile_size = 60
         centering_cutout_size = 20
-        default_gap = 5  # pixels
-        default_annulus_width = 15  # pixels
         if self.save_toggle:
             self.save_toggle.disabled = False
 
@@ -473,17 +471,28 @@ class SeeingProfileWidget:
             catalog_style={"shape": "circle", "color": "red", "size": 10},
         )
 
-        # Default is 1.5 times FWHM
-        aperture_radius = np.round(1.5 * rad_prof.FWHM, 0)
         self.rad_prof = rad_prof
 
-        # Make an aperture settings object, but don't update it's widget yet.
-        ap_settings = PhotometryApertures(
-            radius=aperture_radius,
-            gap=default_gap,
-            annulus_width=default_annulus_width,
-            fwhm_estimate=rad_prof.FWHM,
-        )
+        # variable_aperture is a unit declaration (multiples of FWHM vs.
+        # pixels), not a value to preserve from the previous click, so read
+        # it from the widget and let the model fill in the rest.
+        variable_aperture = self.aperture_settings.value["variable_aperture"]
+
+        if variable_aperture:
+            # The before-validator on PhotometryApertures fills in
+            # radius/gap/annulus_width from VARIABLE_APERTURE_DEFAULTS.
+            ap_settings = PhotometryApertures(
+                variable_aperture=True,
+                fwhm_estimate=rad_prof.FWHM,
+            )
+        else:
+            # Default is 1.5 times FWHM; gap and annulus_width fall through
+            # to the model's fixed-mode field defaults.
+            aperture_radius = np.round(1.5 * rad_prof.FWHM, 0)
+            ap_settings = PhotometryApertures(
+                radius=aperture_radius,
+                fwhm_estimate=rad_prof.FWHM,
+            )
 
         # So it turns out that the validation stuff only updates when changes
         # are made in the UI rather than programmatically. Since we know we've

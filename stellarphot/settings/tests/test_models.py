@@ -27,6 +27,7 @@ from stellarphot.settings.constants import (
 )
 from stellarphot.settings.models import (
     PHOTOMETRY_SETTINGS_FORMAT_VERSION,
+    VARIABLE_APERTURE_DEFAULTS,
     Camera,
     Exoplanet,
     FwhmMethods,
@@ -476,6 +477,13 @@ class TestPriorVersionsCompatibility:
         # current version by default.
         assert phot_settings.settings_version == PHOTOMETRY_SETTINGS_FORMAT_VERSION
 
+        # Context-less validation (old table metadata, in-code construction)
+        # intentionally does not migrate: the file's pixel-sized gap loads
+        # unchanged and is silently reinterpreted as a multiple of FWHM in
+        # variable-aperture mode. The protected path is file load with
+        # context. See #654.
+        assert phot_settings.photometry_apertures.gap == 5.0
+
     @staticmethod
     def _format_1_settings(variable_aperture):
         """
@@ -529,10 +537,18 @@ class TestPriorVersionsCompatibility:
         # is migrated -- with a warning -- because the old variable-aperture
         # annulus geometry biased the photometry (issue #654).
         old_style = self._format_1_settings(True)
-        with pytest.warns(PhotometrySettingsMigrationWarning, match="RESET"):
+        with pytest.warns(PhotometrySettingsMigrationWarning, match="reset") as record:
             settings = PhotometrySettings.model_validate_json(
                 json.dumps(old_style), context={"settings_file": True}
             )
+        # The warning names the migrated top-level setting so that
+        # ReviewSettings can mark that setting as needing to be saved.
+        migration_warnings = [
+            w.message
+            for w in record
+            if isinstance(w.message, PhotometrySettingsMigrationWarning)
+        ]
+        assert [w.migrated for w in migration_warnings] == ["photometry_apertures"]
         apertures = settings.photometry_apertures
         # The user's aperture choice is kept...
         assert apertures.variable_aperture is True
@@ -541,12 +557,10 @@ class TestPriorVersionsCompatibility:
             apertures.fwhm_estimate
             == old_style["photometry_apertures"]["fwhm_estimate"]
         )
-        # ...but the annulus geometry is reset to the current defaults.
-        assert apertures.gap == PhotometryApertures.model_fields["gap"].default
-        assert (
-            apertures.annulus_width
-            == PhotometryApertures.model_fields["annulus_width"].default
-        )
+        # ...but the annulus geometry is reset to the variable-aperture
+        # defaults, which are multiples of the measured FWHM.
+        assert apertures.gap == VARIABLE_APERTURE_DEFAULTS["gap"]
+        assert apertures.annulus_width == VARIABLE_APERTURE_DEFAULTS["annulus_width"]
         assert settings.settings_version == PHOTOMETRY_SETTINGS_FORMAT_VERSION
 
     def test_no_migration_of_unversioned_fixed_aperture_with_context(self):
@@ -727,15 +741,16 @@ class TestPhotometryApertureSettings:
         ap_set.variable_aperture = variable_aperture
         ap_set.radius = radius
         if variable_aperture:
+            # In variable mode radius, gap and annulus_width are all
+            # multiples of the FWHM. See #654.
             expected_inner = (
-                radius * TEST_APERTURE_SETTINGS["fwhm_estimate"]
-                + TEST_APERTURE_SETTINGS["gap"]
-            )
+                radius + TEST_APERTURE_SETTINGS["gap"]
+            ) * TEST_APERTURE_SETTINGS["fwhm_estimate"]
             expected_outer = (
-                radius * TEST_APERTURE_SETTINGS["fwhm_estimate"]
+                radius
                 + TEST_APERTURE_SETTINGS["gap"]
                 + TEST_APERTURE_SETTINGS["annulus_width"]
-            )
+            ) * TEST_APERTURE_SETTINGS["fwhm_estimate"]
         else:
             expected_inner = radius + TEST_APERTURE_SETTINGS["gap"]
             expected_outer = (
@@ -743,8 +758,8 @@ class TestPhotometryApertureSettings:
                 + TEST_APERTURE_SETTINGS["gap"]
                 + TEST_APERTURE_SETTINGS["annulus_width"]
             )
-        assert ap_set.inner_annulus == expected_inner
-        assert ap_set.outer_annulus == expected_outer
+        assert ap_set.inner_annulus == pytest.approx(expected_inner)
+        assert ap_set.outer_annulus == pytest.approx(expected_outer)
 
     def test_create_aperture_settings_variable_aperture(self):
         # Check that the variable aperture flag is set correctly
@@ -780,10 +795,13 @@ class TestPhotometryApertureSettings:
         # Deliberately different from the settings' fwhm_estimate
         fwhm = 2 * settings["fwhm_estimate"]
         if variable_aperture:
-            expected_inner = radius * fwhm + settings["gap"]
+            # radius, gap and annulus_width are all multiples of the FWHM
+            # in variable mode. See #654.
+            expected_inner = (radius + settings["gap"]) * fwhm
+            expected_outer = expected_inner + settings["annulus_width"] * fwhm
         else:
             expected_inner = radius + settings["gap"]
-        expected_outer = expected_inner + settings["annulus_width"]
+            expected_outer = expected_inner + settings["annulus_width"]
 
         assert ap_set.inner_annulus_pixels(fwhm) == pytest.approx(expected_inner)
         assert ap_set.outer_annulus_pixels(fwhm) == pytest.approx(expected_outer)
@@ -795,6 +813,73 @@ class TestPhotometryApertureSettings:
         assert ap_set.outer_annulus == pytest.approx(
             ap_set.outer_annulus_pixels(settings["fwhm_estimate"])
         )
+
+    def test_variable_aperture_defaults_injected(self):
+        # With variable_aperture=True and no geometry values given, the
+        # variable-mode defaults (multiples of FWHM) should be injected
+        # instead of the fixed-mode (pixel) field defaults. See #654.
+        ap_set = PhotometryApertures(variable_aperture=True)
+        for key, value in VARIABLE_APERTURE_DEFAULTS.items():
+            assert getattr(ap_set, key) == value
+
+    def test_variable_aperture_defaults_not_injected_when_present(self):
+        # Values the caller supplies are never overridden by the
+        # variable-mode defaults.
+        ap_set = PhotometryApertures(
+            variable_aperture=True, radius=2.5, gap=3.0, annulus_width=2.0
+        )
+        assert ap_set.radius == 2.5
+        assert ap_set.gap == 3.0
+        assert ap_set.annulus_width == 2.0
+
+    def test_variable_aperture_defaults_partial_injection(self):
+        # Only the missing keys get the variable-mode defaults.
+        ap_set = PhotometryApertures(variable_aperture=True, gap=3.0)
+        assert ap_set.gap == 3.0
+        assert ap_set.radius == VARIABLE_APERTURE_DEFAULTS["radius"]
+        assert ap_set.annulus_width == VARIABLE_APERTURE_DEFAULTS["annulus_width"]
+
+    def test_variable_aperture_defaults_explicit_none_still_errors(self):
+        # An explicit None is present in the input, so it is not replaced
+        # by a default and still fails validation.
+        with pytest.raises(ValidationError, match="radius"):
+            PhotometryApertures(variable_aperture=True, radius=None)
+
+    def test_variable_aperture_rejects_textual_booleans(self):
+        # The default-injection validator sees the raw input, so a value
+        # like "false" -- truthy in Python but False after lax coercion --
+        # could inject variable-mode defaults into a fixed-aperture model.
+        # The field is strict so such input is rejected outright and the
+        # raw value the validator sees always agrees with the final field.
+        for textual in ("false", "true", 0, 1):
+            with pytest.raises(ValidationError, match="variable_aperture"):
+                PhotometryApertures(variable_aperture=textual)
+
+    def test_variable_aperture_defaults_with_fwhm_alias(self):
+        # The old "fwhm" alias for fwhm_estimate passes through the
+        # default-injection validator untouched.
+        ap_set = PhotometryApertures(variable_aperture=True, fwhm=4.0)
+        assert ap_set.fwhm_estimate == 4.0
+        assert ap_set.radius == VARIABLE_APERTURE_DEFAULTS["radius"]
+
+    def test_variable_aperture_assignment_does_not_reinject(self):
+        # pydantic v2 does not run before-validators on assignment, so
+        # flipping variable_aperture on an existing instance reinterprets
+        # the existing numbers rather than replacing them. This is the
+        # intended semantics (a unit re-declaration must not silently
+        # rewrite user values); this test pins it.
+        ap_set = PhotometryApertures()
+        ap_set.variable_aperture = True
+        assert ap_set.radius == PhotometryApertures.model_fields["radius"].default
+        assert ap_set.gap == PhotometryApertures.model_fields["gap"].default
+
+    def test_variable_aperture_defaults_do_not_mutate_caller_dict(self):
+        # The GUI passes live dicts into the model; the validator must not
+        # write the injected defaults back into the caller's dict. Use
+        # model_validate so the dict object itself reaches the validator.
+        settings = {"variable_aperture": True}
+        PhotometryApertures.model_validate(settings)
+        assert settings == {"variable_aperture": True}
 
 
 @pytest.mark.parametrize("bad_one", ["radius", "gap", "annulus_width"])

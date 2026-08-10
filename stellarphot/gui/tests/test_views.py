@@ -1,8 +1,9 @@
 from copy import deepcopy
 
 from stellarphot.gui.views import ui_generator
-from stellarphot.settings import Camera, SourceLocationSettings
+from stellarphot.settings import Camera, PhotometryApertures, SourceLocationSettings
 from stellarphot.settings.constants import TEST_CAMERA_VALUES
+from stellarphot.settings.models import VARIABLE_APERTURE_DEFAULTS
 
 TEST_CAMERA_VALUES = deepcopy(TEST_CAMERA_VALUES)
 
@@ -113,6 +114,74 @@ class TestUiGenerator:
                 assert widget.layout.max_width != width
             else:
                 assert widget.layout.max_width == width
+
+    def test_variable_aperture_toggle_swaps_defaults(self):
+        # Checking the variable_aperture box changes the meaning of
+        # radius/gap/annulus_width (multiples of FWHM vs pixels), so the
+        # widget should swap in the defaults for the selected mode. See #654.
+        ui = ui_generator(PhotometryApertures)
+        fixed_defaults = {
+            name: PhotometryApertures.model_fields[name].default
+            for name in VARIABLE_APERTURE_DEFAULTS
+        }
+        for name, value in fixed_defaults.items():
+            assert ui.di_widgets[name].value == value
+
+        ui.di_widgets["variable_aperture"].value = True
+        for name, value in VARIABLE_APERTURE_DEFAULTS.items():
+            assert ui.di_widgets[name].value == value
+        # The swap must go through the normal change path so the save button
+        # bar knows about it.
+        assert ui.savebuttonbar.unsaved_changes
+
+        ui.di_widgets["variable_aperture"].value = False
+        for name, value in fixed_defaults.items():
+            assert ui.di_widgets[name].value == value
+
+    def test_variable_aperture_silent_flip_does_not_swap_defaults(self):
+        # ipyautoui sets ui._silent = True while it is performing a
+        # programmatic load (e.g. ui.value = saved), and False for a user
+        # toggle. The observer must check that flag and skip the default
+        # swap during a silent, programmatic flip of variable_aperture --
+        # otherwise a loaded value would be clobbered by the mode defaults.
+        # See #654.
+        ui = ui_generator(PhotometryApertures)
+        non_default = dict(radius=2.5, gap=3.5, annulus_width=2.25)
+        for name, value in non_default.items():
+            ui.di_widgets[name].value = value
+
+        try:
+            ui._silent = True
+            ui.di_widgets["variable_aperture"].value = True
+        finally:
+            ui._silent = False
+
+        for name, value in non_default.items():
+            assert ui.di_widgets[name].value == value
+
+    def test_variable_aperture_programmatic_load_keeps_values(self):
+        # Loading saved variable-mode settings assigns ui.value, which also
+        # flips the checkbox and fires the observer while ipyautoui has
+        # ui._silent set to True; the _silent guard in
+        # _swap_aperture_defaults is what lets the loaded numbers survive
+        # instead of being replaced by the mode defaults. (Previously this
+        # only worked by luck, because variable_aperture happens to be the
+        # first field in the model schema, so the loader re-applied the
+        # saved values after the observer had already clobbered them.)
+        ui = ui_generator(PhotometryApertures)
+        saved = dict(
+            variable_aperture=True,
+            radius=2.5,
+            gap=3.5,
+            annulus_width=2.25,
+            fwhm_estimate=6.0,
+        )
+        ui.value = saved
+        for name in ("radius", "gap", "annulus_width"):
+            assert ui.di_widgets[name].value == saved[name]
+        assert ui.value["radius"] == saved["radius"]
+        assert ui.value["gap"] == saved["gap"]
+        assert ui.value["annulus_width"] == saved["annulus_width"]
 
     def test_file_chooser_width(self):
         # We want to set the width of FileChooser fields, but no other fields,

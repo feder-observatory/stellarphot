@@ -1,6 +1,6 @@
 import astropy.io.fits as fits
 import numpy as np
-from astropy.modeling.models import Gaussian2D
+from astropy.modeling.models import Gaussian2D, Moffat2D
 from astropy.nddata import CCDData
 from astropy.stats import gaussian_fwhm_to_sigma
 from astropy.table import Table, vstack
@@ -30,9 +30,22 @@ class FakeImage:
 
     n_repeats_per_side : int, optional
         The number of times to repeat the sources in each direction.
+
+    psf : str, optional
+        Profile used to render the sources, either "gaussian" or "moffat".
+        The sources table always keeps the Gaussian column names
+        (``x_stddev`` etc.); for a Moffat the FWHM implied by ``x_stddev``
+        is rendered as a Moffat profile instead.
     """
 
-    def __init__(self, noise_dev=1.0, seed=None, fwhm=None, n_repeats_per_side=1):
+    def __init__(
+        self,
+        noise_dev=1.0,
+        seed=None,
+        fwhm=None,
+        n_repeats_per_side=1,
+        psf="gaussian",
+    ):
         self.image_shape = np.array([400, 500])
         data_file = get_pkg_data_filename("data/test_sources.csv")
         self._sources = Table.read(data_file)
@@ -76,7 +89,16 @@ class FakeImage:
 
         self.mean_noise = self.sources["amplitude"].max() / 100
         self.noise_dev = noise_dev
-        self._stars = make_gaussian_sources_image(tuple(self.image_shape), self.sources)
+        if psf == "gaussian":
+            self._stars = make_gaussian_sources_image(
+                tuple(self.image_shape), self.sources
+            )
+        elif psf == "moffat":
+            self._stars = make_moffat_sources_image(
+                tuple(self.image_shape), self.sources
+            )
+        else:
+            raise ValueError(f"Unknown psf {psf!r}; must be 'gaussian' or 'moffat'.")
         self._noise = make_noise_image(
             self._stars.shape, mean=self.mean_noise, stddev=noise_dev, seed=seed
         )
@@ -109,13 +131,19 @@ class FakeCCDImage(CCDData):
         noise_dev = kwargs.pop("noise_dev", 1.0)
         # Pull off the n_repeats argument if it exists.
         n_repeats = kwargs.pop("n_repeats", 1)
+        # Pull off the psf argument if it exists.
+        psf = kwargs.pop("psf", "gaussian")
 
         # If no arguments are passed, use the default FakeImage.
         # This dodge is necessary because otherwise we can't copy the CCDData
         # object apparently.
         if (len(args) == 0) and (len(kwargs) == 0):
             base_data = FakeImage(
-                seed=seed, fwhm=fwhm, noise_dev=noise_dev, n_repeats_per_side=n_repeats
+                seed=seed,
+                fwhm=fwhm,
+                noise_dev=noise_dev,
+                n_repeats_per_side=n_repeats,
+                psf=psf,
             )
             super().__init__(base_data.image.copy(), unit="adu")
 
@@ -324,4 +352,54 @@ def make_gaussian_sources_image(shape, source_table, oversample=1.0):
         x_name="x_mean",
         y_name="y_mean",
         discretize_oversample=oversample,
+    )
+
+
+def make_moffat_sources_image(shape, source_table, fwhm=None, alpha=2.5):
+    """
+    Make an image containing 2D Moffat sources.
+
+    Parameters
+    ----------
+    shape : 2-tuple of int
+        The shape of the output 2D image.
+
+    source_table : `~astropy.table.Table`
+        Table of source positions and amplitudes, with the same column names
+        as the Gaussian source tables (``x_mean``, ``y_mean``,
+        ``amplitude``). The table is not modified.
+
+    fwhm : float or array-like, optional
+        FWHM of the sources in pixels. If not given, it is derived per
+        source from the ``x_stddev`` column as though the source were a
+        Gaussian.
+
+    alpha : float, optional
+        Moffat power index; seeing-limited profiles are typically 2.5-3.
+
+    Returns
+    -------
+    image : 2D `~numpy.ndarray`
+        Image containing 2D Moffat sources.
+    """
+    moffat_table = source_table.copy()
+    if fwhm is None:
+        fwhm = moffat_table["x_stddev"] / gaussian_fwhm_to_sigma
+    # Moffat2D FWHM = 2 * gamma * sqrt(2**(1/alpha) - 1)
+    moffat_table["gamma"] = fwhm / (2 * np.sqrt(2 ** (1 / alpha) - 1))
+    moffat_table["alpha"] = alpha
+    moffat_table.rename_columns(["x_mean", "y_mean"], ["x_0", "y_0"])
+
+    # Moffat2D has no analytic bounding box, so each source must be rendered
+    # on an explicit odd-sized cutout; make it generous relative to the FWHM
+    # so the wings are mostly captured.
+    model_shape = 2 * int(5 * np.max(fwhm)) + 1
+
+    return make_model_image(
+        shape,
+        Moffat2D(),
+        moffat_table,
+        x_name="x_0",
+        y_name="y_0",
+        model_shape=(model_shape, model_shape),
     )

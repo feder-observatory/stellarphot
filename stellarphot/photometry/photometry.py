@@ -403,16 +403,36 @@ def single_image_photometry(
         )
 
     if photometry_apertures.variable_aperture:
-        # Get a fast, robust estimate of the FWHM of the sources for setting
-        # the aperture size.
-        fwhm = fast_fwhm_from_image(
-            ccd_image,
-            photometry_apertures.fwhm_estimate,
-            noise=camera.read_noise.value,
-            max_adu=camera.max_data_value.value,
-        )
+        # The measured FWHM sets the aperture geometry of this image, so
+        # without it there is nothing to fall back on -- skip the image
+        # instead of turning every aperture, and all of the photometry, into
+        # NaN. Catch broadly: every failure mode here means "no FWHM, so no
+        # geometry", the type and message are logged, and narrowing would
+        # only turn an unanticipated photutils/numpy failure into an aborted
+        # run.
+        try:
+            fwhm = fast_fwhm_from_image(
+                ccd_image,
+                photometry_apertures.fwhm_estimate,
+                noise=camera.read_noise.value,
+                max_adu=camera.max_data_value.value,
+            )
+            if not np.isfinite(fwhm):
+                # A measurement failure can also surface as NaN, the mean of
+                # an empty fit set.
+                raise RuntimeError(f"measured FWHM is {fwhm}")
+        except Exception as err:
+            logger.warning(
+                f"{logline} Could not measure the FWHM of this image "
+                f"({type(err).__name__}: {err}), so the variable aperture "
+                "sizes cannot be set. Check fwhm_estimate in the aperture "
+                "settings -- the measurement fails when the estimate is far "
+                "from the actual FWHM in either direction "
+                "... SKIPPING THIS IMAGE!"
+            )
+            return None, None
     else:
-        # Use the FWHM from the settings
+        # Fixed apertures are in pixels, so no measurement is needed.
         fwhm = photometry_apertures.fwhm_estimate
 
     # Reject sources that are within an aperture diameter of each other.
@@ -680,7 +700,11 @@ def single_image_photometry(
         fwhm_x, fwhm_y = compute_fwhm(
             ccd_image,
             photom,
-            fwhm_estimate=photometry_apertures.fwhm_estimate,
+            # The seed sets the size of the fit region, and fwhm is the
+            # best value available in either mode: the FWHM measured from
+            # this image in variable mode (the same value the aperture
+            # geometry used) and the settings estimate in fixed mode.
+            fwhm_estimate=fwhm,
             fit_method=photometry_options.fwhm_method,
             sky_per_pix_column="sky_per_pix_avg",
         )

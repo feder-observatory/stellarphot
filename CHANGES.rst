@@ -3,16 +3,21 @@
 
 New Features
 ^^^^^^^^^^^^
++ In variable-aperture photometry, the ``gap`` and ``annulus_width`` now
+  scale with each image's measured FWHM, just like the aperture radius. All
+  three quantities are interpreted as multiples of the per-image FWHM. In
+  variable-aperture mode the per-source FWHM fits reported in the
+  ``fwhm_x``/``fwhm_y`` columns are now seeded with the FWHM measured from
+  each image, and an image whose FWHM cannot be measured is skipped with a
+  warning instead of producing NaN apertures and NaN photometry.
+  Fixed-aperture photometry does not measure the image FWHM at all.
+  [#654, #666]
 + Saved photometry settings files now carry a ``settings_version`` field;
   files without it are format ``1``. On load, format-1 settings with
   ``variable_aperture=True`` get their ``gap`` and ``annulus_width`` reset
-  to defaults, with a warning, because the old variable-aperture annulus
-  geometry biased the photometry (see issue ``#654``). A file written by a
-  newer stellarphot raises ``NewerFormatError`` instead of being misread
-  or overwritten, and older stellarphot versions fail on the new files
-  with a pydantic error about the unexpected ``settings_version`` field.
-  The in-file ``settings_version`` is now the only settings versioning
-  mechanism; the global settings directory version is frozen at ``2``. [#656]
+  to the variable-aperture defaults (multiples of the measured FWHM, not
+  pixels), with a warning (see issue ``#654``). A file written by a
+  newer stellarphot raises ``NewerFormatError``. [#656]
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -66,6 +71,12 @@ Other Changes and Additions
   settings instead of letting them disappear into the notebook log. Nothing
   emits the warning yet; the settings-format migration that will is being
   added in #656. [#663]
++ When the settings-format migration resets the variable-aperture geometry,
+  ``ReviewSettings`` marks the aperture settings as having unsaved
+  changes so they can actually be saved and displays a dismissable banner indicating that
+  settings have been migrated to the new format. [#666]
++ ``stellarphot.transit_fitting`` now imports its transit-model classes
+  lazily. [#666]
 
 Bug Fixes
 ^^^^^^^^^
