@@ -1171,9 +1171,10 @@ class TestAperturePhotometry:
         # a Gaussian fit, biased ~15% wide by the Moffat's wings at
         # alpha=2.5, hence the 20% tolerance -- actually reaches the
         # aperture column. The geometry ratios between the columns are pure
-        # algebra on the settings and are pinned (per image and tightly) by
-        # test_variable_aperture_geometry_identities, so they are not
-        # re-asserted here. See #654.
+        # algebra on the settings and are pinned at the model level by
+        # test_annulus_pixels_methods and
+        # test_create_aperture_settings_variable_aperture in test_models.py,
+        # so they are not re-asserted here. See #654.
         fwhm_values = [5, 7.5, 10]
         phot_data = self._run_multi_image_photometry(
             tmp_path, photometry_settings_for_test, fwhm_values, psf="moffat"

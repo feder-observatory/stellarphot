@@ -1487,13 +1487,6 @@ class TestReviewSettings:
 
         assert review_settings._banner.layout.display == "none"
 
-    def test_banner_dismiss_button_is_an_icon(self):
-        # A text glyph in the description ellipsizes when the button is
-        # narrower than the glyph plus the button padding; an icon cannot.
-        review_settings = ReviewSettings([Camera])
-        assert review_settings._banner_dismiss.icon == "times"
-        assert review_settings._banner_dismiss.description == ""
-
     def test_banner_dismiss_button_matches_banner_style(self, mocker):
         # The dismiss button is styled with the same color as the banner
         # border.

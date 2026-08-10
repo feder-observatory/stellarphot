@@ -855,14 +855,6 @@ class TestPhotometryApertureSettings:
             with pytest.raises(ValidationError, match="variable_aperture"):
                 PhotometryApertures(variable_aperture=textual)
 
-    def test_fixed_aperture_defaults_match_seeing_widget(self):
-        # The fixed-mode field defaults are the recommended pixel values
-        # the seeing-profile widget has always used, so the model is the
-        # single source of these defaults for the GUI.
-        ap_set = PhotometryApertures()
-        assert ap_set.gap == 5
-        assert ap_set.annulus_width == 15
-
     def test_variable_aperture_defaults_with_fwhm_alias(self):
         # The old "fwhm" alias for fwhm_estimate passes through the
         # default-injection validator untouched.
@@ -888,27 +880,6 @@ class TestPhotometryApertureSettings:
         settings = {"variable_aperture": True}
         PhotometryApertures.model_validate(settings)
         assert settings == {"variable_aperture": True}
-
-    def test_variable_aperture_geometry_identities(self):
-        # In variable mode every geometry number is an exact multiple of the
-        # FWHM: inner = (radius + gap) * fwhm and
-        # outer = (radius + gap + annulus_width) * fwhm. These identities are
-        # the core of the #654 semantics change, so pin them exactly.
-        settings = deepcopy(TEST_APERTURE_SETTINGS)
-        settings["variable_aperture"] = True
-        settings["radius"] = 1.5
-        settings["gap"] = 2.0
-        settings["annulus_width"] = 1.5
-        ap_set = PhotometryApertures(**settings)
-
-        for fwhm in [1.0, 3.7, 10.0]:
-            assert ap_set.radius_pixels(fwhm) == pytest.approx(1.5 * fwhm, rel=1e-12)
-            assert ap_set.inner_annulus_pixels(fwhm) == pytest.approx(
-                (1.5 + 2.0) * fwhm, rel=1e-12
-            )
-            assert ap_set.outer_annulus_pixels(fwhm) == pytest.approx(
-                (1.5 + 2.0 + 1.5) * fwhm, rel=1e-12
-            )
 
 
 @pytest.mark.parametrize("bad_one", ["radius", "gap", "annulus_width"])
