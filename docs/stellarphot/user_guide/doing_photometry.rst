@@ -13,7 +13,11 @@ from the stars in that image at photometry time (by
 This keeps a consistent fraction of each star's light inside the aperture and
 maintains proper sky-annulus geometry when seeing varies across a night. Only
 the ``fwhm_estimate`` setting is always in pixels; it seeds the per-image FWHM
-measurement.
+measurement. The estimate only needs to be within roughly a factor of a few
+of the actual FWHM -- the measurement is insensitive to it from about one
+fifth of to four times the true value -- but outside that range the
+measurement fails, and an image whose FWHM cannot be measured is skipped
+with a warning.
 
 Note: For differential photometry, a radius of about 1.5×FWHM is a good
 compromise: the formal signal-to-noise optimum is smaller (near 0.7×FWHM for

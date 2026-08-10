@@ -5,13 +5,13 @@ New Features
 ^^^^^^^^^^^^
 + In variable-aperture photometry, the ``gap`` and ``annulus_width`` now
   scale with each image's measured FWHM, just like the aperture radius. All
-  three quantities are interpreted as multiples of the per-image FWHM. The
-  per-source FWHM fits reported in the ``fwhm_x``/``fwhm_y`` columns are now seeded with the
-  FWHM measured from each image (falling back to ``fwhm_estimate`` from the
-  settings only when the measurement fails), and in fixed-aperture mode a
-  multi-image run measures the image FWHM once instead of once per image,
-  since there the measurement only checks the settings and seeds those
-  fits. [#654, #666]
+  three quantities are interpreted as multiples of the per-image FWHM. In
+  variable-aperture mode the per-source FWHM fits reported in the
+  ``fwhm_x``/``fwhm_y`` columns are now seeded with the FWHM measured from
+  each image, and an image whose FWHM cannot be measured is skipped with a
+  warning instead of producing NaN apertures and NaN photometry.
+  Fixed-aperture photometry does not measure the image FWHM at all.
+  [#654, #666]
 + Saved photometry settings files now carry a ``settings_version`` field;
   files without it are format ``1``. On load, format-1 settings with
   ``variable_aperture=True`` get their ``gap`` and ``annulus_width`` reset

@@ -1220,81 +1220,13 @@ class TestAperturePhotometry:
     def _true_fwhm():
         return gaussian_sigma_to_fwhm * FAKE_CCD_IMAGE.sources["x_stddev"].mean()
 
-    def test_variable_aperture_stale_fwhm_estimate_warns(
+    def test_fixed_aperture_does_not_measure_fwhm(
         self, caplog, tmp_path, monkeypatch, photometry_settings_for_test
     ):
-        # A stale fwhm_estimate seeds the per-image FWHM measurement, so the
-        # pipeline should suggest updating it when the measured FWHM is far
-        # from the estimate. Like its siblings below, the measurement itself
-        # is monkeypatched: a real run with a far-off estimate is ~100x
-        # slower for identical coverage of the warning path. See #654.
-        from stellarphot.photometry import photometry as phot_module
-
-        true_fwhm = self._true_fwhm()
-        monkeypatch.setattr(
-            phot_module,
-            "fast_fwhm_from_image",
-            lambda *_args, **_kwargs: true_fwhm,
-        )
-
-        apertures = photometry_settings_for_test.photometry_apertures
-        apertures.variable_aperture = True
-        apertures.radius = 1.5
-        apertures.gap = 2.0
-        apertures.annulus_width = 1.5
-        apertures.fwhm_estimate = 5 * true_fwhm
-
-        self._run_single_image_capturing_log(
-            caplog, tmp_path, photometry_settings_for_test
-        )
-        assert any(
-            "update fwhm_estimate" in record.message for record in caplog.records
-        )
-
-    def test_variable_aperture_healthy_fwhm_estimate_no_warning(
-        self, caplog, tmp_path, photometry_settings_for_test
-    ):
-        # An accurate fwhm_estimate must not produce warning spam.
-        apertures = photometry_settings_for_test.photometry_apertures
-        apertures.variable_aperture = True
-        apertures.radius = 1.5
-        apertures.gap = 2.0
-        apertures.annulus_width = 1.5
-        apertures.fwhm_estimate = self._true_fwhm()
-
-        self._run_single_image_capturing_log(
-            caplog, tmp_path, photometry_settings_for_test
-        )
-        for record in caplog.records:
-            assert "update fwhm_estimate" not in record.message
-            assert "smaller than the measured FWHM" not in record.message
-
-    def test_fixed_aperture_small_radius_warns(
-        self, caplog, tmp_path, photometry_settings_for_test
-    ):
-        # In fixed mode a pixel radius smaller than the actual FWHM loses a
-        # large, seeing-dependent fraction of the flux, so the pipeline
-        # should point that out, including the measured FWHM so the user can
-        # re-derive their geometry. See #654.
-        apertures = photometry_settings_for_test.photometry_apertures
-        true_fwhm = self._true_fwhm()
-        apertures.fwhm_estimate = true_fwhm
-        apertures.radius = 0.5 * true_fwhm
-
-        self._run_single_image_capturing_log(
-            caplog, tmp_path, photometry_settings_for_test
-        )
-        assert any(
-            "smaller than the measured FWHM" in record.message
-            for record in caplog.records
-        )
-
-    def test_fixed_aperture_fwhm_check_failure_does_not_break_run(
-        self, caplog, tmp_path, monkeypatch, photometry_settings_for_test
-    ):
-        # In fixed mode the FWHM is measured purely for the consistency
-        # check, so a measurement failure must degrade to "no warning" and
-        # never break the photometry itself.
+        # In fixed mode the aperture geometry is in pixels, so there is
+        # nothing for a measured FWHM to set and the measurement is never
+        # made. Patching it to raise proves the call is gone rather than
+        # merely tolerated. See #666.
         from stellarphot.photometry import photometry as phot_module
 
         def raise_error(*_args, **_kwargs):
@@ -1310,42 +1242,14 @@ class TestAperturePhotometry:
         )
         assert phot_data is not None
         assert len(phot_data) > 0
-        for record in caplog.records:
-            assert "update fwhm_estimate" not in record.message
-            assert "smaller than the measured FWHM" not in record.message
 
-    def test_fixed_aperture_nan_fwhm_measurement_no_warning(
-        self, caplog, tmp_path, monkeypatch, photometry_settings_for_test
-    ):
-        # A failed measurement is not always an exception:
-        # fast_fwhm_from_image can return NaN (mean of an empty fit set)
-        # when the estimate is far below the actual FWHM. In fixed mode
-        # that must degrade to "no check", not a nonsense "measured FWHM
-        # is nan" warning.
-        from stellarphot.photometry import photometry as phot_module
-
-        monkeypatch.setattr(
-            phot_module, "fast_fwhm_from_image", lambda *_args, **_kwargs: np.nan
-        )
-
-        apertures = photometry_settings_for_test.photometry_apertures
-        apertures.fwhm_estimate = self._true_fwhm()
-
-        phot_data = self._run_single_image_capturing_log(
-            caplog, tmp_path, photometry_settings_for_test
-        )
-        assert phot_data is not None
-        assert len(phot_data) > 0
-        for record in caplog.records:
-            assert "update fwhm_estimate" not in record.message
-            assert "smaller than the measured FWHM" not in record.message
-
-    def test_variable_aperture_nan_fwhm_measurement_raises(
+    def test_variable_aperture_nan_fwhm_measurement_skips_image(
         self, caplog, tmp_path, monkeypatch, photometry_settings_for_test
     ):
         # In variable mode the measured FWHM sets the aperture geometry, so
-        # a NaN measurement must fail loudly instead of silently producing
-        # NaN apertures and NaN photometry.
+        # a NaN measurement leaves nothing to fall back on; the image is
+        # skipped with a warning instead of silently producing NaN apertures
+        # and NaN photometry. See #666.
         from stellarphot.photometry import photometry as phot_module
 
         monkeypatch.setattr(
@@ -1359,18 +1263,20 @@ class TestAperturePhotometry:
         apertures.annulus_width = 1.5
         apertures.fwhm_estimate = self._true_fwhm()
 
-        with pytest.raises(RuntimeError, match="FWHM"):
-            self._run_single_image_capturing_log(
-                caplog, tmp_path, photometry_settings_for_test
-            )
+        phot_data = self._run_single_image_capturing_log(
+            caplog, tmp_path, photometry_settings_for_test
+        )
+        # The single-image path returns the (photom, dropped_sources) tuple
+        # from single_image_photometry, so the skipped image shows up as a
+        # None photometry table rather than a None return value.
+        assert phot_data[0] is None
+        assert any("SKIPPING THIS IMAGE" in record.message for record in caplog.records)
 
-    def test_fixed_aperture_fwhm_measured_once_per_run(
+    def test_fixed_aperture_never_measures_fwhm(
         self, tmp_path, monkeypatch, photometry_settings_for_test
     ):
-        # In fixed mode the measured FWHM only checks the settings and seeds
-        # the per-source fits, and its result is effectively the same for
-        # every image of a run, so a multi-image run should pay for the
-        # measurement once, not once per image. See #666.
+        # Nothing in fixed mode depends on the measured FWHM, so a
+        # multi-image run should never pay for the measurement. See #666.
         from stellarphot.photometry import photometry as phot_module
 
         calls = []
@@ -1387,7 +1293,7 @@ class TestAperturePhotometry:
             [5, 7.5, 10],
             variable_aperture=False,
         )
-        assert len(calls) == 1
+        assert len(calls) == 0
 
     def test_variable_aperture_fwhm_measured_every_image(
         self, tmp_path, monkeypatch, photometry_settings_for_test
@@ -1428,40 +1334,11 @@ class TestAperturePhotometry:
         self._run_single_image_capturing_log(caplog, tmp_path, photometry_settings)
         return seeds
 
-    def test_fixed_aperture_fit_seed_uses_measured_fwhm(
+    def test_fixed_aperture_fit_seed_uses_settings_estimate(
         self, caplog, tmp_path, monkeypatch, photometry_settings_for_test
     ):
-        # When the FWHM measurement succeeds, the per-source fits should be
-        # seeded with the measured value, not the settings estimate -- the
-        # seed sets the size of the fit region, so a far-off estimate makes
-        # the per-source fits fail. See #666.
-        from stellarphot.photometry import photometry as phot_module
-
-        true_fwhm = self._true_fwhm()
-        measured = 1.5 * true_fwhm
-        monkeypatch.setattr(
-            phot_module, "fast_fwhm_from_image", lambda *_args, **_kwargs: measured
-        )
-
-        photometry_settings_for_test.photometry_apertures.fwhm_estimate = true_fwhm
-
-        seeds = self._run_single_image_capturing_fit_seed(
-            caplog, tmp_path, monkeypatch, photometry_settings_for_test
-        )
-        assert seeds == [measured]
-
-    def test_fixed_aperture_fit_seed_falls_back_to_estimate(
-        self, caplog, tmp_path, monkeypatch, photometry_settings_for_test
-    ):
-        # When the measurement fails in fixed mode, the settings estimate is
-        # the only FWHM available and must seed the per-source fits.
-        from stellarphot.photometry import photometry as phot_module
-
-        def raise_error(*_args, **_kwargs):
-            raise RuntimeError("simulated FWHM measurement failure")
-
-        monkeypatch.setattr(phot_module, "fast_fwhm_from_image", raise_error)
-
+        # Nothing is measured in fixed mode, so the settings estimate is the
+        # only FWHM available and must seed the per-source fits. See #666.
         apertures = photometry_settings_for_test.photometry_apertures
         apertures.fwhm_estimate = self._true_fwhm()
 
