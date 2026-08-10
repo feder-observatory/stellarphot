@@ -1032,13 +1032,11 @@ class TestAperturePhotometry:
         photometry_settings,
         fwhm_values,
         psf="gaussian",
-        variable_aperture=True,
     ):
         # Create a series of images with sources of different FWHM and run
-        # photometry on them. In variable-aperture mode (the default) the
-        # aperture settings are radius/gap/annulus_width of 1.5/2.0/1.5
-        # (multiples of the FWHM); in fixed mode the fixture's pixel-sized
-        # values are kept. Returns the photometry results.
+        # variable-aperture photometry on them, with radius/gap/annulus_width
+        # of 1.5/2.0/1.5 (multiples of the FWHM). Returns the photometry
+        # results.
 
         # Set the camera noise and use this as the noise for the image
         noise = 1 * u.electron
@@ -1071,15 +1069,14 @@ class TestAperturePhotometry:
         fwhm_est = gaussian_sigma_to_fwhm * sources["x_stddev"].mean()
         aperture_settings.fwhm_estimate = fwhm_est
 
-        if variable_aperture:
-            # Set the aperture radius to be a function of the FWHM
-            aperture_settings.radius = 1.5
-            aperture_settings.variable_aperture = True
-            # In variable mode gap and annulus_width are multiples of the FWHM
-            # too, so replace the fixture's pixel-sized values with multiples.
-            # See #654.
-            aperture_settings.gap = 2.0
-            aperture_settings.annulus_width = 1.5
+        # Set the aperture radius to be a function of the FWHM
+        aperture_settings.radius = 1.5
+        aperture_settings.variable_aperture = True
+        # In variable mode gap and annulus_width are multiples of the FWHM
+        # too, so replace the fixture's pixel-sized values with multiples.
+        # See #654.
+        aperture_settings.gap = 2.0
+        aperture_settings.annulus_width = 1.5
 
         # Generate the source list for photometry
         wcs = fake_images[0].wcs
@@ -1220,29 +1217,6 @@ class TestAperturePhotometry:
     def _true_fwhm():
         return gaussian_sigma_to_fwhm * FAKE_CCD_IMAGE.sources["x_stddev"].mean()
 
-    def test_fixed_aperture_does_not_measure_fwhm(
-        self, caplog, tmp_path, monkeypatch, photometry_settings_for_test
-    ):
-        # In fixed mode the aperture geometry is in pixels, so there is
-        # nothing for a measured FWHM to set and the measurement is never
-        # made. Patching it to raise proves the call is gone rather than
-        # merely tolerated. See #666.
-        from stellarphot.photometry import photometry as phot_module
-
-        def raise_error(*_args, **_kwargs):
-            raise RuntimeError("simulated FWHM measurement failure")
-
-        monkeypatch.setattr(phot_module, "fast_fwhm_from_image", raise_error)
-
-        apertures = photometry_settings_for_test.photometry_apertures
-        apertures.fwhm_estimate = self._true_fwhm()
-
-        phot_data = self._run_single_image_capturing_log(
-            caplog, tmp_path, photometry_settings_for_test
-        )
-        assert phot_data is not None
-        assert len(phot_data) > 0
-
     def test_variable_aperture_nan_fwhm_measurement_skips_image(
         self, caplog, tmp_path, monkeypatch, photometry_settings_for_test
     ):
@@ -1272,56 +1246,18 @@ class TestAperturePhotometry:
         assert phot_data[0] is None
         assert any("SKIPPING THIS IMAGE" in record.message for record in caplog.records)
 
-    def test_fixed_aperture_never_measures_fwhm(
-        self, tmp_path, monkeypatch, photometry_settings_for_test
+    def test_variable_aperture_fit_seed_uses_measured_fwhm(
+        self, caplog, tmp_path, monkeypatch, photometry_settings_for_test
     ):
-        # Nothing in fixed mode depends on the measured FWHM, so a
-        # multi-image run should never pay for the measurement. See #666.
+        # The per-source FWHM fits are seeded with the FWHM measured from
+        # this image, not the settings estimate. See #666.
         from stellarphot.photometry import photometry as phot_module
 
-        calls = []
-
-        def counting_measurement(*_args, **_kwargs):
-            calls.append(1)
-            return 7.5
-
-        monkeypatch.setattr(phot_module, "fast_fwhm_from_image", counting_measurement)
-
-        self._run_multi_image_photometry(
-            tmp_path,
-            photometry_settings_for_test,
-            [5, 7.5, 10],
-            variable_aperture=False,
+        true_fwhm = self._true_fwhm()
+        measured = 0.75 * true_fwhm
+        monkeypatch.setattr(
+            phot_module, "fast_fwhm_from_image", lambda *_args, **_kwargs: measured
         )
-        assert len(calls) == 0
-
-    def test_variable_aperture_fwhm_measured_every_image(
-        self, tmp_path, monkeypatch, photometry_settings_for_test
-    ):
-        # In variable mode the measurement sets the aperture geometry, which
-        # must track the seeing of each image, so it can never be reused
-        # from an earlier image. See #666.
-        from stellarphot.photometry import photometry as phot_module
-
-        calls = []
-
-        def counting_measurement(*_args, **_kwargs):
-            calls.append(1)
-            return 7.5
-
-        monkeypatch.setattr(phot_module, "fast_fwhm_from_image", counting_measurement)
-
-        self._run_multi_image_photometry(
-            tmp_path, photometry_settings_for_test, [5, 7.5, 10]
-        )
-        assert len(calls) == 3
-
-    def _run_single_image_capturing_fit_seed(
-        self, caplog, tmp_path, monkeypatch, photometry_settings
-    ):
-        # Run single-image photometry recording the fwhm_estimate that the
-        # per-source FWHM fits (compute_fwhm) are seeded with.
-        from stellarphot.photometry import photometry as phot_module
 
         seeds = []
         real_compute_fwhm = phot_module.compute_fwhm
@@ -1331,35 +1267,6 @@ class TestAperturePhotometry:
             return real_compute_fwhm(*args, **kwargs)
 
         monkeypatch.setattr(phot_module, "compute_fwhm", capturing_compute_fwhm)
-        self._run_single_image_capturing_log(caplog, tmp_path, photometry_settings)
-        return seeds
-
-    def test_fixed_aperture_fit_seed_uses_settings_estimate(
-        self, caplog, tmp_path, monkeypatch, photometry_settings_for_test
-    ):
-        # Nothing is measured in fixed mode, so the settings estimate is the
-        # only FWHM available and must seed the per-source fits. See #666.
-        apertures = photometry_settings_for_test.photometry_apertures
-        apertures.fwhm_estimate = self._true_fwhm()
-
-        seeds = self._run_single_image_capturing_fit_seed(
-            caplog, tmp_path, monkeypatch, photometry_settings_for_test
-        )
-        assert seeds == [apertures.fwhm_estimate]
-
-    def test_variable_aperture_fit_seed_uses_measured_fwhm(
-        self, caplog, tmp_path, monkeypatch, photometry_settings_for_test
-    ):
-        # In variable mode the measured FWHM is guaranteed finite (the run
-        # has already raised otherwise), so it should always be the seed for
-        # the per-source fits. See #666.
-        from stellarphot.photometry import photometry as phot_module
-
-        true_fwhm = self._true_fwhm()
-        measured = 0.75 * true_fwhm
-        monkeypatch.setattr(
-            phot_module, "fast_fwhm_from_image", lambda *_args, **_kwargs: measured
-        )
 
         apertures = photometry_settings_for_test.photometry_apertures
         apertures.variable_aperture = True
@@ -1368,8 +1275,8 @@ class TestAperturePhotometry:
         apertures.annulus_width = 1.5
         apertures.fwhm_estimate = true_fwhm
 
-        seeds = self._run_single_image_capturing_fit_seed(
-            caplog, tmp_path, monkeypatch, photometry_settings_for_test
+        self._run_single_image_capturing_log(
+            caplog, tmp_path, photometry_settings_for_test
         )
         assert seeds == [measured]
 
