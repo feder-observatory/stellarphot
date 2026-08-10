@@ -17,27 +17,84 @@ from ..magnitude_transforms import (
 )
 
 
-def generate_input_mags(n_stars):
-    # Generate n_stars with magnitude in range 10 to 15
+def _generate_input_mags(n_stars):
+    """
+    Generate instrumental magnitudes in the range 10 to 15.
+
+    The random number generator is seeded, so the magnitudes are the same
+    from one run to the next.
+
+    Parameters
+    ----------
+
+    n_stars : int
+        Number of magnitudes to generate.
+
+    Returns
+    -------
+    `astropy.table.Column`
+        Column of instrumental magnitudes named ``instrumental``.
+    """
     rg = np.random.default_rng(1024)
     input_mags = rg.integers(0, high=50, size=n_stars) / 10 + 10
     instr_mags = Column(name="instrumental", data=input_mags)
     return instr_mags
 
 
-def generate_catalog_mags(instrument_mags, color, model):
+def _generate_catalog_mags(instrument_mags, color, model):
     """
-    Generate catalog magnitudes from instrumental magnitudes
-    given a model that relates the two.
+    Generate catalog magnitudes from instrumental magnitudes.
+
+    Parameters
+    ----------
+
+    instrument_mags : `astropy.table.Column`
+        Instrumental magnitudes.
+
+    color : `astropy.table.Column`
+        Color of each star.
+
+    model : `astropy.modeling.Model`
+        Model relating the color to the difference between the catalog and
+        instrumental magnitudes.
+
+    Returns
+    -------
+    `astropy.table.Column`
+        Catalog magnitudes.
     """
     return instrument_mags + model(color)
 
 
-def generate_star_coordinates(
+def _generate_star_coordinates(
     n_stars, ra_start=180 * u.degree, dec_start=45 * u.degree, separation=10 * u.arcsec
 ):
     """
-    Generate RA/Dec coordinates for a set of stars.
+    Generate RA/Dec coordinates for a set of stars on a square grid.
+
+    Parameters
+    ----------
+
+    n_stars : int
+        Number of coordinates to generate.
+
+    ra_start : `astropy.units.Quantity`, optional
+        Right ascension of the first star.
+
+    dec_start : `astropy.units.Quantity`, optional
+        Declination of the first star.
+
+    separation : `astropy.units.Quantity`, optional
+        Spacing between adjacent grid positions in right ascension and in
+        declination.
+
+    Returns
+    -------
+    ra : `astropy.units.Quantity`
+        Right ascension of each star.
+
+    dec : `astropy.units.Quantity`
+        Declination of each star.
     """
     # The plus one guarantees we'll have enough positions for
     # all of our stars.
@@ -54,25 +111,45 @@ def generate_star_coordinates(
     return ra[:n_stars], dec[:n_stars]
 
 
-def generate_tables(n_stars, mag_model):
+def _generate_tables(n_stars, mag_model):
     """
     Generate both tables needed for transforming magnitudes.
+
+    Parameters
+    ----------
+
+    n_stars : int
+        Number of stars to generate.
+
+    mag_model : `astropy.modeling.Model`
+        Model relating the color to the difference between the catalog and
+        instrumental magnitudes.
+
+    Returns
+    -------
+    instrumental : `astropy.table.Table`
+        Instrumental magnitudes, with columns ``mag_inst_r``, ``ra`` and
+        ``dec``.
+
+    catalog_table : `astropy.table.Table`
+        Catalog magnitudes, with columns ``r_mag``, ``RAJ2000``, ``DEJ2000``
+        and ``B-V``.
     """
-    instr_mags = generate_input_mags(n_stars)
+    instr_mags = _generate_input_mags(n_stars)
 
     # Set name to match default value in function.
     instr_mags.name = "mag_inst_r"
 
     # Set name to be default name for color.
     color = Column(name="B-V", data=np.linspace(0.0, 1.0, num=len(instr_mags)))
-    catalog = generate_catalog_mags(instr_mags, color, mag_model)
+    catalog = _generate_catalog_mags(instr_mags, color, mag_model)
 
     # Again, set default name.
     catalog.name = "r_mag"
 
     # We'll use the same RA/Dec for the catalog and and the instrumental
     # magnitudes.
-    ra, dec = generate_star_coordinates(n_stars)
+    ra, dec = _generate_star_coordinates(n_stars)
 
     # Instrumental magnitudes
     ra_col = Column(name="ra", data=ra)
@@ -121,7 +198,7 @@ def test_catalog_same_as_input(order):
     instr_mags = Column(name="instrumental", data=[10, 12.5, 11])
     zero = models.Const1D(0.0)
     color = Column(name="color", data=[1.0] * len(instr_mags))
-    catalog = generate_catalog_mags(instr_mags, color, zero)
+    catalog = _generate_catalog_mags(instr_mags, color, zero)
 
     # We expect these fits to be poorly conditioned because the two
     # sets of magnitudes are identical.
@@ -145,10 +222,10 @@ def test_catalog_linear_to_input(order):
     # the catalog and instrumental magnitudes when the relationship
     # between the two is linear.
     n_stars = 100
-    instr_mags = generate_input_mags(n_stars)
+    instr_mags = _generate_input_mags(n_stars)
     true_relationship = models.Polynomial1D(1, c0=0.5, c1=0.75)
     color = Column(name="color", data=np.linspace(0.0, 1.0, num=len(instr_mags)))
-    catalog = generate_catalog_mags(instr_mags, color, true_relationship)
+    catalog = _generate_catalog_mags(instr_mags, color, true_relationship)
 
     _, fit_model = calculate_transform_coefficients(
         instr_mags, catalog, color, order=order
@@ -168,10 +245,10 @@ def test_catalog_quadratic_to_input(order):
     # the catalog and instrumental magnitudes when the relationship
     # between the two is linear.
     n_stars = 100
-    instr_mags = generate_input_mags(n_stars)
+    instr_mags = _generate_input_mags(n_stars)
     true_relationship = models.Polynomial1D(2, c0=0.5, c1=0.75, c2=0.25)
     color = Column(name="color", data=np.linspace(0.0, 1.0, num=len(instr_mags)))
-    catalog = generate_catalog_mags(instr_mags, color, true_relationship)
+    catalog = _generate_catalog_mags(instr_mags, color, true_relationship)
     _, fit_model = calculate_transform_coefficients(
         instr_mags, catalog, color, order=order
     )
@@ -201,10 +278,10 @@ def test_faintest_magnitude_has_effect(faintest_magnitude):
     # 2. With a limit the fit should be as good as it was before.
     n_stars = 100
 
-    instr_mags = generate_input_mags(n_stars)
+    instr_mags = _generate_input_mags(n_stars)
     true_relationship = models.Polynomial1D(1, c0=0.5, c1=0.75)
     color = Column(name="color", data=np.linspace(0.0, 1.0, num=len(instr_mags)))
-    catalog = generate_catalog_mags(instr_mags, color, true_relationship)
+    catalog = _generate_catalog_mags(instr_mags, color, true_relationship)
 
     faint_ones = catalog >= 14
     assert faint_ones.sum() > 0
@@ -240,7 +317,7 @@ def test_transform_magnitudes_identical_input(order):
 
     zero = models.Const1D(0.0)
 
-    instrumental, catalog_table = generate_tables(n_stars, zero)
+    instrumental, catalog_table = _generate_tables(n_stars, zero)
 
     calib_mags, stars_with_match, transform = transform_magnitudes(
         instrumental, catalog_table, catalog_table, order=order
@@ -262,7 +339,7 @@ def test_transform_magnitudes_identical_coord_quad_mags(order):
 
     true_relationship = models.Polynomial1D(2, c0=0.5, c1=0.75, c2=0.25)
 
-    instrumental, catalog_table = generate_tables(n_stars, true_relationship)
+    instrumental, catalog_table = _generate_tables(n_stars, true_relationship)
 
     calib_mags, stars_with_match, transform = transform_magnitudes(
         instrumental, catalog_table, catalog_table, order=order
@@ -295,7 +372,7 @@ def test_coordinate_mismatches():
 
     true_relationship = models.Polynomial1D(1, c0=0.5, c1=0.75)
 
-    instrumental, catalog_table = generate_tables(n_stars, true_relationship)
+    instrumental, catalog_table = _generate_tables(n_stars, true_relationship)
 
     # Mess up the coordinates of half of the stars so that they don't match.
     catalog_table["RAJ2000"][50:] = catalog_table["RAJ2000"][50:] + 0.5 * u.degree
@@ -314,7 +391,7 @@ def test_coordinate_all_mismatches():
 
     true_relationship = models.Polynomial1D(1, c0=0.5, c1=0.75)
 
-    instrumental, catalog_table = generate_tables(n_stars, true_relationship)
+    instrumental, catalog_table = _generate_tables(n_stars, true_relationship)
 
     # Mess up the coordinates of half of the stars so that they don't match.
     catalog_table["RAJ2000"] = catalog_table["RAJ2000"] + 0.5 * u.degree
@@ -341,7 +418,7 @@ def test_coordinate_all_mismatches():
     assert not any(stars_with_match)
 
 
-class FakeCatalogTable(Table):
+class _FakeCatalogTable(Table):
     """
     Table that quacks like a stellarphot catalog just enough for
     transform_to_catalog, which calls passband_columns on the catalog.
@@ -353,24 +430,44 @@ class FakeCatalogTable(Table):
 
 # Zero point of the synthetic catalog below. The catalog magnitudes follow the
 # fit model exactly with a=b=c=d=0, so this is the only non-zero coefficient.
-FAKE_CATALOG_ZERO_POINT = 20.0
+_FAKE_CATALOG_ZERO_POINT = 20.0
 
 
-def generate_fake_catalog(n_stars):
+def _generate_fake_catalog(n_stars):
     """
-    Generate a catalog whose magnitudes are an exact fit to the transform
-    model with a=b=c=d=0 and z=FAKE_CATALOG_ZERO_POINT.
+    Generate a catalog whose magnitudes are an exact fit to the transform model.
 
-    Returns the catalog, the star coordinates, and the instrumental
-    magnitudes that generated the catalog magnitudes.
+    Catalog magnitudes are generated with a=b=c=d=0 and
+    z=_FAKE_CATALOG_ZERO_POINT, so a fit to them recovers those values exactly.
+
+    Parameters
+    ----------
+
+    n_stars : int
+        Number of stars to generate.
+
+    Returns
+    -------
+    catalog : `_FakeCatalogTable`
+        Catalog with columns ``ra``, ``dec``, ``mag_R`` and ``mag_I``.
+
+    ra : `astropy.units.Quantity`
+        Right ascension of each star.
+
+    dec : `astropy.units.Quantity`
+        Declination of each star.
+
+    instrumental : `numpy.ndarray`
+        Instrumental magnitudes from which the catalog magnitudes were
+        generated.
     """
-    ra, dec = generate_star_coordinates(n_stars)
+    ra, dec = _generate_star_coordinates(n_stars)
 
     instrumental = np.linspace(-10.0, -5.0, num=n_stars)
     color = np.linspace(0.0, 1.0, num=n_stars)
-    cat_r = instrumental + FAKE_CATALOG_ZERO_POINT
+    cat_r = instrumental + _FAKE_CATALOG_ZERO_POINT
 
-    catalog = FakeCatalogTable(
+    catalog = _FakeCatalogTable(
         {
             "ra": ra,
             "dec": dec,
@@ -382,10 +479,28 @@ def generate_fake_catalog(n_stars):
     return catalog, ra, dec, instrumental
 
 
-def generate_observed_table(ra, dec, instrumental):
+def _generate_observed_table(ra, dec, instrumental):
     """
-    Generate observations in the form transform_to_catalog expects, i.e. a
-    table of a single image grouped by file name.
+    Generate observations in the form ``transform_to_catalog`` expects.
+
+    Parameters
+    ----------
+
+    ra : `astropy.units.Quantity`
+        Right ascension of each observed star.
+
+    dec : `astropy.units.Quantity`
+        Declination of each observed star.
+
+    instrumental : `numpy.ndarray`
+        Instrumental magnitude of each observed star.
+
+    Returns
+    -------
+    `astropy.table.Table`
+        Observations of a single image, grouped by file name, with the
+        ``file``, ``passband``, ``ra``, ``dec``, ``mag_inst`` and
+        ``mag_error`` columns `transform_to_catalog` requires.
     """
     n_stars = len(instrumental)
 
@@ -403,10 +518,30 @@ def generate_observed_table(ra, dec, instrumental):
     return observed.group_by("file")
 
 
-def run_transform_to_catalog(mocker, catalog, observed):
+def _run_transform_to_catalog(mocker, catalog, observed):
     """
-    Run transform_to_catalog against a synthetic catalog rather than a
-    fetched one, so that no network access is needed.
+    Run ``transform_to_catalog`` against a synthetic catalog.
+
+    Patching the catalog fetch keeps the test offline, so it does not need
+    the ``remote_data`` marker.
+
+    Parameters
+    ----------
+
+    mocker : `pytest_mock.MockerFixture`
+        Fixture used to patch the `apass_dr9` catalog fetch.
+
+    catalog : `_FakeCatalogTable`
+        Catalog to use in place of the fetched one.
+
+    observed : `astropy.table.Table`
+        Observations to transform, grouped by file name.
+
+    Returns
+    -------
+    `astropy.table.Table`
+        The observations with the calibrated magnitude, fit coefficient and
+        matched-catalog columns added.
     """
     mocker.patch.object(magnitude_transforms, "apass_dr9", return_value=catalog)
 
@@ -429,7 +564,7 @@ def test_transform_to_catalog_excludes_distant_matches(mocker):
     n_good = 20
 
     # Good stars sit exactly on top of their catalog counterparts.
-    catalog, ra, dec, good_mags = generate_fake_catalog(n_good)
+    catalog, ra, dec, good_mags = _generate_fake_catalog(n_good)
 
     # One more observed star, a degree away from every catalog star, so
     # its nearest catalog match is bogus. Its instrumental magnitude is
@@ -440,13 +575,13 @@ def test_transform_to_catalog_excludes_distant_matches(mocker):
     bad_dec = dec[0] - 1 * u.degree
     bad_mag = good_mags[0] - 0.5
 
-    observed = generate_observed_table(
+    observed = _generate_observed_table(
         u.Quantity([*ra, bad_ra]),
         u.Quantity([*dec, bad_dec]),
         np.append(good_mags, bad_mag),
     )
 
-    result = run_transform_to_catalog(mocker, catalog, observed)
+    result = _run_transform_to_catalog(mocker, catalog, observed)
 
     # The distant star has no real match, so its calibrated
     # magnitude should be NaN.
@@ -458,12 +593,12 @@ def test_transform_to_catalog_excludes_distant_matches(mocker):
     # coefficients away from the true values.
     np.testing.assert_allclose(
         result["mag_inst_cal"][:n_good],
-        good_mags + FAKE_CATALOG_ZERO_POINT,
+        good_mags + _FAKE_CATALOG_ZERO_POINT,
         rtol=0,
         atol=1e-6,
     )
     np.testing.assert_allclose(
-        result["z"][:n_good], FAKE_CATALOG_ZERO_POINT, rtol=0, atol=1e-6
+        result["z"][:n_good], _FAKE_CATALOG_ZERO_POINT, rtol=0, atol=1e-6
     )
 
 
@@ -484,7 +619,7 @@ def test_transform_to_catalog_match_tolerance(mocker, offset, expect_nan):
     # coefficients, which requires a match within 1 arcsec. See issue #668.
     n_good = 20
 
-    catalog, ra, dec, good_mags = generate_fake_catalog(n_good)
+    catalog, ra, dec, good_mags = _generate_fake_catalog(n_good)
 
     # An extra observation of the first catalog star, offset in declination so
     # that the separation from its catalog position is exactly the offset. Its
@@ -493,13 +628,13 @@ def test_transform_to_catalog_match_tolerance(mocker, offset, expect_nan):
     # the fit it drags the zero point along with it.
     offset_mag = good_mags[0] - 0.5
 
-    observed = generate_observed_table(
+    observed = _generate_observed_table(
         u.Quantity([*ra, ra[0]]),
         u.Quantity([*dec, dec[0] + offset]),
         np.append(good_mags, offset_mag),
     )
 
-    result = run_transform_to_catalog(mocker, catalog, observed)
+    result = _run_transform_to_catalog(mocker, catalog, observed)
 
     # The offset star gets a calibrated magnitude only if its match is close
     # enough. The fit is exact, so that magnitude is just the instrumental
@@ -508,7 +643,7 @@ def test_transform_to_catalog_match_tolerance(mocker, offset, expect_nan):
         assert np.isnan(result["mag_inst_cal"][-1])
     else:
         assert result["mag_inst_cal"][-1] == pytest.approx(
-            offset_mag + FAKE_CATALOG_ZERO_POINT, abs=1e-6
+            offset_mag + _FAKE_CATALOG_ZERO_POINT, abs=1e-6
         )
 
     # Either way the offset star is more than an arcsec from its catalog
@@ -516,10 +651,10 @@ def test_transform_to_catalog_match_tolerance(mocker, offset, expect_nan):
     # as an exact fit.
     np.testing.assert_allclose(
         result["mag_inst_cal"][:n_good],
-        good_mags + FAKE_CATALOG_ZERO_POINT,
+        good_mags + _FAKE_CATALOG_ZERO_POINT,
         rtol=0,
         atol=1e-6,
     )
     np.testing.assert_allclose(
-        result["z"][:n_good], FAKE_CATALOG_ZERO_POINT, rtol=0, atol=1e-6
+        result["z"][:n_good], _FAKE_CATALOG_ZERO_POINT, rtol=0, atol=1e-6
     )
