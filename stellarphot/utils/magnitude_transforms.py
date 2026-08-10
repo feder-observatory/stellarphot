@@ -736,7 +736,12 @@ def transform_to_catalog(
         cal_mag = calibrated_from_instrumental(X, *popt)
         if fit_diff:
             cal_mag = cal_mag + X[0]
-        bad_match = d2d.arcsecond > 1
+
+        # A limit of 1 arcsec here can cause a variable that really is in APASS to not
+        # match. An example is V2480 Cyg, whose VSX position is about 1.3 arcsec from
+        # its APASS DR9 position.
+        bad_match = d2d.arcsecond > 1.5
+
         cal_mag[bad_match] = np.nan
         cal_mags.extend(cal_mag)
         cat_mags.extend(cat_mag)
