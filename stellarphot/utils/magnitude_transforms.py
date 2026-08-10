@@ -23,8 +23,8 @@ _COEFF_NAMES = ("a", "b", "c", "d", "z")
 # unless the caller asks for them.
 _DEFAULT_VARY = ("a", "c", "z")
 
-# Ranges a fitted term is expected to fall in. These are *not* constraints on
-# the fit -- a value outside the range is reported, not clamped.
+# Ranges a term is expected to fall in. These are *not* constraints on the
+# fit -- a value outside the range is reported, not clamped.
 _DEFAULT_EXPECTED = {"z": (18.0, 22.0)}
 
 # Names of the columns of calibrated magnitudes that `transform_to_catalog`
@@ -97,6 +97,14 @@ def _to_float_array(values):
     sensibly. NaN carries the same information and propagates the way the
     calibrated magnitudes need it to.
 
+    A bare ``values.filled(np.nan)`` will not do, which is why this looks more
+    roundabout than it needs to: a plain `~astropy.table.Column` has no
+    ``filled`` method at all, and depending on the catalog either flavor can
+    turn up here; and an integer `~astropy.table.MaskedColumn` refuses NaN as
+    a fill value, so the conversion to float has to happen first. Going
+    through `numpy.ma` handles both -- unmasked input passes through
+    `numpy.ma.asarray` without a mask, which makes `numpy.ma.filled` a no-op.
+
     Parameters
     ----------
 
@@ -109,6 +117,86 @@ def _to_float_array(values):
         Float array with NaN wherever the input was masked.
     """
     return np.ma.filled(np.ma.asarray(values, dtype=float), np.nan)
+
+
+def _design_column(term, mag_inst, color):
+    """
+    The column one term of the model contributes to the design matrix.
+
+    The model is linear in its coefficients, so each term multiplies a
+    quantity that depends only on the data. Those quantities are what decide
+    whether the terms can be told apart from each other. Keep this in sync
+    with `calibrated_from_instrumental`, which is what actually gets fit.
+
+    Parameters
+    ----------
+
+    term : str
+        Name of the term, one of `_COEFF_NAMES`.
+
+    mag_inst, color : `numpy.ndarray`
+        Instrumental magnitude and color of each star.
+
+    Returns
+    -------
+    `numpy.ndarray`
+        The quantity the term's coefficient multiplies.
+    """
+    match term:
+        case "a":
+            return mag_inst
+        case "b":
+            return mag_inst**2
+        case "c":
+            return color
+        case "d":
+            return color**2
+        case "z":
+            return np.ones_like(mag_inst)
+        case _:  # pragma: no cover
+            raise ValueError(f"Unknown term {term!r}")
+
+
+def _underdetermined_reason(mag_inst, color, vary):
+    """
+    Explain why these stars cannot determine these terms, if they cannot.
+
+    A least squares fit reports success whether or not the data can actually
+    tell the terms being fit apart from each other, so this has to be checked
+    before the fit rather than read off its result.
+
+    Parameters
+    ----------
+
+    mag_inst, color : `numpy.ndarray`
+        Instrumental magnitude and color of the stars that will be fit.
+
+    vary : sequence of str
+        Names of the terms being fit.
+
+    Returns
+    -------
+    str or None
+        Description of the problem, or `None` if the fit is determined.
+    """
+    n_stars = mag_inst.size
+    n_terms = len(vary)
+
+    if n_stars <= n_terms:
+        return (
+            f"{n_stars} usable star(s) cannot determine {n_terms} term(s) "
+            f"{list(vary)}; the fit has no degrees of freedom left"
+        )
+
+    design = np.column_stack([_design_column(term, mag_inst, color) for term in vary])
+    if np.linalg.matrix_rank(design) < n_terms:
+        return (
+            f"the terms {list(vary)} cannot be told apart from each other in "
+            "this data -- most often because color is a linear function of "
+            "instrumental magnitude"
+        )
+
+    return None
 
 
 def _check_known_terms(terms, argument_name):
@@ -283,8 +371,8 @@ def transform_to_catalog(
     obs_mag_col="mag_inst",
     obs_error_column=None,
     cat_name="apass_dr9",
-    cat_filter="r_mag",
-    cat_color=("r_mag", "i_mag"),
+    cat_filter="R",
+    cat_color=("R", "I"),
     vary=_DEFAULT_VARY,
     expected=None,
     in_place=True,
@@ -328,14 +416,15 @@ def transform_to_catalog(
         ``"refcat2"``.
 
     cat_filter : str, optional
-        Name of the filter/passband in catalog that should be matched to the
-        instrumental magnitudes.
+        Name of the passband in the catalog that should be matched to the
+        instrumental magnitudes, e.g. ``"R"`` or ``"SR"``. This is a passband
+        name, not a column name: the column used is ``mag_<cat_filter>``.
 
     cat_color : tuple of two strings, optional
-        Names of the two columns in the catalog that should be used to calculate color.
-        The magnitude difference will be calculated in the order the filters are given.
-        For example, if the value is ``('r_mag', 'i_mag')`` then the calculated color
-        will be the ``r_mag`` column minus the ``i_mag`` column.
+        Names of the two passbands whose difference is the color. The color is
+        calculated in the order the passbands are given, so ``("R", "I")``
+        means the ``mag_R`` column minus the ``mag_I`` column. As with
+        ``cat_filter``, these are passband names rather than column names.
 
     vary : sequence of str, optional
         Which terms of the transform model to fit. Any term not named here is
@@ -345,12 +434,12 @@ def transform_to_catalog(
         the zero point.
 
     expected : dict, optional
-        Range each fitted term is expected to fall in, as
-        ``{term: (low, high)}``. These are **not** constraints on the fit: a
-        fitted value outside its range is reported in a warning, not clamped.
-        Ranges for terms that are not in ``vary`` are ignored. Pass an empty
-        dict to check nothing. The default is
-        ``{"z": (18, 22)}``.
+        Range each term is expected to fall in, as ``{term: (low, high)}``.
+        These are **not** constraints on the fit: a value outside its range is
+        reported in a warning, not clamped. Terms that are not in ``vary`` are
+        checked too -- a term held at zero when it should be near 20 is the
+        most useful thing this can tell you. Pass an empty dict to check
+        nothing. The default is ``{"z": (18, 22)}``.
 
     in_place : bool, optional
         If ``True``, add the calibrated magnitude to the input table, otherwise return
@@ -368,15 +457,24 @@ def transform_to_catalog(
         columns added are ``mag_cal`` and, if ``obs_error_column`` was given,
         ``mag_cal_error``; the fit coefficients ``a``, ``b``, ``c``, ``d`` and
         ``z``; and ``mag_cat`` and ``color_cat``, the matched catalog
-        magnitude and color. Rows with no usable catalog match, and rows in
-        other passbands that had no value already, are NaN.
+        magnitude and color. ``mag_cal`` is NaN for rows with no usable
+        catalog match, as are all of the columns for rows in an image that
+        could not be fit and for rows in other passbands that had no value
+        already.
+
+        Note that ``mag_cat`` and ``color_cat`` are currently filled in from
+        the nearest catalog entry however far away it is, so they can hold the
+        values of an unrelated star on rows whose ``mag_cal`` is NaN; see
+        issue #678.
 
     Notes
     -----
 
-    The values in ``mag_cal_error`` are the instrumental errors scaled by the
-    fitted ``a`` term. That is not a propagation of the uncertainty in the fit
-    itself, and so understates the true uncertainty; see issue #674.
+    The values in ``mag_cal_error`` are the instrumental errors scaled by how
+    much the calibrated magnitude moves when the instrumental one does, which
+    is ``1 + a`` when ``fit_diff`` is ``True`` and ``a`` when it is ``False``.
+    That is not a propagation of the uncertainty in the fit itself, and so
+    understates the true uncertainty; see issue #674.
     """
     if obs_error_column is None:
         warnings.warn(
@@ -402,11 +500,12 @@ def transform_to_catalog(
             f"the terms are {list(_COEFF_NAMES)}."
         )
 
+    # Checked against every term, varied or not. A term that is not fit sits
+    # at exactly zero, and a fixed term sitting outside the range it is
+    # expected in is precisely what the caller needs to hear about -- leaving
+    # ``z`` out of ``vary`` pins the zero point at zero, which is never right.
     expected = dict(_DEFAULT_EXPECTED if expected is None else expected)
     _check_known_terms(expected, "expected")
-    # A term that is not fit sits at exactly zero, so checking its range would
-    # only produce noise -- notably for the default range on ``z``.
-    expected = {term: range_ for term, range_ in expected.items() if term in vary}
 
     base_params = lmfit.Parameters()
     for name in _COEFF_NAMES:
@@ -496,7 +595,12 @@ def transform_to_catalog(
             # A non-positive or non-finite error gives a meaningless weight.
             good_dat = good_dat & np.isfinite(errors) & (errors > 0)
 
-        if not (good_dat.any() and good_cat.any()):
+        # Both halves have to be good for the *same* star. Checking each on
+        # its own is not enough: the two sets can be disjoint, which leaves
+        # nothing to take the median of below.
+        usable = good_dat & good_cat
+
+        if not usable.any():
             warnings.warn(
                 f"No good data in {file[0]}", AstropyUserWarning, stacklevel=2
             )
@@ -506,7 +610,6 @@ def transform_to_catalog(
         # between the catalog and instrumental magnitudes -- either a bad
         # match or a bad measurement.
         mag_diff = cat_mag - mag_inst
-        usable = good_dat & good_cat
         good = usable & (np.abs(mag_diff - np.median(mag_diff[usable])) < 1)
 
         if not good.any():
@@ -522,6 +625,19 @@ def transform_to_catalog(
         fit_data = cat_mag[good] - offset
         weights = 1.0 / errors[good] if obs_error_column is not None else 1.0
 
+        # The fit reports success on data that cannot determine the terms
+        # being fit, and the coefficients it lands on are then applied to
+        # every star in the image, so this has to be caught here rather than
+        # read off the result.
+        underdetermined = _underdetermined_reason(fit_mag, fit_color, vary)
+        if underdetermined is not None:
+            warnings.warn(
+                f"Fit for {file[0]} is underdetermined: {underdetermined}",
+                AstropyUserWarning,
+                stacklevel=2,
+            )
+            continue
+
         params = base_params.copy()
         if params["z"].vary:
             # With every other term at its starting value of zero the model is
@@ -529,10 +645,14 @@ def transform_to_catalog(
             # best starting guess available.
             params["z"].set(value=float(np.median(fit_data)))
 
-        # A fit whose residual is exactly zero leaves lmfit dividing zero by
-        # zero when it works out the correlations between parameters. The
-        # resulting NaN correlations are harmless -- perfectly fit data has no
-        # uncertainty to correlate -- but the warning is not worth showing.
+        # When the model reproduces the data exactly, every parameter's
+        # standard error is zero and lmfit divides zero by zero working out
+        # the correlations between parameters. The NaN correlations that
+        # result are harmless -- a fit with no scatter has no uncertainty to
+        # correlate -- but the RuntimeWarning would be an outright exception
+        # for anyone running with warnings as errors. Real photometry never
+        # fits that well; synthetic data built from the model itself, i.e.
+        # most of this function's tests, always does.
         with np.errstate(invalid="ignore", divide="ignore"):
             fit_result = lmfit.minimize(
                 _transform_residual,
@@ -588,12 +708,26 @@ def transform_to_catalog(
     result = observed_mags_grouped if in_place else observed_mags_grouped.copy()
 
     if obs_error_column is not None:
+        # How much the calibrated magnitude moves when the instrumental one
+        # does. With fit_diff the instrumental magnitude is added back to the
+        # model result, so that sensitivity is 1 + a; without it the model is
+        # the calibrated magnitude outright and a itself is the factor -- it
+        # fits to about 1 rather than about 0. Using the same factor for both
+        # would double the reported uncertainty in one of the two modes.
+        sensitivity = 1 + coefficients["a"] if fit_diff else coefficients["a"]
+
         # Scaled from the raw per-call coefficients rather than the merged
         # column, so that rows in other passbands are handled by the merge
         # below instead of being recomputed from another passband's fit.
-        scaled_errors = (1 + coefficients["a"]) * _to_float_array(
-            result[obs_error_column]
-        )
+        raw_errors = _to_float_array(result[obs_error_column])
+        scaled_errors = sensitivity * raw_errors
+
+        # An error that is not a positive, finite number is kept out of the
+        # fit above, and must not come back out as a calibrated error either:
+        # the AAVSO writer turns only non-finite errors into "na", so a zero
+        # would be submitted as a real uncertainty.
+        scaled_errors[~(np.isfinite(raw_errors) & (raw_errors > 0))] = np.nan
+
         result[_CAL_MAG_ERROR_COLUMN] = _merge_with_existing(
             result, _CAL_MAG_ERROR_COLUMN, scaled_errors, in_passband
         )

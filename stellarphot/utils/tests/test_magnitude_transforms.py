@@ -1,3 +1,5 @@
+import re
+
 import numpy as np
 import pytest
 from astropy import units as u
@@ -5,6 +7,7 @@ from astropy.table import Table, vstack
 from astropy.utils.data import get_pkg_data_filename
 from astropy.utils.exceptions import AstropyUserWarning
 
+from ...core import PhotometryData
 from .. import magnitude_transforms
 from ..magnitude_transforms import (
     calibrated_from_instrumental,
@@ -101,6 +104,39 @@ class _FakeCatalogTable(Table):
         return self
 
 
+def test_calibrated_from_instrumental_matches_hand_computed_values():
+    # Everything below generates its synthetic catalogs by calling this
+    # function and then fits them with the same function, which is what keeps
+    # the tests from encoding a second, drifting copy of the model -- but it
+    # also means a mistake in the model itself would appear identically on
+    # both sides of every comparison and cancel out. These numbers are worked
+    # out by hand from
+    #
+    #     mag_cal = a * mag_inst + b * mag_inst**2 + c * color + d * color**2 + z
+    #
+    # so a sign flip on any term, a swap of the two arguments, or a wrong
+    # exponent shows up here.
+    mag_inst = np.array([-10.0, -5.0])
+    color = np.array([0.5, 2.0])
+    a, b, c, d, z = 0.1, 0.01, 0.2, 0.03, 20.0
+
+    hand_computed = np.array(
+        [
+            # 0.1 * -10 + 0.01 * 100 + 0.2 * 0.5 + 0.03 * 0.25 + 20
+            -1.0 + 1.0 + 0.1 + 0.0075 + 20.0,
+            # 0.1 * -5 + 0.01 * 25 + 0.2 * 2 + 0.03 * 4 + 20
+            -0.5 + 0.25 + 0.4 + 0.12 + 20.0,
+        ]
+    )
+
+    np.testing.assert_allclose(
+        calibrated_from_instrumental((mag_inst, color), a, b, c, d, z),
+        hand_computed,
+        rtol=0,
+        atol=1e-12,
+    )
+
+
 # Default zero point of the synthetic catalog below. The catalog magnitudes
 # follow the fit model exactly, so a fit to them recovers whichever
 # coefficients were used to build the catalog.
@@ -108,7 +144,15 @@ _FAKE_CATALOG_ZERO_POINT = 20.0
 
 
 def _generate_fake_catalog(
-    n_stars, a=0.0, b=0.0, c=0.0, d=0.0, z=_FAKE_CATALOG_ZERO_POINT
+    n_stars,
+    a=0.0,
+    b=0.0,
+    c=0.0,
+    d=0.0,
+    z=_FAKE_CATALOG_ZERO_POINT,
+    coordinates=None,
+    instrumental=None,
+    color=None,
 ):
     """
     Generate a catalog whose magnitudes are an exact fit to the transform model.
@@ -117,7 +161,9 @@ def _generate_fake_catalog(
     `~stellarphot.utils.magnitude_transforms.calibrated_from_instrumental`,
     rather than re-deriving the arithmetic, so the tests cannot drift away
     from the model actually being fit. A fit to the result recovers the
-    coefficients passed in here exactly.
+    coefficients passed in here exactly. The model itself is pinned
+    independently, against hand-computed values, by
+    `test_calibrated_from_instrumental_matches_hand_computed_values`.
 
     Parameters
     ----------
@@ -129,6 +175,17 @@ def _generate_fake_catalog(
         Coefficients of the transform model used to build the catalog
         magnitudes. The defaults make the catalog magnitude the instrumental
         magnitude plus `_FAKE_CATALOG_ZERO_POINT`.
+
+    coordinates : tuple of `astropy.units.Quantity`, optional
+        Right ascension and declination of the stars. Generated on a grid if
+        not given.
+
+    instrumental : `numpy.ndarray`, optional
+        Instrumental magnitudes to build the catalog from. Evenly spaced over
+        the range the fit accepts if not given.
+
+    color : `numpy.ndarray`, optional
+        Color of each star. Random, but seeded, if not given.
 
     Returns
     -------
@@ -145,16 +202,22 @@ def _generate_fake_catalog(
         Instrumental magnitudes from which the catalog magnitudes were
         generated.
     """
-    ra, dec = _generate_star_coordinates(n_stars)
+    if coordinates is None:
+        ra, dec = _generate_star_coordinates(n_stars)
+    else:
+        ra, dec = coordinates
 
-    instrumental = np.linspace(-10.0, -5.0, num=n_stars)
+    if instrumental is None:
+        instrumental = np.linspace(-10.0, -5.0, num=n_stars)
 
-    # The color must not be a linear function of the instrumental magnitude.
-    # If it is, the a, c and z terms of the model are exactly degenerate --
-    # any combination that adds up to the same thing fits equally well -- and
-    # no fitter can recover the individual coefficients. The generator is
-    # seeded, so the colors are the same from one run to the next.
-    color = np.random.default_rng(432).uniform(0.0, 1.0, size=n_stars)
+    if color is None:
+        # The color must not be a linear function of the instrumental
+        # magnitude. If it is, the a, c and z terms of the model are exactly
+        # degenerate -- any combination that adds up to the same thing fits
+        # equally well -- and no fitter can recover the individual
+        # coefficients. The generator is seeded, so the colors are the same
+        # from one run to the next.
+        color = np.random.default_rng(432).uniform(0.0, 1.0, size=n_stars)
 
     # The trailing ``+ instrumental`` is the fit_diff=True offset: the model is
     # fit to the difference between the catalog and instrumental magnitudes.
@@ -200,8 +263,9 @@ def _generate_observed_table(
     passband : str, optional
         Passband to label every observation with.
 
-    mag_error : float, optional
-        Uncertainty to give every instrumental magnitude.
+    mag_error : float or array-like, optional
+        Uncertainty of each instrumental magnitude. A single value is used for
+        every star.
 
     Returns
     -------
@@ -219,7 +283,9 @@ def _generate_observed_table(
             "ra": ra.to_value("degree"),
             "dec": dec.to_value("degree"),
             "mag_inst": np.asarray(instrumental, dtype=float),
-            "mag_error": [mag_error] * n_stars,
+            "mag_error": np.broadcast_to(
+                np.asarray(mag_error, dtype=float), (n_stars,)
+            ).copy(),
         }
     )
 
@@ -244,14 +310,35 @@ def _combine_observed_tables(*tables):
     return vstack([Table(table) for table in tables]).group_by("file")
 
 
+def _patch_catalog_fetch(mocker, catalog, cat_name="apass_dr9"):
+    """
+    Make the catalog fetch return a synthetic catalog instead of querying.
+
+    Patching the fetch keeps the tests offline, so they do not need the
+    ``remote_data`` marker.
+
+    Parameters
+    ----------
+
+    mocker : `pytest_mock.MockerFixture`
+        Fixture used to patch the catalog fetch.
+
+    catalog : `_FakeCatalogTable`
+        Catalog to use in place of the fetched one.
+
+    cat_name : str, optional
+        Name of the catalog to patch. The function of that name in
+        `~stellarphot.utils.magnitude_transforms` is the one replaced, so
+        ``"refcat2"`` is mocked exactly the way ``"apass_dr9"`` is.
+    """
+    mocker.patch.object(magnitude_transforms, cat_name, return_value=catalog)
+
+
 def _run_transform_to_catalog(
     mocker, catalog, observed, obs_filter="R", cat_name="apass_dr9", **kwargs
 ):
     """
     Run ``transform_to_catalog`` against a synthetic catalog.
-
-    Patching the catalog fetch keeps the test offline, so it does not need
-    the ``remote_data`` marker.
 
     Parameters
     ----------
@@ -269,9 +356,8 @@ def _run_transform_to_catalog(
         Passband of the observations to transform.
 
     cat_name : str, optional
-        Name of the catalog to use. The function of the same name in
-        `~stellarphot.utils.magnitude_transforms` is the one patched, so
-        ``"refcat2"`` is mocked exactly the way ``"apass_dr9"`` is.
+        Name of the catalog to use, passed to `_patch_catalog_fetch` as well
+        as to the function under test.
 
     **kwargs
         Passed on to `~stellarphot.utils.magnitude_transforms.transform_to_catalog`,
@@ -283,7 +369,7 @@ def _run_transform_to_catalog(
         The observations with the calibrated magnitude, fit coefficient and
         matched-catalog columns added.
     """
-    mocker.patch.object(magnitude_transforms, cat_name, return_value=catalog)
+    _patch_catalog_fetch(mocker, catalog, cat_name=cat_name)
 
     call_kwargs = {
         "obs_error_column": "mag_error",
@@ -414,7 +500,7 @@ _TRANSFORM_OUTPUT_COLUMNS = {
 }
 
 
-def _fit_a_catalog(mocker, n_stars=20, **catalog_coefficients):
+def _fit_a_catalog(mocker, n_stars=20, vary=None, **catalog_coefficients):
     """
     Build a synthetic catalog and observations of it, then transform them.
 
@@ -426,6 +512,10 @@ def _fit_a_catalog(mocker, n_stars=20, **catalog_coefficients):
 
     n_stars : int, optional
         Number of stars to generate.
+
+    vary : sequence of str, optional
+        Terms to fit. The default of `~stellarphot.utils.transform_to_catalog`
+        is used if this is not given.
 
     **catalog_coefficients
         Coefficients ``a``, ``b``, ``c``, ``d`` and ``z`` of the transform
@@ -446,7 +536,8 @@ def _fit_a_catalog(mocker, n_stars=20, **catalog_coefficients):
         n_stars, **catalog_coefficients
     )
     observed = _generate_observed_table(ra, dec, instrumental)
-    result = _run_transform_to_catalog(mocker, catalog, observed)
+    fit_kwargs = {} if vary is None else {"vary": vary}
+    result = _run_transform_to_catalog(mocker, catalog, observed, **fit_kwargs)
 
     return result, catalog, instrumental
 
@@ -463,6 +554,10 @@ def test_transform_to_catalog_recovers_color_coefficient(mocker, c):
 
 @pytest.mark.parametrize("a", [0.0, 0.02, -0.03])
 def test_transform_to_catalog_recovers_scale_coefficient(mocker, a):
+    # The companion to the color test above: how the calibrated magnitude
+    # depends on the instrumental one. Both signs are tried because a is small,
+    # and a fit that got its sign backwards would still land close to the truth
+    # when a is zero.
     result, catalog, _ = _fit_a_catalog(mocker, a=a)
 
     np.testing.assert_allclose(result["a"], a, rtol=0, atol=1e-6)
@@ -480,6 +575,73 @@ def test_transform_to_catalog_recovers_a_and_c_together(mocker):
     np.testing.assert_allclose(result["a"], a, rtol=0, atol=1e-6)
     np.testing.assert_allclose(result["c"], c, rtol=0, atol=1e-6)
     np.testing.assert_allclose(result["mag_cal"], catalog["mag_R"], rtol=0, atol=1e-6)
+
+
+def test_transform_to_catalog_recovers_quadratic_terms(mocker):
+    # The quadratic terms are held at zero by default, so nothing else in this
+    # file ever fits them -- a wrong exponent or sign confined to b or d would
+    # be invisible. Here the data really does contain them and they are asked
+    # for by name.
+    a, b, c, d = 0.02, 0.01, 0.15, 0.05
+
+    result, catalog, _ = _fit_a_catalog(
+        mocker, a=a, b=b, c=c, d=d, vary=("a", "b", "c", "d", "z")
+    )
+
+    for term, value in (("a", a), ("b", b), ("c", c), ("d", d)):
+        np.testing.assert_allclose(result[term], value, rtol=0, atol=1e-6)
+    np.testing.assert_allclose(result["z"], _FAKE_CATALOG_ZERO_POINT, rtol=0, atol=1e-6)
+    np.testing.assert_allclose(result["mag_cal"], catalog["mag_R"], rtol=0, atol=1e-6)
+
+
+def test_transform_to_catalog_omitted_quadratic_term_degrades_gracefully(mocker):
+    # The other half of the story: data with a real quadratic term, fit with
+    # the default vary that holds b at zero. The fit does not fail, it absorbs
+    # what it can into the linear terms, and what is left over is a bias. Worth
+    # pinning that the failure is a modest one -- a few hundredths of a
+    # magnitude, not a wild answer -- and that it lands mostly in the zero
+    # point rather than in the calibrated magnitudes.
+    b = 0.01
+
+    result, catalog, _ = _fit_a_catalog(mocker, b=b)
+
+    # The zero point soaks up most of the missing term...
+    assert np.abs(result["z"][0] - _FAKE_CATALOG_ZERO_POINT) > 0.1
+    # ...and a, which is supposed to be zero here, takes up the rest.
+    assert np.abs(result["a"][0]) > 0.1
+    # The calibrated magnitudes themselves stay close, because the fit is free
+    # to trade the terms off against each other over this range of magnitudes.
+    assert (
+        np.abs(np.asarray(result["mag_cal"]) - np.asarray(catalog["mag_R"])).max() < 0.1
+    )
+
+
+def test_transform_to_catalog_weights_by_inverse_error(mocker):
+    # Every other fit here is of noiseless data with a single error value, and
+    # for a residual that reaches exactly zero the weights make no difference
+    # to where the fit lands -- so weighting by the error rather than by one
+    # over the error would pass the rest of this file. Here one star is wrong
+    # and says so with a large error: weighted correctly it is ignored,
+    # weighted backwards it takes over (z comes out near 18.5, not 20).
+    n_stars = 20
+
+    catalog, ra, dec, instrumental = _generate_fake_catalog(n_stars)
+
+    # Close enough to the other stars to survive the outlier cut, so only the
+    # weighting can keep it from dragging the fit.
+    observed_mags = instrumental.copy()
+    observed_mags[0] -= 0.8
+
+    errors = np.full(n_stars, 0.001)
+    errors[0] = 10.0
+
+    observed = _generate_observed_table(ra, dec, observed_mags, mag_error=errors)
+
+    result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    np.testing.assert_allclose(result["z"], _FAKE_CATALOG_ZERO_POINT, rtol=0, atol=1e-3)
+    np.testing.assert_allclose(result["a"], 0.0, rtol=0, atol=1e-3)
+    np.testing.assert_allclose(result["c"], 0.0, rtol=0, atol=1e-3)
 
 
 def test_transform_to_catalog_fits_each_image_separately(mocker):
@@ -525,7 +687,65 @@ def test_transform_to_catalog_fits_each_image_separately(mocker):
     )
 
 
+def test_transform_to_catalog_handles_regrouped_row_order(mocker):
+    # Results are written back by row index, and grouping a table sorts it, so
+    # the row a result belongs to is not the row it came in on. Every other
+    # multi-image test here happens to add its images in an order that is
+    # already sorted, which makes the sort a no-op and hides any assumption
+    # that insertion order survives. Here the image added first sorts last,
+    # and the two images have different numbers of stars.
+    n_stars = 20
+    n_in_short_image = 12
+    zero_point_offset = 1.0
+
+    catalog, ra, dec, instrumental = _generate_fake_catalog(n_stars)
+
+    observed = _combine_observed_tables(
+        # Added first, sorts second.
+        _generate_observed_table(ra, dec, instrumental, file_name="z_image.fit"),
+        # Added second, sorts first, and has fewer stars.
+        _generate_observed_table(
+            ra[:n_in_short_image],
+            dec[:n_in_short_image],
+            instrumental[:n_in_short_image] - zero_point_offset,
+            file_name="a_image.fit",
+        ),
+    )
+
+    result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    from_short_image = result["file"] == "a_image.fit"
+
+    # Each image gets its own zero point, and neither picks up the other's.
+    np.testing.assert_allclose(
+        result["z"][from_short_image],
+        _FAKE_CATALOG_ZERO_POINT + zero_point_offset,
+        rtol=0,
+        atol=1e-6,
+    )
+    np.testing.assert_allclose(
+        result["z"][~from_short_image], _FAKE_CATALOG_ZERO_POINT, rtol=0, atol=1e-6
+    )
+
+    # Star by star, not just image by image: every row must have been matched
+    # to, and calibrated against, its own catalog entry.
+    catalog_mags = np.asarray(catalog["mag_R"])
+    for selection, truth in (
+        (from_short_image, catalog_mags[:n_in_short_image]),
+        (~from_short_image, catalog_mags),
+    ):
+        np.testing.assert_allclose(
+            result["mag_cal"][selection], truth, rtol=0, atol=1e-6
+        )
+        np.testing.assert_allclose(
+            result["mag_cat"][selection], truth, rtol=0, atol=1e-6
+        )
+
+
 def test_transform_to_catalog_output_columns(mocker):
+    # The set of columns this adds is its interface with everything downstream
+    # -- the AAVSO writer, the shipped notebook's plots -- so adding or
+    # renaming one should be a deliberate change to this list, not a surprise.
     result, _, _ = _fit_a_catalog(mocker)
 
     added = set(result.colnames) - {
@@ -541,6 +761,9 @@ def test_transform_to_catalog_output_columns(mocker):
 
 
 def test_transform_to_catalog_in_place_mutates_input(mocker):
+    # in_place=True is how the shipped notebook accumulates one passband at a
+    # time, so it has to hand back the very table it was given rather than a
+    # copy that happens to have the same contents.
     catalog, ra, dec, instrumental = _generate_fake_catalog(20)
     observed = _generate_observed_table(ra, dec, instrumental)
 
@@ -551,14 +774,25 @@ def test_transform_to_catalog_in_place_mutates_input(mocker):
 
 
 def test_transform_to_catalog_not_in_place_leaves_input_alone(mocker):
+    # The other half of the contract. Checking the column names is not enough:
+    # a shallow copy that shared its underlying arrays would add its columns
+    # only to the copy while writing through to the original's values, so the
+    # values are snapshotted and compared too.
     catalog, ra, dec, instrumental = _generate_fake_catalog(20)
     observed = _generate_observed_table(ra, dec, instrumental)
+
     original_columns = set(observed.colnames)
+    original_values = {
+        name: np.array(observed[name]) for name in ("mag_inst", "mag_error")
+    }
 
     result = _run_transform_to_catalog(mocker, catalog, observed, in_place=False)
 
     assert set(observed.colnames) == original_columns
     assert "mag_cal" in result.colnames
+
+    for name, values in original_values.items():
+        np.testing.assert_array_equal(observed[name], values)
 
 
 def test_transform_to_catalog_error_is_scaled_instrumental_error(mocker):
@@ -576,7 +810,16 @@ def test_transform_to_catalog_error_is_scaled_instrumental_error(mocker):
 
 
 def test_transform_to_catalog_uses_refcat2(mocker):
-    # Only the apass_dr9 branch of the catalog fetch has ever been exercised.
+    # Only the apass_dr9 branch of the catalog fetch has ever been exercised,
+    # so a typo in the refcat2 branch would have gone unnoticed.
+    #
+    # Because the catalog is mocked, what this checks is the *wiring*: that
+    # asking for refcat2 really queries refcat2 rather than APASS, that the
+    # refcat2 band transform is the one handed to passband_columns, and that
+    # the rest of the pipeline works on what comes back. It says nothing about
+    # the real refcat2 query or the real band transform -- in particular
+    # whether masked catalog entries survive that transform. Testing those
+    # needs a remote_data test per catalog; see issue #680.
     catalog, ra, dec, instrumental = _generate_fake_catalog(20)
     observed = _generate_observed_table(ra, dec, instrumental)
 
@@ -592,6 +835,8 @@ def test_transform_to_catalog_uses_refcat2(mocker):
 
 
 def test_transform_to_catalog_unknown_catalog_raises():
+    # Only two catalogs are supported. A misspelled name should say so rather
+    # than falling through to whatever the last branch happens to do.
     _, ra, dec, instrumental = _generate_fake_catalog(20)
     observed = _generate_observed_table(ra, dec, instrumental)
 
@@ -631,6 +876,9 @@ def test_transform_to_catalog_vary_selects_terms(mocker):
 
 @pytest.mark.parametrize("bad_vary", ["z", ("a", "q"), ()])
 def test_transform_to_catalog_bad_vary_raises(mocker, bad_vary):
+    # Each of these would otherwise fail silently or confusingly: a bare string
+    # iterates into single characters, an unknown term would simply never be
+    # fit, and varying nothing at all leaves every term pinned at zero.
     catalog, ra, dec, instrumental = _generate_fake_catalog(20)
     observed = _generate_observed_table(ra, dec, instrumental)
 
@@ -638,21 +886,49 @@ def test_transform_to_catalog_bad_vary_raises(mocker, bad_vary):
         _run_transform_to_catalog(mocker, catalog, observed, vary=bad_vary)
 
 
-def test_transform_to_catalog_warns_when_term_outside_expected(mocker):
+@pytest.mark.parametrize(
+    "term, true_value, expected",
+    [
+        # The default expected ranges, which cover only the zero point.
+        ("z", 25.0, None),
+        # Terms other than z, to catch an implementation that checked the
+        # hardcoded default key rather than whatever it was handed.
+        ("a", 0.05, {"a": (0.0, 0.01)}),
+        ("c", 0.5, {"c": (-0.1, 0.1)}),
+    ],
+)
+def test_transform_to_catalog_warns_when_term_outside_expected(
+    mocker, term, true_value, expected
+):
     # A zero point outside the expected range used to rail at the bound and
-    # report a confident wrong answer. It should now be fit freely and merely
-    # warned about. See issue #601.
-    true_zero_point = 25.0
+    # report a confident wrong answer. Every term should now be fit freely and
+    # merely warned about, by name and by the value it reached. See issue #601.
+    coefficients = {term: true_value}
+    if term != "z":
+        coefficients["z"] = _FAKE_CATALOG_ZERO_POINT
 
-    catalog, ra, dec, instrumental = _generate_fake_catalog(20, z=true_zero_point)
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20, **coefficients)
     observed = _generate_observed_table(ra, dec, instrumental)
 
-    with pytest.warns(AstropyUserWarning, match="z"):
-        result = _run_transform_to_catalog(mocker, catalog, observed)
+    message = re.escape(f"{term}={true_value:.4f} is outside")
+    with pytest.warns(AstropyUserWarning, match=message):
+        result = _run_transform_to_catalog(mocker, catalog, observed, expected=expected)
 
-    # The value is reported, not clamped to the top of the expected range.
-    np.testing.assert_allclose(result["z"], true_zero_point, rtol=0, atol=1e-6)
+    # The value is reported, not clamped to the edge of the expected range.
+    np.testing.assert_allclose(result[term], true_value, rtol=0, atol=1e-6)
     np.testing.assert_allclose(result["mag_cal"], catalog["mag_R"], rtol=0, atol=1e-6)
+
+
+def test_transform_to_catalog_unknown_expected_term_raises(mocker):
+    # A typo in an expected range would otherwise be silently ignored, leaving
+    # the caller believing a check is happening that is not.
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20)
+    observed = _generate_observed_table(ra, dec, instrumental)
+
+    with pytest.raises(ValueError, match=r"Unknown term\(s\) in expected"):
+        _run_transform_to_catalog(
+            mocker, catalog, observed, expected={"zero_point": (18, 22)}
+        )
 
 
 def test_transform_to_catalog_empty_expected_disables_check(mocker):
@@ -684,11 +960,13 @@ def test_transform_to_catalog_warns_when_fit_fails(mocker):
 
 
 def test_transform_to_catalog_fit_diff_agrees(mocker):
-    # Fitting the difference between the catalog and instrumental magnitudes
-    # should give the same calibrated magnitudes as fitting the catalog
-    # magnitude directly. The coefficients legitimately differ -- with
-    # fit_diff=False the true value of a is 1 rather than 0 -- so only the
-    # calibrated magnitudes are compared.
+    # fit_diff changes what is fit, not what comes out: fitting the difference
+    # between the catalog and instrumental magnitudes should give the same
+    # calibrated magnitudes *and the same errors* as fitting the catalog
+    # magnitude directly. The coefficients themselves legitimately differ --
+    # with fit_diff=False the true value of a is 1 rather than 0 -- which is
+    # exactly why the error column has to be scaled by a different factor in
+    # the two cases.
     catalog, ra, dec, instrumental = _generate_fake_catalog(20, a=0.02, c=0.15)
     observed = _generate_observed_table(ra, dec, instrumental)
 
@@ -701,6 +979,9 @@ def test_transform_to_catalog_fit_diff_agrees(mocker):
 
     np.testing.assert_allclose(
         with_diff["mag_cal"], without_diff["mag_cal"], rtol=0, atol=1e-6
+    )
+    np.testing.assert_allclose(
+        with_diff["mag_cal_error"], without_diff["mag_cal_error"], rtol=0, atol=1e-8
     )
 
 
@@ -753,6 +1034,10 @@ def _make_unusable_observations(case, catalog, ra, dec, instrumental, **kwargs):
 
 @pytest.mark.parametrize("case", ["out_of_range", "nan", "masked_catalog"])
 def test_transform_to_catalog_no_good_data_warns_and_nans(mocker, case):
+    # An image can be unusable from either side -- bad measurements or no
+    # catalog to compare them to -- and the answer is the same either way: say
+    # which image it was, and leave its outputs NaN rather than reporting
+    # coefficients fit to nothing.
     catalog, ra, dec, instrumental = _generate_fake_catalog(20)
     observed = _make_unusable_observations(case, catalog, ra, dec, instrumental)
 
@@ -765,6 +1050,9 @@ def test_transform_to_catalog_no_good_data_warns_and_nans(mocker, case):
 
 
 def test_transform_to_catalog_one_bad_image_does_not_poison_others(mocker):
+    # A night's data can easily contain one unusable image. That image should
+    # cost its own results and nothing else -- the fits for the other images
+    # still have to come back.
     catalog, ra, dec, instrumental = _generate_fake_catalog(20)
 
     observed = _combine_observed_tables(
@@ -871,6 +1159,10 @@ def test_transform_to_catalog_successive_passband_calls_accumulate(mocker):
 
 
 def test_transform_to_catalog_without_error_column(mocker):
+    # The error column is optional but nearly always wanted, so leaving it out
+    # has to say so. It also used to crash outright rather than doing the
+    # unweighted fit the docstring promised, so this checks the fit still runs
+    # and that no calibrated error is invented for it.
     catalog, ra, dec, instrumental = _generate_fake_catalog(20)
     observed = _generate_observed_table(ra, dec, instrumental)
 
@@ -884,6 +1176,9 @@ def test_transform_to_catalog_without_error_column(mocker):
 
 
 def test_transform_to_catalog_passband_not_in_table_raises(mocker):
+    # Asking for a passband the table does not contain is a mistake, not an
+    # empty result, and the message should say which passbands are there --
+    # the usual cause is a name that differs from the one in the file.
     catalog, ra, dec, instrumental = _generate_fake_catalog(20)
     observed = _generate_observed_table(ra, dec, instrumental, passband="R")
 
@@ -928,6 +1223,169 @@ def test_transform_to_catalog_warns_when_outlier_cut_removes_everything(mocker):
         result = _run_transform_to_catalog(mocker, catalog, observed)
 
     assert np.isnan(result["mag_cal"]).all()
+
+
+def test_transform_to_catalog_disjoint_good_data_and_catalog(mocker):
+    # The stars with usable instrumental magnitudes and the stars with usable
+    # catalog entries can be two entirely different sets. Checking that each is
+    # non-empty on its own is not enough: the median offset used for the
+    # outlier cut is then taken over an empty selection, which numpy reports as
+    # a RuntimeWarning -- a hard failure for anyone running with warnings as
+    # errors, as this suite itself does.
+    n_stars = 20
+    half = n_stars // 2
+
+    catalog, ra, dec, instrumental = _generate_fake_catalog(n_stars)
+
+    # Catalog usable only for the second half of the stars...
+    masked = np.zeros(n_stars, dtype=bool)
+    masked[:half] = True
+    catalog["mag_R"] = np.ma.masked_array(catalog["mag_R"], mask=masked)
+
+    # ...and instrumental magnitudes usable only for the first half.
+    instrumental = instrumental.copy()
+    instrumental[half:] = np.nan
+
+    observed = _generate_observed_table(ra, dec, instrumental)
+
+    with pytest.warns(AstropyUserWarning, match="No good data") as recorded:
+        result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    assert not [
+        warning for warning in recorded if issubclass(warning.category, RuntimeWarning)
+    ], "taking the median of an empty selection should not be attempted at all"
+    assert np.isnan(result["mag_cal"]).all()
+
+
+def test_transform_to_catalog_warns_when_too_few_stars_to_fit(mocker):
+    # Three stars cannot pin down three coefficients: the fit has no degrees of
+    # freedom left, so it reproduces those three stars exactly and says nothing
+    # at all about any other star in the image. lmfit reports success anyway,
+    # so the check has to happen before the fit runs.
+    catalog, ra, dec, instrumental = _generate_fake_catalog(3)
+    observed = _generate_observed_table(ra, dec, instrumental)
+
+    with pytest.warns(AstropyUserWarning, match="underdetermined"):
+        result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    assert np.isnan(result["mag_cal"]).all()
+    for term in ("a", "b", "c", "d", "z"):
+        assert np.isnan(result[term]).all()
+
+
+def test_transform_to_catalog_warns_when_terms_are_degenerate(mocker):
+    # Plenty of stars is not enough if they carry no independent information. A
+    # color that is a linear function of instrumental magnitude makes a, c and
+    # z exactly degenerate -- infinitely many combinations fit equally well --
+    # and a star-count guard alone would let this through.
+    n_stars = 20
+
+    instrumental = np.linspace(-10.0, -5.0, num=n_stars)
+    catalog, ra, dec, _ = _generate_fake_catalog(
+        n_stars, instrumental=instrumental, color=0.1 * (instrumental + 10.0)
+    )
+    observed = _generate_observed_table(ra, dec, instrumental)
+
+    with pytest.warns(AstropyUserWarning, match="underdetermined"):
+        result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    assert np.isnan(result["mag_cal"]).all()
+
+
+def test_transform_to_catalog_warns_when_fixed_term_outside_expected(mocker):
+    # Leaving z out of vary pins it at zero, which is nowhere near the expected
+    # zero point of a real image. A term held at a wrong value is exactly what
+    # the caller needs to be told about, so the expected ranges are checked for
+    # fixed terms as well as fitted ones.
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20, a=0.02, c=0.15)
+    observed = _generate_observed_table(ra, dec, instrumental)
+
+    with pytest.warns(AstropyUserWarning, match=r"z=0\.0000 is outside"):
+        result = _run_transform_to_catalog(mocker, catalog, observed, vary=("a", "c"))
+
+    assert (result["z"] == 0.0).all()
+
+
+def test_transform_to_catalog_nans_error_for_unusable_input_error(mocker):
+    # An error that is zero or negative is meaningless, and the fit already
+    # excludes those stars. The calibrated error must not be finite for them
+    # either: the AAVSO writer only turns non-finite errors into "na", so a
+    # zero would be written into a submission as a real uncertainty -- and an
+    # error of zero is infinite weight in any downstream average.
+    n_bad = 2
+
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20)
+    observed = _generate_observed_table(ra, dec, instrumental)
+    observed["mag_error"][0] = 0.0
+    observed["mag_error"][1] = -0.02
+
+    result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    assert np.isnan(result["mag_cal_error"][:n_bad]).all()
+    np.testing.assert_allclose(result["mag_cal_error"][n_bad:], 0.01, rtol=0, atol=1e-8)
+
+    # The stars are only left out of the *fit*. They still have perfectly good
+    # instrumental magnitudes, so they still get calibrated magnitudes.
+    np.testing.assert_allclose(result["mag_cal"], catalog["mag_R"], rtol=0, atol=1e-6)
+
+
+def test_transform_to_catalog_default_catalog_columns(mocker):
+    # Every call site passes cat_filter and cat_color explicitly, so nothing
+    # ever executed the defaults. They name columns the catalog is indexed by
+    # as mag_<name>, which means they have to be passband names.
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20)
+    observed = _generate_observed_table(ra, dec, instrumental)
+
+    _patch_catalog_fetch(mocker, catalog)
+
+    result = transform_to_catalog(observed, "R", obs_error_column="mag_error")
+
+    np.testing.assert_allclose(result["mag_cal"], catalog["mag_R"], rtol=0, atol=1e-6)
+
+
+def test_transform_to_catalog_accepts_photometry_data(mocker):
+    # The shipped notebook hands this function a PhotometryData, not a plain
+    # Table, and every other test here uses a plain Table. PhotometryData
+    # carries units on its columns and has real photometry's gaps in it -- rows
+    # with no magnitude at all -- so it exercises input this file otherwise
+    # builds too tidily.
+    n_unmeasured = 2
+
+    photometry = PhotometryData.read(
+        get_pkg_data_filename(
+            "tests/data/test_photometry_data.ecsv", package="stellarphot"
+        )
+    )
+    # One image's worth of rows, so that each star appears exactly once and
+    # every observation has an unambiguous nearest catalog entry.
+    photometry = photometry[photometry["file"] == sorted(set(photometry["file"]))[0]]
+
+    catalog, ra, dec, instrumental = _generate_fake_catalog(len(photometry))
+
+    # Real photometry has gaps in it -- stars that fell off the chip, or were
+    # too faint to measure -- so keep some here.
+    instrumental[:n_unmeasured] = np.nan
+
+    photometry["ra"] = ra
+    photometry["dec"] = dec
+    photometry["mag_inst"] = instrumental
+    photometry["mag_error"] = np.full(len(photometry), 0.01)
+
+    result = _run_transform_to_catalog(
+        mocker, catalog, photometry.group_by("file"), obs_filter="SR"
+    )
+
+    assert isinstance(result, PhotometryData)
+
+    # The measured stars are calibrated back to the catalog; the unmeasured
+    # ones stay NaN rather than turning into a number.
+    np.testing.assert_allclose(
+        result["mag_cal"][n_unmeasured:],
+        np.asarray(catalog["mag_R"])[n_unmeasured:],
+        rtol=0,
+        atol=1e-6,
+    )
+    assert np.isnan(result["mag_cal"][:n_unmeasured]).all()
 
 
 def test_transform_to_catalog_non_numeric_existing_column_raises(mocker):
