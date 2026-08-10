@@ -32,6 +32,11 @@ _DEFAULT_EXPECTED = {"z": (18.0, 22.0)}
 _CAL_MAG_COLUMN = "mag_cal"
 _CAL_MAG_ERROR_COLUMN = "mag_cal_error"
 
+# How strongly the terms of the fit may be correlated with each other before
+# their individual values stop meaning anything. See `_underdetermined_reason`,
+# which explains how this was arrived at.
+_MAX_CORRELATION_CONDITION = 1e7
+
 
 def calibrated_from_instrumental(X, a, b, c, d, z):
     """
@@ -119,81 +124,70 @@ def _to_float_array(values):
     return np.ma.filled(np.ma.asarray(values, dtype=float), np.nan)
 
 
-def _design_column(term, mag_inst, color):
+def _underdetermined_reason(fit_result, vary):
     """
-    The column one term of the model contributes to the design matrix.
+    Explain why a fit could not determine its terms, if it could not.
 
-    The model is linear in its coefficients, so each term multiplies a
-    quantity that depends only on the data. Those quantities are what decide
-    whether the terms can be told apart from each other. Keep this in sync
-    with `calibrated_from_instrumental`, which is what actually gets fit.
+    `lmfit` reports success whether or not the data can actually tell the
+    terms being fit apart from each other, so a successful fit still has to be
+    checked before its coefficients are used. What is needed is already in the
+    result: how strongly the terms are correlated with each other.
+
+    The measure used is the condition number of the *correlation* matrix
+    rather than of the covariance matrix itself, so that it does not depend on
+    the wildly different scales of the terms -- ``mag_inst`` runs around -10
+    while ``color`` runs around 0.5, which by itself pushes the condition
+    number of the covariance matrix of a healthy five-term fit past 1e6.
+
+    The threshold is a judgement call, because degeneracy is a continuum
+    rather than a state. Measured over synthetic fits, the correlation
+    condition number of a healthy three-term fit stays below about 2e4 even
+    when every star has nearly the same brightness; a five-term fit over a
+    three magnitude range reaches about 1e6, and over a one magnitude range
+    about 4e7 -- and at that point it really does return coefficients wrong by
+    several magnitudes, so rejecting it is right. Data whose color is exactly
+    a linear function of instrumental magnitude lands around 1e14.
+
+    Note that this cannot catch every fit whose coefficients are useless. A
+    field correlated tightly enough to give coefficients wrong by a magnitude
+    can still sit an order of magnitude below the threshold. Reporting the
+    per-coefficient uncertainties the fit already works out would let a caller
+    judge the cases this necessarily lets through.
 
     Parameters
     ----------
 
-    term : str
-        Name of the term, one of `_COEFF_NAMES`.
-
-    mag_inst, color : `numpy.ndarray`
-        Instrumental magnitude and color of each star.
-
-    Returns
-    -------
-    `numpy.ndarray`
-        The quantity the term's coefficient multiplies.
-    """
-    match term:
-        case "a":
-            return mag_inst
-        case "b":
-            return mag_inst**2
-        case "c":
-            return color
-        case "d":
-            return color**2
-        case "z":
-            return np.ones_like(mag_inst)
-        case _:  # pragma: no cover
-            raise ValueError(f"Unknown term {term!r}")
-
-
-def _underdetermined_reason(mag_inst, color, vary):
-    """
-    Explain why these stars cannot determine these terms, if they cannot.
-
-    A least squares fit reports success whether or not the data can actually
-    tell the terms being fit apart from each other, so this has to be checked
-    before the fit rather than read off its result.
-
-    Parameters
-    ----------
-
-    mag_inst, color : `numpy.ndarray`
-        Instrumental magnitude and color of the stars that will be fit.
+    fit_result : `lmfit.minimizer.MinimizerResult`
+        Result of fitting one image.
 
     vary : sequence of str
-        Names of the terms being fit.
+        Names of the terms that were fit, used only in the message.
 
     Returns
     -------
     str or None
         Description of the problem, or `None` if the fit is determined.
     """
-    n_stars = mag_inst.size
-    n_terms = len(vary)
-
-    if n_stars <= n_terms:
+    if fit_result.covar is None:
         return (
-            f"{n_stars} usable star(s) cannot determine {n_terms} term(s) "
-            f"{list(vary)}; the fit has no degrees of freedom left"
+            f"the uncertainty in the terms {list(vary)} could not be estimated "
+            "at all, which means this data does not constrain them"
         )
 
-    design = np.column_stack([_design_column(term, mag_inst, color) for term in vary])
-    if np.linalg.matrix_rank(design) < n_terms:
+    uncertainties = np.sqrt(np.diag(fit_result.covar))
+    if not np.all(np.isfinite(uncertainties)) or np.any(uncertainties <= 0):
+        # A fit that reproduces its data exactly has no uncertainty to
+        # correlate, and is determined rather than underdetermined. Only
+        # synthetic data fits that well; a real image always has some scatter,
+        # which is why nothing here reaches this.
+        return None  # pragma: no cover
+
+    correlation = fit_result.covar / np.outer(uncertainties, uncertainties)
+    if np.linalg.cond(correlation) > _MAX_CORRELATION_CONDITION:
         return (
             f"the terms {list(vary)} cannot be told apart from each other in "
-            "this data -- most often because color is a linear function of "
-            "instrumental magnitude"
+            "this data -- most often because color is very nearly a linear "
+            "function of instrumental magnitude"
         )
 
     return None
@@ -462,10 +456,9 @@ def transform_to_catalog(
         could not be fit and for rows in other passbands that had no value
         already.
 
-        Note that ``mag_cat`` and ``color_cat`` are currently filled in from
-        the nearest catalog entry however far away it is, so they can hold the
-        values of an unrelated star on rows whose ``mag_cal`` is NaN; see
-        issue #678.
+        ``mag_cat`` and ``color_cat`` are taken from the nearest catalog entry
+        whatever its distance, so they can hold the values of an unrelated
+        star on rows whose ``mag_cal`` is NaN.
 
     Notes
     -----
@@ -474,7 +467,7 @@ def transform_to_catalog(
     much the calibrated magnitude moves when the instrumental one does, which
     is ``1 + a`` when ``fit_diff`` is ``True`` and ``a`` when it is ``False``.
     That is not a propagation of the uncertainty in the fit itself, and so
-    understates the true uncertainty; see issue #674.
+    understates the true uncertainty.
     """
     if obs_error_column is None:
         warnings.warn(
@@ -625,14 +618,17 @@ def transform_to_catalog(
         fit_data = cat_mag[good] - offset
         weights = 1.0 / errors[good] if obs_error_column is not None else 1.0
 
-        # The fit reports success on data that cannot determine the terms
-        # being fit, and the coefficients it lands on are then applied to
-        # every star in the image, so this has to be caught here rather than
-        # read off the result.
-        underdetermined = _underdetermined_reason(fit_mag, fit_color, vary)
-        if underdetermined is not None:
+        # Fewer stars than terms has to be caught before the fit rather than
+        # after it: with nothing left to fit, lmfit takes the square root of a
+        # negative number working out the uncertainties, and the RuntimeWarning
+        # that produces is an outright exception for anyone running with
+        # warnings as errors. Whether the terms can be told apart from *each
+        # other* is a question about the fit and is asked of it below.
+        if fit_mag.size <= len(vary):
             warnings.warn(
-                f"Fit for {file[0]} is underdetermined: {underdetermined}",
+                f"Fit for {file[0]} is underdetermined: {fit_mag.size} usable "
+                f"star(s) cannot determine {len(vary)} term(s) {list(vary)}; "
+                "the fit has no degrees of freedom left",
                 AstropyUserWarning,
                 stacklevel=2,
             )
@@ -645,25 +641,29 @@ def transform_to_catalog(
             # best starting guess available.
             params["z"].set(value=float(np.median(fit_data)))
 
-        # When the model reproduces the data exactly, every parameter's
-        # standard error is zero and lmfit divides zero by zero working out
-        # the correlations between parameters. The NaN correlations that
-        # result are harmless -- a fit with no scatter has no uncertainty to
-        # correlate -- but the RuntimeWarning would be an outright exception
-        # for anyone running with warnings as errors. Real photometry never
-        # fits that well; synthetic data built from the model itself, i.e.
-        # most of this function's tests, always does.
-        with np.errstate(invalid="ignore", divide="ignore"):
-            fit_result = lmfit.minimize(
-                _transform_residual,
-                params,
-                method="least_squares",
-                args=(fit_mag, fit_color, fit_data, weights),
-            )
+        fit_result = lmfit.minimize(
+            _transform_residual,
+            params,
+            method="least_squares",
+            args=(fit_mag, fit_color, fit_data, weights),
+        )
 
         if not fit_result.success:
             warnings.warn(
                 f"Fit did not succeed for {file[0]}: {fit_result.message}",
+                AstropyUserWarning,
+                stacklevel=2,
+            )
+            continue
+
+        # A fit reports success whether or not the data can tell the terms
+        # being fit apart from each other, and the coefficients it lands on
+        # are applied to every star in the image, so a successful fit still
+        # has to be checked before its results are used.
+        underdetermined = _underdetermined_reason(fit_result, vary)
+        if underdetermined is not None:
+            warnings.warn(
+                f"Fit for {file[0]} is underdetermined: {underdetermined}",
                 AstropyUserWarning,
                 stacklevel=2,
             )

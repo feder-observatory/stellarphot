@@ -138,9 +138,20 @@ def test_calibrated_from_instrumental_matches_hand_computed_values():
 
 
 # Default zero point of the synthetic catalog below. The catalog magnitudes
-# follow the fit model exactly, so a fit to them recovers whichever
-# coefficients were used to build the catalog.
+# follow the fit model, so a fit to them recovers whichever coefficients were
+# used to build the catalog.
 _FAKE_CATALOG_ZERO_POINT = 20.0
+
+# Scatter added to the synthetic catalog magnitudes. Without it they follow the
+# model to the last bit, the residual of a fit to them reaches exactly zero,
+# and lmfit divides zero by zero working out the correlations between the
+# parameters -- a RuntimeWarning, which this suite turns into a failure. Real
+# photometry always has some scatter, so the fix belongs here rather than in
+# the production code. This is far below every tolerance asserted anywhere in
+# this file: a fit to a catalog built this way still recovers the coefficients
+# it was built from to about 5e-12, six orders of magnitude inside the 1e-6
+# the recovery tests allow.
+_FAKE_CATALOG_SCATTER = 1e-12
 
 
 def _generate_fake_catalog(
@@ -155,14 +166,16 @@ def _generate_fake_catalog(
     color=None,
 ):
     """
-    Generate a catalog whose magnitudes are an exact fit to the transform model.
+    Generate a catalog whose magnitudes follow the transform model.
 
     The catalog magnitudes are built by calling the production model,
     `~stellarphot.utils.magnitude_transforms.calibrated_from_instrumental`,
     rather than re-deriving the arithmetic, so the tests cannot drift away
     from the model actually being fit. A fit to the result recovers the
-    coefficients passed in here exactly. The model itself is pinned
-    independently, against hand-computed values, by
+    coefficients passed in here to within `_FAKE_CATALOG_SCATTER`, the
+    negligible amount of scatter added so that the magnitudes do not follow
+    the model to the last bit. The model itself is pinned independently,
+    against hand-computed values, by
     `test_calibrated_from_instrumental_matches_hand_computed_values`.
 
     Parameters
@@ -224,6 +237,12 @@ def _generate_fake_catalog(
     cat_r = (
         calibrated_from_instrumental((instrumental, color), a, b, c, d, z)
         + instrumental
+    )
+
+    # Seeded, so the scatter is the same from one run to the next. Added only
+    # to mag_R, which leaves the color of each star exactly what was asked for.
+    cat_r = cat_r + np.random.default_rng(9021).normal(
+        0.0, _FAKE_CATALOG_SCATTER, size=np.shape(cat_r)
     )
 
     catalog = _FakeCatalogTable(
@@ -1261,7 +1280,9 @@ def test_transform_to_catalog_warns_when_too_few_stars_to_fit(mocker):
     # Three stars cannot pin down three coefficients: the fit has no degrees of
     # freedom left, so it reproduces those three stars exactly and says nothing
     # at all about any other star in the image. lmfit reports success anyway,
-    # so the check has to happen before the fit runs.
+    # so counting has to happen here -- and it has to happen before the fit is
+    # run, because with fewer stars than terms lmfit takes the square root of a
+    # negative number working out the uncertainties.
     catalog, ra, dec, instrumental = _generate_fake_catalog(3)
     observed = _generate_observed_table(ra, dec, instrumental)
 
@@ -1290,6 +1311,80 @@ def test_transform_to_catalog_warns_when_terms_are_degenerate(mocker):
         result = _run_transform_to_catalog(mocker, catalog, observed)
 
     assert np.isnan(result["mag_cal"]).all()
+
+
+def test_transform_to_catalog_warns_when_terms_are_nearly_degenerate(mocker):
+    # Exactly degenerate data is a synthetic construct: it takes a color that is
+    # a linear function of instrumental magnitude to the last bit, which real
+    # stars never are. What real data does produce is *near* degeneracy -- a
+    # field whose stars run red-and-faint to blue-and-bright, so color is very
+    # nearly a linear function of instrumental magnitude. The fit then reports
+    # success and lands on coefficients that are wrong by whole magnitudes, so
+    # a check that only rejects data of exactly deficient rank is no use here.
+    n_stars = 200
+    color_scatter = 3e-4
+
+    instrumental = np.linspace(-12.0, -6.0, num=n_stars)
+    color = 0.1 * (instrumental + 12.0) + np.random.default_rng(2317).normal(
+        0.0, color_scatter, size=n_stars
+    )
+    catalog, ra, dec, _ = _generate_fake_catalog(
+        n_stars, a=0.02, c=0.15, instrumental=instrumental, color=color
+    )
+    observed = _generate_observed_table(ra, dec, instrumental)
+
+    with pytest.warns(AstropyUserWarning, match="underdetermined"):
+        result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    assert np.isnan(result["mag_cal"]).all()
+
+
+def test_transform_to_catalog_warns_when_covariance_unavailable(mocker):
+    # lmfit does not always manage to estimate the uncertainty in a fit, and
+    # when it has not there is no way to tell whether the terms can be told
+    # apart from each other. Coefficients that may well be meaningless must not
+    # be applied to every star in the image on the strength of the fit having
+    # reported success, so the image is skipped.
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20, a=0.02, c=0.15)
+    observed = _generate_observed_table(ra, dec, instrumental)
+
+    fit = magnitude_transforms.lmfit.minimize
+
+    def fit_without_covariance(*args, **kwargs):
+        result = fit(*args, **kwargs)
+        result.covar = None
+        return result
+
+    mocker.patch.object(magnitude_transforms.lmfit, "minimize", fit_without_covariance)
+
+    with pytest.warns(AstropyUserWarning, match="could not be estimated"):
+        result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    assert np.isnan(result["mag_cal"]).all()
+
+
+def test_transform_to_catalog_fits_correlated_but_usable_data(mocker):
+    # The other side of the test above. Color and instrumental magnitude are
+    # correlated in almost any real field, and a check on how well the terms
+    # can be told apart must not reject data merely for being correlated. Ten
+    # times the scatter of the test above is still a strong correlation, and it
+    # still recovers the coefficients, so it has to go through without warning.
+    n_stars = 200
+    color_scatter = 3e-2
+
+    instrumental = np.linspace(-12.0, -6.0, num=n_stars)
+    color = 0.1 * (instrumental + 12.0) + np.random.default_rng(2317).normal(
+        0.0, color_scatter, size=n_stars
+    )
+    catalog, ra, dec, _ = _generate_fake_catalog(
+        n_stars, a=0.02, c=0.15, instrumental=instrumental, color=color
+    )
+    observed = _generate_observed_table(ra, dec, instrumental)
+
+    result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    np.testing.assert_allclose(result["a"], 0.02, rtol=0, atol=1e-4)
+    np.testing.assert_allclose(result["c"], 0.15, rtol=0, atol=1e-4)
 
 
 def test_transform_to_catalog_warns_when_fixed_term_outside_expected(mocker):
@@ -1357,8 +1452,13 @@ def test_transform_to_catalog_accepts_photometry_data(mocker):
         )
     )
     # One image's worth of rows, so that each star appears exactly once and
-    # every observation has an unambiguous nearest catalog entry.
+    # every observation has an unambiguous nearest catalog entry. Selecting on
+    # the file name only does that if no two nights reuse a name, which is the
+    # property actually being relied on, so check it rather than the data file.
     photometry = photometry[photometry["file"] == sorted(set(photometry["file"]))[0]]
+    assert len(set(photometry["star_id"])) == len(
+        photometry
+    ), "the rows selected are not one image's worth"
 
     catalog, ra, dec, instrumental = _generate_fake_catalog(len(photometry))
 

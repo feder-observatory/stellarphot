@@ -36,8 +36,9 @@ Other Changes and Additions
   messages it printed are now ``AstropyUserWarning``\ s. [#601]
 + ``transform_to_catalog()`` now warns, and leaves that image's results
   unset, when the stars available cannot determine the terms being fit --
-  either because there are too few of them or because the terms are
-  degenerate. Previously such a fit reported success and its coefficients
+  either because there are too few of them, or because the terms come out
+  too strongly correlated with each other for their individual values to
+  mean anything. Previously such a fit reported success and its coefficients
   were applied to every star in the image. [#601]
 + The ``cat_filter`` and ``cat_color`` defaults of ``transform_to_catalog()``
   are now passband names (``"R"`` and ``("R", "I")``) rather than column
