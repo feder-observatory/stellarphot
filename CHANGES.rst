@@ -21,6 +21,37 @@ New Features
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
++ ``stellarphot.utils.magnitude_transforms`` now has a single calibration
+  pipeline instead of two. ``calculate_transform_coefficients()`` and
+  ``transform_magnitudes()``, which nothing in the package or the shipped
+  notebooks called, have been removed, as have the ``transform_to_catalog()``
+  helpers ``opts_to_str()`` and ``calc_residual()``. ``filter_transform()``
+  and ``calibrated_from_instrumental()`` are unchanged. [#601]
++ ``transform_to_catalog()`` now fits with ``lmfit`` rather than
+  ``scipy.optimize.curve_fit``, and its signature has changed to match. The
+  ``a_delta``, ``a_cen``, ``b_delta``, ``c_delta``, ``d_delta`` and
+  ``zero_point_range`` arguments are replaced by ``vary``, naming the terms
+  to fit -- every other term is now held at exactly zero rather than boxed
+  into a range 1e-6 wide -- and ``expected``, giving the range each fitted
+  term is expected to land in. Unlike the old bounds, ``expected`` does not
+  constrain the fit: a zero point outside its range used to rail at the
+  boundary and report a confident wrong answer, and is now fit freely and
+  warned about. The ``verbose`` argument is gone; what it printed is now
+  either an ``AstropyUserWarning`` or, for the per-image progress report,
+  dropped in favor of the fit coefficients already written to the output
+  table. [#601]
++ The calibrated magnitude columns ``transform_to_catalog()`` adds are now
+  named ``mag_cal`` and ``mag_cal_error``, instead of being built from the
+  instrumental magnitude column name (``mag_inst_cal`` by default). The
+  AAVSO writer accepts both. [#601]
++ ``transform_to_catalog()`` no longer raises when the groups of the table it
+  is given contain rows in more than one passband. Rows outside the passband
+  being fit keep any values they already have, so calling it once per
+  passband with ``in_place=True`` now accumulates into a single table rather
+  than each call overwriting the last. [#601]
++ ``lmfit`` moved from the ``exoplanet`` extra to a required dependency,
+  since the magnitude transform now needs it, and ``scipy`` is now declared
+  explicitly rather than relied on transitively. [#601]
 + Documentation improvements: fixed docstring default values, expanded
   variable-aperture photometry documentation with details on how aperture radii
   are computed, clarified astropy Longitude wrapping behavior in the Observatory

@@ -228,8 +228,7 @@ Key contents of each file:
   `add_relative_flux_column()`, `add_in_quadrature()`.
 - [`differential_photometry/vsx_mags.py`](../stellarphot/differential_photometry/vsx_mags.py) — `calc_vmag()`, `calc_multi_vmag()`.
 - [`utils/magnitude_transforms.py`](../stellarphot/utils/magnitude_transforms.py) — `transform_to_catalog()`,
-  `calculate_transform_coefficients()`, `transform_magnitudes()`,
-  `filter_transform()`.
+  `calibrated_from_instrumental()`, `filter_transform()`.
 - [`utils/magnitude_system_transforms.py`](../stellarphot/utils/magnitude_system_transforms.py) — `PanStarrs1ToJohnsonCousins`,
   `USNOPrimeToSDSSDR7`, `transform_apass_bands()`, `transform_refcat2_bands()`.
 - [`utils/comparison_utils.py`](../stellarphot/utils/comparison_utils.py) — `set_up()`, `crossmatch_APASS2VSX()`,

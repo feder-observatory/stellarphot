@@ -39,8 +39,8 @@ Example
         check_star_id=6,
         check_name="000-BLS-123",
         chart="X12345",
-        mag_column="mag_inst_cal",
-        mag_error_column="mag_inst_cal_error",
+        mag_column="mag_cal",
+        mag_error_column="mag_cal_error",
         trans=False,
     )
 

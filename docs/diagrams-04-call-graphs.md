@@ -890,10 +890,7 @@ flowchart LR
     subgraph sg_mag["magnitude_transforms.py"]
         direction TB
         t2c["transform_to_catalog()"]:::fn
-        tmags["transform_magnitudes()"]:::fn
-        ctc["calculate_transform_coefficients()"]:::fn
         cfi["calibrated_from_instrumental()"]:::fn
-        resid["calc_residual()"]:::fn
         ftrans["filter_transform()"]:::fn
     end
 

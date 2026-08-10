@@ -73,7 +73,7 @@ flowchart LR
     runner["PhotometryRunner"]:::widget
     tps["TessPhotometrySetup"]:::widget
     addflux["add_relative_flux_column()"]:::api
-    calib["transform_to_catalog() and<br/>calculate_transform_coefficients()"]:::api
+    calib["transform_to_catalog()"]:::api
     fitstack["TessAnalysisInputControls +<br/>TransitModelFit + TransitModelOptions"]:::widget
     exotic["exotic_settings_widget() +<br/>populate_TOI_boxes()"]:::widget
 
