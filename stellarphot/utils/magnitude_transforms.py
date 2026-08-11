@@ -256,6 +256,34 @@ def _merge_with_existing(table, column_name, new_values, in_passband):
     return np.where(in_passband, new_values, old_values)
 
 
+def _write_output_columns(table, columns, in_passband):
+    """
+    Write a set of output columns to the table, keeping other passbands' values.
+
+    Each column goes through `_merge_with_existing`, so the rows this call is
+    not responsible for keep whatever they already had. Columns are written in
+    the order they appear in ``columns``, which is the order a new column is
+    added to the table in.
+
+    Parameters
+    ----------
+
+    table : `astropy.table.Table`
+        Table the columns will be written to.
+
+    columns : dict
+        Values to write, as ``{column_name: values}``. Each array is the
+        length of the whole table, NaN outside the passband that was fit.
+
+    in_passband : `numpy.ndarray`
+        Boolean mask, `True` for the rows this call is responsible for.
+    """
+    for column_name, new_values in columns.items():
+        table[column_name] = _merge_with_existing(
+            table, column_name, new_values, in_passband
+        )
+
+
 def filter_transform(mag_data, output_filter, g=None, r=None, i=None, transform=None):
     """
     Transform SDSS magnitudes to BVRI using either the transforms from
@@ -437,6 +465,15 @@ def transform_to_catalog(
         If ``True``, add the calibrated magnitude to the input table, otherwise return
         a copy.
 
+        Warnings about an individual image are held until every image's
+        results have been written, so a warning does not cost the images that
+        were fit successfully their results. That does not stop the call
+        raising when warnings are errors -- under ``-W error`` the deferred
+        warnings still escalate, only after the columns have been written. So
+        with ``in_place=True`` the table the caller handed in is complete when
+        the call raises, while with ``in_place=False`` the copy that would
+        have been returned is lost.
+
     fit_diff : bool, optional
         If ``True``, fit the difference between the instrumental and catalog magnitude
         instead of the treating the catalog mag as the dependent variable.
@@ -551,197 +588,204 @@ def transform_to_catalog(
     # is always rows ``group_bounds[i]:group_bounds[i + 1]`` of the output.
     group_bounds = observed_mags_grouped.groups.indices
 
-    for group_number, (file, one_image_all_bands) in enumerate(
-        zip(
-            observed_mags_grouped.groups.keys,
-            observed_mags_grouped.groups,
-            strict=True,
-        )
-    ):
-        group_start = group_bounds[group_number]
-        in_this_group = in_passband[group_start : group_bounds[group_number + 1]]
-        rows = group_start + np.flatnonzero(in_this_group)
-
-        if rows.size == 0:
-            # Nothing in this image was taken in this passband.
-            continue
-
-        one_image = one_image_all_bands[in_this_group]
-        our_coords = SkyCoord(one_image["ra"], one_image["dec"], unit="degree")
-
-        cat_idx, d2d, _ = our_coords.match_to_catalog_sky(cat_coords)
-
-        # Masked catalog entries become NaN here, which both keeps them out of
-        # the fit and makes the calibrated magnitudes that depend on them NaN.
-        mag_inst = _to_float_array(one_image[obs_mag_col])
-        cat_mag = _to_float_array(cat[f"mag_{cat_filter}"][cat_idx])
-        color = _to_float_array(cat["color"][cat_idx])
-
-        # Impose some constraints on what is included in the fit
-        good_cat = np.isfinite(cat_mag) & np.isfinite(color) & (d2d.arcsecond < 1)
-        good_dat = (mag_inst < -3) & (mag_inst > -20) & np.isfinite(mag_inst)
-
-        if obs_error_column is not None:
-            errors = _to_float_array(one_image[obs_error_column])
-            # A non-positive or non-finite error gives a meaningless weight.
-            good_dat = good_dat & np.isfinite(errors) & (errors > 0)
-
-        # Both halves have to be good for the *same* star. Checking each on
-        # its own is not enough: the two sets can be disjoint, which leaves
-        # nothing to take the median of below.
-        usable = good_dat & good_cat
-
-        if not usable.any():
-            warnings.warn(
-                f"No good data in {file[0]}", AstropyUserWarning, stacklevel=2
-            )
-            continue
-
-        # Drop stars more than a magnitude away from the median difference
-        # between the catalog and instrumental magnitudes -- either a bad
-        # match or a bad measurement.
-        mag_diff = cat_mag - mag_inst
-        good = usable & (np.abs(mag_diff - np.median(mag_diff[usable])) < 1)
-
-        if not good.any():
-            warnings.warn(
-                f"No good data in {file[0]}", AstropyUserWarning, stacklevel=2
-            )
-            continue
-
-        # Prep for fitting
-        fit_mag = mag_inst[good]
-        fit_color = color[good]
-        offset = fit_mag if fit_diff else 0.0
-        fit_data = cat_mag[good] - offset
-        weights = 1.0 / errors[good] if obs_error_column is not None else 1.0
-
-        # Fewer stars than terms has to be caught before the fit rather than
-        # after it: with nothing left to fit, lmfit takes the square root of a
-        # negative number working out the uncertainties, and the RuntimeWarning
-        # that produces is an outright exception for anyone running with
-        # warnings as errors. Whether the terms can be told apart from *each
-        # other* is a question about the fit and is asked of it below.
-        if fit_mag.size <= len(vary):
-            warnings.warn(
-                f"Fit for {file[0]} is underdetermined: {fit_mag.size} usable "
-                f"star(s) cannot determine {len(vary)} term(s) {list(vary)}; "
-                "the fit has no degrees of freedom left",
-                AstropyUserWarning,
-                stacklevel=2,
-            )
-            continue
-
-        params = base_params.copy()
-        if params["z"].vary:
-            # With every other term at its starting value of zero the model is
-            # just the zero point, so the median of the data being fit is the
-            # best starting guess available.
-            params["z"].set(value=float(np.median(fit_data)))
-
-        fit_result = lmfit.minimize(
-            _transform_residual,
-            params,
-            method="least_squares",
-            args=(fit_mag, fit_color, fit_data, weights),
-        )
-
-        if not fit_result.success:
-            warnings.warn(
-                f"Fit did not succeed for {file[0]}: {fit_result.message}",
-                AstropyUserWarning,
-                stacklevel=2,
-            )
-            continue
-
-        # A fit reports success whether or not the data can tell the terms
-        # being fit apart from each other, and the coefficients it lands on
-        # are applied to every star in the image, so a successful fit still
-        # has to be checked before its results are used.
-        underdetermined = _underdetermined_reason(fit_result, vary)
-        if underdetermined is not None:
-            warnings.warn(
-                f"Fit for {file[0]} is underdetermined: {underdetermined}",
-                AstropyUserWarning,
-                stacklevel=2,
-            )
-            continue
-
-        values = {name: fit_result.params[name].value for name in _COEFF_NAMES}
-
-        # The expected ranges are a check on the answer, not a constraint on
-        # the fit, so a value outside its range is reported and kept.
-        out_of_range = [
-            f"{term}={values[term]:.4f} is outside the expected range "
-            f"{tuple(expected[term])}"
-            for term in expected
-            if not expected[term][0] <= values[term] <= expected[term][1]
-        ]
-        if out_of_range:
-            warnings.warn(
-                f"Fit for {file[0]}: " + "; ".join(out_of_range),
-                AstropyUserWarning,
-                stacklevel=2,
-            )
-
-        # Calculate calibrated magnitudes for every star in the image, not
-        # just the ones the fit used.
-        model_coefficients = [values[name] for name in _COEFF_NAMES]
-        cal_mag = calibrated_from_instrumental((mag_inst, color), *model_coefficients)
-        if fit_diff:
-            cal_mag = cal_mag + mag_inst
-
-        # A limit of 1 arcsec here can cause a variable that really is in APASS to not
-        # match. An example is V2480 Cyg, whose VSX position is about 1.3 arcsec from
-        # its APASS DR9 position.
-        cal_mag[d2d.arcsecond > 1.5] = np.nan
-
-        for name in _COEFF_NAMES:
-            coefficients[name][rows] = values[name]
-
-        cal_mags[rows] = cal_mag
-        cat_mags[rows] = cat_mag
-        cat_colors[rows] = color
-
+    # Made before the loop rather than after it so that the results can be
+    # written to it in the ``finally`` below. The loop reads only
+    # ``observed_mags_grouped`` and never this table, and the invariant
+    # documented just above is what makes writing by row index legal.
     result = observed_mags_grouped if in_place else observed_mags_grouped.copy()
 
-    if obs_error_column is not None:
-        # How much the calibrated magnitude moves when the instrumental one
-        # does. With fit_diff the instrumental magnitude is added back to the
-        # model result, so that sensitivity is 1 + a; without it the model is
-        # the calibrated magnitude outright and a itself is the factor -- it
-        # fits to about 1 rather than about 0. Using the same factor for both
-        # would double the reported uncertainty in one of the two modes.
-        sensitivity = 1 + coefficients["a"] if fit_diff else coefficients["a"]
+    # Warnings about one image are held until every image's results are in the
+    # table. Under -W error -- which this package's own test suite uses -- a
+    # warning raised inside the loop would otherwise throw away the results of
+    # every image already fit. See issue #679.
+    #
+    # Every warning raised in the loop is an AstropyUserWarning, so the message
+    # alone is enough to defer. Adding one of another category would make this
+    # a list of (message, category) tuples.
+    deferred_warnings = []
 
-        # Scaled from the raw per-call coefficients rather than the merged
-        # column, so that rows in other passbands are handled by the merge
-        # below instead of being recomputed from another passband's fit.
-        raw_errors = _to_float_array(result[obs_error_column])
-        scaled_errors = sensitivity * raw_errors
+    try:
+        for group_number, (file, one_image_all_bands) in enumerate(
+            zip(
+                observed_mags_grouped.groups.keys,
+                observed_mags_grouped.groups,
+                strict=True,
+            )
+        ):
+            group_start = group_bounds[group_number]
+            in_this_group = in_passband[group_start : group_bounds[group_number + 1]]
+            rows = group_start + np.flatnonzero(in_this_group)
 
-        # An error that is not a positive, finite number is kept out of the
-        # fit above, and must not come back out as a calibrated error either:
-        # the AAVSO writer turns only non-finite errors into "na", so a zero
-        # would be submitted as a real uncertainty.
-        scaled_errors[~(np.isfinite(raw_errors) & (raw_errors > 0))] = np.nan
+            if rows.size == 0:
+                # Nothing in this image was taken in this passband.
+                continue
 
-        result[_CAL_MAG_ERROR_COLUMN] = _merge_with_existing(
-            result, _CAL_MAG_ERROR_COLUMN, scaled_errors, in_passband
-        )
+            one_image = one_image_all_bands[in_this_group]
+            our_coords = SkyCoord(one_image["ra"], one_image["dec"], unit="degree")
 
-    result[_CAL_MAG_COLUMN] = _merge_with_existing(
-        result, _CAL_MAG_COLUMN, cal_mags, in_passband
-    )
+            cat_idx, d2d, _ = our_coords.match_to_catalog_sky(cat_coords)
 
-    for name in _COEFF_NAMES:
-        result[name] = _merge_with_existing(
-            result, name, coefficients[name], in_passband
-        )
+            # Masked catalog entries become NaN here, which both keeps them out
+            # of the fit and makes the calibrated magnitudes that depend on
+            # them NaN.
+            mag_inst = _to_float_array(one_image[obs_mag_col])
+            cat_mag = _to_float_array(cat[f"mag_{cat_filter}"][cat_idx])
+            color = _to_float_array(cat["color"][cat_idx])
 
-    result["mag_cat"] = _merge_with_existing(result, "mag_cat", cat_mags, in_passband)
-    result["color_cat"] = _merge_with_existing(
-        result, "color_cat", cat_colors, in_passband
-    )
+            # Impose some constraints on what is included in the fit
+            good_cat = np.isfinite(cat_mag) & np.isfinite(color) & (d2d.arcsecond < 1)
+            good_dat = (mag_inst < -3) & (mag_inst > -20) & np.isfinite(mag_inst)
+
+            if obs_error_column is not None:
+                errors = _to_float_array(one_image[obs_error_column])
+                # A non-positive or non-finite error gives a meaningless weight.
+                good_dat = good_dat & np.isfinite(errors) & (errors > 0)
+
+            # Both halves have to be good for the *same* star. Checking each on
+            # its own is not enough: the two sets can be disjoint, which leaves
+            # nothing to take the median of below.
+            usable = good_dat & good_cat
+
+            if not usable.any():
+                deferred_warnings.append(f"No good data in {file[0]}")
+                continue
+
+            # Drop stars more than a magnitude away from the median difference
+            # between the catalog and instrumental magnitudes -- either a bad
+            # match or a bad measurement.
+            mag_diff = cat_mag - mag_inst
+            good = usable & (np.abs(mag_diff - np.median(mag_diff[usable])) < 1)
+
+            if not good.any():
+                deferred_warnings.append(f"No good data in {file[0]}")
+                continue
+
+            # Prep for fitting
+            fit_mag = mag_inst[good]
+            fit_color = color[good]
+            offset = fit_mag if fit_diff else 0.0
+            fit_data = cat_mag[good] - offset
+            weights = 1.0 / errors[good] if obs_error_column is not None else 1.0
+
+            # Fewer stars than terms has to be caught before the fit rather than
+            # after it: with nothing left to fit, lmfit takes the square root of
+            # a negative number working out the uncertainties, and the
+            # RuntimeWarning that produces is an outright exception for anyone
+            # running with warnings as errors. Whether the terms can be told
+            # apart from *each other* is a question about the fit and is asked
+            # of it below.
+            if fit_mag.size <= len(vary):
+                deferred_warnings.append(
+                    f"Fit for {file[0]} is underdetermined: {fit_mag.size} usable "
+                    f"star(s) cannot determine {len(vary)} term(s) {list(vary)}; "
+                    "the fit has no degrees of freedom left"
+                )
+                continue
+
+            params = base_params.copy()
+            if params["z"].vary:
+                # With every other term at its starting value of zero the model
+                # is just the zero point, so the median of the data being fit is
+                # the best starting guess available.
+                params["z"].set(value=float(np.median(fit_data)))
+
+            fit_result = lmfit.minimize(
+                _transform_residual,
+                params,
+                method="least_squares",
+                args=(fit_mag, fit_color, fit_data, weights),
+            )
+
+            if not fit_result.success:
+                deferred_warnings.append(
+                    f"Fit did not succeed for {file[0]}: {fit_result.message}"
+                )
+                continue
+
+            # A fit reports success whether or not the data can tell the terms
+            # being fit apart from each other, and the coefficients it lands on
+            # are applied to every star in the image, so a successful fit still
+            # has to be checked before its results are used.
+            underdetermined = _underdetermined_reason(fit_result, vary)
+            if underdetermined is not None:
+                deferred_warnings.append(
+                    f"Fit for {file[0]} is underdetermined: {underdetermined}"
+                )
+                continue
+
+            values = {name: fit_result.params[name].value for name in _COEFF_NAMES}
+
+            # The expected ranges are a check on the answer, not a constraint on
+            # the fit, so a value outside its range is reported and kept.
+            out_of_range = [
+                f"{term}={values[term]:.4f} is outside the expected range "
+                f"{tuple(expected[term])}"
+                for term in expected
+                if not expected[term][0] <= values[term] <= expected[term][1]
+            ]
+            if out_of_range:
+                deferred_warnings.append(
+                    f"Fit for {file[0]}: " + "; ".join(out_of_range)
+                )
+
+            # Calculate calibrated magnitudes for every star in the image, not
+            # just the ones the fit used.
+            model_coefficients = [values[name] for name in _COEFF_NAMES]
+            cal_mag = calibrated_from_instrumental(
+                (mag_inst, color), *model_coefficients
+            )
+            if fit_diff:
+                cal_mag = cal_mag + mag_inst
+
+            # A limit of 1 arcsec here can cause a variable that really is in
+            # APASS to not match. An example is V2480 Cyg, whose VSX position is
+            # about 1.3 arcsec from its APASS DR9 position.
+            cal_mag[d2d.arcsecond > 1.5] = np.nan
+
+            for name in _COEFF_NAMES:
+                coefficients[name][rows] = values[name]
+
+            cal_mags[rows] = cal_mag
+            cat_mags[rows] = cat_mag
+            cat_colors[rows] = color
+    finally:
+        # In `finally` so the images fit before anything went wrong still reach
+        # the table, even if what went wrong was not a warning. The keys are
+        # inserted in the order the columns are added to the table in.
+        output_columns = {}
+
+        if obs_error_column is not None:
+            # How much the calibrated magnitude moves when the instrumental one
+            # does. With fit_diff the instrumental magnitude is added back to
+            # the model result, so that sensitivity is 1 + a; without it the
+            # model is the calibrated magnitude outright and a itself is the
+            # factor -- it fits to about 1 rather than about 0. Using the same
+            # factor for both would double the reported uncertainty in one of
+            # the two modes.
+            sensitivity = 1 + coefficients["a"] if fit_diff else coefficients["a"]
+
+            # Scaled from the raw per-call coefficients rather than the merged
+            # column, so that rows in other passbands are handled by the merge
+            # below instead of being recomputed from another passband's fit.
+            raw_errors = _to_float_array(result[obs_error_column])
+            scaled_errors = sensitivity * raw_errors
+
+            # An error that is not a positive, finite number is kept out of the
+            # fit above, and must not come back out as a calibrated error
+            # either: the AAVSO writer turns only non-finite errors into "na",
+            # so a zero would be submitted as a real uncertainty.
+            scaled_errors[~(np.isfinite(raw_errors) & (raw_errors > 0))] = np.nan
+
+            output_columns[_CAL_MAG_ERROR_COLUMN] = scaled_errors
+
+        output_columns[_CAL_MAG_COLUMN] = cal_mags
+        output_columns.update(coefficients)
+        output_columns["mag_cat"] = cat_mags
+        output_columns["color_cat"] = cat_colors
+
+        _write_output_columns(result, output_columns, in_passband)
+
+    for message in deferred_warnings:
+        warnings.warn(message, AstropyUserWarning, stacklevel=2)
 
     return result

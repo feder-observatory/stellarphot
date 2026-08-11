@@ -146,6 +146,11 @@ Bug Fixes
   and a partial save no longer resurrects stale values from a conflicting
   partial settings file. Encoding and OS errors while reading settings now
   raise ``SettingsFileReadError``, a ``ValueError`` subclass. [#662]
++ ``transform_to_catalog()`` now writes its results to the table before any of
+  the warnings about individual images are raised, so running with warnings as
+  errors (``-W error``) no longer discards the results of every image that was
+  fit successfully. With ``in_place=True`` the caller's table is complete even
+  when a deferred warning escalates and the call raises. [#679]
 
 2.1.2 (2026-07-19)
 -------------------

@@ -1,4 +1,5 @@
 import re
+import warnings
 
 import numpy as np
 import pytest
@@ -1068,13 +1069,34 @@ def test_transform_to_catalog_no_good_data_warns_and_nans(mocker, case):
         assert np.isnan(result[term]).all()
 
 
-def test_transform_to_catalog_one_bad_image_does_not_poison_others(mocker):
-    # A night's data can easily contain one unusable image. That image should
-    # cost its own results and nothing else -- the fits for the other images
-    # still have to come back.
-    catalog, ra, dec, instrumental = _generate_fake_catalog(20)
+def _one_good_one_bad_image(catalog, ra, dec, instrumental):
+    """
+    Observations of two images, the first usable and the second not.
 
-    observed = _combine_observed_tables(
+    The unusable image is unusable in a way that makes `transform_to_catalog`
+    give up on it partway through the loop over images, warning and naming
+    ``image_2.fit`` as it does. That is the setup both for "one bad image does
+    not cost the others their results" and for "those results are in the table
+    even when the warning is escalated to an error".
+
+    Parameters
+    ----------
+
+    catalog : `_FakeCatalogTable`
+        Catalog the observations will be matched against.
+
+    ra, dec : `astropy.units.Quantity`
+        Position of each star. Both images observe the same stars.
+
+    instrumental : `numpy.ndarray`
+        Instrumental magnitudes of the usable image.
+
+    Returns
+    -------
+    `astropy.table.Table`
+        Observations of both images, grouped by file name.
+    """
+    return _combine_observed_tables(
         _generate_observed_table(ra, dec, instrumental, file_name="image_1.fit"),
         _make_unusable_observations(
             "out_of_range",
@@ -1086,6 +1108,15 @@ def test_transform_to_catalog_one_bad_image_does_not_poison_others(mocker):
         ),
     )
 
+
+def test_transform_to_catalog_one_bad_image_does_not_poison_others(mocker):
+    # A night's data can easily contain one unusable image. That image should
+    # cost its own results and nothing else -- the fits for the other images
+    # still have to come back.
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20)
+
+    observed = _one_good_one_bad_image(catalog, ra, dec, instrumental)
+
     with pytest.warns(AstropyUserWarning, match="image_2.fit"):
         result = _run_transform_to_catalog(mocker, catalog, observed)
 
@@ -1095,6 +1126,53 @@ def test_transform_to_catalog_one_bad_image_does_not_poison_others(mocker):
         result["mag_cal"][good], catalog["mag_R"], rtol=0, atol=1e-6
     )
     assert np.isnan(result["mag_cal"][~good]).all()
+
+
+def test_transform_to_catalog_writes_results_before_warnings_escalate(mocker):
+    # Anyone running with warnings as errors -- which includes this package's
+    # own test suite -- used to lose every image's results to a warning about
+    # one image, because the columns were not written until after the loop.
+    # The warning still escalates; what is new is that the table it was handed
+    # is complete when it does. See issue #679.
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20)
+
+    observed = _one_good_one_bad_image(catalog, ra, dec, instrumental)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        with pytest.raises(AstropyUserWarning, match="image_2.fit"):
+            _run_transform_to_catalog(mocker, catalog, observed, in_place=True)
+
+    # The call raised, but the table it was handed is complete.
+    assert _TRANSFORM_OUTPUT_COLUMNS <= set(observed.colnames)
+
+    good = observed["file"] == "image_1.fit"
+
+    np.testing.assert_allclose(
+        observed["mag_cal"][good], catalog["mag_R"], rtol=0, atol=1e-6
+    )
+    assert np.isnan(observed["mag_cal"][~good]).all()
+
+
+def test_transform_to_catalog_writes_results_before_expected_warning_escalates(mocker):
+    # The warning about a term outside its expected range is not a bail-out:
+    # the fit succeeded and every star has a calibrated magnitude. Escalated to
+    # an error it nevertheless used to discard all of it, which makes it the
+    # most wasteful of the deferred warnings. See issue #679.
+    true_zero_point = 25.0
+
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20, z=true_zero_point)
+    observed = _generate_observed_table(ra, dec, instrumental)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        with pytest.raises(AstropyUserWarning, match=r"z=25\.0000 is outside"):
+            _run_transform_to_catalog(mocker, catalog, observed, in_place=True)
+
+    assert _TRANSFORM_OUTPUT_COLUMNS <= set(observed.colnames)
+
+    np.testing.assert_allclose(observed["mag_cal"], catalog["mag_R"], rtol=0, atol=1e-6)
+    np.testing.assert_allclose(observed["z"], true_zero_point, rtol=0, atol=1e-6)
 
 
 def test_transform_to_catalog_excludes_masked_catalog_entries(mocker):
