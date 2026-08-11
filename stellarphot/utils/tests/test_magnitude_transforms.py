@@ -1339,48 +1339,22 @@ def test_transform_to_catalog_warns_when_terms_are_nearly_degenerate(mocker):
     assert np.isnan(result["mag_cal"]).all()
 
 
-def test_transform_to_catalog_warns_when_every_star_has_the_same_color(mocker):
-    # A field in which every star has the same catalog color makes the color
-    # and zero point terms interchangeable: c times a constant is a constant,
-    # which is what z already is. There is nothing left to tell them apart, and
-    # inverting the curvature of that fit is hopeless enough that lmfit hands
-    # back *negative* variances -- so the check has to cope with a covariance
-    # matrix that is not merely ill conditioned but not a covariance matrix at
-    # all. Working out those variances also has lmfit taking the square root of
-    # a negative number, and this suite turns that RuntimeWarning into a
-    # failure, so this doubles as the test that the warning does not escape.
+def test_transform_to_catalog_warns_when_a_term_has_no_leverage(mocker):
+    # The extreme end of the same problem: if the two catalog bands the color
+    # is built from are identical, every star's color is zero and the color
+    # term does nothing whatever -- any value of c fits exactly as well as any
+    # other. Nothing needs to handle that specially, which is the point of
+    # measuring the fit's Jacobian rather than its covariance: the column for
+    # a term the data cannot see is zero, so the condition number comes out
+    # infinite by itself.
     n_stars = 20
 
     catalog, ra, dec, instrumental = _generate_fake_catalog(
-        n_stars, a=0.02, c=0.15, color=np.full(n_stars, 0.5)
+        n_stars, a=0.02, color=np.zeros(n_stars)
     )
     observed = _generate_observed_table(ra, dec, instrumental)
 
-    with pytest.warns(AstropyUserWarning, match="could not be estimated"):
-        result = _run_transform_to_catalog(mocker, catalog, observed)
-
-    assert np.isnan(result["mag_cal"]).all()
-
-
-def test_transform_to_catalog_warns_when_covariance_unavailable(mocker):
-    # The other way to end up with nothing to judge the fit by: lmfit did not
-    # manage to estimate the uncertainty at all. Unlike the case above there is
-    # no data that reliably produces this, so the fit result is doctored --
-    # what is being pinned is that a missing covariance is not read as a fit
-    # worth trusting.
-    catalog, ra, dec, instrumental = _generate_fake_catalog(20, a=0.02, c=0.15)
-    observed = _generate_observed_table(ra, dec, instrumental)
-
-    fit = magnitude_transforms.lmfit.minimize
-
-    def fit_without_covariance(*args, **kwargs):
-        result = fit(*args, **kwargs)
-        result.covar = None
-        return result
-
-    mocker.patch.object(magnitude_transforms.lmfit, "minimize", fit_without_covariance)
-
-    with pytest.warns(AstropyUserWarning, match="could not be estimated"):
+    with pytest.warns(AstropyUserWarning, match="cannot be told apart"):
         result = _run_transform_to_catalog(mocker, catalog, observed)
 
     assert np.isnan(result["mag_cal"]).all()

@@ -35,7 +35,7 @@ _CAL_MAG_ERROR_COLUMN = "mag_cal_error"
 # How strongly the terms of the fit may be correlated with each other before
 # their individual values stop meaning anything. See `_underdetermined_reason`,
 # which explains how this was arrived at.
-_MAX_CORRELATION_CONDITION = 1e7
+_MAX_DESIGN_CONDITION = 3e3
 
 
 def calibrated_from_instrumental(X, a, b, c, d, z):
@@ -131,28 +131,35 @@ def _underdetermined_reason(fit_result, vary):
     `lmfit` reports success whether or not the data can actually tell the
     terms being fit apart from each other, so a successful fit still has to be
     checked before its coefficients are used. What is needed is already in the
-    result: how strongly the terms are correlated with each other.
+    result: ``jac``, how much each term moves the residual at each star, which
+    is what decides whether the terms can be distinguished.
 
-    The measure used is the condition number of the *correlation* matrix
-    rather than of the covariance matrix itself, so that it does not depend on
-    the wildly different scales of the terms -- ``mag_inst`` runs around -10
-    while ``color`` runs around 0.5, which by itself pushes the condition
-    number of the covariance matrix of a healthy five-term fit past 1e6.
+    That is used rather than the covariance matrix, which answers the same
+    question but is an inverse, so on hopeless data it comes back with
+    negative variances or does not come back at all, and every one of those
+    would need a case of its own here. ``jac`` is evaluated rather than
+    inverted, so it is always finite: a term the data says nothing about
+    leaves its column zero, and the condition number then comes out infinite
+    on its own rather than by special arrangement.
+
+    The columns are scaled to unit length first, so the measure does not
+    depend on the wildly different scales of the terms -- ``mag_inst`` runs
+    around -10 while ``color`` runs around 0.5.
 
     The threshold is a judgement call, because degeneracy is a continuum
-    rather than a state. Measured over synthetic fits, the correlation
-    condition number of a healthy three-term fit stays below about 2e4 even
-    when every star has nearly the same brightness; a five-term fit over a
-    three magnitude range reaches about 1e6, and over a one magnitude range
-    about 4e7 -- and at that point it really does return coefficients wrong by
-    several magnitudes, so rejecting it is right. Data whose color is exactly
-    a linear function of instrumental magnitude lands around 1e14.
+    rather than a state. Measured over synthetic fits, a healthy three-term
+    fit stays below about 400 even when every star has nearly the same
+    brightness; a five-term fit over a three magnitude range reaches about
+    750, and over a one magnitude range about 7000 -- and at that point it
+    really does return coefficients wrong by several magnitudes, so rejecting
+    it is right. Data whose color is exactly a linear function of
+    instrumental magnitude lands around 3e7.
 
     Note that this cannot catch every fit whose coefficients are useless. A
     field correlated tightly enough to give coefficients wrong by a magnitude
-    can still sit an order of magnitude below the threshold. Reporting the
-    per-coefficient uncertainties the fit already works out would let a caller
-    judge the cases this necessarily lets through.
+    can still sit just below the threshold. Reporting the per-coefficient
+    uncertainties the fit already works out would let a caller judge the
+    cases this necessarily lets through.
 
     Parameters
     ----------
@@ -168,27 +175,14 @@ def _underdetermined_reason(fit_result, vary):
     str or None
         Description of the problem, or `None` if the fit is determined.
     """
-    # A variance that is not a positive, finite number means the covariance
-    # could not be worked out, which happens when the terms are so nearly
-    # indistinguishable that inverting the curvature of the fit is hopeless --
-    # a field in which every star has the same catalog color, say, where the
-    # variances of the color and zero point terms come back negative. The
-    # answer is the same as no covariance at all: nothing is known about how
-    # well these terms are determined, so they must not be trusted.
-    variances = np.diag(fit_result.covar) if fit_result.covar is not None else None
-    if (
-        variances is None
-        or not np.all(np.isfinite(variances))
-        or np.any(variances <= 0)
-    ):
-        return (
-            f"the uncertainty in the terms {list(vary)} could not be estimated "
-            "at all, which means this data does not constrain them"
-        )
+    jacobian = fit_result.jac
 
-    uncertainties = np.sqrt(variances)
-    correlation = fit_result.covar / np.outer(uncertainties, uncertainties)
-    if np.linalg.cond(correlation) > _MAX_CORRELATION_CONDITION:
+    # Leaving a zero-length column alone keeps it zero, which is what makes
+    # the condition number infinite for a term the data cannot see at all.
+    lengths = np.linalg.norm(jacobian, axis=0)
+    scaled = jacobian / np.where(lengths > 0, lengths, 1.0)
+
+    if np.linalg.cond(scaled) > _MAX_DESIGN_CONDITION:
         return (
             f"the terms {list(vary)} cannot be told apart from each other in "
             "this data -- most often because color is very nearly a linear "
@@ -646,23 +640,12 @@ def transform_to_catalog(
             # best starting guess available.
             params["z"].set(value=float(np.median(fit_data)))
 
-        with warnings.catch_warnings():
-            # Working out the parameter uncertainties is part of the fit, and
-            # on data whose terms are indistinguishable -- a field in which
-            # every star has the same catalog color, say -- that means taking
-            # the square root of a negative number. The warning that produces
-            # says nothing the caller can act on, and would be an outright
-            # exception for anyone running with warnings as errors. What it
-            # indicates is not ignored: the covariance it came from is checked
-            # below, and reported in terms of the data rather than of the
-            # arithmetic.
-            warnings.simplefilter("ignore", RuntimeWarning)
-            fit_result = lmfit.minimize(
-                _transform_residual,
-                params,
-                method="least_squares",
-                args=(fit_mag, fit_color, fit_data, weights),
-            )
+        fit_result = lmfit.minimize(
+            _transform_residual,
+            params,
+            method="least_squares",
+            args=(fit_mag, fit_color, fit_data, weights),
+        )
 
         if not fit_result.success:
             warnings.warn(
