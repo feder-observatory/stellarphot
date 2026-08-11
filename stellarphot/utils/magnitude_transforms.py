@@ -185,8 +185,7 @@ def _underdetermined_reason(fit_result, vary):
     if np.linalg.cond(scaled) > _MAX_DESIGN_CONDITION:
         return (
             f"the terms {list(vary)} cannot be told apart from each other in "
-            "this data -- most often because color is very nearly a linear "
-            "function of instrumental magnitude"
+            "this data"
         )
 
     return None
