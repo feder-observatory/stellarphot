@@ -314,6 +314,59 @@ def _generate_observed_table(
     return observed.group_by("file")
 
 
+def _noisy_observations(ra, dec, instrumental, sigma, seed, mag_error=None, **kwargs):
+    """
+    Generate observations that miss the catalog by a known amount.
+
+    A catalog from `_generate_fake_catalog` follows the transform model to
+    within `_FAKE_CATALOG_SCATTER`, so observations of it taken straight from
+    the magnitudes it was built from fit essentially exactly. That is what
+    makes the recovery tests above able to demand 1e-6, but it also means the
+    fit's own view of how well it did -- the coefficient uncertainties and the
+    reduced chi-square -- comes out at the 1e-13 level and says nothing. Any
+    test that asks what those numbers *mean* needs data that scatters about
+    the model by a realistic, known amount instead.
+
+    Parameters
+    ----------
+
+    ra, dec : `astropy.units.Quantity`
+        Position of each star.
+
+    instrumental : `numpy.ndarray`
+        Noiseless instrumental magnitude of each star, i.e. the magnitudes the
+        catalog was generated from.
+
+    sigma : float
+        Standard deviation of the Gaussian noise added to those magnitudes.
+
+    seed : int
+        Seed for the noise, so that a test gets the same numbers every run.
+
+    mag_error : float or array-like, optional
+        Uncertainty to report for each magnitude. Defaults to ``sigma``, which
+        is the truthful value; passing anything else is how a test says the
+        reported errors are wrong.
+
+    **kwargs
+        Passed on to `_generate_observed_table`.
+
+    Returns
+    -------
+    `astropy.table.Table`
+        Observations of a single image, grouped by file name.
+    """
+    noise = np.random.default_rng(seed).normal(0.0, sigma, size=np.shape(instrumental))
+
+    return _generate_observed_table(
+        ra,
+        dec,
+        np.asarray(instrumental, dtype=float) + noise,
+        mag_error=sigma if mag_error is None else mag_error,
+        **kwargs,
+    )
+
+
 def _combine_observed_tables(*tables):
     """
     Stack several per-image observation tables and regroup them by file.
@@ -527,15 +580,30 @@ def test_transform_to_catalog_match_tolerance(mocker, offset, expect_nan):
     )
 
 
-# The columns transform_to_catalog adds to the table it is given.
-_TRANSFORM_OUTPUT_COLUMNS = {
-    "mag_cal",
-    "mag_cal_error",
+# Everything that describes the fit for one image rather than one star: the
+# coefficients, how well each of them was pinned down, and how well the model
+# came out fitting the data. All of them are repeated down every row of the
+# image, and all of them are NaN for an image that could not be fit, so the
+# tests for an unfittable image loop over the lot.
+_FIT_COLUMNS = (
     "a",
     "b",
     "c",
     "d",
     "z",
+    "a_error",
+    "b_error",
+    "c_error",
+    "d_error",
+    "z_error",
+    "fit_redchi",
+)
+
+# The columns transform_to_catalog adds to the table it is given.
+_TRANSFORM_OUTPUT_COLUMNS = {
+    "mag_cal",
+    "mag_cal_error",
+    *_FIT_COLUMNS,
     "mag_cat",
     "color_cat",
 }
@@ -665,6 +733,7 @@ def test_transform_to_catalog_weights_by_inverse_error(mocker):
     # and says so with a large error: weighted correctly it is ignored,
     # weighted backwards it takes over (z comes out near 18.5, not 20).
     n_stars = 20
+    sigma = 1e-4
 
     catalog, ra, dec, instrumental = _generate_fake_catalog(n_stars)
 
@@ -676,13 +745,191 @@ def test_transform_to_catalog_weights_by_inverse_error(mocker):
     errors = np.full(n_stars, 0.001)
     errors[0] = 10.0
 
-    observed = _generate_observed_table(ra, dec, observed_mags, mag_error=errors)
+    # The noise is an order of magnitude below the tolerances asserted here, so
+    # it changes nothing about what this test is asking; it is added only
+    # because a residual of exactly zero is a state real data never reaches.
+    observed = _noisy_observations(
+        ra, dec, observed_mags, sigma, seed=8811, mag_error=errors
+    )
 
     result = _run_transform_to_catalog(mocker, catalog, observed)
 
     np.testing.assert_allclose(result["z"], _FAKE_CATALOG_ZERO_POINT, rtol=0, atol=1e-3)
     np.testing.assert_allclose(result["a"], 0.0, rtol=0, atol=1e-3)
     np.testing.assert_allclose(result["c"], 0.0, rtol=0, atol=1e-3)
+
+
+def test_transform_to_catalog_reports_coefficient_uncertainties(mocker):
+    # How well the fit pinned each term down is what separates a transform
+    # worth applying from one fit to stars that could barely tell its terms
+    # apart, and until now the fit worked it out and threw it away. See issue
+    # #677.
+    n_stars = 50
+    sigma = 0.02
+
+    catalog, ra, dec, instrumental = _generate_fake_catalog(n_stars, a=0.02, c=0.15)
+    observed = _noisy_observations(ra, dec, instrumental, sigma, seed=20260811)
+
+    result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    for term in ("a", "c", "z"):
+        reported = np.asarray(result[f"{term}_error"])
+        assert np.isfinite(reported).all(), term
+        assert (reported > 0).all(), term
+        # One fit per image, so every row of the image carries the same value.
+        assert (reported == reported[0]).all(), term
+
+    # A term that is not fit is held at exactly zero and is therefore known
+    # exactly. Its uncertainty is exactly zero -- not NaN, and not a small
+    # number, which is the same exact comparison
+    # test_transform_to_catalog_fixes_unvaried_terms makes of the value.
+    assert (np.asarray(result["b_error"]) == 0.0).all()
+    assert (np.asarray(result["d_error"]) == 0.0).all()
+
+    # The numbers are the right size, not merely positive: each term really is
+    # within a few of its reported uncertainties of the value the catalog was
+    # built from.
+    for term, truth in (("a", 0.02), ("c", 0.15), ("z", _FAKE_CATALOG_ZERO_POINT)):
+        assert abs(result[term][0] - truth) < 3 * result[f"{term}_error"][0], term
+
+
+def test_transform_to_catalog_uncertainty_falls_as_stars_are_added(mocker):
+    # The test that makes the numbers above uncertainties rather than arbitrary
+    # ones: ten times as many stars, each measured just as well, pin the zero
+    # point down about sqrt(10) times better. Nothing that was not a real
+    # uncertainty would scale that way. See issue #677.
+    sigma = 0.02
+
+    # lmfit scales the covariance by the reduced chi-square, so a single fit's
+    # reported uncertainty carries the scatter of its own noise realization --
+    # about 15% at 25 stars, which is most of the effect being measured.
+    # Averaging a handful of realizations makes this a statement about the
+    # design rather than about one draw.
+    seeds = (54321, 1, 2, 3, 7)
+    z_error = {}
+
+    for n_stars in (25, 250):
+        catalog, ra, dec, instrumental = _generate_fake_catalog(n_stars)
+        reported = [
+            _run_transform_to_catalog(
+                mocker,
+                catalog,
+                _noisy_observations(ra, dec, instrumental, sigma, seed=seed),
+            )["z_error"][0]
+            for seed in seeds
+        ]
+        z_error[n_stars] = np.mean(reported)
+
+    # Roughly sqrt(10), not exactly: the 25-star fit is not an exactly scaled
+    # copy of the 250-star one, since its stars sample the same magnitude and
+    # color ranges more coarsely. The measured ratio is about 3.4 against a
+    # sqrt(10) of 3.16 -- what matters is that it is nowhere near 1, which is
+    # what a number that only looked like an uncertainty would give.
+    assert z_error[25] / z_error[250] == pytest.approx(np.sqrt(10), rel=0.2)
+
+
+@pytest.mark.parametrize(
+    "error_scale, expected_redchi",
+    [
+        # Errors that describe the data: the model is as far from the stars as
+        # they claim to be uncertain, which is what a reduced chi-square of one
+        # means.
+        (1.0, 1.0),
+        # Errors ten times too small. Chi-square goes as the square of that, so
+        # a hundred -- and that factor of a hundred is the whole reason to
+        # report the number.
+        (0.1, 100.0),
+    ],
+)
+def test_transform_to_catalog_reports_reduced_chi_square(
+    mocker, error_scale, expected_redchi
+):
+    # See issue #677.
+    n_stars = 100
+    sigma = 0.02
+
+    catalog, ra, dec, instrumental = _generate_fake_catalog(n_stars)
+    observed = _noisy_observations(
+        ra, dec, instrumental, sigma, seed=13579, mag_error=error_scale * sigma
+    )
+
+    result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    reported = np.asarray(result["fit_redchi"])
+    # One fit per image, so this too is repeated down every row.
+    assert (reported == reported[0]).all()
+    assert reported[0] == pytest.approx(expected_redchi, rel=0.3)
+
+
+def _break_the_covariance(mocker, how):
+    """
+    Make the fit come back with a covariance matrix that cannot be used.
+
+    Neither state is reachable from data. ``lmfit.minimize`` only leaves
+    ``covar`` unset when inverting the design matrix raises, which the
+    degeneracy check upstream of it rejects first, so this has to be arranged
+    rather than provoked -- otherwise the code that handles it is never run at
+    all. The real fit is still performed, so everything except the covariance
+    is exactly what the data gives.
+
+    Parameters
+    ----------
+
+    mocker : `pytest_mock.MockerFixture`
+        Fixture used to patch the fitter.
+
+    how : str
+        ``"missing"`` for no covariance at all, or ``"not_finite"`` for one
+        full of NaN.
+    """
+    real_minimize = magnitude_transforms.lmfit.minimize
+
+    def minimize_then_spoil_covariance(*args, **kwargs):
+        fit_result = real_minimize(*args, **kwargs)
+        match how:
+            case "missing":
+                fit_result.covar = None
+            case "not_finite":
+                fit_result.covar = np.full_like(fit_result.covar, np.nan)
+            case _:  # pragma: no cover
+                raise ValueError(f"Unknown case {how!r}")
+        return fit_result
+
+    mocker.patch.object(
+        magnitude_transforms.lmfit,
+        "minimize",
+        side_effect=minimize_then_spoil_covariance,
+    )
+
+
+@pytest.mark.parametrize("how", ["missing", "not_finite"])
+def test_transform_to_catalog_nans_uncertainties_without_a_covariance(mocker, how):
+    # A fit can converge and still leave nothing to work the uncertainties out
+    # from. The coefficients are real and are reported; the uncertainties are
+    # not available and say so, rather than being filled in from the diagonal
+    # of a matrix that is missing or full of NaN. A non-finite covariance has
+    # to be caught here as firmly as a missing one -- it is the shape that
+    # would otherwise be turned into a confident wrong answer downstream. See
+    # issue #677.
+    n_stars = 50
+    sigma = 0.02
+
+    catalog, ra, dec, instrumental = _generate_fake_catalog(n_stars, a=0.02, c=0.15)
+    observed = _noisy_observations(ra, dec, instrumental, sigma, seed=246810)
+
+    _break_the_covariance(mocker, how)
+
+    result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    for term in ("a", "b", "c", "d", "z"):
+        assert np.isnan(result[f"{term}_error"]).all(), term
+        # The fit itself succeeded, so its answers are all still there.
+        assert np.isfinite(result[term]).all(), term
+
+    assert np.isfinite(result["mag_cal"]).all()
+    # The reduced chi-square is worked out from the residuals, not from the
+    # covariance, so it survives.
+    assert np.isfinite(result["fit_redchi"]).all()
 
 
 def test_transform_to_catalog_fits_each_image_separately(mocker):
@@ -1092,8 +1339,8 @@ def test_transform_to_catalog_no_good_data_warns_and_nans(mocker, case, caplog):
     assert any("image_1.fit" in r.message for r in caplog.records)
 
     assert np.isnan(result["mag_cal"]).all()
-    for term in ("a", "b", "c", "d", "z"):
-        assert np.isnan(result[term]).all()
+    for column in _FIT_COLUMNS:
+        assert np.isnan(result[column]).all(), column
 
 
 def _one_good_one_bad_image(catalog, ra, dec, instrumental):
@@ -1489,8 +1736,8 @@ def test_transform_to_catalog_warns_when_too_few_stars_to_fit(mocker, caplog):
     assert any("underdetermined" in r.message for r in caplog.records)
 
     assert np.isnan(result["mag_cal"]).all()
-    for term in ("a", "b", "c", "d", "z"):
-        assert np.isnan(result[term]).all()
+    for column in _FIT_COLUMNS:
+        assert np.isnan(result[column]).all(), column
 
 
 def test_transform_to_catalog_warns_when_terms_are_degenerate(mocker, caplog):

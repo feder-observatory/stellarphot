@@ -35,6 +35,14 @@ _DEFAULT_EXPECTED = {"z": (18.0, 22.0)}
 _CAL_MAG_COLUMN = "mag_cal"
 _CAL_MAG_ERROR_COLUMN = "mag_cal_error"
 
+# Suffix of the column reporting the uncertainty of a fit coefficient, so that
+# ``a`` is reported alongside ``a_error``. Matches the mag/mag_error and
+# mag_cal/mag_cal_error pairs already in the table.
+_COEFF_ERROR_SUFFIX = "_error"
+
+# Name of the column reporting how well one image's transform fit its stars.
+_FIT_REDCHI_COLUMN = "fit_redchi"
+
 # How close an observed star must be to a catalog entry, in arcseconds. Two
 # limits rather than one: a star must match tightly to be allowed to influence
 # the fit, and less tightly to be given values derived from its match.
@@ -204,6 +212,59 @@ def _underdetermined_reason(fit_result, vary):
         )
 
     return None
+
+
+def _coefficient_uncertainties(fit_result):
+    """
+    Uncertainty of each coefficient of a fit, when the fit can supply them.
+
+    This is the single place the question "does this fit have a usable
+    covariance?" is answered, so that everything derived from the covariance
+    agrees about whether there is one to derive anything from.
+
+    Note that ``fit_result.errorbars`` is deliberately *not* what is checked.
+    `lmfit` clears that flag whenever any varied term comes out with a
+    standard error of exactly zero, and that is what a perfect fit gives:
+    data that follows the model to the last bit has a covariance that really
+    is zero, and zero is the right answer there rather than a missing one.
+    What makes the uncertainties unavailable is ``covar`` being absent
+    altogether, or having non-finite entries -- an inverse that came back with
+    NaN in it looks like a matrix and is not one, and anything that reads it
+    without checking reports a confident wrong number instead of failing.
+
+    Parameters
+    ----------
+
+    fit_result : `lmfit.minimizer.MinimizerResult`
+        Result of fitting one image.
+
+    Returns
+    -------
+    uncertainties : dict
+        Standard error of each term of the transform model, keyed by term
+        name. A term that was not varied was held at exactly zero and is
+        therefore known exactly, so its uncertainty is ``0.0``. Every value is
+        NaN if the covariance cannot be used.
+
+    covar : `numpy.ndarray` or None
+        The covariance matrix, or `None` if it cannot be used. Anything that
+        needs the correlations between the terms as well as their individual
+        uncertainties should take the matrix from here rather than asking the
+        fit result again, so that there is only ever one verdict.
+    """
+    covar = fit_result.covar
+
+    if covar is None or not np.all(np.isfinite(covar)):
+        return {name: np.nan for name in _COEFF_NAMES}, None
+
+    return {
+        name: (
+            np.nan
+            if fit_result.params[name].stderr is None
+            else float(fit_result.params[name].stderr)
+        )
+        for name in _COEFF_NAMES
+    }, covar
 
 
 def _check_known_terms(terms, argument_name):
@@ -497,11 +558,12 @@ def transform_to_catalog(
         Table containing the calibrated magnitudes and the fit parameters. The
         columns added are ``mag_cal`` and, if ``obs_error_column`` was given,
         ``mag_cal_error``; the fit coefficients ``a``, ``b``, ``c``, ``d`` and
-        ``z``; and ``mag_cat`` and ``color_cat``, the matched catalog
-        magnitude and color. ``mag_cal`` is NaN for rows with no usable
-        catalog match, as are all of the columns for rows in an image that
-        could not be fit and for rows in other passbands that had no value
-        already.
+        ``z``, with their uncertainties ``a_error`` through ``z_error`` and
+        the goodness of fit ``fit_redchi``; and ``mag_cat`` and ``color_cat``,
+        the matched catalog magnitude and color. ``mag_cal`` is NaN for rows
+        with no usable catalog match, as are all of the columns for rows in an
+        image that could not be fit and for rows in other passbands that had
+        no value already.
 
         Every column that comes from the catalog match -- ``mag_cal``,
         ``mag_cal_error``, ``mag_cat`` and ``color_cat`` -- is NaN for a star
@@ -513,11 +575,39 @@ def transform_to_catalog(
     Notes
     -----
 
+    The coefficients, their uncertainties and ``fit_redchi`` describe the fit
+    for one image rather than any one star, so each of them is the same on
+    every row of that image. A term that is not in ``vary`` is held at exactly
+    zero and is therefore known exactly, so its uncertainty is exactly zero
+    rather than a small number. The uncertainties are NaN, while the
+    coefficients themselves are still reported, for an image whose fit
+    converged but left no usable covariance behind.
+
+    ``fit_redchi`` is a reduced chi-square only when ``obs_error_column`` is
+    given, because only then is anything dividing the residuals: it is the
+    mean squared residual in units of the errors that were supplied, and a
+    value near one says the model misses the stars by about as much as they
+    claim to be uncertain. Without an error column the fit is unweighted and
+    the same column holds the mean squared residual in **mag squared** -- the
+    same name and a completely different scale, so values from a weighted and
+    an unweighted fit must not be compared with each other.
+
+    The reported uncertainties are scaled by ``fit_redchi``, because `lmfit`'s
+    ``scale_covar`` is left on. They therefore describe the scatter actually
+    observed about the fit rather than the instrumental errors that were
+    quoted, which is the more robust of the two: it stays right when the
+    quoted errors are systematically wrong. The price is that ``fit_redchi``
+    and the ``*_error`` columns are not independent diagnostics. An image
+    whose stars scatter twice as far from the model as they claim reports both
+    a ``fit_redchi`` near four and coefficient uncertainties twice as large,
+    and that is one observation rather than two agreeing ones.
+
     The values in ``mag_cal_error`` are the instrumental errors scaled by how
     much the calibrated magnitude moves when the instrumental one does, which
     is ``1 + a`` when ``fit_diff`` is ``True`` and ``a`` when it is ``False``.
     That is not a propagation of the uncertainty in the fit itself, and so
-    understates the true uncertainty.
+    understates the true uncertainty; the ``*_error`` columns are where that
+    uncertainty can be read off in the meantime.
     """
     if obs_error_column is None:
         warnings.warn(
@@ -574,6 +664,8 @@ def transform_to_catalog(
     # this passband, and is written by row index below. Rows that are never
     # written keep the NaN they start with.
     coefficients = {name: np.full(n_rows, np.nan) for name in _COEFF_NAMES}
+    coefficient_errors = {name: np.full(n_rows, np.nan) for name in _COEFF_NAMES}
+    fit_redchis = np.full(n_rows, np.nan)
     cal_mags = np.full(n_rows, np.nan)
     cal_errors = np.full(n_rows, np.nan)
     cat_mags = np.full(n_rows, np.nan)
@@ -737,6 +829,16 @@ def transform_to_catalog(
 
         values = {name: fit_result.params[name].value for name in _COEFF_NAMES}
 
+        # How well the fit pinned each term down, and how well the model it
+        # landed on describes the stars. Both are answers about the image
+        # rather than about any one star, and both are reported even when
+        # they are the only thing that would tell a caller the coefficients
+        # below are not worth applying.
+        # The covariance matrix comes back too, but nothing here needs the
+        # correlations between the terms -- only the individual
+        # uncertainties, which are its diagonal.
+        uncertainties, _ = _coefficient_uncertainties(fit_result)
+
         # The expected ranges are a check on the answer, not a constraint on
         # the fit, so a value outside its range is reported and kept.
         out_of_range = [
@@ -768,6 +870,9 @@ def transform_to_catalog(
 
         for name in _COEFF_NAMES:
             coefficients[name][rows] = values[name]
+            coefficient_errors[name][rows] = uncertainties[name]
+
+        fit_redchis[rows] = fit_result.redchi
 
         cal_mags[rows] = cal_mag
         cat_mags[rows] = np.where(matched, cat_mag, np.nan)
@@ -812,6 +917,16 @@ def transform_to_catalog(
     output_columns.update(coefficients)
     output_columns["mag_cat"] = cat_mags
     output_columns["color_cat"] = cat_colors
+
+    # The fit's own account of how it did. Last, because the columns above
+    # are what a caller reaches for first and their order predates these.
+    output_columns.update(
+        {
+            name + _COEFF_ERROR_SUFFIX: errors_for_name
+            for name, errors_for_name in coefficient_errors.items()
+        }
+    )
+    output_columns[_FIT_REDCHI_COLUMN] = fit_redchis
 
     _write_output_columns(result, output_columns, in_passband)
 

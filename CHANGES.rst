@@ -18,6 +18,16 @@ New Features
   to the variable-aperture defaults (multiples of the measured FWHM, not
   pixels), with a warning (see issue ``#654``). A file written by a
   newer stellarphot raises ``NewerFormatError``. [#656]
++ ``transform_to_catalog()`` now reports how good each image's fit was, in six
+  new columns repeated down every row of that image alongside the coefficients
+  themselves: ``a_error`` through ``z_error``, the uncertainty of each
+  coefficient, and ``fit_redchi``. A term that is not being fit is held at
+  exactly zero and its uncertainty is exactly zero; the uncertainties are NaN,
+  while the coefficients are still reported, for a fit that converged but left
+  no usable covariance behind. ``fit_redchi`` is a reduced chi-square only
+  when ``obs_error_column`` is given -- unweighted it is the mean squared
+  residual in mag squared -- and, because ``lmfit`` scales the covariance by
+  it, it and the ``*_error`` columns are not independent diagnostics. [#677]
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
