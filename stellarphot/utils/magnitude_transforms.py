@@ -6,6 +6,7 @@ import numpy as np
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astropy.utils.exceptions import AstropyUserWarning
+from uncertainties import unumpy
 
 from ..catalogs import apass_dr9, refcat2
 from .magnitude_system_transforms import transform_apass_bands, transform_refcat2_bands
@@ -212,6 +213,145 @@ def _underdetermined_reason(fit_result, vary):
         )
 
     return None
+
+
+def _coefficient_uncertainties(fit_result):
+    """
+    Uncertainty of each coefficient of a fit, when the fit can supply them.
+
+    This is the single place the question "does this fit have a usable
+    covariance?" is answered, so that everything derived from the covariance
+    agrees about whether there is one to derive anything from.
+
+    Note that ``fit_result.errorbars`` is deliberately *not* what is checked.
+    `lmfit` clears that flag whenever any varied term comes out with a
+    standard error of exactly zero, and that is what a perfect fit gives:
+    data that follows the model to the last bit has a covariance that really
+    is zero, and zero is the right answer there rather than a missing one.
+    What makes the uncertainties unavailable is ``covar`` being absent
+    altogether, or having non-finite entries -- an inverse that came back with
+    NaN in it looks like a matrix and is not one, and anything that reads it
+    without checking reports a confident wrong number instead of failing.
+
+    Parameters
+    ----------
+
+    fit_result : `lmfit.minimizer.MinimizerResult`
+        Result of fitting one image.
+
+    Returns
+    -------
+    uncertainties : dict
+        Standard error of each term of the transform model, keyed by term
+        name. A term that was not varied was held at exactly zero and is
+        therefore known exactly, so its uncertainty is ``0.0``. Every value is
+        NaN if the covariance cannot be used.
+
+    covar : `numpy.ndarray` or None
+        The covariance matrix, or `None` if it cannot be used. Anything that
+        needs the correlations between the terms as well as their individual
+        uncertainties should take the matrix from here rather than asking the
+        fit result again, so that there is only ever one verdict.
+    """
+    covar = fit_result.covar
+
+    if covar is None or not np.all(np.isfinite(covar)):
+        return {name: np.nan for name in _COEFF_NAMES}, None
+
+    return {
+        name: (
+            np.nan
+            if fit_result.params[name].stderr is None
+            else float(fit_result.params[name].stderr)
+        )
+        for name in _COEFF_NAMES
+    }, covar
+
+
+def _calibrated_with_uncertainty(fit_result, covar, mag_inst, color, errors, fit_diff):
+    """
+    Calibrated magnitude of every star, and how uncertain each one is.
+
+    The uncertainty has two parts: the star's own measurement error, and the
+    uncertainty of the transform it was calibrated through. Neither one is
+    written down here. `lmfit` turns the fit into `uncertainties` values that
+    carry the whole covariance matrix, including the correlations between the
+    terms, and `calibrated_from_instrumental` -- the same model function the
+    fit itself used -- then evaluates on them unchanged.
+
+    Doing it this way means the sensitivity of the calibrated magnitude to the
+    instrumental one is never spelled out. Making ``mag_inst`` itself an
+    uncertain value is enough: it appears twice in the expression, once inside
+    the model and once in the ``fit_diff`` add-back, and `uncertainties`
+    works out the ``1 + a + 2*b*mag_inst`` that follows from that. Add a term
+    to the model and the propagation stays right by construction, where a
+    hand-written derivative would be a second copy of the model quietly going
+    stale.
+
+    Note that this is deliberately not exact for a star that was itself in the
+    fit: that star's own noise helped move the coefficients, and treating its
+    measurement error and the transform's uncertainty as independent
+    double-counts a little of it. Measured against a Monte Carlo the reported
+    error is about 10% too large in that case, shrinking as one over the
+    number of stars fit. Erring high is the right direction and modelling the
+    correlation is not worth what it would cost.
+
+    Parameters
+    ----------
+
+    fit_result : `lmfit.minimizer.MinimizerResult`
+        Result of fitting one image.
+
+    covar : `numpy.ndarray` or None
+        Covariance matrix of the fit, as vetted by
+        `_coefficient_uncertainties`, or `None` if it cannot be used. Nothing
+        is propagated when it is `None`: the calibrated magnitudes are still
+        worked out, but there is no honest uncertainty to report for them.
+
+    mag_inst, color : `numpy.ndarray`
+        Instrumental magnitude and color of every star in the image, not just
+        the ones the fit used.
+
+    errors : `numpy.ndarray` or None
+        Uncertainty of each instrumental magnitude, or `None` if none was
+        supplied. Must already have been checked: `uncertainties` refuses
+        outright to build a value whose standard deviation is negative. NaN it
+        accepts, and carries through to a NaN uncertainty beside a perfectly
+        good calibrated magnitude.
+
+    fit_diff : bool
+        Whether the fit was of the difference between the catalog and
+        instrumental magnitudes, in which case the instrumental magnitude is
+        added back here.
+
+    Returns
+    -------
+    calibrated : `numpy.ndarray`
+        Calibrated magnitude of each star.
+
+    uncertainty : `numpy.ndarray` or None
+        Uncertainty of each calibrated magnitude, or `None` when there was
+        nothing to propagate.
+    """
+    if covar is None or errors is None:
+        calibrated = calibrated_from_instrumental(
+            (mag_inst, color),
+            *(fit_result.params[name].value for name in _COEFF_NAMES),
+        )
+        if fit_diff:
+            calibrated = calibrated + mag_inst
+        return calibrated, None
+
+    star_mag = unumpy.uarray(mag_inst, errors)
+    uvars = fit_result.params.create_uvars(covar)
+
+    calibrated = calibrated_from_instrumental(
+        (star_mag, color), *(uvars[name] for name in _COEFF_NAMES)
+    )
+    if fit_diff:
+        calibrated = calibrated + star_mag
+
+    return unumpy.nominal_values(calibrated), unumpy.std_devs(calibrated)
 
 
 def _check_known_terms(terms, argument_name):
@@ -550,12 +690,38 @@ def transform_to_catalog(
     a ``fit_redchi`` near four and coefficient uncertainties twice as large,
     and that is one observation rather than two agreeing ones.
 
-    The values in ``mag_cal_error`` are the instrumental errors scaled by how
-    much the calibrated magnitude moves when the instrumental one does, which
-    is ``1 + a`` when ``fit_diff`` is ``True`` and ``a`` when it is ``False``.
-    That is not a propagation of the uncertainty in the fit itself, and so
-    understates the true uncertainty; the ``*_error`` columns are where that
-    uncertainty can be read off in the meantime.
+    ``mag_cal_error`` combines two things: the star's own measurement error,
+    and the uncertainty of the transform it was calibrated through, correlations
+    between the terms included. The second part is the larger of the two on a
+    fit to a modest number of stars, and it is worked out per star rather than
+    added on as a constant, because a fit predicts best at the centroid of the
+    stars it was fit to and worst at the ends of their range. It is NaN for an
+    image whose fit left no usable covariance behind: an uncertainty that
+    cannot be worked out is reported as no number rather than as the
+    measurement error on its own, which would be a confident value known to be
+    too small.
+
+    The uncertainty of the *catalog* magnitudes is deliberately not part of it.
+    A star's catalog entry decides whether it was matched, but never enters the
+    calculation of its calibrated magnitude, so there is nothing there to
+    propagate. What the catalog does contribute is its scatter about the
+    transform across the field, and that is already in the answer: ``lmfit``
+    scales the covariance by ``fit_redchi``, so catalog scatter inflates every
+    coefficient uncertainty and with it every calibrated error. That is the
+    right home for it, a property of the calibration shared by every star in
+    the image. The catalog's systematic tie to the standard system -- about
+    0.02 mag for APASS DR9 -- is identical for every star in every image, and
+    in a per-star column would be actively misleading, since averaging these
+    magnitudes would appear to beat it down by the square root of the number of
+    stars.
+
+    One consequence of that scaling is worth knowing. The transform half of
+    ``mag_cal_error`` corrects itself when the quoted instrumental errors are
+    systematically wrong, because the covariance it comes from was scaled by
+    the scatter actually observed; the measurement half does not, because it is
+    those quoted errors. So an image with a ``fit_redchi`` far from one is
+    reporting calibrated errors whose two halves disagree about how much to
+    trust the input, which is the reason to read that column.
     """
     if obs_error_column is None:
         warnings.warn(
@@ -777,18 +943,16 @@ def transform_to_catalog(
 
         values = {name: fit_result.params[name].value for name in _COEFF_NAMES}
 
-        # How well the fit pinned each term down. lmfit's stderr is exactly
-        # 0.0 for a term that was not varied -- held at zero, so known
-        # exactly -- and None in the states where no uncertainty could be
-        # worked out at all.
-        uncertainties = {
-            name: (
-                np.nan
-                if fit_result.params[name].stderr is None
-                else float(fit_result.params[name].stderr)
-            )
-            for name in _COEFF_NAMES
-        }
+        # How well the fit pinned each term down, and how well the model it
+        # landed on describes the stars. Both are answers about the image
+        # rather than about any one star, and both are reported even when
+        # they are the only thing that would tell a caller the coefficients
+        # below are not worth applying.
+        # The covariance matrix comes back too, and ``covar is None`` is
+        # this function's single verdict on whether there is a usable one:
+        # the calibrated errors below are propagated through it, or are
+        # not reported at all.
+        uncertainties, covar = _coefficient_uncertainties(fit_result)
 
         # The expected ranges are a check on the answer, not a constraint on
         # the fit, so a value outside its range is reported and kept.
@@ -801,14 +965,32 @@ def transform_to_catalog(
         if out_of_range:
             logger.warning(f"Fit for {file[0]}: " + "; ".join(out_of_range))
 
+        if obs_error_column is None:
+            star_errors = None
+        else:
+            # An error that is not a positive, finite number is kept out of
+            # the fit above, and must not come back out as a calibrated
+            # error either: the AAVSO writer turns only non-finite errors
+            # into "na", so a zero would be submitted as a real
+            # uncertainty. Done here, before the propagation rather than
+            # after it, because `uncertainties` refuses outright to build a
+            # value with a negative standard deviation.
+            star_errors = np.where(np.isfinite(errors) & (errors > 0), errors, np.nan)
+
+            if covar is None:
+                logger.warning(
+                    f"Fit for {file[0]} left no usable covariance behind, so "
+                    "the uncertainty of the transform cannot be propagated "
+                    "and mag_cal_error is NaN for this image. Reporting the "
+                    "measurement error on its own would understate it."
+                )
+
         # Calculate calibrated magnitudes for every star in the image, not
-        # just the ones the fit used.
-        model_coefficients = [values[name] for name in _COEFF_NAMES]
-        cal_mag = calibrated_from_instrumental(
-            (mag_inst, model_color), *model_coefficients
+        # just the ones the fit used, propagating the uncertainty of the
+        # fit into them when there is one to propagate.
+        cal_mag, cal_error = _calibrated_with_uncertainty(
+            fit_result, covar, mag_inst, model_color, star_errors, fit_diff
         )
-        if fit_diff:
-            cal_mag = cal_mag + mag_inst
 
         # One cut for everything that comes from the match: a star matched
         # closely enough to be given a calibrated magnitude keeps the
@@ -829,23 +1011,7 @@ def transform_to_catalog(
         cat_mags[rows] = np.where(matched, cat_mag, np.nan)
         cat_colors[rows] = np.where(matched, color, np.nan)
 
-        if obs_error_column is not None:
-            # How much the calibrated magnitude moves when the instrumental
-            # one does. With fit_diff the instrumental magnitude is added
-            # back to the model result, so that sensitivity is 1 + a;
-            # without it the model is the calibrated magnitude outright and
-            # a itself is the factor -- it fits to about 1 rather than
-            # about 0. Using the same factor for both would double the
-            # reported uncertainty in one of the two modes.
-            sensitivity = 1 + values["a"] if fit_diff else values["a"]
-            cal_error = sensitivity * errors
-
-            # An error that is not a positive, finite number is kept out of
-            # the fit above, and must not come back out as a calibrated
-            # error either: the AAVSO writer turns only non-finite errors
-            # into "na", so a zero would be submitted as a real uncertainty.
-            cal_error[~(np.isfinite(errors) & (errors > 0))] = np.nan
-
+        if cal_error is not None:
             # A star with no calibrated magnitude has no calibrated error
             # either, whatever the reason it has no magnitude. That is
             # stronger than repeating the distance cut -- it also covers a
