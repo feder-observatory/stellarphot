@@ -21,6 +21,41 @@ New Features
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
++ ``stellarphot.utils.magnitude_transforms`` now has a single calibration
+  pipeline instead of two. ``calculate_transform_coefficients()`` and
+  ``transform_magnitudes()``, which nothing in the package or the shipped
+  notebooks called, have been removed, as have the ``transform_to_catalog()``
+  helpers ``opts_to_str()`` and ``calc_residual()``. ``filter_transform()``
+  and ``calibrated_from_instrumental()`` are unchanged. [#601]
++ ``transform_to_catalog()`` now fits with ``lmfit`` instead of
+  ``scipy.optimize.curve_fit``. The old bounds arguments (``a_delta``,
+  ``a_cen``, ``b_delta``, ``c_delta``, ``d_delta``, ``zero_point_range``)
+  are replaced by ``vary``, naming the terms to fit -- all others are held
+  at exactly zero -- and ``expected``, ranges that are checked after the
+  fit and warned about rather than imposed on it. ``verbose`` is gone; the
+  messages it printed are now ``AstropyUserWarning``\ s. [#601]
++ ``transform_to_catalog()`` now warns, and leaves that image's results
+  unset, when the stars available cannot determine the terms being fit --
+  either because there are too few of them, or because the terms come out
+  too strongly correlated with each other for their individual values to
+  mean anything. Previously such a fit reported success and its coefficients
+  were applied to every star in the image. [#601]
++ The ``cat_filter`` and ``cat_color`` defaults of ``transform_to_catalog()``
+  are now passband names (``"R"`` and ``("R", "I")``) rather than column
+  names, so a call that omits them works instead of raising ``KeyError``.
+  [#601]
++ The calibrated magnitude columns ``transform_to_catalog()`` adds are now
+  named ``mag_cal`` and ``mag_cal_error``, instead of being built from the
+  instrumental magnitude column name (``mag_inst_cal`` by default). The
+  AAVSO writer accepts both. [#601]
++ ``transform_to_catalog()`` no longer raises when the groups of the table it
+  is given contain rows in more than one passband. Rows outside the passband
+  being fit keep any values they already have, so calling it once per
+  passband with ``in_place=True`` now accumulates into a single table rather
+  than each call overwriting the last. [#601]
++ ``lmfit`` moved from the ``exoplanet`` extra to a required dependency,
+  since the magnitude transform now needs it, and ``scipy`` is now declared
+  explicitly rather than relied on transitively. [#601]
 + Documentation improvements: fixed docstring default values, expanded
   variable-aperture photometry documentation with details on how aperture radii
   are computed, clarified astropy Longitude wrapping behavior in the Observatory

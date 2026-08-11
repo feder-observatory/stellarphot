@@ -25,6 +25,8 @@ dependencies = [
                    # to speed up its internal numpy operations when present
     "ccdproc",
     "lightkurve",
+    "lmfit",  # fits the magnitude transform in stellarphot.utils; also the
+              # fitter behind the optional transit fitting
     "matplotlib",
     "pandas",
     "photutils >=2,<3",
@@ -36,6 +38,8 @@ dependencies = [
                  # transitive dependency (via astroquery) otherwise
     "regions",  # stellarphot does not directly use regions, but
                 # astroquery.XMatch gripes on import if it is not installed
+    "scipy",  # imported directly in stellarphot.photometry; arrives
+              # transitively via astropy's dependencies otherwise
 ]
 
 [project.optional-dependencies]
@@ -62,8 +66,8 @@ gui = [
     "papermill",
 ]
 exoplanet = [
-    "lmfit",
-    "pytransit",
+    "pytransit",  # lmfit, the other half of the transit fitter, is a core
+                  # dependency because the magnitude transform needs it too
 ]
 # Everything a user needs for the full interactive experience.
 all = [

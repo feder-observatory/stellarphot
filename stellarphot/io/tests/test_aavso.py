@@ -682,11 +682,11 @@ class TestMtypeGuard:
         with pytest.warns(AstropyUserWarning, match="MTYPE=STD"):
             write_aavso_extended(phot_table, out, **writer_kwargs)
 
-    # mag_inst_cal and mag_inst_r_cal are what transform_to_catalog names its
-    # calibrated output (obs_mag_col + "_cal"), and the calibration user guide
-    # tells users to pass mag_column="mag_inst_cal" to this writer -- so the
-    # instrumental prefix must not trip the warning when the calibrated
-    # suffix is present.
+    # mag_cal is what transform_to_catalog names its calibrated output.
+    # mag_inst_cal and mag_inst_r_cal are what it named that output in
+    # stellarphot 2.1 and earlier, and tables written then are still readable
+    # -- so an instrumental prefix must not trip the warning when the
+    # calibrated suffix is present.
     @pytest.mark.parametrize(
         "column_name",
         ["mag_cal", "mag_standard", "mag", "mag_inst_cal", "mag_inst_r_cal"],

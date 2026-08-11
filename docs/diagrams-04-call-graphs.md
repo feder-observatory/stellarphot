@@ -890,10 +890,7 @@ flowchart LR
     subgraph sg_mag["magnitude_transforms.py"]
         direction TB
         t2c["transform_to_catalog()"]:::fn
-        tmags["transform_magnitudes()"]:::fn
-        ctc["calculate_transform_coefficients()"]:::fn
         cfi["calibrated_from_instrumental()"]:::fn
-        resid["calc_residual()"]:::fn
         ftrans["filter_transform()"]:::fn
     end
 
@@ -917,17 +914,14 @@ flowchart LR
     apass["catalogs.apass_dr9()"]:::external
     refcat["catalogs.refcat2()"]:::external
     vsx["catalogs.vsx_vizier()"]:::external
-    curvefit["scipy curve_fit"]:::external
+    minimize["lmfit.minimize<br/>(scipy least_squares)"]:::external
 
     t2c --> apass
     t2c --> refcat
     t2c -->|"as transformer"| tab
     t2c -->|"as transformer"| trb
-    t2c --> curvefit
+    t2c --> minimize
     t2c --> cfi
-    t2c --> resid
-    tmags --> ctc
-    ctc --> cfi
     tab --> ps1
     trb --> ps1
     tab --> usno
@@ -938,10 +932,7 @@ flowchart LR
     xmatch --> apass
 
     click t2c href "../stellarphot/utils/magnitude_transforms.py" "magnitude_transforms.py"
-    click tmags href "../stellarphot/utils/magnitude_transforms.py" "magnitude_transforms.py"
-    click ctc href "../stellarphot/utils/magnitude_transforms.py" "magnitude_transforms.py"
     click cfi href "../stellarphot/utils/magnitude_transforms.py" "magnitude_transforms.py"
-    click resid href "../stellarphot/utils/magnitude_transforms.py" "magnitude_transforms.py"
     click ftrans href "../stellarphot/utils/magnitude_transforms.py" "magnitude_transforms.py"
     click tab href "../stellarphot/utils/magnitude_system_transforms.py" "magnitude_system_transforms.py"
     click trb href "../stellarphot/utils/magnitude_system_transforms.py" "magnitude_system_transforms.py"
