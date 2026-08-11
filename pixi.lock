@@ -10674,6 +10674,7 @@ packages:
   - regions
   - requests
   - scipy
+  - uncertainties
   - astro-image-display-api>=0.3.0 ; extra == 'all'
   - astrowidgets>=0.6 ; extra == 'all'
   - bqplot-image-gl>=1.10 ; extra == 'all'
