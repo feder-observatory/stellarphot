@@ -151,6 +151,18 @@ Bug Fixes
   messages instead of warnings, so running with warnings-as-errors no longer
   aborts the calibration; output columns are written after all images are
   processed. [#682]
++ ``transform_to_catalog()`` now applies one match-distance cut to everything
+  it derives from the catalog match. ``mag_cat`` and ``color_cat`` used to be
+  taken from the nearest catalog entry however far away it was, and
+  ``mag_cal_error`` was reported for every row with a usable input error, so
+  both could describe an unrelated star on a row whose ``mag_cal`` was NaN.
+  All of them are now NaN beyond 1.5 arcsec, the same limit ``mag_cal``
+  follows, and ``mag_cal_error`` is NaN wherever ``mag_cal`` is -- including
+  for a star with no instrumental magnitude, which previously got a finite
+  calibrated error. A star is also no longer required to have a catalog color
+  unless a color term (``"c"`` or ``"d"``) is actually being fit, so stars the
+  catalog has no color for can be fit and calibrated when ``vary`` does not
+  include one. [#678, #681]
 
 2.1.2 (2026-07-19)
 -------------------

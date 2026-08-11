@@ -35,6 +35,18 @@ _DEFAULT_EXPECTED = {"z": (18.0, 22.0)}
 _CAL_MAG_COLUMN = "mag_cal"
 _CAL_MAG_ERROR_COLUMN = "mag_cal_error"
 
+# How close an observed star must be to a catalog entry, in arcseconds. Two
+# limits rather than one: a star must match tightly to be allowed to influence
+# the fit, and less tightly to be given values derived from its match.
+#
+# The band between the two is deliberate. A limit of 1 arcsec everywhere can
+# stop a variable that really is in the catalog from matching at all -- V2480
+# Cyg's VSX position is about 1.3 arcsec from its APASS DR9 position -- and a
+# star in that band is well enough matched to calibrate, just not well enough
+# to calibrate everything else against.
+_FIT_MATCH_ARCSEC = 1.0
+_CAL_MATCH_ARCSEC = 1.5
+
 # How strongly the terms of the fit may be correlated with each other before
 # their individual values stop meaning anything. See `_underdetermined_reason`,
 # which explains how this was arrived at.
@@ -456,6 +468,12 @@ def transform_to_catalog(
         ``"d"``, the linear and quadratic dependence on color, and ``"z"``,
         the zero point.
 
+        A star is required to have a catalog color only when ``"c"`` or
+        ``"d"`` is being fit. With neither of them in ``vary`` the color does
+        not enter the model at all, so stars the catalog has no color for take
+        part in the fit and are calibrated like any other; their ``color_cat``
+        is still NaN, because their color really is unknown.
+
     expected : dict, optional
         Range each term is expected to fall in, as ``{term: (low, high)}``.
         These are **not** constraints on the fit: a value outside its range is
@@ -485,9 +503,12 @@ def transform_to_catalog(
         could not be fit and for rows in other passbands that had no value
         already.
 
-        ``mag_cat`` and ``color_cat`` are taken from the nearest catalog entry
-        whatever its distance, so they can hold the values of an unrelated
-        star on rows whose ``mag_cal`` is NaN.
+        Every column that comes from the catalog match -- ``mag_cal``,
+        ``mag_cal_error``, ``mag_cat`` and ``color_cat`` -- is NaN for a star
+        whose nearest catalog entry is more than 1.5 arcsec away, so none of
+        them can hold the values of an unrelated star. ``mag_cal_error`` is
+        NaN wherever ``mag_cal`` is, for whatever reason, so a finite
+        calibrated error always has a calibrated magnitude to go with it.
 
     Notes
     -----
@@ -522,6 +543,11 @@ def transform_to_catalog(
             f"the terms are {list(_COEFF_NAMES)}."
         )
 
+    # Whether a star needs a catalog color at all. Only the color terms use
+    # one, and ``vary`` is fixed for the whole call, so this is settled once
+    # rather than per image.
+    fitting_color = bool({"c", "d"} & set(vary))
+
     # Checked against every term, varied or not. A term that is not fit sits
     # at exactly zero, and a fixed term sitting outside the range it is
     # expected in is precisely what the caller needs to hear about -- leaving
@@ -549,6 +575,7 @@ def transform_to_catalog(
     # written keep the NaN they start with.
     coefficients = {name: np.full(n_rows, np.nan) for name in _COEFF_NAMES}
     cal_mags = np.full(n_rows, np.nan)
+    cal_errors = np.full(n_rows, np.nan)
     cat_mags = np.full(n_rows, np.nan)
     cat_colors = np.full(n_rows, np.nan)
 
@@ -615,8 +642,23 @@ def transform_to_catalog(
         cat_mag = _to_float_array(cat[f"mag_{cat_filter}"][cat_idx])
         color = _to_float_array(cat["color"][cat_idx])
 
+        # The color the model is evaluated with. When no color term is
+        # being fit the color is multiplied by zero, but ``0.0 * np.nan``
+        # is NaN, which would poison both the residual and the calibrated
+        # magnitude of every star the catalog has no color for. A neutral
+        # zero stands in for the missing colors instead. `numpy.where`
+        # rather than `numpy.nan_to_num`, which would also turn an
+        # infinite color into a very large finite one. The raw ``color``
+        # is what goes into the ``color_cat`` output column, so a star
+        # with no color still reports none.
+        model_color = (
+            color if fitting_color else np.where(np.isfinite(color), color, 0.0)
+        )
+
         # Impose some constraints on what is included in the fit
-        good_cat = np.isfinite(cat_mag) & np.isfinite(color) & (d2d.arcsecond < 1)
+        good_cat = np.isfinite(cat_mag) & (d2d.arcsecond < _FIT_MATCH_ARCSEC)
+        if fitting_color:
+            good_cat = good_cat & np.isfinite(color)
         good_dat = (mag_inst < -3) & (mag_inst > -20) & np.isfinite(mag_inst)
 
         if obs_error_column is not None:
@@ -645,7 +687,7 @@ def transform_to_catalog(
 
         # Prep for fitting
         fit_mag = mag_inst[good]
-        fit_color = color[good]
+        fit_color = model_color[good]
         offset = fit_mag if fit_diff else 0.0
         fit_data = cat_mag[good] - offset
         weights = 1.0 / errors[good] if obs_error_column is not None else 1.0
@@ -707,48 +749,62 @@ def transform_to_catalog(
         # Calculate calibrated magnitudes for every star in the image, not
         # just the ones the fit used.
         model_coefficients = [values[name] for name in _COEFF_NAMES]
-        cal_mag = calibrated_from_instrumental((mag_inst, color), *model_coefficients)
+        cal_mag = calibrated_from_instrumental(
+            (mag_inst, model_color), *model_coefficients
+        )
         if fit_diff:
             cal_mag = cal_mag + mag_inst
 
-        # A limit of 1 arcsec here can cause a variable that really is in
-        # APASS to not match. An example is V2480 Cyg, whose VSX position is
-        # about 1.3 arcsec from its APASS DR9 position.
-        cal_mag[d2d.arcsecond > 1.5] = np.nan
+        # One cut for everything that comes from the match: a star matched
+        # closely enough to be given a calibrated magnitude keeps the
+        # catalog magnitude and color it was calibrated against, and a
+        # star matched no better than this keeps none of them rather than
+        # reporting an unrelated star's values. The comparison is ``<=``
+        # so that the boundary stays where it has always been.
+        matched = d2d.arcsecond <= _CAL_MATCH_ARCSEC
+        cal_mag[~matched] = np.nan
 
         for name in _COEFF_NAMES:
             coefficients[name][rows] = values[name]
 
         cal_mags[rows] = cal_mag
-        cat_mags[rows] = cat_mag
-        cat_colors[rows] = color
+        cat_mags[rows] = np.where(matched, cat_mag, np.nan)
+        cat_colors[rows] = np.where(matched, color, np.nan)
+
+        if obs_error_column is not None:
+            # How much the calibrated magnitude moves when the instrumental
+            # one does. With fit_diff the instrumental magnitude is added
+            # back to the model result, so that sensitivity is 1 + a;
+            # without it the model is the calibrated magnitude outright and
+            # a itself is the factor -- it fits to about 1 rather than
+            # about 0. Using the same factor for both would double the
+            # reported uncertainty in one of the two modes.
+            sensitivity = 1 + values["a"] if fit_diff else values["a"]
+            cal_error = sensitivity * errors
+
+            # An error that is not a positive, finite number is kept out of
+            # the fit above, and must not come back out as a calibrated
+            # error either: the AAVSO writer turns only non-finite errors
+            # into "na", so a zero would be submitted as a real uncertainty.
+            cal_error[~(np.isfinite(errors) & (errors > 0))] = np.nan
+
+            # A star with no calibrated magnitude has no calibrated error
+            # either, whatever the reason it has no magnitude. That is
+            # stronger than repeating the distance cut -- it also covers a
+            # star with no instrumental magnitude -- and it is what makes a
+            # finite mag_cal_error safe to select rows on.
+            cal_error[~np.isfinite(cal_mag)] = np.nan
+
+            cal_errors[rows] = cal_error
 
     # The keys are inserted in the order the columns are added to the table in.
     output_columns = {}
 
+    # The calibrated errors are worked out in the loop, where the per-star
+    # distances and calibrated magnitudes they depend on live. Only the
+    # column order is decided here, and it puts them first.
     if obs_error_column is not None:
-        # How much the calibrated magnitude moves when the instrumental one
-        # does. With fit_diff the instrumental magnitude is added back to
-        # the model result, so that sensitivity is 1 + a; without it the
-        # model is the calibrated magnitude outright and a itself is the
-        # factor -- it fits to about 1 rather than about 0. Using the same
-        # factor for both would double the reported uncertainty in one of
-        # the two modes.
-        sensitivity = 1 + coefficients["a"] if fit_diff else coefficients["a"]
-
-        # Scaled from the raw per-call coefficients rather than the merged
-        # column, so that rows in other passbands are handled by the merge
-        # below instead of being recomputed from another passband's fit.
-        raw_errors = _to_float_array(result[obs_error_column])
-        scaled_errors = sensitivity * raw_errors
-
-        # An error that is not a positive, finite number is kept out of the
-        # fit above, and must not come back out as a calibrated error
-        # either: the AAVSO writer turns only non-finite errors into "na",
-        # so a zero would be submitted as a real uncertainty.
-        scaled_errors[~(np.isfinite(raw_errors) & (raw_errors > 0))] = np.nan
-
-        output_columns[_CAL_MAG_ERROR_COLUMN] = scaled_errors
+        output_columns[_CAL_MAG_ERROR_COLUMN] = cal_errors
 
     output_columns[_CAL_MAG_COLUMN] = cal_mags
     output_columns.update(coefficients)
