@@ -168,20 +168,25 @@ def _underdetermined_reason(fit_result, vary):
     str or None
         Description of the problem, or `None` if the fit is determined.
     """
-    if fit_result.covar is None:
+    # A variance that is not a positive, finite number means the covariance
+    # could not be worked out, which happens when the terms are so nearly
+    # indistinguishable that inverting the curvature of the fit is hopeless --
+    # a field in which every star has the same catalog color, say, where the
+    # variances of the color and zero point terms come back negative. The
+    # answer is the same as no covariance at all: nothing is known about how
+    # well these terms are determined, so they must not be trusted.
+    variances = np.diag(fit_result.covar) if fit_result.covar is not None else None
+    if (
+        variances is None
+        or not np.all(np.isfinite(variances))
+        or np.any(variances <= 0)
+    ):
         return (
             f"the uncertainty in the terms {list(vary)} could not be estimated "
             "at all, which means this data does not constrain them"
         )
 
-    uncertainties = np.sqrt(np.diag(fit_result.covar))
-    if not np.all(np.isfinite(uncertainties)) or np.any(uncertainties <= 0):
-        # A fit that reproduces its data exactly has no uncertainty to
-        # correlate, and is determined rather than underdetermined. Only
-        # synthetic data fits that well; a real image always has some scatter,
-        # which is why nothing here reaches this.
-        return None  # pragma: no cover
-
+    uncertainties = np.sqrt(variances)
     correlation = fit_result.covar / np.outer(uncertainties, uncertainties)
     if np.linalg.cond(correlation) > _MAX_CORRELATION_CONDITION:
         return (
@@ -641,12 +646,23 @@ def transform_to_catalog(
             # best starting guess available.
             params["z"].set(value=float(np.median(fit_data)))
 
-        fit_result = lmfit.minimize(
-            _transform_residual,
-            params,
-            method="least_squares",
-            args=(fit_mag, fit_color, fit_data, weights),
-        )
+        with warnings.catch_warnings():
+            # Working out the parameter uncertainties is part of the fit, and
+            # on data whose terms are indistinguishable -- a field in which
+            # every star has the same catalog color, say -- that means taking
+            # the square root of a negative number. The warning that produces
+            # says nothing the caller can act on, and would be an outright
+            # exception for anyone running with warnings as errors. What it
+            # indicates is not ignored: the covariance it came from is checked
+            # below, and reported in terms of the data rather than of the
+            # arithmetic.
+            warnings.simplefilter("ignore", RuntimeWarning)
+            fit_result = lmfit.minimize(
+                _transform_residual,
+                params,
+                method="least_squares",
+                args=(fit_mag, fit_color, fit_data, weights),
+            )
 
         if not fit_result.success:
             warnings.warn(

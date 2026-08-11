@@ -1339,12 +1339,35 @@ def test_transform_to_catalog_warns_when_terms_are_nearly_degenerate(mocker):
     assert np.isnan(result["mag_cal"]).all()
 
 
+def test_transform_to_catalog_warns_when_every_star_has_the_same_color(mocker):
+    # A field in which every star has the same catalog color makes the color
+    # and zero point terms interchangeable: c times a constant is a constant,
+    # which is what z already is. There is nothing left to tell them apart, and
+    # inverting the curvature of that fit is hopeless enough that lmfit hands
+    # back *negative* variances -- so the check has to cope with a covariance
+    # matrix that is not merely ill conditioned but not a covariance matrix at
+    # all. Working out those variances also has lmfit taking the square root of
+    # a negative number, and this suite turns that RuntimeWarning into a
+    # failure, so this doubles as the test that the warning does not escape.
+    n_stars = 20
+
+    catalog, ra, dec, instrumental = _generate_fake_catalog(
+        n_stars, a=0.02, c=0.15, color=np.full(n_stars, 0.5)
+    )
+    observed = _generate_observed_table(ra, dec, instrumental)
+
+    with pytest.warns(AstropyUserWarning, match="could not be estimated"):
+        result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    assert np.isnan(result["mag_cal"]).all()
+
+
 def test_transform_to_catalog_warns_when_covariance_unavailable(mocker):
-    # lmfit does not always manage to estimate the uncertainty in a fit, and
-    # when it has not there is no way to tell whether the terms can be told
-    # apart from each other. Coefficients that may well be meaningless must not
-    # be applied to every star in the image on the strength of the fit having
-    # reported success, so the image is skipped.
+    # The other way to end up with nothing to judge the fit by: lmfit did not
+    # manage to estimate the uncertainty at all. Unlike the case above there is
+    # no data that reliably produces this, so the fit result is doctored --
+    # what is being pinned is that a missing covariance is not read as a fit
+    # worth trusting.
     catalog, ra, dec, instrumental = _generate_fake_catalog(20, a=0.02, c=0.15)
     observed = _generate_observed_table(ra, dec, instrumental)
 
