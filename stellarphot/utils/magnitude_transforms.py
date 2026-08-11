@@ -1,5 +1,6 @@
 import logging
 import warnings
+from contextlib import contextmanager
 
 import lmfit
 import numpy as np
@@ -268,6 +269,33 @@ def _coefficient_uncertainties(fit_result):
     }, covar
 
 
+@contextmanager
+def _nan_is_an_expected_input():
+    """
+    Let NaN through arithmetic without numpy calling it invalid.
+
+    A star with no instrumental magnitude, no color, or no usable error is
+    meant to come out of the model with a NaN beside it rather than to be
+    dropped, so NaN going in is part of the contract here rather than a sign
+    that something has gone wrong.
+
+    numpy 2.5 disagrees when the arithmetic runs elementwise over an array of
+    uncertain values, which is what propagating the fit's covariance makes it
+    do: it reports the NaN as an invalid-value `RuntimeWarning`, on Linux and
+    Windows but not macOS. This package's test suite turns warnings into
+    errors, so that would fail on some platforms and not others. Both layers
+    are quieted because the two spellings of the complaint arrive by different
+    routes -- one through the floating-point error state, one raised directly
+    by the vectorized call numpy makes over the object array.
+
+    Nothing else is silenced: a genuinely invalid operation on a real number
+    is not what this covers, and NaN in the output is still NaN in the output.
+    """
+    with warnings.catch_warnings(), np.errstate(invalid="ignore"):
+        warnings.filterwarnings("ignore", "invalid value encountered", RuntimeWarning)
+        yield
+
+
 def _calibrated_with_uncertainty(fit_result, covar, mag_inst, color, errors, fit_diff):
     """
     Calibrated magnitude of every star, and how uncertain each one is.
@@ -334,24 +362,29 @@ def _calibrated_with_uncertainty(fit_result, covar, mag_inst, color, errors, fit
         nothing to propagate.
     """
     if covar is None or errors is None:
-        calibrated = calibrated_from_instrumental(
-            (mag_inst, color),
-            *(fit_result.params[name].value for name in _COEFF_NAMES),
-        )
-        if fit_diff:
-            calibrated = calibrated + mag_inst
+        with _nan_is_an_expected_input():
+            calibrated = calibrated_from_instrumental(
+                (mag_inst, color),
+                *(fit_result.params[name].value for name in _COEFF_NAMES),
+            )
+            if fit_diff:
+                calibrated = calibrated + mag_inst
         return calibrated, None
 
-    star_mag = unumpy.uarray(mag_inst, errors)
     uvars = fit_result.params.create_uvars(covar)
 
-    calibrated = calibrated_from_instrumental(
-        (star_mag, color), *(uvars[name] for name in _COEFF_NAMES)
-    )
-    if fit_diff:
-        calibrated = calibrated + star_mag
+    with _nan_is_an_expected_input():
+        # Building the uncertain values is itself elementwise over the array,
+        # so a NaN error complains here rather than in the model below.
+        star_mag = unumpy.uarray(mag_inst, errors)
 
-    return unumpy.nominal_values(calibrated), unumpy.std_devs(calibrated)
+        calibrated = calibrated_from_instrumental(
+            (star_mag, color), *(uvars[name] for name in _COEFF_NAMES)
+        )
+        if fit_diff:
+            calibrated = calibrated + star_mag
+
+        return unumpy.nominal_values(calibrated), unumpy.std_devs(calibrated)
 
 
 def _check_known_terms(terms, argument_name):
