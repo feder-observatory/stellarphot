@@ -25,8 +25,9 @@ dependencies = [
                    # to speed up its internal numpy operations when present
     "ccdproc",
     "lightkurve",
-    "lmfit",  # fits the magnitude transform in stellarphot.utils; also the
-              # fitter behind the optional transit fitting
+    "lmfit >=1.2.2",  # fits the magnitude transform in stellarphot.utils; also
+                      # the fitter behind the optional transit fitting; 1.2.2
+                      # introduced Parameters.create_uvars()
     "matplotlib",
     "pandas",
     "photutils >=2,<3",
@@ -40,6 +41,10 @@ dependencies = [
                 # astroquery.XMatch gripes on import if it is not installed
     "scipy",  # imported directly in stellarphot.photometry; arrives
               # transitively via astropy's dependencies otherwise
+    "uncertainties",  # imported directly in stellarphot.utils to propagate the
+                      # magnitude transform's covariance into each star's
+                      # calibrated error; an unconditional requirement of lmfit
+                      # otherwise
 ]
 
 [project.optional-dependencies]

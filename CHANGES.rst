@@ -163,6 +163,12 @@ Bug Fixes
   nearest catalog star's values however far away it was. [#678]
 + ``transform_to_catalog()`` no longer requires a star to have a catalog
   color unless a color term (``"c"`` or ``"d"``) is actually being fit. [#681]
++ ``mag_cal_error`` from ``transform_to_catalog()`` now includes the
+  uncertainty of the fitted transform, correlations included, instead of
+  only the star's scaled measurement error, so it varies per star and is
+  somewhat larger. When a fit leaves no usable covariance it is NaN, with
+  a warning. Catalog magnitude uncertainty is still excluded -- see the
+  docstring for why. [#674]
 
 2.1.2 (2026-07-19)
 -------------------

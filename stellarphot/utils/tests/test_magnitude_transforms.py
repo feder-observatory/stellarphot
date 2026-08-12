@@ -582,9 +582,28 @@ _TRANSFORM_OUTPUT_COLUMNS = {
 }
 
 
-def _fit_a_catalog(mocker, n_stars=20, vary=None, **catalog_coefficients):
+def _fit_a_catalog(
+    mocker,
+    n_stars=20,
+    vary=None,
+    sigma=0.0,
+    seed=None,
+    mag_error=None,
+    **catalog_coefficients,
+):
     """
     Build a synthetic catalog and observations of it, then transform them.
+
+    Left at its defaults (``sigma=0.0``) this generates noiseless
+    observations, for tests that check *where* the fit lands. Passing a
+    nonzero ``sigma``, and usually a ``seed`` so the noise is reproducible,
+    generates noisy observations instead, for tests that ask what the fit's
+    own uncertainties *mean* -- a noiseless fit is exact and has nothing to
+    report an uncertainty about. Noiseless observations taken straight from
+    the magnitudes a synthetic catalog was built from fit it to within
+    `_FAKE_CATALOG_SCATTER`, which leaves every uncertainty derived from a
+    noiseless fit at the 1e-13 level; see the ``noise_sigma`` parameter of
+    `_generate_observed_table` for the noise added on top of that.
 
     Parameters
     ----------
@@ -599,6 +618,20 @@ def _fit_a_catalog(mocker, n_stars=20, vary=None, **catalog_coefficients):
         Terms to fit. The default of `~stellarphot.utils.transform_to_catalog`
         is used if this is not given.
 
+    sigma : float, optional
+        Standard deviation of Gaussian noise added to the observed
+        magnitudes. Zero, the default, adds none.
+
+    seed : int, optional
+        Seed for that noise, so a test gets the same numbers every run.
+        Meaningless when ``sigma`` is zero.
+
+    mag_error : float or array-like, optional
+        Uncertainty to report for each instrumental magnitude, passed on to
+        `_generate_observed_table`. Left at that function's own default --
+        ``sigma`` when noise was added, ``0.01`` otherwise -- if not given
+        here.
+
     **catalog_coefficients
         Coefficients ``a``, ``b``, ``c``, ``d`` and ``z`` of the transform
         model used to build the catalog, passed to `_generate_fake_catalog`.
@@ -612,16 +645,40 @@ def _fit_a_catalog(mocker, n_stars=20, vary=None, **catalog_coefficients):
         The catalog the observations were transformed against.
 
     instrumental : `numpy.ndarray`
-        Instrumental magnitude of each observation.
+        Instrumental magnitude of each star, i.e. the magnitudes the catalog
+        was generated from. When ``sigma`` is nonzero this is the noiseless
+        value -- the observed ``mag_inst`` column of ``result`` is these plus
+        the noise.
     """
     catalog, ra, dec, instrumental = _generate_fake_catalog(
         n_stars, **catalog_coefficients
     )
-    observed = _generate_observed_table(ra, dec, instrumental)
+    observed = _generate_observed_table(
+        ra, dec, instrumental, mag_error=mag_error, noise_sigma=sigma, seed=seed
+    )
     fit_kwargs = {} if vary is None else {"vary": vary}
     result = _run_transform_to_catalog(mocker, catalog, observed, **fit_kwargs)
 
     return result, catalog, instrumental
+
+
+@pytest.fixture(scope="module")
+def _noisy_fit_result(module_mocker):
+    """
+    The one noisy fit shared by tests that ask what its uncertainties mean.
+
+    `test_transform_to_catalog_reports_coefficient_uncertainties`,
+    `test_transform_to_catalog_error_includes_the_transform_uncertainty` and
+    `test_transform_to_catalog_error_uses_the_whole_covariance` all read --
+    and none of them mutate -- the result of fitting the same catalog: 50
+    stars, noise sigma 0.02, seed 20260811, a=0.02 and c=0.15. Computing it
+    once here rather than three times keeps the tests from drifting apart on
+    inputs they mean to share.
+    """
+    result, _, _ = _fit_a_catalog(
+        module_mocker, n_stars=50, sigma=0.02, seed=20260811, a=0.02, c=0.15
+    )
+    return result
 
 
 @pytest.mark.parametrize("c", [0.0, 0.15, -0.2])
@@ -732,20 +789,12 @@ def test_transform_to_catalog_weights_by_inverse_error(mocker):
     np.testing.assert_allclose(result["c"], 0.0, rtol=0, atol=1e-3)
 
 
-def test_transform_to_catalog_reports_coefficient_uncertainties(mocker):
+def test_transform_to_catalog_reports_coefficient_uncertainties(_noisy_fit_result):
     # How well the fit pinned each term down is what separates a transform
     # worth applying from one fit to stars that could barely tell its terms
     # apart, and until now the fit worked it out and threw it away. See issue
     # #677.
-    n_stars = 50
-    sigma = 0.02
-
-    catalog, ra, dec, instrumental = _generate_fake_catalog(n_stars, a=0.02, c=0.15)
-    observed = _generate_observed_table(
-        ra, dec, instrumental, noise_sigma=sigma, seed=20260811
-    )
-
-    result = _run_transform_to_catalog(mocker, catalog, observed)
+    result = _noisy_fit_result
 
     for term in ("a", "c", "z"):
         reported = np.asarray(result[f"{term}_error"])
@@ -1018,17 +1067,179 @@ def test_transform_to_catalog_not_in_place_leaves_input_alone(mocker):
         np.testing.assert_array_equal(observed[name], values)
 
 
-def test_transform_to_catalog_error_is_scaled_instrumental_error(mocker):
-    # The calibrated error is currently just the instrumental error scaled by
-    # the fitted linear term -- not a real propagation. See issue #674; this
-    # test pins the current behavior so that changing it is a deliberate edit.
+def test_transform_to_catalog_error_reduces_to_instrumental_for_a_perfect_fit(mocker):
+    # The calibrated error has two parts: the star's own measurement error,
+    # scaled by how much the calibrated magnitude moves when the instrumental
+    # one does, and the uncertainty of the transform the star was calibrated
+    # through. This catalog follows the model to within
+    # _FAKE_CATALOG_SCATTER, so the fit to it has a reduced chi-square of
+    # about 1.5e-20 and the second part comes out around 1e-13 -- nothing.
+    # What is left is the first part exactly, which is why this limit is worth
+    # pinning: it is what makes the noisy tests below interpretable, because
+    # anything they see above (1 + a) * mag_error there is the transform term
+    # and not an artifact of the fixtures. See issue #674.
     a = 0.02
     mag_error = 0.01
 
-    result, _, _ = _fit_a_catalog(mocker, a=a)
+    result, _, _ = _fit_a_catalog(mocker, a=a, mag_error=mag_error)
 
     np.testing.assert_allclose(
         result["mag_cal_error"], (1 + a) * mag_error, rtol=0, atol=1e-8
+    )
+
+
+def test_transform_to_catalog_error_includes_the_transform_uncertainty(
+    _noisy_fit_result,
+):
+    # The failure issue #674 exists to fix: the calibrated error used to be
+    # the star's own measurement error and nothing else, as though the
+    # coefficients it was calibrated through were known exactly. They are not,
+    # and on data with realistic scatter the difference is not small.
+    sigma = 0.02  # must match the sigma _noisy_fit_result fit with
+
+    result = _noisy_fit_result
+    n_stars = len(result)
+
+    reported = np.asarray(result["mag_cal_error"])
+
+    # What used to be reported, and what is now a floor rather than an answer.
+    measurement_only = (1 + result["a"][0]) * sigma
+    assert (reported > measurement_only).all()
+
+    # The half that proves the transform term is worked out per star rather
+    # than added on as a constant: a fit predicts best at the centroid of the
+    # stars it was fit to and worst at the ends of their range. The rows are
+    # in order of instrumental magnitude, because _generate_fake_catalog
+    # builds them from a linspace, so the ends of the range are the ends of
+    # the table.
+    excess = np.sqrt(reported**2 - measurement_only**2)
+    fifth = n_stars // 5
+    ends = np.concatenate([excess[:fifth], excess[-fifth:]]).mean()
+    middle = excess[2 * fifth : 3 * fifth].mean()
+
+    # Measured at about 1.35, and set by the geometry of the fit rather than
+    # by the noise -- it comes out the same to three figures for every seed
+    # tried, because scaling the covariance scales every star's share of it.
+    assert ends > 1.2 * middle
+
+
+def test_transform_to_catalog_error_uses_the_whole_covariance(_noisy_fit_result):
+    # The terms of the transform are strongly correlated with each other --
+    # over a range of instrumental magnitudes that never crosses zero, the
+    # zero point and the scale term trade off almost exactly -- so a
+    # propagation that used only the individual uncertainties, the diagonal of
+    # the covariance matrix, would be badly wrong rather than slightly wrong.
+    # This is also the test that would notice the propagation silently
+    # degrading to that uncorrelated answer, which is one of the ways it can
+    # fail without raising. See issue #674.
+    sigma = 0.02  # must match the sigma _noisy_fit_result fit with
+
+    result = _noisy_fit_result
+
+    reported = np.asarray(result["mag_cal_error"])
+
+    # The same propagation with every correlation thrown away, built from the
+    # columns the table already reports.
+    mag_inst = np.asarray(result["mag_inst"])
+    color = np.asarray(result["color_cat"])
+    diagonal_only = np.sqrt(
+        ((1 + result["a"][0]) * sigma) ** 2
+        + (mag_inst * result["a_error"][0]) ** 2
+        + (color * result["c_error"][0]) ** 2
+        + result["z_error"][0] ** 2
+    )
+
+    # The correlations are large and they reduce the answer: measured, the
+    # diagonal-only version is 1.4 to 1.8 times too big. The lower bound is
+    # what stops "ignores the covariance entirely" passing this from below.
+    assert ((1 + result["a"][0]) * sigma < reported).all()
+    assert (reported < 0.8 * diagonal_only).all()
+
+
+def test_transform_to_catalog_error_matches_a_monte_carlo(mocker):
+    # The test that makes the reported number an uncertainty rather than an
+    # arbitrary one: fix a catalog, observe it several hundred times with
+    # fresh noise, and the spread of one star's calibrated magnitudes should
+    # be the uncertainty reported for it. See issue #674.
+    # Few enough stars that the transform is not pinned down all that well,
+    # so its share of the calibrated error is a fifth of the total rather than
+    # a few percent of it. With a large field the two answers -- with and
+    # without the transform term -- are too close for 300 trials to tell
+    # apart, and this test would pass whether or not it had been fixed.
+    n_stars = 12
+    sigma = 0.02
+    n_trials = 300
+
+    catalog, ra, dec, instrumental = _generate_fake_catalog(n_stars, a=0.02, c=0.15)
+
+    # The star this is measured on is an extra observation of the first
+    # catalog star, 1.3 arcsec away from it. That is close enough to be
+    # calibrated and too far to be used in the fit, which is the point: a star
+    # that was in the fit moved the coefficients with its own noise, and both
+    # this propagation and the Monte Carlo treat the two as independent, so
+    # the comparison there is about 10% conservative. Out of the fit there is
+    # nothing to correct for.
+    ra = u.Quantity([*ra, ra[0]])
+    dec = u.Quantity([*dec, dec[0] + 1.3 * u.arcsec])
+    instrumental = np.append(instrumental, instrumental[0])
+
+    _patch_catalog_fetch(mocker, catalog)
+
+    calibrated = []
+    reported = []
+    for trial in range(n_trials):
+        observed = _generate_observed_table(
+            ra, dec, instrumental, noise_sigma=sigma, seed=10000 + trial
+        )
+        result = transform_to_catalog(
+            observed,
+            "R",
+            obs_error_column="mag_error",
+            cat_filter="R",
+            cat_color=("R", "I"),
+        )
+        calibrated.append(result["mag_cal"][-1])
+        reported.append(result["mag_cal_error"][-1])
+
+    # Measured ratio 1.03. The 15% is room for the sampling error of a
+    # 300-trial standard deviation, about 4%, and for the reported error
+    # itself varying from realization to realization -- lmfit scales the
+    # covariance by the reduced chi-square, so it carries the scatter of the
+    # noise draw it was fit to.
+    assert np.std(calibrated) == pytest.approx(np.mean(reported), rel=0.15)
+
+
+def test_transform_to_catalog_error_includes_the_quadratic_sensitivity(mocker):
+    # How much the calibrated magnitude moves when the instrumental one does
+    # is 1 + a + 2*b*mag_inst, not 1 + a, whenever the quadratic term is being
+    # fit -- and it is different for every star. Nothing writes that
+    # expression down: it falls out of the instrumental magnitude appearing
+    # twice in the model, once inside it and once in the fit_diff add-back,
+    # which is exactly why it needs a test of its own. On this catalog the fit
+    # is perfect, so the transform term is negligible and the sensitivity is
+    # the whole answer. See issue #674.
+    a, b = 0.02, 0.01
+    mag_error = 0.01
+
+    result, _, instrumental = _fit_a_catalog(
+        mocker,
+        a=a,
+        b=b,
+        c=0.15,
+        d=0.05,
+        vary=("a", "b", "c", "d", "z"),
+        mag_error=mag_error,
+    )
+
+    sensitivity = 1 + a + 2 * b * instrumental
+
+    # The quadratic term really does change the answer here -- the
+    # sensitivity runs from 0.82 to 0.92 across the field -- so a propagation
+    # that ignored b could not pass.
+    assert np.ptp(sensitivity) > 0.05
+
+    np.testing.assert_allclose(
+        result["mag_cal_error"], np.abs(sensitivity) * mag_error, rtol=0, atol=1e-8
     )
 
 
@@ -1207,8 +1418,13 @@ def test_transform_to_catalog_fit_diff_agrees(mocker):
     np.testing.assert_allclose(
         with_diff["mag_cal"], without_diff["mag_cal"], rtol=0, atol=1e-6
     )
+    # Looser than the magnitudes above, and deliberately so: the two modes fit
+    # different numbers, so their covariances differ in the last few bits --
+    # measured at 1.5e-11 -- and the propagation carries that into the errors
+    # at about 4e-10. That clears 1e-8 by only a factor of 25, close enough to
+    # the edge to be worth not waiting for.
     np.testing.assert_allclose(
-        with_diff["mag_cal_error"], without_diff["mag_cal_error"], rtol=0, atol=1e-8
+        with_diff["mag_cal_error"], without_diff["mag_cal_error"], rtol=0, atol=1e-7
     )
 
 
@@ -1838,6 +2054,12 @@ def test_transform_to_catalog_nans_error_for_unusable_input_error(mocker):
     # either: the AAVSO writer only turns non-finite errors into "na", so a
     # zero would be written into a submission as a real uncertainty -- and an
     # error of zero is infinite weight in any downstream average.
+    #
+    # One of the two spoiled rows carries a *negative* error, which is also
+    # what pins the order the propagation is done in: `uncertainties` refuses
+    # outright to build a value with a negative standard deviation, so the
+    # sanitizing below has to happen before the propagation rather than after
+    # it. NaN it accepts, and carries through to exactly the NaN wanted here.
     catalog, ra, dec, instrumental = _generate_fake_catalog(20)
     observed = _observations_with_unusable_rows("bad_error", ra, dec, instrumental)
 
