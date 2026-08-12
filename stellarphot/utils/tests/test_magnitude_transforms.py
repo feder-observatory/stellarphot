@@ -750,6 +750,11 @@ def _noisy_fit_result(module_mocker):
     result, _, _ = _fit_a_catalog(
         module_mocker, n_stars=50, sigma=0.02, seed=20260811, a=0.02, c=0.15
     )
+    # The patch has done its job once the fit is computed. Left in place it
+    # would outlive every later test in the module -- module_mocker unwinds at
+    # module teardown -- and hand the remote-data tests this fake catalog in
+    # place of the real fetch.
+    module_mocker.stopall()
     return result
 
 
