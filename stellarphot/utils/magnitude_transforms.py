@@ -635,9 +635,11 @@ def transform_to_catalog(
 
         cat_idx, d2d, _ = our_coords.match_to_catalog_sky(cat_coords)
 
-        # Masked catalog entries become NaN here, which both keeps them out
-        # of the fit and makes the calibrated magnitudes that depend on
-        # them NaN.
+        # Masked catalog entries become NaN here, which keeps them out of the
+        # fit. A star's own calibrated magnitude never involves its catalog
+        # magnitude, and a missing color only makes ``mag_cal`` NaN when a
+        # color term is being fit -- ``model_color`` below covers the case
+        # where none is.
         mag_inst = _to_float_array(one_image[obs_mag_col])
         cat_mag = _to_float_array(cat[f"mag_{cat_filter}"][cat_idx])
         color = _to_float_array(cat["color"][cat_idx])
