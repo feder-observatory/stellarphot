@@ -294,20 +294,14 @@ def _generate_observed_table(
 
     mag_error : float or array-like, optional
         Uncertainty to report for each instrumental magnitude. Defaults to
-        ``noise_sigma`` when noise is being added, which is the truthful
-        value -- passing anything else alongside ``noise_sigma`` is how a
-        test says the reported errors are wrong -- and to 0.01 otherwise.
+        ``noise_sigma`` when noise is added -- the truthful value -- and to
+        0.01 otherwise.
 
     noise_sigma : float, optional
         Standard deviation of Gaussian noise added to the instrumental
-        magnitudes. The default of zero adds none, so the observations fit a
-        catalog from `_generate_fake_catalog` essentially exactly. That is
-        what lets the recovery tests demand 1e-6 of the coefficients, but it
-        also means the fit's own view of how well it did -- the coefficient
-        uncertainties and the reduced chi-square -- comes out at the 1e-13
-        level and says nothing. Any test that asks what those numbers *mean*
-        needs data that scatters about the model by a realistic, known
-        amount instead.
+        magnitudes. Tests of coefficient recovery leave this at zero; tests
+        of the fit diagnostics need data that misses the model by a known,
+        realistic amount.
 
     seed : int, optional
         Seed for the noise, so that a test gets the same numbers every run.
