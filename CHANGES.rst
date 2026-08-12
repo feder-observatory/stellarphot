@@ -169,24 +169,12 @@ Bug Fixes
   somewhat larger. When a fit leaves no usable covariance it is NaN, with
   a warning. Catalog magnitude uncertainty is still excluded -- see the
   docstring for why. [#674]
-+ ``transform_to_catalog()`` now raises when ``cat_filter`` names a different
-  band from ``obs_filter``. Calibrating observations in one band against
-  catalog magnitudes in another makes the color difference between the two
-  bands part of the fit, which then reports it as a transform coefficient and
-  applies it to every star, so a mismatched pair is always a mistake -- two
-  spellings of one band, such as ``"R"`` and ``"RC"``, are not one. Along with
-  that, ``cat_filter`` and ``cat_color`` now default to `None` and are
-  resolved to ``obs_filter`` and the color conventionally used with it,
-  instead of to the literals ``"R"`` and ``("R", "I")``, which would have made
-  every call that omitted them for another band an error. The fit is also now
-  weighted by the observed errors and the catalog's own errors combined in
-  quadrature wherever the catalog has a ``mag_error_<cat_filter>`` column, and
-  a star whose catalog error is missing or not positive is left out of the
-  fit, as one with an unusable observed error already was. Where the column is
-  absent -- which is the case for the Johnson-Cousins R and I, transformed
-  from a catalog's native bands by a transform that does not yet propagate
-  errors -- the fit is weighted by the observed errors alone, exactly as
-  before, and logs one message naming the band. See issue ``#685``. [#680]
++ ``transform_to_catalog()`` now warns loudly when ``cat_filter`` explicitly
+  names a band different from ``obs_filter`` instead of silently folding the
+  color difference into the fit. Passband spellings are canonicalized
+  (``"Rc"`` and ``"R"`` are one band), ``cat_filter``/``cat_color`` default
+  from ``obs_filter``, and the fit is weighted by observed and catalog errors
+  in quadrature where available, with the weighting recorded in ``.meta``. [#680]
 
 2.1.2 (2026-07-19)
 -------------------

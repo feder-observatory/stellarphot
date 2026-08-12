@@ -11,6 +11,7 @@ from numpy.linalg import LinAlgError
 from uncertainties import correlated_values, unumpy
 
 from ..catalogs import apass_dr9, refcat2
+from ..settings.aavso_models import AAVSOFilters
 from .magnitude_system_transforms import transform_apass_bands, transform_refcat2_bands
 
 logger = logging.getLogger(__name__)
@@ -58,35 +59,57 @@ _FIT_REDCHI_COLUMN = "fit_redchi"
 _FIT_MATCH_ARCSEC = 1.0
 _CAL_MATCH_ARCSEC = 1.5
 
-# Passband names that mean the same physical band. Cousins R and I are each
-# written several ways, and `transform_refcat2_bands` really does add ``mag_R``
-# and ``mag_RC`` as copies of one column, so matching R observations against a
-# catalog's RC is one band spelled two ways rather than the mistake the check
-# that uses this exists to catch.
-_SAME_BAND = (frozenset({"R", "RC", "Rc"}), frozenset({"I", "IC", "Ic"}))
-
-# The color conventionally used with each passband, for a caller who names a
-# band but no color. Which color goes with a band is a convention rather than
-# something derivable, so a band that is not here has to be asked about rather
-# than guessed at. Every spelling of Cousins R and I is a key of its own,
-# because the band is looked up as the caller wrote it and is never rewritten
-# into one preferred spelling.
+# The color conventionally used with each canonical passband, for a caller
+# who names a band but no color. Which color goes with a band is a convention
+# rather than something derivable, so a band that is not here has to be asked
+# about rather than guessed at. Limited to the bands the two catalog fetches
+# below can actually supply -- apass_dr9 fetches B, V, R, I, SR, SG and SI,
+# refcat2 fetches B, V, R and I -- so U, SU and SZ are left out even though
+# AAVSO recognizes them: naming a color built from a band the catalog cannot
+# return would only replace this lookup's raise with a `KeyError` further on.
 _CONVENTIONAL_COLOR = {
-    "U": ("U", "B"),
     "B": ("B", "V"),
     "V": ("B", "V"),
     "R": ("R", "I"),
-    "RC": ("R", "I"),
-    "Rc": ("R", "I"),
     "I": ("R", "I"),
-    "IC": ("R", "I"),
-    "Ic": ("R", "I"),
-    "SU": ("SU", "SG"),
     "SG": ("SG", "SR"),
     "SR": ("SR", "SI"),
     "SI": ("SR", "SI"),
-    "SZ": ("SI", "SZ"),
 }
+
+
+def _canonical_passband(name):
+    """
+    The AAVSO-standard spelling of a passband name.
+
+    `~stellarphot.settings.aavso_models.AAVSOFilters` is the definitive list
+    of AAVSO passbands, and its members carry both the name a caller is
+    likely to type -- ``Rc`` and ``Ic`` for Cousins R and I -- and the value
+    that is AAVSO's own preferred spelling for it -- ``"R"`` and ``"I"``. This
+    matches ``name`` case-insensitively against both, so ``"Rc"``, ``"rc"``,
+    ``"RC"`` and ``"R"`` all resolve to the one member and come back as
+    ``"R"``. A name that matches nothing is not necessarily wrong -- callers
+    can and do use catalog-specific bands this function has never heard of --
+    so it is returned upper-cased rather than rejected, upper case being the
+    convention AAVSO passband names follow.
+
+    Parameters
+    ----------
+
+    name : str
+        Passband name as a caller wrote it.
+
+    Returns
+    -------
+    str
+        The canonical spelling of the same band.
+    """
+    upper = name.upper()
+    for member in AAVSOFilters:
+        if member.name.upper() == upper or member.value.upper() == upper:
+            return member.value
+    return upper
+
 
 # How strongly the terms of the fit may be correlated with each other before
 # their individual values stop meaning anything. See `_underdetermined_reason`,
@@ -423,28 +446,6 @@ def _calibrated_with_uncertainty(fit_result, covar, mag_inst, color, errors, fit
         return unumpy.nominal_values(calibrated), unumpy.std_devs(calibrated)
 
 
-def _is_same_band(one_filter, another_filter):
-    """
-    Whether two passband names name the same physical band.
-
-    Parameters
-    ----------
-
-    one_filter, another_filter : str
-        Passband names to compare.
-
-    Returns
-    -------
-    bool
-        `True` if the two names are the same, or are two spellings of one
-        band; see `_SAME_BAND`.
-    """
-    if one_filter == another_filter:
-        return True
-
-    return any(one_filter in band and another_filter in band for band in _SAME_BAND)
-
-
 def _check_known_terms(terms, argument_name):
     """
     Raise if any of ``terms`` is not a coefficient of the transform model.
@@ -694,22 +695,30 @@ def transform_to_catalog(
         Name of the passband in the catalog that should be matched to the
         instrumental magnitudes, e.g. ``"R"`` or ``"SR"``. This is a passband
         name, not a column name: the column used is ``mag_<cat_filter>``.
-        Defaults to ``obs_filter``, and naming a different band raises, since
-        calibrating observations in one band against catalog magnitudes in
-        another folds the color difference between the two bands into the fit,
-        where it comes back as a transform coefficient and is applied to every
-        star. Two spellings of one band -- ``"R"`` and ``"RC"``, say -- are not
-        a different band.
+        Passband spellings are canonicalized case-insensitively against
+        `~stellarphot.settings.aavso_models.AAVSOFilters`, so ``"R"`` and
+        ``"Rc"`` are one band rather than two. Defaults to ``obs_filter``,
+        and the default can never mismatch; naming a different band
+        explicitly is taken as deliberate -- unfiltered or DSLR observations
+        (AAVSO's CV and TG) are routinely calibrated against a catalog's V,
+        for instance, because there is no observed V to match against
+        instead -- but it warns, because calibrating observations in one band
+        against catalog magnitudes in another folds the color difference
+        between the two bands into the fit, where it comes back as a
+        transform coefficient and is applied to every star.
 
     cat_color : tuple of two strings, optional
         Names of the two passbands whose difference is the color. The color is
         calculated in the order the passbands are given, so ``("R", "I")``
         means the ``mag_R`` column minus the ``mag_I`` column. As with
-        ``cat_filter``, these are passband names rather than column names.
-        Defaults to the color conventionally used with ``cat_filter``, which
-        is ``("R", "I")`` for R and I, ``("B", "V")`` for B and V, and the
-        neighboring Sloan band for the Sloan ones. A band with no convention
-        recorded raises rather than being guessed at.
+        ``cat_filter``, these are passband names rather than column names, and
+        are canonicalized the same way. Only used, and therefore only
+        defaulted or checked, when a color term (``"c"`` or ``"d"``) is being
+        fit; see ``vary``. When it is, this defaults to the color
+        conventionally used with ``cat_filter``, which is ``("R", "I")`` for R
+        and I, ``("B", "V")`` for B and V, and the neighboring Sloan band for
+        the Sloan ones. A band with no convention recorded raises rather than
+        being guessed at.
 
     vary : sequence of str, optional
         Which terms of the transform model to fit. Any term not named here is
@@ -761,6 +770,14 @@ def transform_to_catalog(
         NaN wherever ``mag_cal`` is, for whatever reason, so a finite
         calibrated error always has a calibrated magnitude to go with it.
 
+        ``result.meta["transform_weighting"]`` records how the fit for this
+        call was weighted, keyed by ``obs_filter`` exactly as it was passed:
+        ``"combined"`` when the catalog had an error column for the band,
+        ``"observed"`` when it did not, and ``"unweighted"`` when
+        ``obs_error_column`` was not given. Keyed rather than flat because
+        this function is called once per passband on the same table, and a
+        flat entry would be overwritten by the next call.
+
     Notes
     -----
 
@@ -786,9 +803,12 @@ def transform_to_catalog(
     combined in quadrature, ``1 / sqrt(obs_error**2 + cat_error**2)``, wherever
     the catalog has a ``mag_error_<cat_filter>`` column; by the observed errors
     alone, with a log message naming the band, wherever it does not. A star
-    whose catalog error is missing or is not positive is left out of the fit,
-    exactly as one whose observed error is. Which bands have an error depends on the
-    catalog rather than on this function: `~stellarphot.CatalogData` builds
+    whose catalog error is missing, masked, NaN or not positive is not left
+    out of the fit for it -- the catalog simply does not know its own
+    uncertainty for that star, so its weight falls back to the observed error
+    alone, exactly as if the catalog had no error column at all. Which bands
+    have an error depends on the catalog rather than on this function:
+    `~stellarphot.CatalogData` builds
     ``mag_error_<band>`` for the bands a catalog measured itself -- B, V, SG,
     SR and SI for APASS DR9, the Sloan bands for refcat2 -- while the
     Johnson-Cousins R and I are added afterwards by
@@ -895,27 +915,43 @@ def transform_to_catalog(
     # passband name wrong should hear about the name rather than about the
     # mismatch that follows from it, and checking the table before commenting
     # on the arguments is the better order in any case.
-    cat_filter = obs_filter if cat_filter is None else cat_filter
-    if not _is_same_band(obs_filter, cat_filter):
-        raise ValueError(
+    cat_filter = _canonical_passband(obs_filter if cat_filter is None else cat_filter)
+    if _canonical_passband(obs_filter) != cat_filter:
+        # The default can never land here -- it is always obs_filter itself
+        # -- so a mismatch only happens when the caller named a different
+        # catalog band on purpose. That is a real workflow: unfiltered and
+        # DSLR observations (AAVSO's CV and TG) have no observed V to match,
+        # so they are calibrated against a catalog's V instead. What has to
+        # be said out loud is the cost of doing that -- the color difference
+        # between the two bands becomes part of the fit, comes back as a
+        # transform coefficient, and is applied to every star -- not whether
+        # it is allowed.
+        warnings.warn(
             f"Observed passband {obs_filter!r} and catalog passband "
-            f"{cat_filter!r} are different bands. Calibrating one against the "
-            "other makes the color difference between the two bands part of "
-            "the fit, which then reports it as a transform coefficient and "
-            "applies it to every star in the image. Leave cat_filter out to "
-            "use the observed passband, or transform the observations to the "
-            "catalog's band first."
+            f"{cat_filter!r} are different bands. The color difference "
+            "between the two bands becomes part of the fit, which reports it "
+            "as a transform coefficient and applies it to every star in the "
+            "image. This is fine for a deliberate choice, such as "
+            "calibrating unfiltered or DSLR observations against a catalog's "
+            "V, but if that was not the intent, leave cat_filter out to use "
+            "the observed passband, or transform the observations to the "
+            "catalog's band first.",
+            AstropyUserWarning,
+            stacklevel=2,
         )
 
-    if cat_color is None:
-        try:
-            cat_color = _CONVENTIONAL_COLOR[cat_filter]
-        except KeyError:
-            raise ValueError(
-                "No color is conventionally used with passband "
-                f"{cat_filter!r}, so cat_color must be given explicitly. The "
-                f"passbands with a default are {sorted(_CONVENTIONAL_COLOR)}."
-            ) from None
+    if cat_color is not None:
+        cat_color = tuple(_canonical_passband(band) for band in cat_color)
+    elif cat_filter in _CONVENTIONAL_COLOR:
+        cat_color = _CONVENTIONAL_COLOR[cat_filter]
+    elif fitting_color:
+        raise ValueError(
+            "No color is conventionally used with passband "
+            f"{cat_filter!r}, so cat_color must be given explicitly. The "
+            f"passbands with a default are {sorted(_CONVENTIONAL_COLOR)}."
+        )
+    # else: no color term is being fit, so the model never evaluates a color
+    # and cat_color is left `None` -- nothing needs it, so nothing is guessed.
 
     # Output is built at the length of the whole table, not of the rows in
     # this passband, and is written by row index below. Rows that are never
@@ -950,8 +986,37 @@ def transform_to_catalog(
             f"Unknown catalog name {cat_name}. Must be one of 'apass_dr9' or 'refcat2'."
         )
 
+    # cat_filter and cat_color are only ever strings until this point, so a
+    # band the catalog cannot supply -- "U" against apass_dr9 or refcat2,
+    # neither of which fetches it, is the obvious way -- would otherwise
+    # survive every check above and die in a bare `KeyError` only after the
+    # Vizier round trip just spent had already paid for it. Checked here,
+    # right after the columns exist to check against, so the message can name
+    # both what is missing and what the catalog actually has.
+    needed_bands = {cat_filter} if cat_color is None else {cat_filter, *cat_color}
+    available_bands = sorted(
+        name.removeprefix("mag_")
+        for name in cat.colnames
+        if name.startswith("mag_") and not name.startswith("mag_error_")
+    )
+    missing_bands = sorted(needed_bands - set(available_bands))
+    if missing_bands:
+        raise ValueError(
+            f"The {cat_name} catalog has no magnitude for passband(s) "
+            f"{missing_bands}, needed for cat_filter or cat_color. It has "
+            f"magnitudes for {available_bands}."
+        )
+
     cat_coords = SkyCoord(cat["ra"], cat["dec"], unit="degree")
-    cat["color"] = cat[f"mag_{cat_color[0]}"] - cat[f"mag_{cat_color[1]}"]
+    if cat_color is None:
+        # No color term is being fit -- see fitting_color above -- so the
+        # model never evaluates a color. An all-NaN column keeps color_cat
+        # honestly reporting "unknown" for every star, rather than a
+        # difference nobody asked for and the catalog was never checked to
+        # support.
+        cat["color"] = np.full(len(cat), np.nan)
+    else:
+        cat["color"] = cat[f"mag_{cat_color[0]}"] - cat[f"mag_{cat_color[1]}"]
 
     # Grouping a table reorders its rows, and the result below is either the
     # grouped table itself or a straight copy of it, so group number ``i``
@@ -981,7 +1046,10 @@ def transform_to_catalog(
         # weighted fit nobody asked for, and would quietly change what
         # ``fit_redchi`` means.
         cat_error_column = None
-    elif cat_error_column not in cat.colnames:
+        weighting_mode = "unweighted"
+    elif cat_error_column in cat.colnames:
+        weighting_mode = "combined"
+    else:
         logger.warning(
             f"The {cat_name} catalog has no {cat_error_column} column, so the "
             "fit is weighted by the errors of the observations alone and how "
@@ -991,6 +1059,14 @@ def transform_to_catalog(
             "propagate errors; see issue #685."
         )
         cat_error_column = None
+        weighting_mode = "observed"
+
+    # Recorded on the result rather than returned separately, keyed by
+    # obs_filter exactly as the caller passed it rather than as a flat entry,
+    # because this function is called once per passband on the same table --
+    # a flat entry would be overwritten by the next call, losing the first
+    # passband's mode.
+    result.meta.setdefault("transform_weighting", {})[obs_filter] = weighting_mode
 
     for group_number, (file, one_image_all_bands) in enumerate(
         zip(
@@ -1047,12 +1123,21 @@ def transform_to_catalog(
 
         if cat_error_column is not None:
             cat_error = _to_float_array(cat[cat_error_column][cat_idx])
-            # The same rule as for the observed errors just above, and for
-            # the same reasons: a catalog error of zero is an infinite
-            # weight, and a missing one makes the weight NaN, which
-            # poisons every residual in the image rather than only this
-            # star's.
-            good_cat = good_cat & np.isfinite(cat_error) & (cat_error > 0)
+            # Unlike the observed error just above, a catalog error the fit
+            # cannot use -- missing, masked, NaN, zero or negative -- does
+            # not mean the star's catalog magnitude is unusable, only that
+            # the catalog does not know its own uncertainty for it. Zero
+            # stands in for it instead of excluding the star: the weight
+            # below is ``1 / hypot(errors, cat_error)``, and ``hypot(x, 0)``
+            # is exactly ``x``, so the star ends up weighted by its observed
+            # error alone -- the same fallback used when the catalog has no
+            # error column for the band at all, just decided star by star
+            # instead of for the whole image. This is what keeps a catalog's
+            # single-observation stars, reported with zero error, in the fit
+            # exactly as they were before catalog-error weighting existed.
+            cat_error = np.where(
+                np.isfinite(cat_error) & (cat_error > 0), cat_error, 0.0
+            )
 
         # Both halves have to be good for the *same* star. Checking each on
         # its own is not enough: the two sets can be disjoint, which leaves
