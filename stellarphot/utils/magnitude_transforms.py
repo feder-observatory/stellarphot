@@ -7,7 +7,8 @@ import numpy as np
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astropy.utils.exceptions import AstropyUserWarning
-from uncertainties import unumpy
+from numpy.linalg import LinAlgError
+from uncertainties import correlated_values, unumpy
 
 from ..catalogs import apass_dr9, refcat2
 from .magnitude_system_transforms import transform_apass_bands, transform_refcat2_bands
@@ -220,20 +221,6 @@ def _coefficient_uncertainties(fit_result):
     """
     Uncertainty of each coefficient of a fit, when the fit can supply them.
 
-    This is the single place the question "does this fit have a usable
-    covariance?" is answered, so that everything derived from the covariance
-    agrees about whether there is one to derive anything from.
-
-    Note that ``fit_result.errorbars`` is deliberately *not* what is checked.
-    `lmfit` clears that flag whenever any varied term comes out with a
-    standard error of exactly zero, and that is what a perfect fit gives:
-    data that follows the model to the last bit has a covariance that really
-    is zero, and zero is the right answer there rather than a missing one.
-    What makes the uncertainties unavailable is ``covar`` being absent
-    altogether, or having non-finite entries -- an inverse that came back with
-    NaN in it looks like a matrix and is not one, and anything that reads it
-    without checking reports a confident wrong number instead of failing.
-
     Parameters
     ----------
 
@@ -253,10 +240,33 @@ def _coefficient_uncertainties(fit_result):
         needs the correlations between the terms as well as their individual
         uncertainties should take the matrix from here rather than asking the
         fit result again, so that there is only ever one verdict.
+
+    Notes
+    -----
+
+    This is the single place the question "does this fit have a usable
+    covariance?" is answered, so that everything derived from the covariance
+    agrees about whether there is one to derive anything from.
+
+    ``fit_result.errorbars`` is deliberately *not* what is checked. This code
+    consumes the covariance matrix itself, so the matrix is what it checks;
+    ``errorbars`` is a summary flag `lmfit` derives from that same object, and
+    checking the artifact actually used is one less indirection.
     """
     covar = fit_result.covar
 
     if covar is None or not np.all(np.isfinite(covar)):
+        return {name: np.nan for name in _COEFF_NAMES}, None
+
+    # lmfit's own `create_uvars` wraps this same decomposition in
+    # `except (LinAlgError, ValueError): pass` and falls back silently to
+    # uncorrelated, stderr-based ufloats. Not known to happen with real data;
+    # checked only so a covariance that fails to decompose (e.g. a tiny
+    # negative eigenvalue from round-off) is never turned into nonsense.
+    varied = [name for name in _COEFF_NAMES if fit_result.params[name].vary]
+    try:
+        correlated_values([fit_result.params[name].value for name in varied], covar)
+    except (LinAlgError, ValueError):
         return {name: np.nan for name in _COEFF_NAMES}, None
 
     return {
@@ -300,29 +310,9 @@ def _calibrated_with_uncertainty(fit_result, covar, mag_inst, color, errors, fit
     """
     Calibrated magnitude of every star, and how uncertain each one is.
 
-    The uncertainty has two parts: the star's own measurement error, and the
-    uncertainty of the transform it was calibrated through. Neither one is
-    written down here. `lmfit` turns the fit into `uncertainties` values that
-    carry the whole covariance matrix, including the correlations between the
-    terms, and `calibrated_from_instrumental` -- the same model function the
-    fit itself used -- then evaluates on them unchanged.
-
-    Doing it this way means the sensitivity of the calibrated magnitude to the
-    instrumental one is never spelled out. Making ``mag_inst`` itself an
-    uncertain value is enough: it appears twice in the expression, once inside
-    the model and once in the ``fit_diff`` add-back, and `uncertainties`
-    works out the ``1 + a + 2*b*mag_inst`` that follows from that. Add a term
-    to the model and the propagation stays right by construction, where a
-    hand-written derivative would be a second copy of the model quietly going
-    stale.
-
-    Note that this is deliberately not exact for a star that was itself in the
-    fit: that star's own noise helped move the coefficients, and treating its
-    measurement error and the transform's uncertainty as independent
-    double-counts a little of it. Measured against a Monte Carlo the reported
-    error is about 10% too large in that case, shrinking as one over the
-    number of stars fit. Erring high is the right direction and modelling the
-    correlation is not worth what it would cost.
+    The returned error carries the star's own measurement error plus the
+    uncertainty of the fitted transform, correlations between the transform's
+    terms included.
 
     Parameters
     ----------
@@ -360,15 +350,31 @@ def _calibrated_with_uncertainty(fit_result, covar, mag_inst, color, errors, fit
     uncertainty : `numpy.ndarray` or None
         Uncertainty of each calibrated magnitude, or `None` when there was
         nothing to propagate.
+
+    Notes
+    -----
+
+    The coefficients arrive as `uncertainties` ufloats carrying the fit's
+    full covariance matrix, and ``mag_inst`` is itself made a ufloat before
+    `calibrated_from_instrumental` -- the same model function the fit used --
+    evaluates on them. That way the sensitivity of the calibrated magnitude to
+    the instrumental one, including the extra term from the ``fit_diff``
+    add-back, is never written down by hand.
+
+    This slightly over-counts the uncertainty of a star that was itself in
+    the fit, since its own noise also helped move the coefficients; erring
+    high there is deliberate.
     """
     if covar is None or errors is None:
-        with _nan_is_an_expected_input():
-            calibrated = calibrated_from_instrumental(
-                (mag_inst, color),
-                *(fit_result.params[name].value for name in _COEFF_NAMES),
-            )
-            if fit_diff:
-                calibrated = calibrated + mag_inst
+        # NaN inputs propagate through plain float arithmetic without
+        # tripping numpy's invalid-value warning, so there is nothing to
+        # suppress here.
+        calibrated = calibrated_from_instrumental(
+            (mag_inst, color),
+            *(fit_result.params[name].value for name in _COEFF_NAMES),
+        )
+        if fit_diff:
+            calibrated = calibrated + mag_inst
         return calibrated, None
 
     uvars = fit_result.params.create_uvars(covar)
@@ -723,30 +729,25 @@ def transform_to_catalog(
     a ``fit_redchi`` near four and coefficient uncertainties twice as large,
     and that is one observation rather than two agreeing ones.
 
-    ``mag_cal_error`` combines two things: the star's own measurement error,
-    and the uncertainty of the transform it was calibrated through, correlations
-    between the terms included. The second part is the larger of the two on a
-    fit to a modest number of stars, and it is worked out per star rather than
-    added on as a constant, because a fit predicts best at the centroid of the
-    stars it was fit to and worst at the ends of their range. It is NaN for an
-    image whose fit left no usable covariance behind: an uncertainty that
-    cannot be worked out is reported as no number rather than as the
-    measurement error on its own, which would be a confident value known to be
-    too small.
+    ``mag_cal_error`` combines the star's own measurement error with the
+    uncertainty of the fitted transform, correlations between the terms
+    included. The transform term is a significant contribution -- the part a
+    plain measurement-error column omits entirely -- that grows as the number
+    of fitted stars shrinks, and it is worked out per star because a fit
+    predicts best at the centroid of the stars it was fit to. It is NaN,
+    rather than falling back to the measurement error alone, for an image
+    whose fit left no usable covariance behind.
 
-    The uncertainty of the *catalog* magnitudes is deliberately not part of it.
-    A star's catalog entry decides whether it was matched, but never enters the
-    calculation of its calibrated magnitude, so there is nothing there to
-    propagate. What the catalog does contribute is its scatter about the
-    transform across the field, and that is already in the answer: ``lmfit``
-    scales the covariance by ``fit_redchi``, so catalog scatter inflates every
-    coefficient uncertainty and with it every calibrated error. That is the
-    right home for it, a property of the calibration shared by every star in
-    the image. The catalog's systematic tie to the standard system -- about
-    0.02 mag for APASS DR9 -- is identical for every star in every image, and
-    in a per-star column would be actively misleading, since averaging these
-    magnitudes would appear to beat it down by the square root of the number of
-    stars.
+    A star's catalog entry decides whether it was matched. When a color term
+    (``c`` or ``d``) is fit, though, the model also applies that star's
+    catalog color, so the color's uncertainty is a real, knowingly omitted
+    contribution -- roughly ``c * sigma_color`` -- tracked as issue #691. What
+    the catalog reliably contributes is its field-wide scatter about the
+    transform, already absorbed because ``lmfit`` scales the covariance by
+    ``fit_redchi``; and its systematic tie to the standard system -- about
+    0.02 mag for APASS DR9 -- which is identical for every star in every
+    image, so a per-star column would mislead, appearing to average down by
+    the square root of the number of stars.
 
     One consequence of that scaling is worth knowing. The transform half of
     ``mag_cal_error`` corrects itself when the quoted instrumental errors are
@@ -998,6 +999,18 @@ def transform_to_catalog(
         if out_of_range:
             logger.warning(f"Fit for {file[0]}: " + "; ".join(out_of_range))
 
+        if covar is None:
+            message = (
+                f"Fit for {file[0]} left no usable covariance behind, so its "
+                "coefficient *_error columns are NaN for this image"
+            )
+            if obs_error_column is not None:
+                message += (
+                    ", and so is mag_cal_error, rather than reporting the "
+                    "measurement error on its own, which would understate it"
+                )
+            logger.warning(message + ".")
+
         if obs_error_column is None:
             star_errors = None
         else:
@@ -1009,14 +1022,6 @@ def transform_to_catalog(
             # after it, because `uncertainties` refuses outright to build a
             # value with a negative standard deviation.
             star_errors = np.where(np.isfinite(errors) & (errors > 0), errors, np.nan)
-
-            if covar is None:
-                logger.warning(
-                    f"Fit for {file[0]} left no usable covariance behind, so "
-                    "the uncertainty of the transform cannot be propagated "
-                    "and mag_cal_error is NaN for this image. Reporting the "
-                    "measurement error on its own would understate it."
-                )
 
         # Calculate calibrated magnitudes for every star in the image, not
         # just the ones the fit used, propagating the uncertainty of the

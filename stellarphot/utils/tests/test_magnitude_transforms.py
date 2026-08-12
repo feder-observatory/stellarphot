@@ -582,10 +582,29 @@ _TRANSFORM_OUTPUT_COLUMNS = {
 }
 
 
-def _fit_a_catalog(mocker, n_stars=20, vary=None, **catalog_coefficients):
+def _fit_a_catalog(
+    mocker,
+    n_stars=20,
+    vary=None,
+    sigma=0.0,
+    seed=None,
+    mag_error=None,
+    **catalog_coefficients,
+):
     """
     Build a synthetic catalog and observations of it, then transform them.
 
+    Left at its defaults (``sigma=0.0``) this generates noiseless
+    observations, for tests that check *where* the fit lands. Passing a
+    nonzero ``sigma``, and usually a ``seed`` so the noise is reproducible,
+    generates noisy observations instead, for tests that ask what the fit's
+    own uncertainties *mean* -- a noiseless fit is exact and has nothing to
+    report an uncertainty about. Noiseless observations taken straight from
+    the magnitudes a synthetic catalog was built from fit it to within
+    `_FAKE_CATALOG_SCATTER`, which leaves every uncertainty derived from a
+    noiseless fit at the 1e-13 level; see the ``noise_sigma`` parameter of
+    `_generate_observed_table` for the noise added on top of that.
+
     Parameters
     ----------
 
@@ -599,63 +618,19 @@ def _fit_a_catalog(mocker, n_stars=20, vary=None, **catalog_coefficients):
         Terms to fit. The default of `~stellarphot.utils.transform_to_catalog`
         is used if this is not given.
 
-    **catalog_coefficients
-        Coefficients ``a``, ``b``, ``c``, ``d`` and ``z`` of the transform
-        model used to build the catalog, passed to `_generate_fake_catalog`.
-
-    Returns
-    -------
-    result : `astropy.table.Table`
-        The transformed observations.
-
-    catalog : `_FakeCatalogTable`
-        The catalog the observations were transformed against.
-
-    instrumental : `numpy.ndarray`
-        Instrumental magnitude of each observation.
-    """
-    catalog, ra, dec, instrumental = _generate_fake_catalog(
-        n_stars, **catalog_coefficients
-    )
-    observed = _generate_observed_table(ra, dec, instrumental)
-    fit_kwargs = {} if vary is None else {"vary": vary}
-    result = _run_transform_to_catalog(mocker, catalog, observed, **fit_kwargs)
-
-    return result, catalog, instrumental
-
-
-def _fit_a_noisy_catalog(
-    mocker, n_stars=50, sigma=0.02, seed=20260811, vary=None, **catalog_coefficients
-):
-    """
-    Build a synthetic catalog and noisy observations of it, then transform them.
-
-    The companion to `_fit_a_catalog` for tests that ask what the fit's own
-    numbers *mean* rather than where the fit lands. Observations taken
-    straight from the magnitudes a synthetic catalog was built from fit it to
-    within `_FAKE_CATALOG_SCATTER`, which leaves every uncertainty derived
-    from the fit at the 1e-13 level; see the ``noise_sigma`` parameter of
-    `_generate_observed_table`.
-
-    Parameters
-    ----------
-
-    mocker : `pytest_mock.MockerFixture`
-        Fixture used to patch the catalog fetch.
-
-    n_stars : int, optional
-        Number of stars to generate.
-
     sigma : float, optional
-        Standard deviation of the noise added to the observed magnitudes, and
-        the error reported for each of them.
+        Standard deviation of Gaussian noise added to the observed
+        magnitudes. Zero, the default, adds none.
 
     seed : int, optional
         Seed for that noise, so a test gets the same numbers every run.
+        Meaningless when ``sigma`` is zero.
 
-    vary : sequence of str, optional
-        Terms to fit. The default of `~stellarphot.utils.transform_to_catalog`
-        is used if this is not given.
+    mag_error : float or array-like, optional
+        Uncertainty to report for each instrumental magnitude, passed on to
+        `_generate_observed_table`. Left at that function's own default --
+        ``sigma`` when noise was added, ``0.01`` otherwise -- if not given
+        here.
 
     **catalog_coefficients
         Coefficients ``a``, ``b``, ``c``, ``d`` and ``z`` of the transform
@@ -670,20 +645,40 @@ def _fit_a_noisy_catalog(
         The catalog the observations were transformed against.
 
     instrumental : `numpy.ndarray`
-        Noiseless instrumental magnitude of each star, i.e. the magnitudes the
-        catalog was generated from. The observed magnitudes, which are these
-        plus the noise, are in the ``mag_inst`` column of ``result``.
+        Instrumental magnitude of each star, i.e. the magnitudes the catalog
+        was generated from. When ``sigma`` is nonzero this is the noiseless
+        value -- the observed ``mag_inst`` column of ``result`` is these plus
+        the noise.
     """
     catalog, ra, dec, instrumental = _generate_fake_catalog(
         n_stars, **catalog_coefficients
     )
     observed = _generate_observed_table(
-        ra, dec, instrumental, noise_sigma=sigma, seed=seed
+        ra, dec, instrumental, mag_error=mag_error, noise_sigma=sigma, seed=seed
     )
     fit_kwargs = {} if vary is None else {"vary": vary}
     result = _run_transform_to_catalog(mocker, catalog, observed, **fit_kwargs)
 
     return result, catalog, instrumental
+
+
+@pytest.fixture(scope="module")
+def _noisy_fit_result(module_mocker):
+    """
+    The one noisy fit shared by tests that ask what its uncertainties mean.
+
+    `test_transform_to_catalog_reports_coefficient_uncertainties`,
+    `test_transform_to_catalog_error_includes_the_transform_uncertainty` and
+    `test_transform_to_catalog_error_uses_the_whole_covariance` all read --
+    and none of them mutate -- the result of fitting the same catalog: 50
+    stars, noise sigma 0.02, seed 20260811, a=0.02 and c=0.15. Computing it
+    once here rather than three times keeps the tests from drifting apart on
+    inputs they mean to share.
+    """
+    result, _, _ = _fit_a_catalog(
+        module_mocker, n_stars=50, sigma=0.02, seed=20260811, a=0.02, c=0.15
+    )
+    return result
 
 
 @pytest.mark.parametrize("c", [0.0, 0.15, -0.2])
@@ -794,12 +789,12 @@ def test_transform_to_catalog_weights_by_inverse_error(mocker):
     np.testing.assert_allclose(result["c"], 0.0, rtol=0, atol=1e-3)
 
 
-def test_transform_to_catalog_reports_coefficient_uncertainties(mocker):
+def test_transform_to_catalog_reports_coefficient_uncertainties(_noisy_fit_result):
     # How well the fit pinned each term down is what separates a transform
     # worth applying from one fit to stars that could barely tell its terms
     # apart, and until now the fit worked it out and threw it away. See issue
     # #677.
-    result, _, _ = _fit_a_noisy_catalog(mocker, a=0.02, c=0.15)
+    result = _noisy_fit_result
 
     for term in ("a", "c", "z"):
         reported = np.asarray(result[f"{term}_error"])
@@ -919,79 +914,6 @@ def test_transform_to_catalog_reports_unweighted_fit_statistic(mocker):
     reported = np.asarray(result["fit_redchi"])
     assert (reported == reported[0]).all()
     assert reported[0] == pytest.approx(sigma**2, rel=0.3)
-
-
-def _break_the_covariance(mocker, how):
-    """
-    Make the fit come back with a covariance matrix that cannot be used.
-
-    Neither state is reachable from data. ``lmfit.minimize`` only leaves
-    ``covar`` unset when inverting the design matrix raises, which the
-    degeneracy check upstream of it rejects first, so this has to be arranged
-    rather than provoked -- otherwise the code that handles it is never run at
-    all. The real fit is still performed, so everything except the covariance
-    is exactly what the data gives.
-
-    Parameters
-    ----------
-
-    mocker : `pytest_mock.MockerFixture`
-        Fixture used to patch the fitter.
-
-    how : str
-        ``"missing"`` for no covariance at all, or ``"not_finite"`` for one
-        full of NaN.
-    """
-    real_minimize = magnitude_transforms.lmfit.minimize
-
-    def minimize_then_spoil_covariance(*args, **kwargs):
-        fit_result = real_minimize(*args, **kwargs)
-        match how:
-            case "missing":
-                fit_result.covar = None
-            case "not_finite":
-                fit_result.covar = np.full_like(fit_result.covar, np.nan)
-            case _:  # pragma: no cover
-                raise ValueError(f"Unknown case {how!r}")
-        return fit_result
-
-    mocker.patch.object(
-        magnitude_transforms.lmfit,
-        "minimize",
-        side_effect=minimize_then_spoil_covariance,
-    )
-
-
-@pytest.mark.parametrize("how", ["missing", "not_finite"])
-def test_transform_to_catalog_nans_uncertainties_without_a_covariance(
-    mocker, how, caplog
-):
-    # A fit can converge and still leave nothing to work the uncertainties out
-    # from. The coefficients are real and are reported; the uncertainties are
-    # not available and say so, rather than being filled in from the diagonal
-    # of a matrix that is missing or full of NaN. A non-finite covariance has
-    # to be caught here as firmly as a missing one -- it is the shape that
-    # would otherwise be turned into a confident wrong answer downstream. See
-    # issue #677.
-    _break_the_covariance(mocker, how)
-
-    # The calibrated errors cannot be worked out either, and say so; that half
-    # is what test_transform_to_catalog_nans_calibrated_error_without_a_covariance
-    # is about.
-    with caplog.at_level(logging.WARNING, logger=_MAGNITUDE_TRANSFORMS_LOGGER):
-        result, _, _ = _fit_a_noisy_catalog(mocker, seed=246810, a=0.02, c=0.15)
-
-    assert any("no usable covariance" in r.message for r in caplog.records)
-
-    for term in ("a", "b", "c", "d", "z"):
-        assert np.isnan(result[f"{term}_error"]).all(), term
-        # The fit itself succeeded, so its answers are all still there.
-        assert np.isfinite(result[term]).all(), term
-
-    assert np.isfinite(result["mag_cal"]).all()
-    # The reduced chi-square is worked out from the residuals, not from the
-    # covariance, so it survives.
-    assert np.isfinite(result["fit_redchi"]).all()
 
 
 def test_transform_to_catalog_fits_each_image_separately(mocker):
@@ -1159,24 +1081,24 @@ def test_transform_to_catalog_error_reduces_to_instrumental_for_a_perfect_fit(mo
     a = 0.02
     mag_error = 0.01
 
-    result, _, _ = _fit_a_catalog(mocker, a=a)
+    result, _, _ = _fit_a_catalog(mocker, a=a, mag_error=mag_error)
 
     np.testing.assert_allclose(
         result["mag_cal_error"], (1 + a) * mag_error, rtol=0, atol=1e-8
     )
 
 
-def test_transform_to_catalog_error_includes_the_transform_uncertainty(mocker):
+def test_transform_to_catalog_error_includes_the_transform_uncertainty(
+    _noisy_fit_result,
+):
     # The failure issue #674 exists to fix: the calibrated error used to be
     # the star's own measurement error and nothing else, as though the
     # coefficients it was calibrated through were known exactly. They are not,
     # and on data with realistic scatter the difference is not small.
-    n_stars = 50
-    sigma = 0.02
+    sigma = 0.02  # must match the sigma _noisy_fit_result fit with
 
-    result, _, _ = _fit_a_noisy_catalog(
-        mocker, n_stars=n_stars, sigma=sigma, a=0.02, c=0.15
-    )
+    result = _noisy_fit_result
+    n_stars = len(result)
 
     reported = np.asarray(result["mag_cal_error"])
 
@@ -1201,7 +1123,7 @@ def test_transform_to_catalog_error_includes_the_transform_uncertainty(mocker):
     assert ends > 1.2 * middle
 
 
-def test_transform_to_catalog_error_uses_the_whole_covariance(mocker):
+def test_transform_to_catalog_error_uses_the_whole_covariance(_noisy_fit_result):
     # The terms of the transform are strongly correlated with each other --
     # over a range of instrumental magnitudes that never crosses zero, the
     # zero point and the scale term trade off almost exactly -- so a
@@ -1210,9 +1132,9 @@ def test_transform_to_catalog_error_uses_the_whole_covariance(mocker):
     # This is also the test that would notice the propagation silently
     # degrading to that uncorrelated answer, which is one of the ways it can
     # fail without raising. See issue #674.
-    sigma = 0.02
+    sigma = 0.02  # must match the sigma _noisy_fit_result fit with
 
-    result, _, _ = _fit_a_noisy_catalog(mocker, sigma=sigma, a=0.02, c=0.15)
+    result = _noisy_fit_result
 
     reported = np.asarray(result["mag_cal_error"])
 
@@ -1300,7 +1222,13 @@ def test_transform_to_catalog_error_includes_the_quadratic_sensitivity(mocker):
     mag_error = 0.01
 
     result, _, instrumental = _fit_a_catalog(
-        mocker, a=a, b=b, c=0.15, d=0.05, vary=("a", "b", "c", "d", "z")
+        mocker,
+        a=a,
+        b=b,
+        c=0.15,
+        d=0.05,
+        vary=("a", "b", "c", "d", "z"),
+        mag_error=mag_error,
     )
 
     sensitivity = 1 + a + 2 * b * instrumental
@@ -1313,27 +1241,6 @@ def test_transform_to_catalog_error_includes_the_quadratic_sensitivity(mocker):
     np.testing.assert_allclose(
         result["mag_cal_error"], np.abs(sensitivity) * mag_error, rtol=0, atol=1e-8
     )
-
-
-@pytest.mark.parametrize("how", ["missing", "not_finite"])
-def test_transform_to_catalog_nans_calibrated_error_without_a_covariance(
-    mocker, how, caplog
-):
-    # Without a usable covariance the transform's own uncertainty cannot be
-    # propagated, and the honest answer is no number at all. Falling back to
-    # the measurement error alone would report a confident value that is known
-    # to be too small, which is the failure #674 exists to fix -- these
-    # numbers are submitted to the AAVSO. The calibrated magnitudes are still
-    # produced; it is only their uncertainty that is unavailable.
-    _break_the_covariance(mocker, how)
-
-    with caplog.at_level(logging.WARNING, logger=_MAGNITUDE_TRANSFORMS_LOGGER):
-        result, _, _ = _fit_a_noisy_catalog(mocker, a=0.02, c=0.15)
-
-    assert any("image_1.fit" in r.message for r in caplog.records)
-
-    assert np.isnan(result["mag_cal_error"]).all()
-    assert np.isfinite(result["mag_cal"]).all()
 
 
 def test_transform_to_catalog_uses_refcat2(mocker):

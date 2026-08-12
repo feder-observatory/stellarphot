@@ -10664,7 +10664,7 @@ packages:
   - bottleneck
   - ccdproc
   - lightkurve
-  - lmfit
+  - lmfit>=1.2.2
   - matplotlib
   - pandas
   - photutils>=2,<3

@@ -25,8 +25,9 @@ dependencies = [
                    # to speed up its internal numpy operations when present
     "ccdproc",
     "lightkurve",
-    "lmfit",  # fits the magnitude transform in stellarphot.utils; also the
-              # fitter behind the optional transit fitting
+    "lmfit >=1.2.2",  # fits the magnitude transform in stellarphot.utils; also
+                      # the fitter behind the optional transit fitting; 1.2.2
+                      # introduced Parameters.create_uvars()
     "matplotlib",
     "pandas",
     "photutils >=2,<3",
