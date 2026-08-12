@@ -18,6 +18,12 @@ New Features
   to the variable-aperture defaults (multiples of the measured FWHM, not
   pixels), with a warning (see issue ``#654``). A file written by a
   newer stellarphot raises ``NewerFormatError``. [#656]
++ ``transform_to_catalog()`` now reports how well each image's transform
+  fit, in six new columns repeated down the image's rows like the
+  coefficients themselves: ``a_error`` through ``z_error``, the uncertainty
+  of each coefficient, and ``fit_redchi``, the summed squared residuals per
+  degree of freedom -- in units of the supplied errors, or in mag² when no
+  ``obs_error_column`` is given. [#677]
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
