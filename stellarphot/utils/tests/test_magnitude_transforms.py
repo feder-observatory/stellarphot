@@ -403,6 +403,13 @@ def _run_transform_to_catalog(
     return transform_to_catalog(observed, obs_filter, cat_name=cat_name, **call_kwargs)
 
 
+# Every output column whose value comes from the catalog entry a star was
+# matched to. All of them stand or fall together: a star matched closely
+# enough to be calibrated keeps the catalog magnitude and color it was
+# calibrated against, and a star that is not gets none of them.
+_CATALOG_DERIVED_COLUMNS = ("mag_cal", "mag_cal_error", "mag_cat", "color_cat")
+
+
 def test_transform_to_catalog_excludes_distant_matches(mocker):
     # A star whose nearest catalog match is far away (much more than
     # 1 arcsec) should be excluded from the fit for the transform
@@ -431,9 +438,12 @@ def test_transform_to_catalog_excludes_distant_matches(mocker):
 
     result = _run_transform_to_catalog(mocker, catalog, observed)
 
-    # The distant star has no real match, so its calibrated
-    # magnitude should be NaN.
-    assert np.isnan(result["mag_cal"][-1])
+    # The distant star has no real match, so nothing derived from that match
+    # should come back with a value -- the catalog magnitude and color are of
+    # an unrelated star, and an error without a magnitude to go with it is
+    # worse than no error at all. See issue #678.
+    for column in _CATALOG_DERIVED_COLUMNS:
+        assert np.isnan(result[column][-1]), column
 
     # With the distant star excluded from the fit, the good stars are
     # an exact fit, so their calibrated magnitudes should match the
@@ -485,13 +495,22 @@ def test_transform_to_catalog_match_tolerance(mocker, offset, expect_nan):
     result = _run_transform_to_catalog(mocker, catalog, observed)
 
     # The offset star gets a calibrated magnitude only if its match is close
-    # enough. The fit is exact, so that magnitude is just the instrumental
-    # magnitude plus the zero point.
-    if expect_nan:
-        assert np.isnan(result["mag_cal"][-1])
-    else:
+    # enough -- and everything else derived from that match goes with it,
+    # rather than mag_cat and color_cat being kept for a match too distant to
+    # calibrate against. This is where that decision is pinned. See issue #678.
+    for column in _CATALOG_DERIVED_COLUMNS:
+        assert np.isnan(result[column][-1]) == expect_nan, column
+
+    if not expect_nan:
+        # The fit is exact, so the calibrated magnitude is just the
+        # instrumental magnitude plus the zero point, and the catalog values
+        # are those of the star it was matched to.
         assert result["mag_cal"][-1] == pytest.approx(
             offset_mag + _FAKE_CATALOG_ZERO_POINT, abs=1e-6
+        )
+        assert result["mag_cat"][-1] == pytest.approx(catalog["mag_R"][0], abs=1e-12)
+        assert result["color_cat"][-1] == pytest.approx(
+            catalog["mag_R"][0] - catalog["mag_I"][0], abs=1e-12
         )
 
     # Either way the offset star is more than an arcsec from its catalog
@@ -1208,6 +1227,99 @@ def test_transform_to_catalog_excludes_masked_catalog_entries(mocker):
     )
 
 
+def _catalog_without_color(n_stars, no_color, **kwargs):
+    """
+    Build a synthetic catalog in which some stars have no color.
+
+    Masking ``mag_I`` is how a real catalog says it has no measurement in that
+    band. The color `transform_to_catalog` works out is masked in turn, and
+    reaches the fit as NaN, so nothing in `_generate_fake_catalog` has to
+    change to produce a star with no color.
+
+    Parameters
+    ----------
+
+    n_stars : int
+        Number of stars to generate.
+
+    no_color : `numpy.ndarray`
+        Boolean mask, `True` for the stars that should have no color.
+
+    **kwargs
+        Passed on to `_generate_fake_catalog`.
+
+    Returns
+    -------
+    Whatever `_generate_fake_catalog` returns, with ``mag_I`` masked.
+    """
+    catalog, ra, dec, instrumental = _generate_fake_catalog(n_stars, **kwargs)
+    catalog["mag_I"] = np.ma.masked_array(catalog["mag_I"], mask=no_color)
+
+    return catalog, ra, dec, instrumental
+
+
+def test_transform_to_catalog_fits_colorless_stars_when_no_color_term(mocker, caplog):
+    # A star with no catalog color has nothing missing as far as a fit with no
+    # color term in it is concerned, so demanding a color of it throws away
+    # data for no reason. See issue #681.
+    n_stars = 20
+
+    catalog, ra, dec, instrumental = _catalog_without_color(
+        n_stars, np.ones(n_stars, dtype=bool)
+    )
+    observed = _generate_observed_table(ra, dec, instrumental)
+
+    with caplog.at_level(logging.WARNING, logger=_MAGNITUDE_TRANSFORMS_LOGGER):
+        result = _run_transform_to_catalog(mocker, catalog, observed, vary=("a", "z"))
+
+    assert not any("No good data" in r.message for r in caplog.records)
+
+    np.testing.assert_allclose(result["mag_cal"], catalog["mag_R"], rtol=0, atol=1e-6)
+    np.testing.assert_allclose(result["z"], _FAKE_CATALOG_ZERO_POINT, rtol=0, atol=1e-6)
+    # The color is genuinely unknown, and the output column still says so.
+    assert np.isnan(result["color_cat"]).all()
+
+
+def test_transform_to_catalog_still_needs_color_when_fitting_a_color_term(
+    mocker, caplog
+):
+    # The other half of the relaxation above, which is what keeps it from being
+    # unconditional: a color term fit to stars with no color is not a fit.
+    n_stars = 20
+
+    catalog, ra, dec, instrumental = _catalog_without_color(
+        n_stars, np.ones(n_stars, dtype=bool)
+    )
+    observed = _generate_observed_table(ra, dec, instrumental)
+
+    with caplog.at_level(logging.WARNING, logger=_MAGNITUDE_TRANSFORMS_LOGGER):
+        result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    assert any("No good data" in r.message for r in caplog.records)
+    assert np.isnan(result["mag_cal"]).all()
+
+
+def test_transform_to_catalog_mixes_stars_with_and_without_color(mocker):
+    # The realistic case: a catalog with a color for some stars and not others.
+    # With no color term being fit, all of them belong in the fit, and the
+    # color column is what says which ones had a color to begin with.
+    n_stars = 20
+
+    no_color = np.zeros(n_stars, dtype=bool)
+    no_color[::2] = True
+
+    catalog, ra, dec, instrumental = _catalog_without_color(n_stars, no_color)
+    observed = _generate_observed_table(ra, dec, instrumental)
+
+    result = _run_transform_to_catalog(mocker, catalog, observed, vary=("a", "z"))
+
+    # Every star is calibrated, color or no color...
+    np.testing.assert_allclose(result["mag_cal"], catalog["mag_R"], rtol=0, atol=1e-6)
+    # ...and the color column reports exactly the ones that had none.
+    assert np.isnan(result["color_cat"][no_color]).all()
+    assert np.isfinite(result["color_cat"][~no_color]).all()
+
+
 def _two_passband_observations(ra, dec, instrumental, i_offset=0.5):
     """
     Observations of one image containing two passbands.
@@ -1493,27 +1605,97 @@ def test_transform_to_catalog_warns_when_fixed_term_outside_expected(mocker, cap
     assert (result["z"] == 0.0).all()
 
 
+# Number of leading rows `_observations_with_unusable_rows` spoils.
+_N_UNUSABLE_ROWS = 2
+
+
+def _observations_with_unusable_rows(case, ra, dec, instrumental):
+    """
+    Observations whose first `_N_UNUSABLE_ROWS` rows cannot carry an error.
+
+    The rest of the rows are untouched, so the fit still has plenty to work
+    with and the spoiled rows are the only thing under test.
+
+    Parameters
+    ----------
+
+    case : str
+        What is wrong with those rows: ``"bad_error"`` for magnitude errors
+        that are not positive finite numbers, or ``"no_magnitude"`` for rows
+        with no instrumental magnitude at all.
+
+    ra, dec : `astropy.units.Quantity`
+        Position of each star.
+
+    instrumental : `numpy.ndarray`
+        Instrumental magnitude of each star.
+
+    Returns
+    -------
+    `astropy.table.Table`
+        Observations, grouped by file name.
+    """
+    observed = _generate_observed_table(ra, dec, instrumental)
+
+    match case:
+        case "bad_error":
+            # Zero and negative are the two ways an error can be meaningless.
+            observed["mag_error"][0] = 0.0
+            observed["mag_error"][1] = -0.02
+        case "no_magnitude":
+            observed["mag_inst"][:_N_UNUSABLE_ROWS] = np.nan
+        case _:  # pragma: no cover
+            raise ValueError(f"Unknown case {case!r}")
+
+    return observed
+
+
 def test_transform_to_catalog_nans_error_for_unusable_input_error(mocker):
     # An error that is zero or negative is meaningless, and the fit already
     # excludes those stars. The calibrated error must not be finite for them
     # either: the AAVSO writer only turns non-finite errors into "na", so a
     # zero would be written into a submission as a real uncertainty -- and an
     # error of zero is infinite weight in any downstream average.
-    n_bad = 2
-
     catalog, ra, dec, instrumental = _generate_fake_catalog(20)
-    observed = _generate_observed_table(ra, dec, instrumental)
-    observed["mag_error"][0] = 0.0
-    observed["mag_error"][1] = -0.02
+    observed = _observations_with_unusable_rows("bad_error", ra, dec, instrumental)
 
     result = _run_transform_to_catalog(mocker, catalog, observed)
 
-    assert np.isnan(result["mag_cal_error"][:n_bad]).all()
-    np.testing.assert_allclose(result["mag_cal_error"][n_bad:], 0.01, rtol=0, atol=1e-8)
+    assert np.isnan(result["mag_cal_error"][:_N_UNUSABLE_ROWS]).all()
+    np.testing.assert_allclose(
+        result["mag_cal_error"][_N_UNUSABLE_ROWS:], 0.01, rtol=0, atol=1e-8
+    )
 
     # The stars are only left out of the *fit*. They still have perfectly good
     # instrumental magnitudes, so they still get calibrated magnitudes.
     np.testing.assert_allclose(result["mag_cal"], catalog["mag_R"], rtol=0, atol=1e-6)
+
+
+def test_transform_to_catalog_nans_error_where_there_is_no_magnitude(mocker):
+    # A calibrated error with no calibrated magnitude beside it is a trap:
+    # selecting rows on a finite mag_cal_error keeps them, and whatever reads
+    # mag_cal next gets NaN. A finite error must always mean there is a
+    # magnitude for it to be the error of, whatever the reason the magnitude
+    # is missing -- here an unmeasured star rather than a distant match. See
+    # issue #678.
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20)
+    observed = _observations_with_unusable_rows("no_magnitude", ra, dec, instrumental)
+
+    result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    assert np.isnan(result["mag_cal"][:_N_UNUSABLE_ROWS]).all()
+    assert np.isnan(result["mag_cal_error"][:_N_UNUSABLE_ROWS]).all()
+
+    # The stars that were measured are unaffected.
+    np.testing.assert_allclose(
+        result["mag_cal"][_N_UNUSABLE_ROWS:],
+        np.asarray(catalog["mag_R"])[_N_UNUSABLE_ROWS:],
+        rtol=0,
+        atol=1e-6,
+    )
+    np.testing.assert_allclose(
+        result["mag_cal_error"][_N_UNUSABLE_ROWS:], 0.01, rtol=0, atol=1e-8
+    )
 
 
 def test_transform_to_catalog_default_catalog_columns(mocker):
