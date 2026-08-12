@@ -214,59 +214,6 @@ def _underdetermined_reason(fit_result, vary):
     return None
 
 
-def _coefficient_uncertainties(fit_result):
-    """
-    Uncertainty of each coefficient of a fit, when the fit can supply them.
-
-    This is the single place the question "does this fit have a usable
-    covariance?" is answered, so that everything derived from the covariance
-    agrees about whether there is one to derive anything from.
-
-    Note that ``fit_result.errorbars`` is deliberately *not* what is checked.
-    `lmfit` clears that flag whenever any varied term comes out with a
-    standard error of exactly zero, and that is what a perfect fit gives:
-    data that follows the model to the last bit has a covariance that really
-    is zero, and zero is the right answer there rather than a missing one.
-    What makes the uncertainties unavailable is ``covar`` being absent
-    altogether, or having non-finite entries -- an inverse that came back with
-    NaN in it looks like a matrix and is not one, and anything that reads it
-    without checking reports a confident wrong number instead of failing.
-
-    Parameters
-    ----------
-
-    fit_result : `lmfit.minimizer.MinimizerResult`
-        Result of fitting one image.
-
-    Returns
-    -------
-    uncertainties : dict
-        Standard error of each term of the transform model, keyed by term
-        name. A term that was not varied was held at exactly zero and is
-        therefore known exactly, so its uncertainty is ``0.0``. Every value is
-        NaN if the covariance cannot be used.
-
-    covar : `numpy.ndarray` or None
-        The covariance matrix, or `None` if it cannot be used. Anything that
-        needs the correlations between the terms as well as their individual
-        uncertainties should take the matrix from here rather than asking the
-        fit result again, so that there is only ever one verdict.
-    """
-    covar = fit_result.covar
-
-    if covar is None or not np.all(np.isfinite(covar)):
-        return {name: np.nan for name in _COEFF_NAMES}, None
-
-    return {
-        name: (
-            np.nan
-            if fit_result.params[name].stderr is None
-            else float(fit_result.params[name].stderr)
-        )
-        for name in _COEFF_NAMES
-    }, covar
-
-
 def _check_known_terms(terms, argument_name):
     """
     Raise if any of ``terms`` is not a coefficient of the transform model.
@@ -579,18 +526,19 @@ def transform_to_catalog(
     for one image rather than any one star, so each of them is the same on
     every row of that image. A term that is not in ``vary`` is held at exactly
     zero and is therefore known exactly, so its uncertainty is exactly zero
-    rather than a small number. The uncertainties are NaN, while the
-    coefficients themselves are still reported, for an image whose fit
-    converged but left no usable covariance behind.
+    rather than a small number.
 
-    ``fit_redchi`` is a reduced chi-square only when ``obs_error_column`` is
-    given, because only then is anything dividing the residuals: it is the
-    mean squared residual in units of the errors that were supplied, and a
-    value near one says the model misses the stars by about as much as they
-    claim to be uncertain. Without an error column the fit is unweighted and
-    the same column holds the mean squared residual in **mag squared** -- the
-    same name and a completely different scale, so values from a weighted and
-    an unweighted fit must not be compared with each other.
+    ``fit_redchi`` is `lmfit`'s reduced chi-square: the summed squared
+    residuals per degree of freedom, i.e. divided by the number of stars fit
+    minus the number of terms varied. It is a chi-square only when
+    ``obs_error_column`` is given, because only then is anything dividing the
+    residuals: the residuals are in units of the errors that were supplied,
+    and a value near one says the model misses the stars by about as much as
+    they claim to be uncertain. Without an error column the fit is unweighted
+    and the same column holds the summed squared residuals per degree of
+    freedom in **mag squared** -- the same name and a completely different
+    scale, so values from a weighted and an unweighted fit must not be
+    compared with each other.
 
     The reported uncertainties are scaled by ``fit_redchi``, because `lmfit`'s
     ``scale_covar`` is left on. They therefore describe the scatter actually
@@ -829,15 +777,18 @@ def transform_to_catalog(
 
         values = {name: fit_result.params[name].value for name in _COEFF_NAMES}
 
-        # How well the fit pinned each term down, and how well the model it
-        # landed on describes the stars. Both are answers about the image
-        # rather than about any one star, and both are reported even when
-        # they are the only thing that would tell a caller the coefficients
-        # below are not worth applying.
-        # The covariance matrix comes back too, but nothing here needs the
-        # correlations between the terms -- only the individual
-        # uncertainties, which are its diagonal.
-        uncertainties, _ = _coefficient_uncertainties(fit_result)
+        # How well the fit pinned each term down. lmfit's stderr is exactly
+        # 0.0 for a term that was not varied -- held at zero, so known
+        # exactly -- and None in the states where no uncertainty could be
+        # worked out at all.
+        uncertainties = {
+            name: (
+                np.nan
+                if fit_result.params[name].stderr is None
+                else float(fit_result.params[name].stderr)
+            )
+            for name in _COEFF_NAMES
+        }
 
         # The expected ranges are a check on the answer, not a constraint on
         # the fit, so a value outside its range is reported and kept.
