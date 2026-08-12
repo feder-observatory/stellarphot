@@ -1,3 +1,4 @@
+import logging
 import warnings
 
 import lmfit
@@ -8,6 +9,8 @@ from astropy.utils.exceptions import AstropyUserWarning
 
 from ..catalogs import apass_dr9, refcat2
 from .magnitude_system_transforms import transform_apass_bands, transform_refcat2_bands
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "calibrated_from_instrumental",
@@ -256,6 +259,34 @@ def _merge_with_existing(table, column_name, new_values, in_passband):
     return np.where(in_passband, new_values, old_values)
 
 
+def _write_output_columns(table, columns, in_passband):
+    """
+    Write a set of output columns to the table, keeping other passbands' values.
+
+    Each column goes through `_merge_with_existing`, so the rows this call is
+    not responsible for keep whatever they already had. Columns are written in
+    the order they appear in ``columns``, which is the order a new column is
+    added to the table in.
+
+    Parameters
+    ----------
+
+    table : `astropy.table.Table`
+        Table the columns will be written to.
+
+    columns : dict
+        Values to write, as ``{column_name: values}``. Each array is the
+        length of the whole table, NaN outside the passband that was fit.
+
+    in_passband : `numpy.ndarray`
+        Boolean mask, `True` for the rows this call is responsible for.
+    """
+    for column_name, new_values in columns.items():
+        table[column_name] = _merge_with_existing(
+            table, column_name, new_values, in_passband
+        )
+
+
 def filter_transform(mag_data, output_filter, g=None, r=None, i=None, transform=None):
     """
     Transform SDSS magnitudes to BVRI using either the transforms from
@@ -428,7 +459,7 @@ def transform_to_catalog(
     expected : dict, optional
         Range each term is expected to fall in, as ``{term: (low, high)}``.
         These are **not** constraints on the fit: a value outside its range is
-        reported in a warning, not clamped. Terms that are not in ``vary`` are
+        reported in a log message, not clamped. Terms that are not in ``vary`` are
         checked too -- a term held at zero when it should be near 20 is the
         most useful thing this can tell you. Pass an empty dict to check
         nothing. The default is ``{"z": (18, 22)}``.
@@ -551,6 +582,12 @@ def transform_to_catalog(
     # is always rows ``group_bounds[i]:group_bounds[i + 1]`` of the output.
     group_bounds = observed_mags_grouped.groups.indices
 
+    # Made before the loop rather than after it so that the results can be
+    # written to it. The loop reads only ``observed_mags_grouped`` and never
+    # this table, and the invariant documented just above is what makes
+    # writing by row index legal.
+    result = observed_mags_grouped if in_place else observed_mags_grouped.copy()
+
     for group_number, (file, one_image_all_bands) in enumerate(
         zip(
             observed_mags_grouped.groups.keys,
@@ -571,8 +608,9 @@ def transform_to_catalog(
 
         cat_idx, d2d, _ = our_coords.match_to_catalog_sky(cat_coords)
 
-        # Masked catalog entries become NaN here, which both keeps them out of
-        # the fit and makes the calibrated magnitudes that depend on them NaN.
+        # Masked catalog entries become NaN here, which both keeps them out
+        # of the fit and makes the calibrated magnitudes that depend on
+        # them NaN.
         mag_inst = _to_float_array(one_image[obs_mag_col])
         cat_mag = _to_float_array(cat[f"mag_{cat_filter}"][cat_idx])
         color = _to_float_array(cat["color"][cat_idx])
@@ -592,9 +630,7 @@ def transform_to_catalog(
         usable = good_dat & good_cat
 
         if not usable.any():
-            warnings.warn(
-                f"No good data in {file[0]}", AstropyUserWarning, stacklevel=2
-            )
+            logger.warning(f"No good data in {file[0]}")
             continue
 
         # Drop stars more than a magnitude away from the median difference
@@ -604,9 +640,7 @@ def transform_to_catalog(
         good = usable & (np.abs(mag_diff - np.median(mag_diff[usable])) < 1)
 
         if not good.any():
-            warnings.warn(
-                f"No good data in {file[0]}", AstropyUserWarning, stacklevel=2
-            )
+            logger.warning(f"No good data in {file[0]}")
             continue
 
         # Prep for fitting
@@ -617,26 +651,24 @@ def transform_to_catalog(
         weights = 1.0 / errors[good] if obs_error_column is not None else 1.0
 
         # Fewer stars than terms has to be caught before the fit rather than
-        # after it: with nothing left to fit, lmfit takes the square root of a
-        # negative number working out the uncertainties, and the RuntimeWarning
-        # that produces is an outright exception for anyone running with
-        # warnings as errors. Whether the terms can be told apart from *each
-        # other* is a question about the fit and is asked of it below.
+        # after it: with nothing left to fit, lmfit takes the square root of
+        # a negative number working out the uncertainties, and the
+        # RuntimeWarning that produces is an outright exception for anyone
+        # running with warnings as errors. Whether the terms can be told
+        # apart from *each other* is a question about the fit and is asked
+        # of it below.
         if fit_mag.size <= len(vary):
-            warnings.warn(
+            logger.warning(
                 f"Fit for {file[0]} is underdetermined: {fit_mag.size} usable "
-                f"star(s) cannot determine {len(vary)} term(s) {list(vary)}; "
-                "the fit has no degrees of freedom left",
-                AstropyUserWarning,
-                stacklevel=2,
+                f"star(s) cannot determine {len(vary)} term(s) {list(vary)}"
             )
             continue
 
         params = base_params.copy()
         if params["z"].vary:
-            # With every other term at its starting value of zero the model is
-            # just the zero point, so the median of the data being fit is the
-            # best starting guess available.
+            # With every other term at its starting value of zero the model
+            # is just the zero point, so the median of the data being fit is
+            # the best starting guess available.
             params["z"].set(value=float(np.median(fit_data)))
 
         fit_result = lmfit.minimize(
@@ -647,11 +679,7 @@ def transform_to_catalog(
         )
 
         if not fit_result.success:
-            warnings.warn(
-                f"Fit did not succeed for {file[0]}: {fit_result.message}",
-                AstropyUserWarning,
-                stacklevel=2,
-            )
+            logger.warning(f"Fit did not succeed for {file[0]}: {fit_result.message}")
             continue
 
         # A fit reports success whether or not the data can tell the terms
@@ -660,11 +688,7 @@ def transform_to_catalog(
         # has to be checked before its results are used.
         underdetermined = _underdetermined_reason(fit_result, vary)
         if underdetermined is not None:
-            warnings.warn(
-                f"Fit for {file[0]} is underdetermined: {underdetermined}",
-                AstropyUserWarning,
-                stacklevel=2,
-            )
+            logger.warning(f"Fit for {file[0]} is underdetermined: {underdetermined}")
             continue
 
         values = {name: fit_result.params[name].value for name in _COEFF_NAMES}
@@ -678,11 +702,7 @@ def transform_to_catalog(
             if not expected[term][0] <= values[term] <= expected[term][1]
         ]
         if out_of_range:
-            warnings.warn(
-                f"Fit for {file[0]}: " + "; ".join(out_of_range),
-                AstropyUserWarning,
-                stacklevel=2,
-            )
+            logger.warning(f"Fit for {file[0]}: " + "; ".join(out_of_range))
 
         # Calculate calibrated magnitudes for every star in the image, not
         # just the ones the fit used.
@@ -691,9 +711,9 @@ def transform_to_catalog(
         if fit_diff:
             cal_mag = cal_mag + mag_inst
 
-        # A limit of 1 arcsec here can cause a variable that really is in APASS to not
-        # match. An example is V2480 Cyg, whose VSX position is about 1.3 arcsec from
-        # its APASS DR9 position.
+        # A limit of 1 arcsec here can cause a variable that really is in
+        # APASS to not match. An example is V2480 Cyg, whose VSX position is
+        # about 1.3 arcsec from its APASS DR9 position.
         cal_mag[d2d.arcsecond > 1.5] = np.nan
 
         for name in _COEFF_NAMES:
@@ -703,15 +723,17 @@ def transform_to_catalog(
         cat_mags[rows] = cat_mag
         cat_colors[rows] = color
 
-    result = observed_mags_grouped if in_place else observed_mags_grouped.copy()
+    # The keys are inserted in the order the columns are added to the table in.
+    output_columns = {}
 
     if obs_error_column is not None:
         # How much the calibrated magnitude moves when the instrumental one
-        # does. With fit_diff the instrumental magnitude is added back to the
-        # model result, so that sensitivity is 1 + a; without it the model is
-        # the calibrated magnitude outright and a itself is the factor -- it
-        # fits to about 1 rather than about 0. Using the same factor for both
-        # would double the reported uncertainty in one of the two modes.
+        # does. With fit_diff the instrumental magnitude is added back to
+        # the model result, so that sensitivity is 1 + a; without it the
+        # model is the calibrated magnitude outright and a itself is the
+        # factor -- it fits to about 1 rather than about 0. Using the same
+        # factor for both would double the reported uncertainty in one of
+        # the two modes.
         sensitivity = 1 + coefficients["a"] if fit_diff else coefficients["a"]
 
         # Scaled from the raw per-call coefficients rather than the merged
@@ -721,27 +743,18 @@ def transform_to_catalog(
         scaled_errors = sensitivity * raw_errors
 
         # An error that is not a positive, finite number is kept out of the
-        # fit above, and must not come back out as a calibrated error either:
-        # the AAVSO writer turns only non-finite errors into "na", so a zero
-        # would be submitted as a real uncertainty.
+        # fit above, and must not come back out as a calibrated error
+        # either: the AAVSO writer turns only non-finite errors into "na",
+        # so a zero would be submitted as a real uncertainty.
         scaled_errors[~(np.isfinite(raw_errors) & (raw_errors > 0))] = np.nan
 
-        result[_CAL_MAG_ERROR_COLUMN] = _merge_with_existing(
-            result, _CAL_MAG_ERROR_COLUMN, scaled_errors, in_passband
-        )
+        output_columns[_CAL_MAG_ERROR_COLUMN] = scaled_errors
 
-    result[_CAL_MAG_COLUMN] = _merge_with_existing(
-        result, _CAL_MAG_COLUMN, cal_mags, in_passband
-    )
+    output_columns[_CAL_MAG_COLUMN] = cal_mags
+    output_columns.update(coefficients)
+    output_columns["mag_cat"] = cat_mags
+    output_columns["color_cat"] = cat_colors
 
-    for name in _COEFF_NAMES:
-        result[name] = _merge_with_existing(
-            result, name, coefficients[name], in_passband
-        )
-
-    result["mag_cat"] = _merge_with_existing(result, "mag_cat", cat_mags, in_passband)
-    result["color_cat"] = _merge_with_existing(
-        result, "color_cat", cat_colors, in_passband
-    )
+    _write_output_columns(result, output_columns, in_passband)
 
     return result

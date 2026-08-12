@@ -146,6 +146,11 @@ Bug Fixes
   and a partial save no longer resurrects stale values from a conflicting
   partial settings file. Encoding and OS errors while reading settings now
   raise ``SettingsFileReadError``, a ``ValueError`` subclass. [#662]
++ ``transform_to_catalog()`` now reports per-image fitting problems (no usable
+  stars, underdetermined or failed fits, out-of-expected-range terms) as log
+  messages instead of warnings, so running with warnings-as-errors no longer
+  aborts the calibration; output columns are written after all images are
+  processed. [#682]
 
 2.1.2 (2026-07-19)
 -------------------

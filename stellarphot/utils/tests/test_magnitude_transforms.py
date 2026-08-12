@@ -1,4 +1,4 @@
-import re
+import logging
 
 import numpy as np
 import pytest
@@ -14,6 +14,9 @@ from ..magnitude_transforms import (
     filter_transform,
     transform_to_catalog,
 )
+
+# Logger name for magnitude_transforms module
+_MAGNITUDE_TRANSFORMS_LOGGER = "stellarphot.utils.magnitude_transforms"
 
 
 def _generate_star_coordinates(
@@ -917,11 +920,11 @@ def test_transform_to_catalog_bad_vary_raises(mocker, bad_vary):
     ],
 )
 def test_transform_to_catalog_warns_when_term_outside_expected(
-    mocker, term, true_value, expected
+    mocker, term, true_value, expected, caplog
 ):
     # A zero point outside the expected range used to rail at the bound and
     # report a confident wrong answer. Every term should now be fit freely and
-    # merely warned about, by name and by the value it reached. See issue #601.
+    # merely logged about, by name and by the value it reached. See issue #601.
     coefficients = {term: true_value}
     if term != "z":
         coefficients["z"] = _FAKE_CATALOG_ZERO_POINT
@@ -929,9 +932,11 @@ def test_transform_to_catalog_warns_when_term_outside_expected(
     catalog, ra, dec, instrumental = _generate_fake_catalog(20, **coefficients)
     observed = _generate_observed_table(ra, dec, instrumental)
 
-    message = re.escape(f"{term}={true_value:.4f} is outside")
-    with pytest.warns(AstropyUserWarning, match=message):
+    message_pattern = f"{term}={true_value:.4f} is outside"
+    with caplog.at_level(logging.WARNING, logger=_MAGNITUDE_TRANSFORMS_LOGGER):
         result = _run_transform_to_catalog(mocker, catalog, observed, expected=expected)
+
+    assert any(message_pattern in r.message for r in caplog.records)
 
     # The value is reported, not clamped to the edge of the expected range.
     np.testing.assert_allclose(result[term], true_value, rtol=0, atol=1e-6)
@@ -962,7 +967,7 @@ def test_transform_to_catalog_empty_expected_disables_check(mocker):
     np.testing.assert_allclose(result["z"], true_zero_point, rtol=0, atol=1e-6)
 
 
-def test_transform_to_catalog_warns_when_fit_fails(mocker):
+def test_transform_to_catalog_warns_when_fit_fails(mocker, caplog):
     # A fit that does not converge is not reliably reproducible, so mock one.
     catalog, ra, dec, instrumental = _generate_fake_catalog(20)
     observed = _generate_observed_table(ra, dec, instrumental)
@@ -972,8 +977,10 @@ def test_transform_to_catalog_warns_when_fit_fails(mocker):
     failed_fit.message = "the fitter gave up"
     mocker.patch.object(magnitude_transforms.lmfit, "minimize", return_value=failed_fit)
 
-    with pytest.warns(AstropyUserWarning, match="did not succeed"):
+    with caplog.at_level(logging.WARNING, logger=_MAGNITUDE_TRANSFORMS_LOGGER):
         result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    assert any("did not succeed" in r.message for r in caplog.records)
 
     assert np.isnan(result["mag_cal"]).all()
 
@@ -1052,7 +1059,7 @@ def _make_unusable_observations(case, catalog, ra, dec, instrumental, **kwargs):
 
 
 @pytest.mark.parametrize("case", ["out_of_range", "nan", "masked_catalog"])
-def test_transform_to_catalog_no_good_data_warns_and_nans(mocker, case):
+def test_transform_to_catalog_no_good_data_warns_and_nans(mocker, case, caplog):
     # An image can be unusable from either side -- bad measurements or no
     # catalog to compare them to -- and the answer is the same either way: say
     # which image it was, and leave its outputs NaN rather than reporting
@@ -1060,21 +1067,44 @@ def test_transform_to_catalog_no_good_data_warns_and_nans(mocker, case):
     catalog, ra, dec, instrumental = _generate_fake_catalog(20)
     observed = _make_unusable_observations(case, catalog, ra, dec, instrumental)
 
-    with pytest.warns(AstropyUserWarning, match="image_1.fit"):
+    with caplog.at_level(logging.WARNING, logger=_MAGNITUDE_TRANSFORMS_LOGGER):
         result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    assert any("image_1.fit" in r.message for r in caplog.records)
 
     assert np.isnan(result["mag_cal"]).all()
     for term in ("a", "b", "c", "d", "z"):
         assert np.isnan(result[term]).all()
 
 
-def test_transform_to_catalog_one_bad_image_does_not_poison_others(mocker):
-    # A night's data can easily contain one unusable image. That image should
-    # cost its own results and nothing else -- the fits for the other images
-    # still have to come back.
-    catalog, ra, dec, instrumental = _generate_fake_catalog(20)
+def _one_good_one_bad_image(catalog, ra, dec, instrumental):
+    """
+    Observations of two images, the first usable and the second not.
 
-    observed = _combine_observed_tables(
+    The unusable image is unusable in a way that makes `transform_to_catalog`
+    give up on it partway through the loop over images, warning and naming
+    ``image_2.fit`` as it does. That is the setup both for "one bad image does
+    not cost the others their results" and for "those results are in the table
+    even when the warning is escalated to an error".
+
+    Parameters
+    ----------
+
+    catalog : `_FakeCatalogTable`
+        Catalog the observations will be matched against.
+
+    ra, dec : `astropy.units.Quantity`
+        Position of each star. Both images observe the same stars.
+
+    instrumental : `numpy.ndarray`
+        Instrumental magnitudes of the usable image.
+
+    Returns
+    -------
+    `astropy.table.Table`
+        Observations of both images, grouped by file name.
+    """
+    return _combine_observed_tables(
         _generate_observed_table(ra, dec, instrumental, file_name="image_1.fit"),
         _make_unusable_observations(
             "out_of_range",
@@ -1086,8 +1116,19 @@ def test_transform_to_catalog_one_bad_image_does_not_poison_others(mocker):
         ),
     )
 
-    with pytest.warns(AstropyUserWarning, match="image_2.fit"):
+
+def test_transform_to_catalog_one_bad_image_does_not_poison_others(mocker, caplog):
+    # A night's data can easily contain one unusable image. That image should
+    # cost its own results and nothing else -- the fits for the other images
+    # still have to come back.
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20)
+
+    observed = _one_good_one_bad_image(catalog, ra, dec, instrumental)
+
+    with caplog.at_level(logging.WARNING, logger=_MAGNITUDE_TRANSFORMS_LOGGER):
         result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    assert any("image_2.fit" in r.message for r in caplog.records)
 
     good = result["file"] == "image_1.fit"
 
@@ -1095,6 +1136,50 @@ def test_transform_to_catalog_one_bad_image_does_not_poison_others(mocker):
         result["mag_cal"][good], catalog["mag_R"], rtol=0, atol=1e-6
     )
     assert np.isnan(result["mag_cal"][~good]).all()
+
+
+def test_transform_to_catalog_bad_image_logs_instead_of_raising(mocker, caplog):
+    # Problems with one image are log messages, not warnings, so the call
+    # completes and the table is written even with warnings escalated to
+    # errors -- which this suite's own configuration does. See issue #679.
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20)
+
+    observed = _one_good_one_bad_image(catalog, ra, dec, instrumental)
+
+    with caplog.at_level(logging.WARNING, logger=_MAGNITUDE_TRANSFORMS_LOGGER):
+        result = _run_transform_to_catalog(mocker, catalog, observed, in_place=True)
+
+    assert any("image_2.fit" in r.message for r in caplog.records)
+
+    # The call completed and the table is complete.
+    assert _TRANSFORM_OUTPUT_COLUMNS <= set(result.colnames)
+
+    good = result["file"] == "image_1.fit"
+
+    np.testing.assert_allclose(
+        result["mag_cal"][good], catalog["mag_R"], rtol=0, atol=1e-6
+    )
+    assert np.isnan(result["mag_cal"][~good]).all()
+
+
+def test_transform_to_catalog_out_of_range_term_logs_instead_of_raising(mocker, caplog):
+    # A term outside its expected range is a report on a fit that succeeded,
+    # so it is a log message rather than a warning: every star keeps its
+    # calibrated magnitude even with warnings escalated to errors. See
+    # issue #679.
+    true_zero_point = 25.0
+
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20, z=true_zero_point)
+    observed = _generate_observed_table(ra, dec, instrumental)
+
+    with caplog.at_level(logging.WARNING, logger=_MAGNITUDE_TRANSFORMS_LOGGER):
+        result = _run_transform_to_catalog(mocker, catalog, observed, in_place=True)
+
+    assert any("z=25.0000 is outside" in r.message for r in caplog.records)
+    assert _TRANSFORM_OUTPUT_COLUMNS <= set(result.colnames)
+
+    np.testing.assert_allclose(result["mag_cal"], catalog["mag_R"], rtol=0, atol=1e-6)
+    np.testing.assert_allclose(result["z"], true_zero_point, rtol=0, atol=1e-6)
 
 
 def test_transform_to_catalog_excludes_masked_catalog_entries(mocker):
@@ -1228,7 +1313,7 @@ def test_transform_to_catalog_skips_image_without_the_passband(mocker):
     assert np.isnan(result["mag_cal"][~has_the_passband]).all()
 
 
-def test_transform_to_catalog_warns_when_outlier_cut_removes_everything(mocker):
+def test_transform_to_catalog_warns_when_outlier_cut_removes_everything(mocker, caplog):
     # Stars more than a magnitude from the median offset between the catalog
     # and instrumental magnitudes are dropped. Here every star is, which
     # leaves nothing to fit even though the data and the catalog matches are
@@ -1238,13 +1323,15 @@ def test_transform_to_catalog_warns_when_outlier_cut_removes_everything(mocker):
     scattered = instrumental + np.array([2.5, -2.5])
     observed = _generate_observed_table(ra, dec, scattered)
 
-    with pytest.warns(AstropyUserWarning, match="No good data"):
+    with caplog.at_level(logging.WARNING, logger=_MAGNITUDE_TRANSFORMS_LOGGER):
         result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    assert any("No good data" in r.message for r in caplog.records)
 
     assert np.isnan(result["mag_cal"]).all()
 
 
-def test_transform_to_catalog_disjoint_good_data_and_catalog(mocker):
+def test_transform_to_catalog_disjoint_good_data_and_catalog(mocker, caplog):
     # The stars with usable instrumental magnitudes and the stars with usable
     # catalog entries can be two entirely different sets. Checking that each is
     # non-empty on its own is not enough: the median offset used for the
@@ -1267,16 +1354,14 @@ def test_transform_to_catalog_disjoint_good_data_and_catalog(mocker):
 
     observed = _generate_observed_table(ra, dec, instrumental)
 
-    with pytest.warns(AstropyUserWarning, match="No good data") as recorded:
+    with caplog.at_level(logging.WARNING, logger=_MAGNITUDE_TRANSFORMS_LOGGER):
         result = _run_transform_to_catalog(mocker, catalog, observed)
 
-    assert not [
-        warning for warning in recorded if issubclass(warning.category, RuntimeWarning)
-    ], "taking the median of an empty selection should not be attempted at all"
+    assert any("No good data" in r.message for r in caplog.records)
     assert np.isnan(result["mag_cal"]).all()
 
 
-def test_transform_to_catalog_warns_when_too_few_stars_to_fit(mocker):
+def test_transform_to_catalog_warns_when_too_few_stars_to_fit(mocker, caplog):
     # Three stars cannot pin down three coefficients: the fit has no degrees of
     # freedom left, so it reproduces those three stars exactly and says nothing
     # at all about any other star in the image. lmfit reports success anyway,
@@ -1286,15 +1371,17 @@ def test_transform_to_catalog_warns_when_too_few_stars_to_fit(mocker):
     catalog, ra, dec, instrumental = _generate_fake_catalog(3)
     observed = _generate_observed_table(ra, dec, instrumental)
 
-    with pytest.warns(AstropyUserWarning, match="underdetermined"):
+    with caplog.at_level(logging.WARNING, logger=_MAGNITUDE_TRANSFORMS_LOGGER):
         result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    assert any("underdetermined" in r.message for r in caplog.records)
 
     assert np.isnan(result["mag_cal"]).all()
     for term in ("a", "b", "c", "d", "z"):
         assert np.isnan(result[term]).all()
 
 
-def test_transform_to_catalog_warns_when_terms_are_degenerate(mocker):
+def test_transform_to_catalog_warns_when_terms_are_degenerate(mocker, caplog):
     # Plenty of stars is not enough if they carry no independent information. A
     # color that is a linear function of instrumental magnitude makes a, c and
     # z exactly degenerate -- infinitely many combinations fit equally well --
@@ -1307,13 +1394,15 @@ def test_transform_to_catalog_warns_when_terms_are_degenerate(mocker):
     )
     observed = _generate_observed_table(ra, dec, instrumental)
 
-    with pytest.warns(AstropyUserWarning, match="underdetermined"):
+    with caplog.at_level(logging.WARNING, logger=_MAGNITUDE_TRANSFORMS_LOGGER):
         result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    assert any("underdetermined" in r.message for r in caplog.records)
 
     assert np.isnan(result["mag_cal"]).all()
 
 
-def test_transform_to_catalog_warns_when_terms_are_nearly_degenerate(mocker):
+def test_transform_to_catalog_warns_when_terms_are_nearly_degenerate(mocker, caplog):
     # Exactly degenerate data is a synthetic construct: it takes a color that is
     # a linear function of instrumental magnitude to the last bit, which real
     # stars never are. What real data does produce is *near* degeneracy -- a
@@ -1333,13 +1422,15 @@ def test_transform_to_catalog_warns_when_terms_are_nearly_degenerate(mocker):
     )
     observed = _generate_observed_table(ra, dec, instrumental)
 
-    with pytest.warns(AstropyUserWarning, match="underdetermined"):
+    with caplog.at_level(logging.WARNING, logger=_MAGNITUDE_TRANSFORMS_LOGGER):
         result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    assert any("underdetermined" in r.message for r in caplog.records)
 
     assert np.isnan(result["mag_cal"]).all()
 
 
-def test_transform_to_catalog_warns_when_a_term_has_no_leverage(mocker):
+def test_transform_to_catalog_warns_when_a_term_has_no_leverage(mocker, caplog):
     # The extreme end of the same problem: if the two catalog bands the color
     # is built from are identical, every star's color is zero and the color
     # term does nothing whatever -- any value of c fits exactly as well as any
@@ -1354,8 +1445,10 @@ def test_transform_to_catalog_warns_when_a_term_has_no_leverage(mocker):
     )
     observed = _generate_observed_table(ra, dec, instrumental)
 
-    with pytest.warns(AstropyUserWarning, match="cannot be told apart"):
+    with caplog.at_level(logging.WARNING, logger=_MAGNITUDE_TRANSFORMS_LOGGER):
         result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    assert any("cannot be told apart" in r.message for r in caplog.records)
 
     assert np.isnan(result["mag_cal"]).all()
 
@@ -1384,7 +1477,7 @@ def test_transform_to_catalog_fits_correlated_but_usable_data(mocker):
     np.testing.assert_allclose(result["c"], 0.15, rtol=0, atol=1e-4)
 
 
-def test_transform_to_catalog_warns_when_fixed_term_outside_expected(mocker):
+def test_transform_to_catalog_warns_when_fixed_term_outside_expected(mocker, caplog):
     # Leaving z out of vary pins it at zero, which is nowhere near the expected
     # zero point of a real image. A term held at a wrong value is exactly what
     # the caller needs to be told about, so the expected ranges are checked for
@@ -1392,8 +1485,10 @@ def test_transform_to_catalog_warns_when_fixed_term_outside_expected(mocker):
     catalog, ra, dec, instrumental = _generate_fake_catalog(20, a=0.02, c=0.15)
     observed = _generate_observed_table(ra, dec, instrumental)
 
-    with pytest.warns(AstropyUserWarning, match=r"z=0\.0000 is outside"):
+    with caplog.at_level(logging.WARNING, logger=_MAGNITUDE_TRANSFORMS_LOGGER):
         result = _run_transform_to_catalog(mocker, catalog, observed, vary=("a", "c"))
+
+    assert any("z=0.0000 is outside" in r.message for r in caplog.records)
 
     assert (result["z"] == 0.0).all()
 
