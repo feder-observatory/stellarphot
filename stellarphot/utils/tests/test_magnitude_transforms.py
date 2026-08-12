@@ -1138,9 +1138,10 @@ def test_transform_to_catalog_one_bad_image_does_not_poison_others(mocker, caplo
     assert np.isnan(result["mag_cal"][~good]).all()
 
 
-def test_transform_to_catalog_writes_results_before_warnings_escalate(mocker, caplog):
-    # Bad images now log warnings instead of raising them, so the table is
-    # always completed and the call returns normally. See issue #679.
+def test_transform_to_catalog_bad_image_logs_instead_of_raising(mocker, caplog):
+    # Problems with one image are log messages, not warnings, so the call
+    # completes and the table is written even with warnings escalated to
+    # errors -- which this suite's own configuration does. See issue #679.
     catalog, ra, dec, instrumental = _generate_fake_catalog(20)
 
     observed = _one_good_one_bad_image(catalog, ra, dec, instrumental)
@@ -1161,12 +1162,11 @@ def test_transform_to_catalog_writes_results_before_warnings_escalate(mocker, ca
     assert np.isnan(result["mag_cal"][~good]).all()
 
 
-def test_transform_to_catalog_writes_results_before_expected_warning_escalates(
-    mocker, caplog
-):
-    # The message about a term outside its expected range is now logged, not
-    # raised as a warning. The fit succeeded and every star has a calibrated
-    # magnitude. See issue #679.
+def test_transform_to_catalog_out_of_range_term_logs_instead_of_raising(mocker, caplog):
+    # A term outside its expected range is a report on a fit that succeeded,
+    # so it is a log message rather than a warning: every star keeps its
+    # calibrated magnitude even with warnings escalated to errors. See
+    # issue #679.
     true_zero_point = 25.0
 
     catalog, ra, dec, instrumental = _generate_fake_catalog(20, z=true_zero_point)

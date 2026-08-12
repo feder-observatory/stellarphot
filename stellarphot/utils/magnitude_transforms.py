@@ -459,7 +459,7 @@ def transform_to_catalog(
     expected : dict, optional
         Range each term is expected to fall in, as ``{term: (low, high)}``.
         These are **not** constraints on the fit: a value outside its range is
-        reported in a warning, not clamped. Terms that are not in ``vary`` are
+        reported in a log message, not clamped. Terms that are not in ``vary`` are
         checked too -- a term held at zero when it should be near 20 is the
         most useful thing this can tell you. Pass an empty dict to check
         nothing. The default is ``{"z": (18, 22)}``.
