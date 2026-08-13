@@ -3,13 +3,22 @@ import logging
 import numpy as np
 import pytest
 from astropy import units as u
+from astropy.coordinates import SkyCoord
 from astropy.table import Table, vstack
 from astropy.utils.data import get_pkg_data_filename
 from astropy.utils.exceptions import AstropyUserWarning
 
+from stellarphot.conftest import SERVER_DOWN_ERRORS
+
+from ...catalogs import apass_dr9, refcat2
 from ...core import PhotometryData
 from .. import magnitude_transforms
+from ..magnitude_system_transforms import (
+    transform_apass_bands,
+    transform_refcat2_bands,
+)
 from ..magnitude_transforms import (
+    _to_float_array,
     calibrated_from_instrumental,
     filter_transform,
     transform_to_catalog,
@@ -156,6 +165,18 @@ _FAKE_CATALOG_ZERO_POINT = 20.0
 # the recovery tests allow.
 _FAKE_CATALOG_SCATTER = 1e-12
 
+# Error the synthetic catalog reports for each of its magnitudes. A real
+# catalog reports one for every band it measured itself, and the fit weights
+# by it, so a catalog with no errors at all is the exception rather than the
+# rule -- it is what a *transformed* band looks like, which the tests that
+# care about say explicitly by passing ``cat_error=None``. Small enough
+# against the observed errors used here that it changes no number any other
+# test in this file asserts on: the fit weights are 1/sqrt(obs^2 + cat^2), and
+# `lmfit` rescales the covariance by the reduced chi-square, so a catalog
+# error this far below the observed ones is invisible in both the fit and its
+# reported uncertainties.
+_FAKE_CATALOG_ERROR = 0.001
+
 
 def _generate_fake_catalog(
     n_stars,
@@ -167,6 +188,7 @@ def _generate_fake_catalog(
     coordinates=None,
     instrumental=None,
     color=None,
+    cat_error=_FAKE_CATALOG_ERROR,
 ):
     """
     Generate a catalog whose magnitudes follow the transform model.
@@ -203,10 +225,19 @@ def _generate_fake_catalog(
     color : `numpy.ndarray`, optional
         Color of each star. Random, but seeded, if not given.
 
+    cat_error : float or array-like, optional
+        Error to report for each catalog magnitude, in the
+        ``mag_error_R`` and ``mag_error_I`` columns a real catalog carries for
+        the bands it measured itself. Pass `None` for a catalog with no error
+        columns at all, which is what a band transformed from other bands
+        looks like -- and is what makes `transform_to_catalog` fall back to
+        weighting by the observed errors alone, with a warning.
+
     Returns
     -------
     catalog : `_FakeCatalogTable`
-        Catalog with columns ``ra``, ``dec``, ``mag_R`` and ``mag_I``.
+        Catalog with columns ``ra``, ``dec``, ``mag_R`` and ``mag_I``, and,
+        unless ``cat_error`` is `None`, ``mag_error_R`` and ``mag_error_I``.
 
     ra : `astropy.units.Quantity`
         Right ascension of each star.
@@ -257,7 +288,49 @@ def _generate_fake_catalog(
         }
     )
 
+    if cat_error is not None:
+        errors = np.broadcast_to(
+            np.asarray(cat_error, dtype=float), np.shape(cat_r)
+        ).copy()
+        catalog["mag_error_R"] = errors
+        catalog["mag_error_I"] = errors.copy()
+
     return catalog, ra, dec, instrumental
+
+
+def _catalog_posing_as_bands(catalog, **new_from_old):
+    """
+    Copy a catalog's magnitudes under other passband names.
+
+    ``_catalog_posing_as_bands(catalog, SR="R", SI="I")`` gives the catalog a
+    ``mag_SR`` column holding exactly what ``mag_R`` holds, along with the
+    matching ``mag_error_SR``, so that a catalog built in R and I can stand in
+    for one in any other pair of bands. Only the names change, so a fit
+    against the renamed band recovers exactly what it recovers against the
+    original.
+
+    Parameters
+    ----------
+
+    catalog : `_FakeCatalogTable`
+        Catalog to add the columns to. Modified in place.
+
+    **new_from_old
+        The new passband names, each with the name of the passband whose
+        columns it should copy.
+
+    Returns
+    -------
+    `_FakeCatalogTable`
+        The catalog, for convenience.
+    """
+    for new, old in new_from_old.items():
+        catalog[f"mag_{new}"] = catalog[f"mag_{old}"]
+        old_error = f"mag_error_{old}"
+        if old_error in catalog.colnames:
+            catalog[f"mag_error_{new}"] = catalog[old_error]
+
+    return catalog
 
 
 def _generate_observed_table(
@@ -419,11 +492,11 @@ def _run_transform_to_catalog(
     """
     _patch_catalog_fetch(mocker, catalog, cat_name=cat_name)
 
-    call_kwargs = {
-        "obs_error_column": "mag_error",
-        "cat_filter": "R",
-        "cat_color": ("R", "I"),
-    }
+    # Only the error column is supplied here. The catalog band and color are
+    # left to default from ``obs_filter``, because naming a catalog band that
+    # is not the observed one is now an error, and a helper that quietly
+    # passed ``cat_filter="R"`` would make every call for another band one.
+    call_kwargs = {"obs_error_column": "mag_error"}
     call_kwargs.update(kwargs)
 
     return transform_to_catalog(observed, obs_filter, cat_name=cat_name, **call_kwargs)
@@ -678,6 +751,11 @@ def _noisy_fit_result(module_mocker):
     result, _, _ = _fit_a_catalog(
         module_mocker, n_stars=50, sigma=0.02, seed=20260811, a=0.02, c=0.15
     )
+    # The patch has done its job once the fit is computed. Left in place it
+    # would outlive every later test in the module -- module_mocker unwinds at
+    # module teardown -- and hand the remote-data tests this fake catalog in
+    # place of the real fetch.
+    module_mocker.stopall()
     return result
 
 
@@ -755,38 +833,296 @@ def test_transform_to_catalog_omitted_quadratic_term_degrades_gracefully(mocker)
     )
 
 
-def test_transform_to_catalog_weights_by_inverse_error(mocker):
-    # Every other fit here is of noiseless data with a single error value, and
-    # for a residual that reaches exactly zero the weights make no difference
-    # to where the fit lands -- so weighting by the error rather than by one
-    # over the error would pass the rest of this file. Here one star is wrong
-    # and says so with a large error: weighted correctly it is ignored,
-    # weighted backwards it takes over (z comes out near 18.5, not 20).
-    n_stars = 20
+def _one_star_with_a_large_error(mocker, n_stars=20, cat_error=_FAKE_CATALOG_ERROR):
+    """
+    Fit an image in which one star is wrong and says so with a large error.
+
+    The star's observed magnitude is 0.8 mag from where the catalog puts it,
+    which is close enough to survive the median-based outlier cut, so nothing
+    but the weighting can keep it from dragging the fit. Every other star is
+    measured well and agrees with the catalog.
+
+    Parameters
+    ----------
+
+    mocker : `pytest_mock.MockerFixture`
+        Fixture used to patch the catalog fetch.
+
+    n_stars : int, optional
+        Number of stars to generate.
+
+    cat_error : float or array-like or None, optional
+        Error the catalog reports for each of its magnitudes, passed to
+        `_generate_fake_catalog`.
+
+    Returns
+    -------
+    `astropy.table.Table`
+        The transformed observations.
+    """
     sigma = 1e-4
 
-    catalog, ra, dec, instrumental = _generate_fake_catalog(n_stars)
+    catalog, ra, dec, instrumental = _generate_fake_catalog(
+        n_stars, cat_error=cat_error
+    )
 
-    # Close enough to the other stars to survive the outlier cut, so only the
-    # weighting can keep it from dragging the fit.
     observed_mags = instrumental.copy()
     observed_mags[0] -= 0.8
 
     errors = np.full(n_stars, 0.001)
     errors[0] = 10.0
 
-    # The noise is an order of magnitude below the tolerances asserted here, so
-    # it changes nothing about what this test is asking; it is added only
+    # The noise is an order of magnitude below the tolerances asserted by the
+    # callers, so it changes nothing about what they ask; it is added only
     # because a residual of exactly zero is a state real data never reaches.
     observed = _generate_observed_table(
         ra, dec, observed_mags, noise_sigma=sigma, seed=8811, mag_error=errors
     )
 
-    result = _run_transform_to_catalog(mocker, catalog, observed)
+    return _run_transform_to_catalog(mocker, catalog, observed)
 
+
+def _assert_the_bad_star_was_ignored(result):
+    """
+    Assert a fit recovered the truth despite the badly measured star in it.
+
+    See `_one_star_with_a_large_error`, which builds the image this is asked
+    of. Weighted backwards the bad star takes over and ``z`` comes out near
+    18.5 rather than 20.
+    """
     np.testing.assert_allclose(result["z"], _FAKE_CATALOG_ZERO_POINT, rtol=0, atol=1e-3)
     np.testing.assert_allclose(result["a"], 0.0, rtol=0, atol=1e-3)
     np.testing.assert_allclose(result["c"], 0.0, rtol=0, atol=1e-3)
+
+
+def test_transform_to_catalog_weights_by_inverse_error(mocker):
+    # Every other fit here is of noiseless data with a single error value, and
+    # for a residual that reaches exactly zero the weights make no difference
+    # to where the fit lands -- so weighting by the error rather than by one
+    # over the error would pass the rest of this file.
+    _assert_the_bad_star_was_ignored(_one_star_with_a_large_error(mocker))
+
+
+def test_transform_to_catalog_weights_by_inverse_error_without_catalog_errors(mocker):
+    # The same thing where the catalog supplies no errors of its own, which is
+    # the path the Johnson-Cousins bands take (see the log-message test below).
+    # The observed errors have to be used on their own there, and used the same
+    # way round -- the fallback is not a path that gets to behave differently.
+    result = _one_star_with_a_large_error(mocker, cat_error=None)
+
+    _assert_the_bad_star_was_ignored(result)
+
+
+def test_transform_to_catalog_weights_by_the_catalog_error_too(mocker):
+    # What is being fit is the difference between an observed magnitude and a
+    # catalog one, so a star the *catalog* barely knows constrains the fit as
+    # poorly as one the observation barely knows, and the catalog says which
+    # stars those are. This is what replaced the faintest_mag_for_transform
+    # cut #676 removed: the poorly known stars are down-weighted rather than a
+    # magnitude being drawn across the field. See issue #680.
+    n_stars = 20
+    sigma = 1e-4
+
+    catalog, ra, dec, instrumental = _generate_fake_catalog(n_stars)
+
+    # One star's observed magnitude is 0.8 mag from where the catalog puts it
+    # -- close enough to survive the median-based outlier cut -- and it is the
+    # catalog that is unsure about it. The observation is as good as any other.
+    observed_mags = instrumental.copy()
+    observed_mags[0] -= 0.8
+
+    catalog["mag_error_R"][0] = 10.0
+
+    observed = _generate_observed_table(
+        ra, dec, observed_mags, noise_sigma=sigma, seed=8811, mag_error=0.001
+    )
+
+    result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    np.testing.assert_allclose(result["z"], _FAKE_CATALOG_ZERO_POINT, rtol=0, atol=1e-3)
+
+    # The other half: with no catalog errors to weight by, nothing marks that
+    # star out and it drags the fit. Without this the test above would pass on
+    # a version that ignored the catalog errors entirely.
+    del catalog["mag_error_R"]
+
+    unweighted = _run_transform_to_catalog(mocker, catalog, observed)
+
+    assert abs(unweighted["z"][0] - _FAKE_CATALOG_ZERO_POINT) > 0.01
+
+
+def test_transform_to_catalog_combines_the_errors_in_quadrature(mocker):
+    # Which combination it is matters, and the test above cannot tell: adding
+    # the two errors, or taking the larger of them, would down-weight that
+    # star just as well. So run the same data twice, once against a catalog
+    # that supplies the errors and once with the test having folded them into
+    # the observed errors itself. The two fits must be identical bit for bit,
+    # because they are literally the same weights.
+    n_stars = 20
+    sigma = 0.02
+
+    catalog, ra, dec, instrumental = _generate_fake_catalog(n_stars, a=0.02, c=0.15)
+
+    # Both errors vary from star to star, and in opposite directions, so no
+    # single-error rule reproduces the combination by accident.
+    cat_error = np.linspace(0.005, 0.05, n_stars)
+    obs_error = np.linspace(0.05, 0.005, n_stars)
+    catalog["mag_error_R"] = cat_error
+
+    observed = _generate_observed_table(
+        ra, dec, instrumental, noise_sigma=sigma, seed=97531, mag_error=obs_error
+    )
+    combined_by_the_code = _run_transform_to_catalog(mocker, catalog, observed)
+
+    del catalog["mag_error_R"]
+    pre_combined = _generate_observed_table(
+        ra,
+        dec,
+        instrumental,
+        noise_sigma=sigma,
+        seed=97531,
+        mag_error=np.hypot(obs_error, cat_error),
+    )
+
+    combined_by_the_test = _run_transform_to_catalog(mocker, catalog, pre_combined)
+
+    # Exact equality, not approximate: the fits saw the same magnitudes and
+    # the same weights, so anything but the same answer means the weights were
+    # built some other way. Only what the weights decide is compared --
+    # mag_cal_error is the star's own measurement error propagated, and the
+    # observed errors really are different between the two runs.
+    for column in ("a", "c", "z", "mag_cal"):
+        np.testing.assert_array_equal(
+            np.asarray(combined_by_the_code[column]),
+            np.asarray(combined_by_the_test[column]),
+            err_msg=column,
+        )
+
+
+def test_transform_to_catalog_warns_when_the_catalog_has_no_error_for_the_band(
+    mocker, caplog
+):
+    # The bands the shipped notebook calibrates in, R and I, are exactly the
+    # ones neither APASS nor refcat2 supplies errors for: they are transformed
+    # from the catalog's native bands by a transform that does not propagate
+    # errors yet. The fit still runs, weighted by the observed errors alone,
+    # and says which band it could not do better for. Issue #685 is the fix.
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20, cat_error=None)
+    observed = _combine_observed_tables(
+        _generate_observed_table(ra, dec, instrumental, file_name="image_1.fit"),
+        _generate_observed_table(ra, dec, instrumental, file_name="image_2.fit"),
+    )
+
+    with caplog.at_level(logging.WARNING, logger=_MAGNITUDE_TRANSFORMS_LOGGER):
+        result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    about_the_band = [
+        r for r in caplog.records if "mag_error_R" in r.message and "#685" in r.message
+    ]
+    # One message per call, not one per image: the column is missing from the
+    # catalog, which is a fact about the call rather than about an image.
+    assert len(about_the_band) == 1
+
+    # The result has one row per star per image, so repeat the catalog
+    # magnitudes for each image.
+    expected_mag = np.tile(catalog["mag_R"], 2)
+    np.testing.assert_allclose(result["mag_cal"], expected_mag, rtol=0, atol=1e-6)
+
+
+def test_transform_to_catalog_negligible_catalog_error_changes_nothing(mocker):
+    # The other side of the fallback: adding catalog errors to the weighting
+    # must not have moved the answer for anyone whose catalog errors are too
+    # small to matter. An extremely small catalog error -- one that is
+    # deliberately far below the observed errors -- allows
+    # ``np.hypot(err, 1e-30) == err`` to the last bit in float64, which is what
+    # makes exact bit-for-bit equality between the quadrature-weighted path and
+    # the observed-errors-only path a legitimate expectation. A plausible small
+    # catalog error would force tolerance-based comparison, which could not
+    # distinguish the two weighting code paths at all.
+    n_stars = 20
+    sigma = 0.02
+
+    catalog, ra, dec, instrumental = _generate_fake_catalog(
+        n_stars, a=0.02, c=0.15, cat_error=1e-30
+    )
+    observed = _generate_observed_table(
+        ra, dec, instrumental, noise_sigma=sigma, seed=13579
+    )
+
+    negligible = _run_transform_to_catalog(mocker, catalog, observed, in_place=False)
+
+    del catalog["mag_error_R"]
+    absent = _run_transform_to_catalog(mocker, catalog, observed, in_place=False)
+
+    assert negligible is not absent
+    for column in _TRANSFORM_OUTPUT_COLUMNS:
+        np.testing.assert_array_equal(
+            np.asarray(negligible[column]),
+            np.asarray(absent[column]),
+            err_msg=column,
+        )
+
+
+@pytest.mark.parametrize("case", ["masked", "zero", "negative", "nan"])
+def test_transform_to_catalog_treats_unusable_catalog_errors_as_observed_only(
+    mocker, case
+):
+    # A catalog error the fit cannot use -- masked, NaN, zero or negative --
+    # no longer drops the star from the fit. The catalog simply does not know
+    # its own uncertainty for that star, so the star is weighted by its
+    # observed error alone, exactly as an APASS star with a single, zero-error
+    # observation was before catalog-error weighting existed. See issue #680.
+    n_stars = 20
+    sigma = 1e-4
+
+    # Every star's catalog magnitude is poorly known, so that a star weighted
+    # by its catalog error would be pulled off the true zero point if the
+    # substitution below were not happening.
+    catalog, ra, dec, instrumental = _generate_fake_catalog(n_stars, cat_error=0.5)
+
+    observed_mags = instrumental.copy()
+    observed_mags[0] -= 0.8
+
+    observed = _generate_observed_table(
+        ra, dec, observed_mags, noise_sigma=sigma, seed=8811, mag_error=0.01
+    )
+
+    unusable_catalog = catalog.copy()
+    match case:
+        case "masked":
+            unusable_catalog["mag_error_R"] = np.ma.masked_array(
+                unusable_catalog["mag_error_R"], mask=np.arange(n_stars) == 0
+            )
+        case "zero":
+            unusable_catalog["mag_error_R"][0] = 0.0
+        case "negative":
+            unusable_catalog["mag_error_R"][0] = -0.02
+        case "nan":
+            unusable_catalog["mag_error_R"][0] = np.nan
+        case _:  # pragma: no cover
+            raise ValueError(f"Unknown case {case!r}")
+
+    treated_as_unusable = _run_transform_to_catalog(
+        mocker, unusable_catalog, observed, in_place=False
+    )
+
+    # The reference run substitutes a catalog error so small that
+    # ``np.hypot(obs_err, 1e-30) == obs_err`` to the last bit in float64 --
+    # see `test_transform_to_catalog_negligible_catalog_error_changes_nothing`
+    # for why that makes exact equality a legitimate expectation here rather
+    # than an approximate one.
+    reference_catalog = catalog.copy()
+    reference_catalog["mag_error_R"][0] = 1e-30
+    reference = _run_transform_to_catalog(
+        mocker, reference_catalog, observed, in_place=False
+    )
+
+    for column in _TRANSFORM_OUTPUT_COLUMNS:
+        np.testing.assert_array_equal(
+            np.asarray(treated_as_unusable[column]),
+            np.asarray(reference[column]),
+            err_msg=column,
+        )
 
 
 def test_transform_to_catalog_reports_coefficient_uncertainties(_noisy_fit_result):
@@ -1793,11 +2129,96 @@ def test_transform_to_catalog_passband_not_in_table_raises(mocker):
     # Asking for a passband the table does not contain is a mistake, not an
     # empty result, and the message should say which passbands are there --
     # the usual cause is a name that differs from the one in the file.
+    #
+    # The catalog band is deliberately a different one, which makes this the
+    # test that pins the order of the two checks: the table is checked before
+    # the arguments are, so a caller who got the passband name wrong hears
+    # about the name rather than about a mismatch that is a consequence of it.
     catalog, ra, dec, instrumental = _generate_fake_catalog(20)
     observed = _generate_observed_table(ra, dec, instrumental, passband="R")
 
     with pytest.raises(ValueError, match="No rows with passband 'B'"):
-        _run_transform_to_catalog(mocker, catalog, observed, obs_filter="B")
+        _run_transform_to_catalog(
+            mocker, catalog, observed, obs_filter="B", cat_filter="R"
+        )
+
+
+def test_transform_to_catalog_mismatched_passbands_warns_and_proceeds(mocker):
+    # Calibrating V observations against the catalog's B folds the B - V of
+    # every star into the fit, which comes back as a zero point and a color
+    # term and is then applied to every star in the image. That is exactly
+    # what unfiltered and DSLR observations -- AAVSO's CV and TG -- need,
+    # because there is no observed V to match against instead, so naming a
+    # different catalog band explicitly is taken as deliberate rather than
+    # rejected. The contamination it can cause is the warning's job to flag,
+    # not the function's job to prevent. See issue #680.
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20)
+    _catalog_posing_as_bands(catalog, V="R", B="I")
+    observed = _generate_observed_table(ra, dec, instrumental, passband="V")
+
+    with pytest.warns(AstropyUserWarning, match="passband 'V'.*passband 'B'"):
+        result = _run_transform_to_catalog(
+            mocker, catalog, observed, obs_filter="V", cat_filter="B"
+        )
+
+    # The fit proceeds and calibrates against the named catalog band.
+    np.testing.assert_allclose(result["mag_cal"], catalog["mag_B"], rtol=0, atol=1e-6)
+
+
+@pytest.mark.parametrize("cat_filter", ["R", "RC", "Rc", "rc"])
+def test_transform_to_catalog_accepts_equivalent_passband_names(mocker, cat_filter):
+    # The half that keeps the check above from being over-eager. Cousins R is
+    # written several ways, and refcat2's band transform really does add
+    # mag_R and mag_RC as copies of one column, so R against RC is one band
+    # spelled two ways rather than two bands. Canonicalization is
+    # case-insensitive, which is what "rc" exercises here. Because this suite
+    # turns warnings into errors, a passing call already proves the mismatch
+    # warning above was not raised for any of these spellings.
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20)
+    _catalog_posing_as_bands(catalog, RC="R", Rc="R")
+    observed = _generate_observed_table(ra, dec, instrumental)
+
+    result = _run_transform_to_catalog(mocker, catalog, observed, cat_filter=cat_filter)
+
+    np.testing.assert_allclose(result["mag_cal"], catalog["mag_R"], rtol=0, atol=1e-6)
+
+
+def test_transform_to_catalog_unknown_default_color_raises(mocker):
+    # The color that goes with a band is a convention rather than something
+    # derivable, so a band with no convention recorded has to be asked about
+    # instead of guessed at -- a wrong guess would name a column that is not
+    # there, and the KeyError that follows says nothing about what to do. This
+    # only bites when a color term is actually being fit, which is what the
+    # default ``vary`` does.
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20)
+    _catalog_posing_as_bands(catalog, TG="R")
+    observed = _generate_observed_table(ra, dec, instrumental, passband="TG")
+
+    with pytest.raises(ValueError, match="cat_color must be given"):
+        _run_transform_to_catalog(mocker, catalog, observed, obs_filter="TG")
+
+    # Naming the color is all it takes.
+    result = _run_transform_to_catalog(
+        mocker, catalog, observed, obs_filter="TG", cat_color=("R", "I")
+    )
+    np.testing.assert_allclose(result["mag_cal"], catalog["mag_TG"], rtol=0, atol=1e-6)
+
+
+def test_transform_to_catalog_unknown_default_color_runs_without_color_term(mocker):
+    # The other side of the test above: with no color term in ``vary``, the
+    # model never needs a color, so a band with no conventional color does
+    # not have to raise -- it can only leave ``color_cat`` unknown, which is
+    # what it already is for a star the catalog has no color for.
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20)
+    _catalog_posing_as_bands(catalog, TG="R")
+    observed = _generate_observed_table(ra, dec, instrumental, passband="TG")
+
+    result = _run_transform_to_catalog(
+        mocker, catalog, observed, obs_filter="TG", vary=("a", "z")
+    )
+
+    np.testing.assert_allclose(result["mag_cal"], catalog["mag_TG"], rtol=0, atol=1e-6)
+    assert np.isnan(result["color_cat"]).all()
 
 
 def test_transform_to_catalog_skips_image_without_the_passband(mocker):
@@ -2102,18 +2523,41 @@ def test_transform_to_catalog_nans_error_where_there_is_no_magnitude(mocker):
     )
 
 
-def test_transform_to_catalog_default_catalog_columns(mocker):
-    # Every call site passes cat_filter and cat_color explicitly, so nothing
-    # ever executed the defaults. They name columns the catalog is indexed by
-    # as mag_<name>, which means they have to be passband names.
+@pytest.mark.parametrize(
+    "band, color",
+    [
+        # The band this was written for, and its conventional color.
+        ("R", ("R", "I")),
+        # A band whose conventional color is a different pair entirely, which
+        # is what stops the defaults being a pair of literals. Before this the
+        # default was ``cat_filter="R"``, so calibrating V without naming the
+        # catalog band silently fit V observations against catalog R.
+        ("V", ("B", "V")),
+    ],
+)
+def test_transform_to_catalog_default_catalog_columns(mocker, band, color):
+    # cat_filter and cat_color name columns the catalog is indexed by as
+    # mag_<name>, which means they have to be passband names. Left out, they
+    # follow the observed passband: the catalog band is the one that was
+    # observed, since anything else is an error, and the color is the pair
+    # conventionally used with it.
     catalog, ra, dec, instrumental = _generate_fake_catalog(20)
-    observed = _generate_observed_table(ra, dec, instrumental)
+
+    # The catalog's own R stands in for the band being calibrated, and its I
+    # for the other half of the color pair. Which half that is depends on the
+    # band: V is the second of B - V and R is the first of R - I.
+    other = color[0] if color[1] == band else color[1]
+    _catalog_posing_as_bands(catalog, **{band: "R", other: "I"})
+
+    observed = _generate_observed_table(ra, dec, instrumental, passband=band)
 
     _patch_catalog_fetch(mocker, catalog)
 
-    result = transform_to_catalog(observed, "R", obs_error_column="mag_error")
+    result = transform_to_catalog(observed, band, obs_error_column="mag_error")
 
-    np.testing.assert_allclose(result["mag_cal"], catalog["mag_R"], rtol=0, atol=1e-6)
+    np.testing.assert_allclose(
+        result["mag_cal"], catalog[f"mag_{band}"], rtol=0, atol=1e-6
+    )
 
 
 def test_transform_to_catalog_accepts_photometry_data(mocker):
@@ -2140,6 +2584,14 @@ def test_transform_to_catalog_accepts_photometry_data(mocker):
 
     catalog, ra, dec, instrumental = _generate_fake_catalog(len(photometry))
 
+    # The photometry is in Sloan r', which is a different passband from
+    # Cousins R however close the two are, so the catalog has to be asked for
+    # r' as well -- until this was fixed the test calibrated SR observations
+    # against catalog R, exactly the mistake #680 makes an error. Renaming the
+    # synthetic catalog's bands is enough: nothing here depends on the
+    # magnitudes being real ones.
+    _catalog_posing_as_bands(catalog, SR="R", SI="I")
+
     # Real photometry has gaps in it -- stars that fell off the chip, or were
     # too faint to measure -- so keep some here.
     instrumental[:n_unmeasured] = np.nan
@@ -2159,7 +2611,7 @@ def test_transform_to_catalog_accepts_photometry_data(mocker):
     # ones stay NaN rather than turning into a number.
     np.testing.assert_allclose(
         result["mag_cal"][n_unmeasured:],
-        np.asarray(catalog["mag_R"])[n_unmeasured:],
+        np.asarray(catalog["mag_SR"])[n_unmeasured:],
         rtol=0,
         atol=1e-6,
     )
@@ -2176,3 +2628,246 @@ def test_transform_to_catalog_non_numeric_existing_column_raises(mocker):
 
     with pytest.raises(ValueError, match="'mag_cal' is already in the table"):
         _run_transform_to_catalog(mocker, catalog, observed)
+
+
+def test_transform_to_catalog_records_weighting_mode_in_meta(mocker):
+    # Which errors were available to weight the fit by is a fact about the
+    # call, not about any one star, so it belongs in the table's meta rather
+    # than in a per-row column -- a caller reading mag_cal_error still needs
+    # to know whether it is backed by the catalog's own uncertainty or by the
+    # observed error alone.
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20)
+    observed = _generate_observed_table(ra, dec, instrumental)
+
+    result = _run_transform_to_catalog(mocker, catalog, observed, in_place=False)
+    assert result.meta["transform_weighting"]["R"] == "combined"
+
+    del catalog["mag_error_R"]
+    result = _run_transform_to_catalog(mocker, catalog, observed, in_place=False)
+    assert result.meta["transform_weighting"]["R"] == "observed"
+
+    with pytest.warns(AstropyUserWarning, match="rror weighting"):
+        result = _run_transform_to_catalog(
+            mocker, catalog, observed, obs_error_column=None, in_place=False
+        )
+    assert result.meta["transform_weighting"]["R"] == "unweighted"
+
+
+def test_transform_to_catalog_weighting_meta_keeps_earlier_passbands(mocker):
+    # transform_to_catalog is called once per passband on the same table, so a
+    # flat key in meta would be overwritten by the second call. Keying by
+    # obs_filter, exactly as the caller passed it, is what keeps both calls'
+    # entries alive.
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20)
+    observed = _two_passband_observations(ra, dec, instrumental)
+
+    result = _run_transform_to_catalog(mocker, catalog, observed, obs_filter="R")
+    result = _run_transform_to_catalog(
+        mocker, catalog, result, obs_filter="I", cat_filter="I"
+    )
+
+    assert result.meta["transform_weighting"] == {"R": "combined", "I": "combined"}
+
+
+def test_transform_to_catalog_missing_catalog_band_raises_clean_error(mocker):
+    # Asking for a band the catalog cannot supply used to pass every argument
+    # check, spend the Vizier round trip, and then die in a bare KeyError.
+    # The message should say plainly which band is missing and which ones the
+    # catalog actually has.
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20)
+    observed = _generate_observed_table(ra, dec, instrumental, passband="V")
+
+    with pytest.warns(AstropyUserWarning, match="passband 'V'.*passband 'U'"):
+        with pytest.raises(ValueError, match=r"'U'.*'I', 'R'") as exc_info:
+            _run_transform_to_catalog(
+                mocker,
+                catalog,
+                observed,
+                obs_filter="V",
+                cat_filter="U",
+                cat_color=("R", "I"),
+            )
+
+    assert not isinstance(exc_info.value, KeyError)
+
+
+# Everything below runs only with --remote-data, in the single tox coverage
+# job that passes it. The rest of this file mocks the catalog fetch, which
+# leaves two things untested: the real Vizier query, and the real band
+# transform that turns a catalog's native passbands into Johnson-Cousins ones
+# -- in particular whether the masked entries it produces survive as masked
+# rather than as a fill value. See issue #680.
+
+# Center of the field the remote tests calibrate against: the north galactic
+# pole. The field matters more than it looks. `transform_to_catalog` searches
+# a hardcoded one degree around the first observation and
+# `CatalogData.from_vizier` asks for every row in that cone, so the test pulls
+# a full degree-radius catalog however small a field it builds observations
+# from -- see issue #686. At the galactic pole that cone holds as few stars as
+# any patch of sky does, which is what keeps the query to something Vizier
+# will answer in reasonable time.
+_REMOTE_FIELD_CENTER = SkyCoord(ra=192.85948 * u.degree, dec=27.12825 * u.degree)
+
+# Radius of the separate, small query that supplies the stars the fake
+# observations are built from. Deliberately far smaller than the one degree
+# above: the point is to observe a handful of real stars near the center, not
+# to reproduce the query under test.
+_REMOTE_OBSERVED_RADIUS = 10 * u.arcmin
+
+# Zero point the fake observations are built with, and the scatter added to
+# them. The scatter keeps the fit from being exactly degenerate and gives
+# `fit_redchi` and the covariance something to describe; the zero point is
+# inside the default expected range for z, so a healthy fit warns about
+# nothing.
+_REMOTE_ZERO_POINT = 20.0
+_REMOTE_SCATTER = 0.005
+
+# Range of catalog magnitude the observations are built from. The lower end
+# keeps every instrumental magnitude inside the -20 to -3 window the fit
+# accepts, and the span is wide enough that the terms of the transform can be
+# told apart from each other -- real stars' colors correlate with their
+# magnitudes, so a narrow range is how a fit to a real field goes degenerate.
+_REMOTE_MAG_RANGE = (10.5, 16.5)
+
+# Most stars the query returns are thrown away, evenly, to keep the fit quick
+# without narrowing the magnitude range sampling every Nth row preserves.
+_REMOTE_MAX_STARS = 150
+
+# Fewest stars, and fewest calibrated magnitudes, worth calling a result.
+_REMOTE_MIN_STARS = 20
+
+# The passbands and band transform each catalog is fetched with, mirroring
+# what `transform_to_catalog` asks for. Both native and transformed bands have
+# to be requested: `passband_columns` needs the native ones to transform from.
+_REMOTE_CATALOGS = {
+    "apass_dr9": (
+        apass_dr9,
+        ["B", "V", "R", "I", "SR", "SG", "SI"],
+        transform_apass_bands,
+    ),
+    "refcat2": (refcat2, ["B", "V", "R", "I"], transform_refcat2_bands),
+}
+
+# `ValueError` is in SERVER_DOWN_ERRORS, because the GAIA aperture service
+# reports failure that way, but `transform_to_catalog` also raises it for its
+# own reasons -- so xfailing on it around the call under test would turn a
+# real failure into a pass. The query inside that call is the only part that
+# can find the server down, and it cannot fail with a ValueError.
+_QUERY_DOWN_ERRORS = tuple(
+    error for error in SERVER_DOWN_ERRORS if error is not ValueError
+)
+
+
+@pytest.mark.remote_data
+@pytest.mark.parametrize("cat_name", sorted(_REMOTE_CATALOGS))
+def test_transform_to_catalog_against_a_real_catalog(cat_name):
+    fetch, passbands, transformer = _REMOTE_CATALOGS[cat_name]
+
+    try:
+        nearby = fetch(
+            _REMOTE_FIELD_CENTER,
+            radius=_REMOTE_OBSERVED_RADIUS,
+            clip_by_frame=False,
+            padding=0,
+        )
+    except _QUERY_DOWN_ERRORS as e:
+        pytest.xfail(f"Vizier is down or misbehaving: {e}")
+
+    stars = nearby.passband_columns(passbands=passbands, transformer=transformer)
+
+    catalog_mag = _to_float_array(stars["mag_R"])
+    no_catalog_mag = ~np.isfinite(catalog_mag)
+
+    # Stars the catalog has no R magnitude for are kept on purpose -- they are
+    # what this test exists to check -- and so are stars over a range of
+    # magnitude wide enough to fit.
+    in_range = (catalog_mag >= _REMOTE_MAG_RANGE[0]) & (
+        catalog_mag <= _REMOTE_MAG_RANGE[1]
+    )
+    stars = stars[in_range | no_catalog_mag]
+    if len(stars) > _REMOTE_MAX_STARS:
+        stars = stars[:: int(np.ceil(len(stars) / _REMOTE_MAX_STARS))]
+
+    catalog_mag = _to_float_array(stars["mag_R"])
+    no_catalog_mag = ~np.isfinite(catalog_mag)
+
+    # Only apass_dr9 is required to have stars with no R magnitude: its native
+    # bands really are missing for some stars, and those stars are what the
+    # masked-row checks at the bottom exist for. refcat2's R is transformed
+    # from Sloan bands the catalog is essentially complete in, so this field
+    # -- and perhaps any field -- has no refcat2 star without one; the checks
+    # below then check nothing rather than failing a premise the catalog
+    # cannot meet.
+    if cat_name == "apass_dr9":
+        assert no_catalog_mag.any(), (
+            "No stars with missing catalog magnitudes in the selected field. "
+            "Either the band transform stopped producing masked catalog "
+            "entries or the test field needs re-choosing."
+        )
+
+    assert np.isfinite(catalog_mag).sum() >= _REMOTE_MIN_STARS, (
+        f"only {np.isfinite(catalog_mag).sum()} usable {cat_name} stars near "
+        f"{_REMOTE_FIELD_CENTER.to_string('hmsdms')}"
+    )
+
+    # A star with no catalog magnitude was still observed, so it needs an
+    # instrumental magnitude like any other; the middle of the field's range
+    # will do, since nothing here depends on its value.
+    instrumental = catalog_mag - _REMOTE_ZERO_POINT
+    instrumental[no_catalog_mag] = np.nanmedian(instrumental)
+
+    observed = _generate_observed_table(
+        u.Quantity(np.asarray(stars["ra"]), u.degree),
+        u.Quantity(np.asarray(stars["dec"]), u.degree),
+        instrumental,
+        noise_sigma=_REMOTE_SCATTER,
+        seed=680,
+    )
+
+    try:
+        # Neither catalog supplies an error for the Johnson-Cousins R it
+        # transforms into, which is the case issue #685 is about, so this
+        # logs a message about the band every time until that is fixed.
+        result = transform_to_catalog(
+            observed, "R", obs_error_column="mag_error", cat_name=cat_name
+        )
+    except _QUERY_DOWN_ERRORS as e:
+        pytest.xfail(f"Vizier is down or misbehaving: {e}")
+
+    calibrated = np.ma.getdata(result["mag_cal"])
+    finite = np.isfinite(calibrated)
+    assert finite.sum() >= _REMOTE_MIN_STARS
+
+    # The observations were built from the catalog's own magnitudes, so the
+    # fit should recover the zero point they were built with and give every
+    # star its catalog magnitude back.
+    assert result["z"][0] == pytest.approx(_REMOTE_ZERO_POINT, abs=0.5)
+
+    has_a_catalog_magnitude = finite & ~no_catalog_mag
+    recovered = np.abs(
+        calibrated[has_a_catalog_magnitude] - catalog_mag[has_a_catalog_magnitude]
+    )
+    # A percentile rather than a maximum: a real field contains variables and
+    # blends, and one star matched to the wrong catalog entry a degree-wide
+    # query turned up should not fail a test about the pipeline.
+    assert np.percentile(recovered, 90) < 0.05
+
+    # The fit's account of itself, which is only meaningful on data that
+    # scatters -- hence the noise added above.
+    for column in ("a_error", "c_error", "z_error", "fit_redchi"):
+        assert np.isfinite(result[column][0]), column
+        assert result[column][0] > 0, column
+
+    # The point of the whole test. A star the catalog has no magnitude for
+    # must come back with no magnitude, not with whatever the catalog's
+    # missing-value convention happens to be -- and it is only the real
+    # catalog and the real band transform that can say whether that survives.
+    for column in ("mag_cal", "mag_cat"):
+        # np.ma.getdata rather than the column itself: `np.isnan` of a
+        # masked array is masked in turn, and `.all()` of that is True
+        # whatever the numbers underneath are -- exactly the check that
+        # passes when it should not.
+        missing = np.ma.getdata(result[column])[no_catalog_mag]
+        assert np.isnan(missing).all(), column
+        for fill_value in (-999, 1e20, 0.0):
+            assert not (missing == fill_value).any(), (column, fill_value)

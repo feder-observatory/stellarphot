@@ -169,6 +169,12 @@ Bug Fixes
   somewhat larger. When a fit leaves no usable covariance it is NaN, with
   a warning. Catalog magnitude uncertainty is still excluded -- see the
   docstring for why. [#674]
++ ``transform_to_catalog()`` now warns loudly when ``cat_filter`` explicitly
+  names a band different from ``obs_filter`` instead of silently folding the
+  color difference into the fit. Passband spellings are canonicalized
+  (``"Rc"`` and ``"R"`` are one band), ``cat_filter``/``cat_color`` default
+  from ``obs_filter``, and the fit is weighted by observed and catalog errors
+  in quadrature where available, with the weighting recorded in ``.meta``. [#680]
 
 2.1.2 (2026-07-19)
 -------------------
