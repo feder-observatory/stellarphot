@@ -1,4 +1,5 @@
 import logging
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -19,6 +20,7 @@ from ..magnitude_system_transforms import (
 )
 from ..magnitude_transforms import (
     _MIN_FIT_SIGMA,
+    _excess_scatter,
     _to_float_array,
     calibrated_from_instrumental,
     filter_transform,
@@ -676,6 +678,7 @@ def _fit_a_catalog(
     sigma=0.0,
     seed=None,
     mag_error=None,
+    min_fit_sigma=None,
     **catalog_coefficients,
 ):
     """
@@ -719,6 +722,10 @@ def _fit_a_catalog(
         ``sigma`` when noise was added, ``0.01`` otherwise -- if not given
         here.
 
+    min_fit_sigma : float, optional
+        Passed on to `~stellarphot.utils.transform_to_catalog`, whose
+        default is used if this is not given.
+
     **catalog_coefficients
         Coefficients ``a``, ``b``, ``c``, ``d`` and ``z`` of the transform
         model used to build the catalog, passed to `_generate_fake_catalog`.
@@ -744,6 +751,8 @@ def _fit_a_catalog(
         ra, dec, instrumental, mag_error=mag_error, noise_sigma=sigma, seed=seed
     )
     fit_kwargs = {} if vary is None else {"vary": vary}
+    if min_fit_sigma is not None:
+        fit_kwargs["min_fit_sigma"] = min_fit_sigma
     result = _run_transform_to_catalog(mocker, catalog, observed, **fit_kwargs)
 
     return result, catalog, instrumental
@@ -769,6 +778,35 @@ def _noisy_fit_result(module_mocker):
     # would outlive every later test in the module -- module_mocker unwinds at
     # module teardown -- and hand the remote-data tests this fake catalog in
     # place of the real fetch.
+    module_mocker.stopall()
+    return result
+
+
+@pytest.fixture(scope="module")
+def _unweighted_fit_result(module_mocker):
+    """
+    The one unweighted fit shared by tests that ask what it reports.
+
+    `test_transform_to_catalog_reports_unweighted_fit_statistic` and
+    `test_transform_to_catalog_diagnostics_for_an_unweighted_fit` both read
+    -- and neither mutates -- the result of the same fit with no error
+    column: 100 stars, noise sigma 0.02, seed 13579. Computing it once here
+    rather than twice keeps the tests from drifting apart on inputs they
+    mean to share.
+    """
+    n_stars = 100
+
+    catalog, ra, dec, instrumental = _generate_fake_catalog(n_stars)
+    observed = _generate_observed_table(
+        ra, dec, instrumental, noise_sigma=0.02, seed=13579
+    )
+
+    with pytest.warns(AstropyUserWarning, match="rror weighting"):
+        result = _run_transform_to_catalog(
+            module_mocker, catalog, observed, obs_error_column=None
+        )
+    # Same reasoning as `_noisy_fit_result` just above: the patch must not
+    # outlive the fit it was made for.
     module_mocker.stopall()
     return result
 
@@ -1239,11 +1277,6 @@ def test_transform_to_catalog_reports_reduced_chi_square(
 ):
     # See issue #677.
     n_stars = 100
-    # Large enough that ``error_scale * sigma`` stays above `_MIN_FIT_SIGMA`
-    # for both scales, so that what is being measured here is the reduced
-    # chi-square itself rather than the sigma floor issue #694 added. The
-    # floor's own effect on this column is measured by
-    # `test_transform_to_catalog_floor_caps_the_reported_redchi`.
     sigma = 0.2
 
     catalog, ra, dec, instrumental = _generate_fake_catalog(n_stars)
@@ -1256,7 +1289,9 @@ def test_transform_to_catalog_reports_reduced_chi_square(
         mag_error=error_scale * sigma,
     )
 
-    result = _run_transform_to_catalog(mocker, catalog, observed)
+    # The floor is pinned off so that what is measured here is the reduced
+    # chi-square itself, with no help from the weighting the floor changes.
+    result = _run_transform_to_catalog(mocker, catalog, observed, min_fit_sigma=0)
 
     reported = np.asarray(result["fit_redchi"])
     # One fit per image, so this too is repeated down every row.
@@ -1264,37 +1299,27 @@ def test_transform_to_catalog_reports_reduced_chi_square(
     assert reported[0] == pytest.approx(expected_redchi, rel=0.3)
 
 
-def test_transform_to_catalog_reports_unweighted_fit_statistic(mocker):
+def test_transform_to_catalog_reports_unweighted_fit_statistic(
+    _unweighted_fit_result,
+):
     # Without an error column nothing divides the residuals, so the same
     # column holds the summed squared residuals per degree of freedom in mag
     # squared -- for Gaussian noise, the noise variance. The weighted values
     # above sit near one; this sits near 4e-4, which is the documented "same
     # column, completely different scale" behavior.
-    n_stars = 100
-    sigma = 0.02
+    sigma = 0.02  # must match the noise sigma _unweighted_fit_result fit with
 
-    catalog, ra, dec, instrumental = _generate_fake_catalog(n_stars)
-    observed = _generate_observed_table(
-        ra, dec, instrumental, noise_sigma=sigma, seed=13579
-    )
-
-    with pytest.warns(AstropyUserWarning, match="rror weighting"):
-        result = _run_transform_to_catalog(
-            mocker, catalog, observed, obs_error_column=None
-        )
+    result = _unweighted_fit_result
 
     reported = np.asarray(result["fit_redchi"])
     assert (reported == reported[0]).all()
     assert reported[0] == pytest.approx(sigma**2, rel=0.3)
 
 
-# The sigma floor and the three fit diagnostics, all of them issue #694. A
-# catalog error of exactly zero means "the catalog does not know its own
-# uncertainty for this star", and the star is then weighted by its observed
-# error alone -- which on real APASS DR9 data is 3-5x smaller than the true
-# scatter, and is reported for the *faint* stars, so the fit weights the
-# worst-measured stars most heavily. Flooring the sigma bounds how much any
-# one star can be worth; the diagnostics say when it happened.
+# The sigma floor and the three fit diagnostics, all of them issue #694:
+# one star claiming a tiny uncertainty quietly held most of a fit's weight.
+# Flooring the sigma bounds how much any one star can be worth; the
+# diagnostics say when it happened.
 
 
 @pytest.mark.parametrize("cat_error", [None, 0.0], ids=["observed", "combined"])
@@ -1328,10 +1353,10 @@ def test_transform_to_catalog_floors_the_fit_sigma(mocker, cat_error):
 
     # Exact equality, not approximate: the two fits saw the same magnitudes
     # and, once floored, the same weights, so anything but the same answer
-    # means a sub-floor sigma reached the fit. ``mag_cal_error`` is left out
-    # because its measurement half is the star's own quoted error, which
-    # really does differ between the two runs.
-    for column in ("a", "c", "z", "mag_cal", "fit_redchi", "fit_max_weight_share"):
+    # means a sub-floor sigma reached the fit. ``mag_cal_error`` and
+    # ``fit_redchi`` are left out because both are reported against the
+    # star's own quoted errors, which really do differ between the two runs.
+    for column in ("a", "c", "z", "mag_cal", "fit_max_weight_share"):
         np.testing.assert_array_equal(
             np.asarray(below[column]),
             np.asarray(floored[column]),
@@ -1339,28 +1364,124 @@ def test_transform_to_catalog_floors_the_fit_sigma(mocker, cat_error):
         )
 
 
-def test_transform_to_catalog_floor_caps_the_reported_redchi(mocker):
-    # What the floor costs: an image whose quoted errors are far too small can
-    # no longer report an arbitrarily large reduced chi-square, because the
-    # sigma dividing the residuals stops at the floor. Errors a hundred times
-    # too small would give a redchi near 1e4 unfloored; floored, the largest
-    # value available is the scatter measured in units of the floor.
+def test_transform_to_catalog_floor_preserves_the_redchi_alarm(mocker):
+    # The floor bounds a star's leverage inside the fit, but the reported
+    # fit_redchi is measured against the errors as quoted, so an image whose
+    # quoted errors are a hundred times too small still reports a redchi near
+    # 1e4 -- not one capped at the scatter in units of the floor.
     sigma = 0.02
+    claimed = 0.0002
 
     result, _, _ = _fit_a_catalog(
-        mocker, n_stars=100, sigma=sigma, seed=13579, mag_error=0.0002, cat_error=None
+        mocker, n_stars=100, sigma=sigma, seed=13579, mag_error=claimed, cat_error=None
     )
 
-    assert result["fit_redchi"][0] == pytest.approx(
-        (sigma / _MIN_FIT_SIGMA) ** 2, rel=0.3
+    assert result["fit_redchi"][0] == pytest.approx((sigma / claimed) ** 2, rel=0.3)
+
+
+def test_transform_to_catalog_floor_preserves_the_excess_scatter_alarm(mocker):
+    # Quoted errors and true scatter both below the floor. Measured against
+    # the floored sigmas the redchi would come out below one and the excess
+    # would read exactly zero -- an affirmative all-clear for precisely the
+    # under-quoted-errors case this diagnostic exists to catch. Measured
+    # against the errors as quoted, the alarm survives.
+    sigma = 0.008
+    claimed = 0.002
+
+    result, _, _ = _fit_a_catalog(
+        mocker, n_stars=300, sigma=sigma, seed=97531, mag_error=claimed, cat_error=None
     )
+
+    assert result["fit_excess_scatter"][0] == pytest.approx(
+        np.sqrt(sigma**2 - claimed**2), rel=0.15
+    )
+
+
+def test_transform_to_catalog_respects_a_custom_min_fit_sigma(mocker):
+    # The same replacing-sub-floor-sigmas-changes-nothing expectation as the
+    # default-floor test above, at a floor the caller chose. fit_redchi is
+    # left out of the columns compared: it is measured against the errors as
+    # quoted, which really do differ between the two runs.
+    n_stars = 20
+    floor = 0.05
+
+    errors = np.full(n_stars, 0.2)
+    errors[:10] = np.geomspace(0.001, 0.04, 10)
+
+    at_the_floor = errors.copy()
+    at_the_floor[:10] = floor
+
+    fit_kwargs = dict(
+        mocker=mocker,
+        n_stars=n_stars,
+        sigma=0.02,
+        seed=24680,
+        cat_error=None,
+        min_fit_sigma=floor,
+    )
+    below, _, _ = _fit_a_catalog(mag_error=errors, **fit_kwargs)
+    floored, _, _ = _fit_a_catalog(mag_error=at_the_floor, **fit_kwargs)
+
+    for column in ("a", "c", "z", "mag_cal", "fit_max_weight_share"):
+        np.testing.assert_array_equal(
+            np.asarray(below[column]),
+            np.asarray(floored[column]),
+            err_msg=column,
+        )
+
+
+def test_transform_to_catalog_min_fit_sigma_zero_disables_the_floor(mocker):
+    # Zero means no floor: a star whose quoted error is far below the default
+    # floor keeps the full weight its error claims, which the weight-share
+    # column reports directly.
+    n_stars = 20
+
+    errors = np.full(n_stars, 0.05)
+    errors[0] = 0.002
+
+    result, _, _ = _fit_a_catalog(
+        mocker,
+        n_stars=n_stars,
+        sigma=0.02,
+        seed=2468,
+        mag_error=errors,
+        cat_error=None,
+        min_fit_sigma=0,
+    )
+
+    statistical = 1.0 / errors**2
+    expected = statistical.max() / statistical.sum()
+    assert result["fit_max_weight_share"][0] == pytest.approx(expected)
+
+
+def test_transform_to_catalog_rejects_a_negative_min_fit_sigma(mocker):
+    with pytest.raises(ValueError, match="min_fit_sigma"):
+        _fit_a_catalog(mocker, min_fit_sigma=-0.01)
+
+
+def test_excess_scatter_returns_zero_when_redchi_is_barely_above_one():
+    # lmfit's redchi and the bracket function recompute the same sum in
+    # different orders, so around 1.0 they can disagree by a few ULPs. A gate
+    # on lmfit's value could pass while both bracket endpoints evaluate
+    # negative, which is a ValueError from brentq for a healthy image. The
+    # gate is therefore the bracket function itself, evaluated at zero.
+    weighted_residual = np.full(4, np.nextafter(1.0, 0.0))
+    sigma = np.full(4, 2.0)
+
+    fit_result = SimpleNamespace(
+        residual=weighted_residual,
+        nfree=4,
+        redchi=np.nextafter(1.0, 2.0),
+    )
+
+    assert _excess_scatter(fit_result, sigma, 1.0 / sigma) == 0.0
 
 
 @pytest.mark.parametrize("n_zero", [0, 5, 20])
 def test_transform_to_catalog_reports_fraction_with_no_catalog_error(mocker, n_zero):
-    # The diagnostic that would have made issue #694 visible immediately: on
-    # the data that prompted it this column reads 0.95 for B and 0.002 for V,
-    # which says the two bands' fit_redchi values were never comparable.
+    # The diagnostic that says when two bands' fit_redchi values are not
+    # comparable because one band's catalog barely knew its own errors; see
+    # issue #694.
     n_stars = 20
 
     cat_error = np.full(n_stars, 0.03)
@@ -1393,10 +1514,9 @@ def test_transform_to_catalog_reports_every_catalog_error_missing_without_the_co
 
 
 def test_transform_to_catalog_reports_max_single_star_weight_share(mocker):
-    # The number that catches a fit one star is quietly running: on the data
-    # behind issue #694 a single star held 88.5% of the V fit's weight, and
-    # nothing in the output said so -- that fit's redchi of 1.87 looked
-    # healthier than the two bands whose problem was obvious.
+    # The number that catches a fit one star is quietly running: one star
+    # held ~88% of a fit's weight and nothing in the output said so; see
+    # issue #694.
     n_stars = 20
 
     errors = np.full(n_stars, 0.05)
@@ -1464,22 +1584,16 @@ def test_transform_to_catalog_reports_no_excess_scatter_when_errors_describe_the
     assert result["fit_excess_scatter"][0] == 0.0
 
 
-def test_transform_to_catalog_diagnostics_for_an_unweighted_fit(mocker):
+def test_transform_to_catalog_diagnostics_for_an_unweighted_fit(
+    _unweighted_fit_result,
+):
     # Without an error column there are no sigmas, so there is no scatter to
     # call excessive and the column says so with NaN rather than zero, which
     # would claim the errors were checked and found adequate. The weight share
     # is still meaningful: every star counts the same, so each holds 1/N.
-    n_stars = 100
+    n_stars = 100  # must match the count _unweighted_fit_result fit
 
-    catalog, ra, dec, instrumental = _generate_fake_catalog(n_stars)
-    observed = _generate_observed_table(
-        ra, dec, instrumental, noise_sigma=0.02, seed=13579
-    )
-
-    with pytest.warns(AstropyUserWarning, match="rror weighting"):
-        result = _run_transform_to_catalog(
-            mocker, catalog, observed, obs_error_column=None
-        )
+    result = _unweighted_fit_result
 
     assert np.isnan(result["fit_excess_scatter"][0])
     assert result["fit_max_weight_share"][0] == pytest.approx(1.0 / n_stars)
