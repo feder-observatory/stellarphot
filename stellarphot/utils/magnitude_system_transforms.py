@@ -198,15 +198,16 @@ class PanStarrs1ToJohnsonCousinsMixin:
 
         Parameters
         ----------
-        from_magnitudes : np.ArrayLike
+        from_magnitudes : np.typing.ArrayLike
             Pan-STARRS1 magnitudes to transform. The shape should either be (6,)
             or (n, 6), where n is the number of magnitudes in the Pan-STARRS1 system
-            you wish to transform to Johnson-Cousins system.
+            you wish to transform to Johnson-Cousins system. The result has the
+            shape (4,) or (n, 4) to match.
 
         ps1_band_for_V : str, optional
             Pan-STARRS1 band to use as the base magnitude for the V band.
 
-        from_magnitude_errors : np.ArrayLike, optional
+        from_magnitude_errors : np.typing.ArrayLike, optional
             Errors in the Pan-STARRS1 magnitudes, same shape as
             ``from_magnitudes``. When given, the return value is the tuple
             ``(magnitudes, errors)``, where the errors combine the input
@@ -233,12 +234,19 @@ class PanStarrs1ToJohnsonCousinsMixin:
             from_magnitudes[..., from_band_index["gp1"]]
             - from_magnitudes[..., from_band_index["rp1"]]
         )
-        if len(from_magnitudes.shape) == 1:
+        input_was_1d = len(from_magnitudes.shape) == 1
+        if input_was_1d:
             from_magnitudes = from_magnitudes[np.newaxis, :]
         if from_magnitude_errors is not None:
-            from_magnitude_errors = np.asarray(from_magnitude_errors).reshape(
-                from_magnitudes.shape
-            )
+            from_magnitude_errors = np.asarray(from_magnitude_errors)
+            if len(from_magnitude_errors.shape) == 1:
+                from_magnitude_errors = from_magnitude_errors[np.newaxis, :]
+            if from_magnitude_errors.shape != from_magnitudes.shape:
+                raise ValueError(
+                    "from_magnitude_errors must have the same shape as "
+                    f"from_magnitudes; got {from_magnitude_errors.shape} and "
+                    f"{from_magnitudes.shape}."
+                )
         to_mags = np.zeros(
             from_magnitudes.shape[:-1] + (len(self.to_system.passbands),)
         )
@@ -275,7 +283,7 @@ class PanStarrs1ToJohnsonCousinsMixin:
                 # band is the polynomial's derivative through the color
                 # (+1 for gp1, -1 for rp1) plus one for the base band.
                 dpoly_dcolor = transform.polynomial.deriv()(color)
-                partials = np.zeros_like(from_magnitudes)
+                partials = np.zeros(from_magnitudes.shape)
                 partials[..., from_band_index["gp1"]] += dpoly_dcolor
                 partials[..., from_band_index["rp1"]] -= dpoly_dcolor
                 partials[..., from_band_index[from_band_name]] += 1.0
@@ -284,9 +292,17 @@ class PanStarrs1ToJohnsonCousinsMixin:
                     + transform.residual**2
                 )
 
+        # Undo the promotion above, if there was one, so that the output shape
+        # always matches the input shape. Squeezing unconditionally would turn
+        # a single-row (1, 6) input into a (4,) result that callers cannot
+        # index by column.
+        if input_was_1d:
+            to_mags = to_mags[0]
+            to_errors = to_errors[0]
+
         if from_magnitude_errors is not None:
-            return np.squeeze(to_mags), np.squeeze(to_errors)
-        return np.squeeze(to_mags)
+            return to_mags, to_errors
+        return to_mags
 
 
 class MatrixTransformMixin:
@@ -300,7 +316,7 @@ class MatrixTransformMixin:
 
         Parameters
         ----------
-        from_magnitudes : np.ArrayLike
+        from_magnitudes : np.typing.ArrayLike
             Magnitudes to transform. The shape should be (p + 1,) or (p + 1, n),
             where p is the number of passbands in the from_system and n is the
             number of stars. The rows are the magnitudes in the order of the
@@ -371,6 +387,15 @@ def transform_apass_bands(table, apply_sdssdr7_transform: bool = False):
     # Putting this here to avoid a circular import
     from .magnitude_transforms import _JESTER_RMS, _JESTER_TRANSFORMS, filter_transform
 
+    # The error propagation below assumes the transform is linear in the native
+    # g, r and i. That is true of "jester" and NOT of the "ivezic" transform
+    # that filter_transform also supports, which is a polynomial in color -- do
+    # not change this name without reworking the error propagation.
+    transform_name = "jester"
+
+    # Johnson-Cousins bands this produces, in the order used everywhere below.
+    output_bands = ("R", "I")
+
     # Set up for input to Jester transform
     use_columns = dict(
         g="mag_SG",
@@ -387,13 +412,18 @@ def transform_apass_bands(table, apply_sdssdr7_transform: bool = False):
     )
     have_errors = all(column in table.colnames for column in error_columns.values())
     if have_errors:
+        if transform_name != "jester":  # pragma: no cover
+            raise NotImplementedError(
+                "Error propagation is implemented only for the linear Jester "
+                f"transform, not {transform_name!r}."
+            )
         error_values = {band: table[column] for band, column in error_columns.items()}
         # Effective linear coefficients of the native g, r and i in each
         # output band; without the SDSS DR7 step these are just the Jester
         # coefficients.
         effective_coeffs = {
             band: np.asarray(_JESTER_TRANSFORMS[band][:3], dtype=float)
-            for band in ("R", "I")
+            for band in output_bands
         }
 
     # The Jester transformation really for transformation from the ugriz on the
@@ -435,27 +465,34 @@ def transform_apass_bands(table, apply_sdssdr7_transform: bool = False):
             # The matrix step makes the SDSS g, r and i magnitudes
             # correlated -- each is a mix of the same native bands -- so the
             # errors cannot be propagated through it and Jester separately.
-            # Compose the two linear maps instead: the effective coefficient
-            # of each native band is the Jester row through the matrix.
+            # Compose the two linear maps instead: the effective coefficients
+            # are the Jester rows through the matrix. Note that the
+            # USNO'->SDSS DR7 step has no published rms residual, so only the
+            # Jester residual enters the quadrature below and the resulting
+            # errors are a floor on the true uncertainty.
             matrix = transform.transform_information.array
-            for band in ("R", "I"):
-                jester_row = np.zeros(matrix.shape[0])
-                # Rows 1, 2 and 3 of the matrix output are g, r and i, the
-                # same indexing used for sdss_mags above.
-                jester_row[1:4] = _JESTER_TRANSFORMS[band][:3]
-                effective_coeffs[band] = (jester_row @ matrix)[1:4]
+            # Rows 1, 2 and 3 of the matrix output are g, r and i, the same
+            # indexing used for sdss_mags above, so the Jester coefficients
+            # are padded into those columns before the product and only those
+            # columns of the result are kept.
+            jester = np.zeros((len(output_bands), matrix.shape[0]))
+            for row, band in enumerate(output_bands):
+                jester[row, 1:4] = _JESTER_TRANSFORMS[band][:3]
+            effective_coeffs = dict(
+                zip(output_bands, (jester @ matrix)[:, 1:4], strict=True)
+            )
 
     table["mag_RC"] = filter_transform(
         table,
         output_filter="R",
         **use_columns,
-        transform="jester",
+        transform=transform_name,
     )
     table["mag_IC"] = filter_transform(
         table,
         output_filter="I",
         **use_columns,
-        transform="jester",
+        transform=transform_name,
     )
 
     if have_errors:
@@ -512,34 +549,34 @@ def transform_refcat2_bands(table):
         ]
     )
 
-    error_columns = ["mag_error_SG", "mag_error_SR", "mag_error_SI", "mag_error_SZ"]
+    # Only the g, r and i errors are required. The partial derivative with
+    # respect to z is identically zero for every output band -- none of the
+    # transforms use z -- so a missing z error cannot change the answer and
+    # zeros are used for it.
+    error_columns = ["mag_error_SG", "mag_error_SR", "mag_error_SI"]
     have_errors = all(column in table.colnames for column in error_columns)
+
+    error_input = None
     if have_errors:
         zeros = np.zeros(num_rows)
+        z_error = table["mag_error_SZ"] if "mag_error_SZ" in table.colnames else zeros
         error_input = np.array(
             [
                 table["mag_error_SG"],
                 table["mag_error_SR"],
                 table["mag_error_SI"],
-                table["mag_error_SZ"],
+                z_error,
                 zeros,  # Placeholder for the y_p1 band
                 zeros,  # Placeholder for the w_p1 band
             ]
-        )
-        transformed_data, transformed_errors = transform(
-            transform_input.T,
-            ps1_band_for_V="gp1",
-            from_magnitude_errors=error_input.T,
-        )
-        transformed_errors = np.atleast_2d(transformed_errors)
-    else:
-        transformed_data = transform(
-            transform_input.T,
-            ps1_band_for_V="gp1",
-        )
+        ).T
 
-    # A one-row table comes back squeezed to a 1-d array
-    transformed_data = np.atleast_2d(transformed_data)
+    result = transform(
+        transform_input.T,
+        ps1_band_for_V="gp1",
+        from_magnitude_errors=error_input,
+    )
+    transformed_data, transformed_errors = result if have_errors else (result, None)
 
     table["mag_B"] = transformed_data[:, 0]
     table["mag_V"] = transformed_data[:, 1]
