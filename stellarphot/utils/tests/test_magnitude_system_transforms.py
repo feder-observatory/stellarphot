@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from astropy.coordinates import SkyCoord
+from astropy.table import Table
 from astropy.utils.data import get_pkg_data_path
 from pydantic import ValidationError
 
@@ -28,6 +29,56 @@ def _check_json_roundtrip(model):
     json_str = model.model_dump_json()
     new_model = model.model_validate_json(json_str)
     assert model == new_model
+
+
+def _passband_table(bands, mags, errors=None):
+    """
+    Build a table shaped like the output of ``CatalogData.passband_columns``:
+    one ``mag_<band>`` column per band and, when ``errors`` is given, a
+    matching ``mag_error_<band>`` column.
+    """
+    table = Table()
+    for band, values in zip(bands, mags, strict=True):
+        table[f"mag_{band}"] = np.asarray(values, dtype=float)
+    if errors is not None:
+        for band, values in zip(bands, errors, strict=True):
+            table[f"mag_error_{band}"] = np.asarray(values, dtype=float)
+    return table
+
+
+# The Jester et al. (2005) transformations used for APASS, from
+# http://www.sdss3.org/dr8/algorithms/sdssUBVRITransform.php -- R and I are
+# compositions of the tabulated relations (R = V - (V-R), I = R - (Rc-Ic)),
+# so their rms residuals combine in quadrature: V and V-R for R, plus Rc-Ic
+# for I.
+_JESTER_R_COEFFS = (0.41, -0.5, 1.09)
+_JESTER_I_COEFFS = (0.41, -1.5, 2.09)
+# The composed residuals are written out as decimal literals rather than as
+# the quadrature expression the production code uses, so that an error in
+# the composition cannot cancel between the code and its test:
+#   R: sqrt(0.01**2 + 0.03**2)           = 0.0316227766...
+#   I: sqrt(0.01**2 + 0.03**2 + 0.01**2) = 0.0331662479...
+_JESTER_R_RMS = 0.03162278
+_JESTER_I_RMS = 0.03316625
+
+
+def _refcat2_error_table():
+    """
+    A two-star refcat2-shaped table with native g, r, i and z magnitudes and
+    errors. Returns the table and the four error arrays, in band order.
+    """
+    errors = [
+        np.array([0.01, 0.04]),
+        np.array([0.02, 0.05]),
+        np.array([0.03, 0.06]),
+        np.array([0.04, 0.07]),
+    ]
+    table = _passband_table(
+        ["SG", "SR", "SI", "SZ"],
+        [[14.0, 15.0], [13.6, 14.4], [13.4, 14.1], [13.3, 14.0]],
+        errors=errors,
+    )
+    return table, errors
 
 
 class TestMagnitudeSystem:
@@ -230,6 +281,87 @@ class TestPanStarrs1ToJohnsonCousins:
         with pytest.raises(ValueError, match="rp1"):
             ps1_to_jc_missing_rp1(np.zeros(len(passbands_without_rp1)))
 
+    def test_transform_zero_errors_propagate_to_residual(self):
+        # With zero measurement error the propagated error is exactly the
+        # published residual of each transformation -- the noise floor of
+        # the fit itself.
+        ps1_to_jc = PanStarrs1ToJohnsonCousins.load()
+        mags = np.array([[20.0, 19.5, 19.0, 18.5, 18.0, 17.5]] * 2)
+        jc_mags, jc_errors = ps1_to_jc(mags, from_magnitude_errors=np.zeros_like(mags))
+        expected_residuals = [
+            ps1_to_jc.transform_information[bands].residual
+            for bands in (("gp1", "B"), ("gp1", "V"), ("rp1", "Rc"), ("ip1", "Ic"))
+        ]
+        assert jc_errors.shape == (2, 4)
+        assert np.allclose(jc_errors, expected_residuals)
+        # Asking for errors must not change the magnitudes themselves
+        assert np.allclose(jc_mags, ps1_to_jc(mags))
+
+    def test_transform_errors_match_finite_differences(self):
+        # The propagated error should agree with numerically estimated
+        # partial derivatives of the magnitude transform, combined with the
+        # input errors and the published residual in quadrature.
+        ps1_to_jc = PanStarrs1ToJohnsonCousins.load()
+        mags = np.array([20.0, 19.5, 19.0, 18.5, 18.0, 17.5])
+        errors = np.array([0.01, 0.02, 0.03, 0.04, 0.0, 0.0])
+        jc_mags, jc_errors = ps1_to_jc(mags, from_magnitude_errors=errors)
+        assert jc_mags.shape == (4,)
+        assert jc_errors.shape == (4,)
+
+        delta = 1e-6
+        expected = np.zeros(4)
+        for out_index, bands in enumerate(
+            (("gp1", "B"), ("gp1", "V"), ("rp1", "Rc"), ("ip1", "Ic"))
+        ):
+            variance = ps1_to_jc.transform_information[bands].residual ** 2
+            for in_index in range(len(mags)):
+                up, down = mags.copy(), mags.copy()
+                up[in_index] += delta
+                down[in_index] -= delta
+                partial = (ps1_to_jc(up) - ps1_to_jc(down))[out_index] / (2 * delta)
+                variance += (partial * errors[in_index]) ** 2
+            expected[out_index] = np.sqrt(variance)
+        assert np.allclose(jc_errors, expected)
+
+    def test_transform_errors_wrong_shape_raises(self):
+        # An errors array with the right number of elements but the wrong
+        # shape must raise rather than being silently reinterpreted in C
+        # order, which would pair each error with the wrong magnitude.
+        ps1_to_jc = PanStarrs1ToJohnsonCousins.load()
+        mags = np.array([[20.0, 19.5, 19.0, 18.5, 18.0, 17.5]] * 3)
+        errors = np.full((6, 3), 0.01)
+        with pytest.raises(ValueError, match="same shape as from_magnitudes"):
+            ps1_to_jc(mags, from_magnitude_errors=errors)
+
+    def test_transform_errors_with_integer_magnitudes(self):
+        # The error path must be as forgiving of input dtype as the
+        # magnitudes-only path is, rather than failing on integer input
+        # because it allocated its workspace from the input dtype.
+        ps1_to_jc = PanStarrs1ToJohnsonCousins.load()
+        int_mags = np.array([20, 19, 19, 18, 18, 17])
+        jc_mags, jc_errors = ps1_to_jc(int_mags, from_magnitude_errors=np.full(6, 0.01))
+        assert np.allclose(jc_mags, ps1_to_jc(int_mags.astype(float)))
+        assert np.all(jc_errors > 0)
+
+    @pytest.mark.parametrize("with_errors", [False, True])
+    def test_transform_output_shape_matches_input_shape(self, with_errors):
+        # A two-dimensional input must give a two-dimensional result even
+        # when there is only one row, so that callers can index the output
+        # columns without re-inflating the result.
+        ps1_to_jc = PanStarrs1ToJohnsonCousins.load()
+        mags = np.array([[20.0, 19.5, 19.0, 18.5, 18.0, 17.5]])
+        errors = np.full(mags.shape, 0.01) if with_errors else None
+        result = ps1_to_jc(mags, from_magnitude_errors=errors)
+        shapes = [r.shape for r in result] if with_errors else [result.shape]
+        assert shapes == [(1, 4)] * len(shapes)
+
+        # One-dimensional input still comes back one-dimensional.
+        result = ps1_to_jc(
+            mags[0], from_magnitude_errors=errors[0] if with_errors else None
+        )
+        shapes = [r.shape for r in result] if with_errors else [result.shape]
+        assert shapes == [(4,)] * len(shapes)
+
 
 class TestCatalogTransforms:
     @pytest.mark.remote_data
@@ -245,6 +377,9 @@ class TestCatalogTransforms:
         )
         assert "mag_R" in apass_trans.columns
         assert "mag_I" in apass_trans.columns
+        # The catalog errors must be propagated into the transformed bands
+        assert "mag_error_R" in apass_trans.columns
+        assert "mag_error_I" in apass_trans.columns
 
     @pytest.mark.remote_data
     def test_apass_can_apply_usno(self):
@@ -261,6 +396,8 @@ class TestCatalogTransforms:
         )
         assert "mag_R" in apass_trans.columns
         assert "mag_I" in apass_trans.columns
+        assert "mag_error_R" in apass_trans.columns
+        assert "mag_error_I" in apass_trans.columns
 
     @pytest.mark.remote_data
     def test_refcats_adds_BVRI(self):
@@ -279,12 +416,157 @@ class TestCatalogTransforms:
         assert "mag_V" in refcat_trans.columns
         assert "mag_R" in refcat_trans.columns
         assert "mag_I" in refcat_trans.columns
+        for band in ("B", "V", "R", "I"):
+            assert f"mag_error_{band}" in refcat_trans.columns
 
         # Make sure an error is raised when a unknown band is requested
         with pytest.raises(
             ValueError, match="Transformer did not add columns for passbands"
         ):
             refcat.passband_columns(["X"], transformer=transform_refcat2_bands)
+
+    def test_apass_transform_propagates_errors(self):
+        # The Jester transforms are linear, R = 0.41 g - 0.5 r + 1.09 i - 0.23
+        # and I = 0.41 g - 1.5 r + 2.09 i - 0.44, so the propagated error is
+        # the coefficient-weighted quadrature sum of the native errors plus
+        # the rms residual of the transform itself.
+        eg = np.array([0.01, 0.04])
+        er = np.array([0.02, 0.05])
+        ei = np.array([0.03, 0.06])
+        table = _passband_table(
+            ["SG", "SR", "SI"],
+            [[14.0, 15.0], [13.6, 14.4], [13.4, 14.1]],
+            errors=[eg, er, ei],
+        )
+        transformed = transform_apass_bands(table)
+
+        for band, coeffs, rms in (
+            ("R", _JESTER_R_COEFFS, _JESTER_R_RMS),
+            ("I", _JESTER_I_COEFFS, _JESTER_I_RMS),
+        ):
+            cg, cr, ci = coeffs
+            expected = np.sqrt(
+                (cg * eg) ** 2 + (cr * er) ** 2 + (ci * ei) ** 2 + rms**2
+            )
+            assert np.allclose(transformed[f"mag_error_{band}"], expected)
+            assert np.allclose(
+                transformed[f"mag_error_{band}C"], transformed[f"mag_error_{band}"]
+            )
+
+    def test_apass_transform_without_errors_adds_no_error_columns(self):
+        # A table without native error columns still gets magnitudes, and
+        # no error columns are invented for it.
+        table = _passband_table(["SG", "SR", "SI"], [[14.0], [13.6], [13.4]])
+        transformed = transform_apass_bands(table)
+        assert "mag_R" in transformed.colnames
+        assert "mag_I" in transformed.colnames
+        assert "mag_error_R" not in transformed.colnames
+        assert "mag_error_I" not in transformed.colnames
+
+    def test_apass_usno_transform_propagates_errors(self):
+        # With the USNO->SDSS matrix applied first the transform is still
+        # linear, so the propagated error must match finite-difference
+        # partials of the full magnitude transform combined with the native
+        # errors, plus the Jester rms in quadrature.
+        native_bands = ["SG", "SR", "SI"]
+        errors = [
+            np.array([0.01, 0.04]),
+            np.array([0.02, 0.05]),
+            np.array([0.03, 0.06]),
+        ]
+        table = _passband_table(
+            native_bands, [[14.0, 15.0], [13.6, 14.4], [13.4, 14.1]], errors=errors
+        )
+        transformed = transform_apass_bands(table.copy(), apply_sdssdr7_transform=True)
+
+        delta = 1e-6
+        for band, rms in (("R", _JESTER_R_RMS), ("I", _JESTER_I_RMS)):
+            variance = np.full(2, rms**2)
+            for native, err in zip(native_bands, errors, strict=True):
+                up, down = table.copy(), table.copy()
+                up[f"mag_{native}"] = up[f"mag_{native}"] + delta
+                down[f"mag_{native}"] = down[f"mag_{native}"] - delta
+                partial = (
+                    np.asarray(
+                        transform_apass_bands(up, apply_sdssdr7_transform=True)[
+                            f"mag_{band}"
+                        ]
+                    )
+                    - np.asarray(
+                        transform_apass_bands(down, apply_sdssdr7_transform=True)[
+                            f"mag_{band}"
+                        ]
+                    )
+                ) / (2 * delta)
+                variance += (partial * err) ** 2
+            assert np.allclose(transformed[f"mag_error_{band}"], np.sqrt(variance))
+
+    def test_refcat2_transform_propagates_errors(self):
+        # Each Johnson-Cousins band is native + P(g - r), so the partials
+        # are P'(c) through the color plus one for the native band, and the
+        # published residual of each fit adds in quadrature. The polynomials
+        # and residuals here are written out from the Pan-STARRS1 paper
+        # independently of the shipped JSON file.
+        table, (eg, er, ei, _) = _refcat2_error_table()
+        transformed = transform_refcat2_bands(table)
+
+        color = np.asarray(table["mag_SG"]) - np.asarray(table["mag_SR"])
+        published = {
+            "B": (np.polynomial.Polynomial([0.212, 0.556, 0.034]), 0.032, "g"),
+            "V": (np.polynomial.Polynomial([0.005, -0.536, 0.011]), 0.012, "g"),
+            "R": (np.polynomial.Polynomial([-0.137, -0.108, -0.029]), 0.015, "r"),
+            "I": (np.polynomial.Polynomial([-0.366, -0.136, -0.018]), 0.017, "i"),
+        }
+        for band, (poly, residual, native) in published.items():
+            dpdc = poly.deriv()(color)
+            partial_g = dpdc + (native == "g")
+            partial_r = -dpdc + (native == "r")
+            partial_i = 1.0 * (native == "i")
+            # The SZ error must not appear: no transform uses the z band.
+            expected = np.sqrt(
+                (partial_g * eg) ** 2
+                + (partial_r * er) ** 2
+                + (partial_i * ei) ** 2
+                + residual**2
+            )
+            assert np.allclose(transformed[f"mag_error_{band}"], expected)
+        assert np.allclose(transformed["mag_error_RC"], transformed["mag_error_R"])
+        assert np.allclose(transformed["mag_error_IC"], transformed["mag_error_I"])
+
+    def test_refcat2_transform_without_z_error_still_propagates(self):
+        # No output band uses the z magnitude, so the z error cannot affect
+        # any result. A catalog that supplies g, r and i errors but no z
+        # error must therefore still get propagated errors, identical to
+        # what it would get with a z error column present.
+        with_z, _ = _refcat2_error_table()
+        without_z = with_z.copy()
+        del without_z["mag_error_SZ"]
+
+        expected = transform_refcat2_bands(with_z)
+        transformed = transform_refcat2_bands(without_z)
+        for band in ("B", "V", "R", "I"):
+            assert f"mag_error_{band}" in transformed.colnames
+            assert np.allclose(
+                transformed[f"mag_error_{band}"], expected[f"mag_error_{band}"]
+            )
+
+    def test_refcat2_transform_single_row(self):
+        # A one-row table must transform without the output being squeezed
+        # down to a shape the column assignments cannot index.
+        table, _ = _refcat2_error_table()
+        transformed = transform_refcat2_bands(table[:1])
+        for band in ("B", "V", "R", "I"):
+            assert len(transformed[f"mag_{band}"]) == 1
+            assert len(transformed[f"mag_error_{band}"]) == 1
+
+    def test_refcat2_transform_without_errors_adds_no_error_columns(self):
+        table = _passband_table(
+            ["SG", "SR", "SI", "SZ"], [[14.0], [13.6], [13.4], [13.3]]
+        )
+        transformed = transform_refcat2_bands(table)
+        for band in ("B", "V", "R", "I"):
+            assert f"mag_{band}" in transformed.colnames
+            assert f"mag_error_{band}" not in transformed.colnames
 
 
 class TestUSNOPrimeToSDSSDR7:

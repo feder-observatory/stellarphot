@@ -24,6 +24,15 @@ New Features
   of each coefficient, and ``fit_redchi``, the summed squared residuals per
   degree of freedom -- in units of the supplied errors, or in mag² when no
   ``obs_error_column`` is given. [#677]
++ ``transform_apass_bands()`` and ``transform_refcat2_bands()`` now
+  propagate the catalog's native magnitude errors into the transformed
+  bands -- ``mag_error_R`` and ``mag_error_I``, plus ``mag_error_B`` and
+  ``mag_error_V`` for refcat2 -- with each transform's published rms
+  residual added in quadrature where one exists, so
+  ``transform_to_catalog()`` weights by the combined errors for these bands
+  too. The USNO'-to-SDSS DR7 step used by
+  ``transform_apass_bands(apply_sdssdr7_transform=True)`` has no published
+  residual, so the errors on that path are a floor. [#685]
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -181,6 +190,11 @@ Bug Fixes
   (``"Rc"`` and ``"R"`` are one band), ``cat_filter``/``cat_color`` default
   from ``obs_filter``, and the fit is weighted by observed and catalog errors
   in quadrature where available, with the weighting recorded in ``.meta``. [#680]
++ ``PanStarrs1ToJohnsonCousinsMixin.__call__`` now returns a result whose
+  shape matches its input: an ``(n, 6)`` input gives ``(n, 4)`` even when
+  ``n`` is 1, where it previously came back as ``(4,)`` and broke
+  ``transform_refcat2_bands()`` on a one-row table. Errors whose shape does
+  not match the magnitudes now raise instead of being reshaped. [#685]
 
 2.1.2 (2026-07-19)
 -------------------
