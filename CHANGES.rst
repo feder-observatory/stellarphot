@@ -118,6 +118,12 @@ Other Changes and Additions
   settings have been migrated to the new format. [#666]
 + ``stellarphot.transit_fitting`` now imports its transit-model classes
   lazily. [#666]
++ ``stellarphot/notebooks/transform-to-appas-dr9.ipynb`` reports the quality of
+  each image's fit -- a table of ``z``, ``z_error`` and ``fit_redchi`` per
+  image, and error bars and a ``fit_redchi`` panel on the plot of ``z`` against
+  time. It no longer passes ``cat_filter`` and ``cat_color``, which
+  ``transform_to_catalog`` now works out for itself, and its unused imports
+  have been dropped. [#677, #680]
 
 Bug Fixes
 ^^^^^^^^^
