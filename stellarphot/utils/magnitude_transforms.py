@@ -539,6 +539,29 @@ def _write_output_columns(table, columns, in_passband):
         )
 
 
+# For jester, using the transform for "all stars with Rc-Ic < 1.15"
+# from
+# http://www.sdss3.org/dr8/algorithms/sdssUBVRITransform.php#Jester2005
+# Each entry is the coefficients of g, r and i and a constant term.
+_JESTER_TRANSFORMS = {
+    "B": [1.39, -0.39, 0, 0.21],
+    "V": [0.41, 0.59, 0, -0.01],
+    "R": [0.41, -0.5, 1.09, -0.23],
+    "I": [0.41, -1.5, 2.09, -0.44],
+}
+
+# RMS residuals of the same tabulated transformations. B and V are direct
+# fits; R and I are compositions of them (R = V - (V-R), with rms 0.01 and
+# 0.03, and I = R - (Rc-Ic), with rms 0.01 more), so their residuals combine
+# in quadrature.
+_JESTER_RMS = {
+    "B": 0.03,
+    "V": 0.01,
+    "R": np.sqrt(0.01**2 + 0.03**2),
+    "I": np.sqrt(0.01**2 + 0.03**2 + 0.01**2),
+}
+
+
 def filter_transform(mag_data, output_filter, g=None, r=None, i=None, transform=None):
     """
     Transform SDSS magnitudes to BVRI using either the transforms from
@@ -595,16 +618,6 @@ def filter_transform(mag_data, output_filter, g=None, r=None, i=None, transform=
         "I": [-0.0307, 0.1163, -0.3341, -0.3584],
     }
     base_mag_ivezic = {"B": g, "V": g, "R": r, "I": i}
-    # For jester, using the transform for "all stars with Rc-Ic < 1.15"
-    # from
-    # http://www.sdss3.org/dr8/algorithms/sdssUBVRITransform.php#Jester2005
-    jester_transforms = {
-        "B": [1.39, -0.39, 0, 0.21],
-        "V": [0.41, 0.59, 0, -0.01],
-        "R": [0.41, -0.5, 1.09, -0.23],
-        "I": [0.41, -1.5, 2.09, -0.44],
-    }
-
     if output_filter not in base_mag_ivezic.keys():
         raise ValueError("the desired filter must be a string R B V or I")
 
@@ -627,7 +640,7 @@ def filter_transform(mag_data, output_filter, g=None, r=None, i=None, transform=
         else:
             out_mag = np.ma.array(out_mag, mask=input_mask)
     elif transform == "jester":
-        coeff = jester_transforms[output_filter]
+        coeff = _JESTER_TRANSFORMS[output_filter]
         out_mag = (
             coeff[0] * mag_data[g]
             + coeff[1] * mag_data[r]

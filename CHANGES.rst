@@ -24,6 +24,12 @@ New Features
   of each coefficient, and ``fit_redchi``, the summed squared residuals per
   degree of freedom -- in units of the supplied errors, or in mag² when no
   ``obs_error_column`` is given. [#677]
++ ``transform_apass_bands()`` and ``transform_refcat2_bands()`` now
+  propagate the catalog's native magnitude errors into the transformed
+  bands -- ``mag_error_R`` and ``mag_error_I``, plus ``mag_error_B`` and
+  ``mag_error_V`` for refcat2 -- with each transform's published rms
+  residual added in quadrature, so ``transform_to_catalog()`` weights by
+  the combined errors for these bands too. [#685]
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^

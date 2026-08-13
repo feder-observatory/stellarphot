@@ -188,8 +188,11 @@ class PanStarrs1ToJohnsonCousinsMixin:
     """
 
     def __call__(
-        self, from_magnitudes: np.typing.ArrayLike, ps1_band_for_V: str = "gp1"
-    ) -> np.ndarray:
+        self,
+        from_magnitudes: np.typing.ArrayLike,
+        ps1_band_for_V: str = "gp1",
+        from_magnitude_errors: np.typing.ArrayLike | None = None,
+    ) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
         """
         Transform Pan-STARRS1 magnitudes to Johnson-Cousins magnitudes.
 
@@ -200,6 +203,15 @@ class PanStarrs1ToJohnsonCousinsMixin:
             or (n, 6), where n is the number of magnitudes in the Pan-STARRS1 system
             you wish to transform to Johnson-Cousins system.
 
+        ps1_band_for_V : str, optional
+            Pan-STARRS1 band to use as the base magnitude for the V band.
+
+        from_magnitude_errors : np.ArrayLike, optional
+            Errors in the Pan-STARRS1 magnitudes, same shape as
+            ``from_magnitudes``. When given, the return value is the tuple
+            ``(magnitudes, errors)``, where the errors combine the input
+            errors propagated through each transform with the published
+            residual of that transform, in quadrature.
         """
         # Convert to numpy array
         from_magnitudes = np.asarray(from_magnitudes)
@@ -223,9 +235,14 @@ class PanStarrs1ToJohnsonCousinsMixin:
         )
         if len(from_magnitudes.shape) == 1:
             from_magnitudes = from_magnitudes[np.newaxis, :]
+        if from_magnitude_errors is not None:
+            from_magnitude_errors = np.asarray(from_magnitude_errors).reshape(
+                from_magnitudes.shape
+            )
         to_mags = np.zeros(
             from_magnitudes.shape[:-1] + (len(self.to_system.passbands),)
         )
+        to_errors = np.zeros_like(to_mags)
         for index, jc_band in enumerate(self.to_system.passbands):
             to_band_name = jc_band
             match to_band_name:
@@ -246,12 +263,29 @@ class PanStarrs1ToJohnsonCousinsMixin:
                         f"transformation from Pan-STARRS1 to Johnson-Cousins."
                     )
 
+            transform = self.transform_information[(from_band_name, to_band_name)]
             to_mags[..., index] = (
-                self.transform_information[(from_band_name, to_band_name)].polynomial(
-                    color
-                )
+                transform.polynomial(color)
                 + from_magnitudes[..., from_band_index[from_band_name]]
             )
+
+            if from_magnitude_errors is not None:
+                # The transform is base magnitude plus polynomial in the
+                # g - r color, so the partial with respect to each input
+                # band is the polynomial's derivative through the color
+                # (+1 for gp1, -1 for rp1) plus one for the base band.
+                dpoly_dcolor = transform.polynomial.deriv()(color)
+                partials = np.zeros_like(from_magnitudes)
+                partials[..., from_band_index["gp1"]] += dpoly_dcolor
+                partials[..., from_band_index["rp1"]] -= dpoly_dcolor
+                partials[..., from_band_index[from_band_name]] += 1.0
+                to_errors[..., index] = np.sqrt(
+                    np.sum((partials * from_magnitude_errors) ** 2, axis=-1)
+                    + transform.residual**2
+                )
+
+        if from_magnitude_errors is not None:
+            return np.squeeze(to_mags), np.squeeze(to_errors)
         return np.squeeze(to_mags)
 
 
@@ -335,7 +369,7 @@ def transform_apass_bands(table, apply_sdssdr7_transform: bool = False):
         Table of catalog information. This is assumed to be in "passband" format
     """
     # Putting this here to avoid a circular import
-    from .magnitude_transforms import filter_transform
+    from .magnitude_transforms import _JESTER_RMS, _JESTER_TRANSFORMS, filter_transform
 
     # Set up for input to Jester transform
     use_columns = dict(
@@ -343,6 +377,24 @@ def transform_apass_bands(table, apply_sdssdr7_transform: bool = False):
         r="mag_SR",
         i="mag_SI",
     )
+
+    # Errors are propagated only when the catalog supplies them for every
+    # native band the transform uses.
+    error_columns = dict(
+        g="mag_error_SG",
+        r="mag_error_SR",
+        i="mag_error_SI",
+    )
+    have_errors = all(column in table.colnames for column in error_columns.values())
+    if have_errors:
+        error_values = {band: table[column] for band, column in error_columns.items()}
+        # Effective linear coefficients of the native g, r and i in each
+        # output band; without the SDSS DR7 step these are just the Jester
+        # coefficients.
+        effective_coeffs = {
+            band: np.asarray(_JESTER_TRANSFORMS[band][:3], dtype=float)
+            for band in ("R", "I")
+        }
 
     # The Jester transformation really for transformation from the ugriz on the
     # 2.5m SDSS telescope to the Johnson-Cousins system.
@@ -379,6 +431,20 @@ def transform_apass_bands(table, apply_sdssdr7_transform: bool = False):
             i="mag_SI_tmp",
         )
 
+        if have_errors:
+            # The matrix step makes the SDSS g, r and i magnitudes
+            # correlated -- each is a mix of the same native bands -- so the
+            # errors cannot be propagated through it and Jester separately.
+            # Compose the two linear maps instead: the effective coefficient
+            # of each native band is the Jester row through the matrix.
+            matrix = transform.transform_information.array
+            for band in ("R", "I"):
+                jester_row = np.zeros(matrix.shape[0])
+                # Rows 1, 2 and 3 of the matrix output are g, r and i, the
+                # same indexing used for sdss_mags above.
+                jester_row[1:4] = _JESTER_TRANSFORMS[band][:3]
+                effective_coeffs[band] = (jester_row @ matrix)[1:4]
+
     table["mag_RC"] = filter_transform(
         table,
         output_filter="R",
@@ -392,9 +458,25 @@ def transform_apass_bands(table, apply_sdssdr7_transform: bool = False):
         transform="jester",
     )
 
+    if have_errors:
+        # The transforms are linear in the native g, r and i, so the errors
+        # propagate through the squared coefficients, and the rms residual
+        # of the Jester transform adds in quadrature.
+        for band, native in (("R", "RC"), ("I", "IC")):
+            coeff_g, coeff_r, coeff_i = effective_coeffs[band]
+            table[f"mag_error_{native}"] = np.sqrt(
+                (coeff_g * error_values["g"]) ** 2
+                + (coeff_r * error_values["r"]) ** 2
+                + (coeff_i * error_values["i"]) ** 2
+                + _JESTER_RMS[band] ** 2
+            )
+
     # Yes, this is dumb. You fix it if you want it less dumb.
     table["mag_R"] = table["mag_RC"]
     table["mag_I"] = table["mag_IC"]
+    if have_errors:
+        table["mag_error_R"] = table["mag_error_RC"]
+        table["mag_error_I"] = table["mag_error_IC"]
     # The dumbness has ended for now
 
     # Remove the temporary columns if they were created
@@ -430,20 +512,53 @@ def transform_refcat2_bands(table):
         ]
     )
 
-    transformed_data = transform(
-        transform_input.T,
-        ps1_band_for_V="gp1",
-    )
+    error_columns = ["mag_error_SG", "mag_error_SR", "mag_error_SI", "mag_error_SZ"]
+    have_errors = all(column in table.colnames for column in error_columns)
+    if have_errors:
+        zeros = np.zeros(num_rows)
+        error_input = np.array(
+            [
+                table["mag_error_SG"],
+                table["mag_error_SR"],
+                table["mag_error_SI"],
+                table["mag_error_SZ"],
+                zeros,  # Placeholder for the y_p1 band
+                zeros,  # Placeholder for the w_p1 band
+            ]
+        )
+        transformed_data, transformed_errors = transform(
+            transform_input.T,
+            ps1_band_for_V="gp1",
+            from_magnitude_errors=error_input.T,
+        )
+        transformed_errors = np.atleast_2d(transformed_errors)
+    else:
+        transformed_data = transform(
+            transform_input.T,
+            ps1_band_for_V="gp1",
+        )
+
+    # A one-row table comes back squeezed to a 1-d array
+    transformed_data = np.atleast_2d(transformed_data)
 
     table["mag_B"] = transformed_data[:, 0]
     table["mag_V"] = transformed_data[:, 1]
     table["mag_RC"] = transformed_data[:, 2]
     table["mag_IC"] = transformed_data[:, 3]
 
+    if have_errors:
+        table["mag_error_B"] = transformed_errors[:, 0]
+        table["mag_error_V"] = transformed_errors[:, 1]
+        table["mag_error_RC"] = transformed_errors[:, 2]
+        table["mag_error_IC"] = transformed_errors[:, 3]
+
     # Yes, this is dumb. You fix it if you want it less dumb.
     # We should only have one name for RC and IC, not two...
     table["mag_R"] = table["mag_RC"]
     table["mag_I"] = table["mag_IC"]
+    if have_errors:
+        table["mag_error_R"] = table["mag_error_RC"]
+        table["mag_error_I"] = table["mag_error_IC"]
     # The dumbness has ended for now
 
     return table
