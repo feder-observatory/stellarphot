@@ -1518,12 +1518,15 @@ def test_transform_to_catalog_uncertainties_scale_with_the_quoted_errors(mocker)
 
     # mag_cal_error is in the list because both of its halves quote: the
     # measurement half is the tripled error itself and the transform half
-    # comes from the tripled-error covariance.
+    # comes from the tripled-error covariance. The scaling is exact in
+    # theory, but the two fits converge independently and the optimizer's
+    # stopping point varies at the ~1e-7 level across platforms; the
+    # rescaling bug this guards against is off by factors, not 1e-5.
     for column in ("a_error", "c_error", "z_error", "mag_cal_error"):
         np.testing.assert_allclose(
             np.asarray(tripled[column]),
             scale * np.asarray(quoted[column]),
-            rtol=1e-7,
+            rtol=1e-5,
             err_msg=column,
         )
 
