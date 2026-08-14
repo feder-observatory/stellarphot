@@ -33,6 +33,10 @@ New Features
   too. The USNO'-to-SDSS DR7 step used by
   ``transform_apass_bands(apply_sdssdr7_transform=True)`` has no published
   residual, so the errors on that path are a floor. [#685]
++ ``transform_to_catalog()`` now reports how each image's fit was weighted,
+  in three new columns beside ``fit_redchi``: ``fit_cat_error_missing_frac``,
+  ``fit_max_weight_share`` and ``fit_excess_scatter``; see its docstring for
+  what each means. [#694]
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -136,6 +140,15 @@ Other Changes and Additions
 
 Bug Fixes
 ^^^^^^^^^
++ ``transform_to_catalog()`` now floors the uncertainty it weights each star
+  by at ``min_fit_sigma``, a new keyword defaulting to 0.01 mag (pass 0 for
+  no floor), so a single star claiming a tiny uncertainty can no longer hold
+  most of a fit's weight. The floor changes only the weighting;
+  ``fit_redchi``, ``fit_excess_scatter`` and ``mag_cal_error`` are measured
+  against the errors as quoted. [#694]
++ ``transform_to_catalog()`` reports the 1.0 arcsec match limit stars must
+  meet to enter the fit, which is tighter than the documented 1.5 arcsec
+  limit for the columns derived from the match. [#694]
 + The comparison viewer's "Click closer to a star" message is now visible: it
   is shown in a status line under the image instead of being sent to a widget
   that was never displayed, and it is cleared by the next click that does hit

@@ -8,6 +8,7 @@ from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astropy.utils.exceptions import AstropyUserWarning
 from numpy.linalg import LinAlgError
+from scipy.optimize import brentq
 from uncertainties import correlated_values, unumpy
 
 from ..catalogs import apass_dr9, refcat2
@@ -46,6 +47,39 @@ _COEFF_ERROR_SUFFIX = "_error"
 
 # Name of the column reporting how well one image's transform fit its stars.
 _FIT_REDCHI_COLUMN = "fit_redchi"
+
+# Default of the ``min_fit_sigma`` parameter: the smallest uncertainty, in
+# magnitudes, that a star is allowed to claim when the fit weights it. A
+# least-squares weight goes as one over the variance, so a star claiming a
+# sigma far below this does not merely count for a little more -- it can run
+# the fit; see issue #694. The value is a statement about what is credible: a
+# single ground-based measurement tied to a survey catalog is not good below
+# about 0.01 mag whatever the catalog says.
+#
+# Applied to the total sigma the fit weights by, so it bounds the weight of a
+# star however its sigma got small -- a zero catalog error, a tiny observed
+# error, or a band whose catalog has no error column at all. It floors the
+# weighting alone; the reported ``fit_redchi``, ``fit_excess_scatter`` and
+# ``mag_cal_error`` are all measured against the errors as quoted.
+_MIN_FIT_SIGMA = 0.01
+
+# Names of the columns describing how the fit was weighted, as opposed to where
+# it landed. Each answers a question ``fit_redchi`` cannot: whether the catalog
+# knew its own errors at all, whether one star ran the fit, and how far the
+# residuals sit from the errors that were quoted.
+_FIT_CAT_ERROR_MISSING_COLUMN = "fit_cat_error_missing_frac"
+_FIT_MAX_WEIGHT_SHARE_COLUMN = "fit_max_weight_share"
+_FIT_EXCESS_SCATTER_COLUMN = "fit_excess_scatter"
+
+# The three as one tuple, mirroring `_COEFF_NAMES` above: `_fit_diagnostics`
+# returns a dict keyed by exactly these names, and the per-image write loop
+# and the output-column block both iterate over them, so adding a diagnostic
+# is an edit here and in that return dict rather than a hunt for every site.
+_FIT_DIAGNOSTIC_COLUMNS = (
+    _FIT_CAT_ERROR_MISSING_COLUMN,
+    _FIT_MAX_WEIGHT_SHARE_COLUMN,
+    _FIT_EXCESS_SCATTER_COLUMN,
+)
 
 # How close an observed star must be to a catalog entry, in arcseconds. Two
 # limits rather than one: a star must match tightly to be allowed to influence
@@ -268,6 +302,186 @@ def _underdetermined_reason(fit_result, vary):
         )
 
     return None
+
+
+def _fit_diagnostics(fit_result, sigma, weights, cat_error_usable):
+    """
+    Describe how one image's fit was weighted, as opposed to where it landed.
+
+    Three numbers that ``fit_redchi`` cannot supply on its own, all of them
+    from issue #694: a reduced chi-square is a ratio, so an image whose errors
+    are wrong in the right way reports a healthy-looking one.
+
+    Parameters
+    ----------
+
+    fit_result : `lmfit.minimizer.MinimizerResult`
+        The fit these describe.
+
+    sigma : `numpy.ndarray` or None
+        Uncertainty of each star that was fit, as quoted -- before the
+        ``min_fit_sigma`` floor, so the excess-scatter diagnostic measures
+        the residuals against what the errors claim rather than against the
+        floor. `None` for an unweighted fit, which has no uncertainties.
+
+    weights : `numpy.ndarray` or float
+        Weight the fit gave each residual, floor included -- the caller's
+        own ``weights``, not something re-derived from ``sigma``. The scalar
+        ``1.0`` for an unweighted fit.
+
+    cat_error_usable : `numpy.ndarray` or None
+        Boolean mask over the stars that were fit: whether each one's
+        catalog error was usable, as decided where the errors were prepared.
+        `None` when the catalog had no error column for the band, or when
+        the fit was unweighted and never consulted one.
+
+    Returns
+    -------
+    dict
+        Keyed by `_FIT_DIAGNOSTIC_COLUMNS`, ready to be written to the rows
+        of this image.
+    """
+    # A catalog with no error column for the band knows nothing about any of
+    # these stars, which is the same statement as a column of zeros rather than
+    # a question that does not apply, so it reads as "all of them missing".
+    if cat_error_usable is None:
+        missing_fraction = 1.0
+    else:
+        missing_fraction = float(np.mean(~cat_error_usable))
+
+    # What a least-squares fit actually apportions among the stars is one over
+    # the variance, so that is what a share of the fit means. An unweighted fit
+    # divides it evenly, which `numpy.broadcast_to` gets right for free.
+    statistical_weight = np.broadcast_to(
+        np.asarray(weights) ** 2,
+        np.shape(fit_result.residual),
+    )
+    max_weight_share = float(statistical_weight.max() / statistical_weight.sum())
+
+    return {
+        _FIT_CAT_ERROR_MISSING_COLUMN: missing_fraction,
+        _FIT_MAX_WEIGHT_SHARE_COLUMN: max_weight_share,
+        _FIT_EXCESS_SCATTER_COLUMN: _excess_scatter(fit_result, sigma, weights),
+    }
+
+
+def _excess_scatter(fit_result, sigma, weights):
+    """
+    Scatter that would have to be added to every sigma to explain the residuals.
+
+    The value ``s`` at which adding ``s`` in quadrature to each star's
+    uncertainty brings the reduced chi-square to one: how far the stars sit
+    from the model over and above what they claim to be uncertain by. Real
+    contributors seen in it include flat-field gradients and the catalog's
+    own photometry, neither of which any weighting scheme can fix; see
+    issue #694.
+
+    Reported rather than folded into the weights. A fit that absorbs its own
+    excess scatter has a reduced chi-square of one by construction, which
+    destroys the one diagnostic that revealed any of this.
+
+    The best-fit residuals are held fixed rather than the model being refit
+    with the widened sigmas. Refitting would move them, but a scatter term
+    that is the same for every star barely changes where a fit lands -- it
+    rescales the weights nearly uniformly -- and holding them fixed keeps this
+    a description of the fit that was actually reported.
+
+    Parameters
+    ----------
+
+    fit_result : `lmfit.minimizer.MinimizerResult`
+        The fit to describe. Its ``residual`` is the weighted residual, i.e.
+        already multiplied by ``weights``.
+
+    sigma : `numpy.ndarray` or None
+        Uncertainty of each star as quoted, before the ``min_fit_sigma``
+        floor, so the excess is measured against what the errors claim
+        rather than against the floor. `None` for an unweighted fit.
+
+    weights : `numpy.ndarray` or float
+        Weight the fit gave each residual, floor included. Unused when
+        ``sigma`` is `None`.
+
+    Returns
+    -------
+    float
+        The excess scatter in magnitudes; zero when the residuals are already
+        no larger than the errors claim, and NaN for an unweighted fit, whose
+        residuals have no errors to be excessive with respect to.
+    """
+    if sigma is None or fit_result.nfree <= 0:
+        # Nothing was divided by anything, so "how far the residuals sit from
+        # what the stars claim" has no meaning. NaN rather than zero, which
+        # would say the errors were checked and found adequate.
+        return np.nan
+
+    # Undo the weighting: lmfit's residual is the model minus the data times
+    # the weights, and what is needed here is the difference itself, so that
+    # it can be divided by the sigmas as quoted rather than as floored.
+    residual = np.asarray(fit_result.residual) / weights
+
+    def reduced_chi_square_less_one(excess):
+        return np.sum(residual**2 / (sigma**2 + excess**2)) / fit_result.nfree - 1.0
+
+    if reduced_chi_square_less_one(0.0) <= 0.0:
+        # The stars are already no further from the model than they claim to
+        # be uncertain, so no excess is needed and none is invented. The gate
+        # is the bracket function itself, not a reduced chi-square computed
+        # some other way: any other formulation of the same sum can disagree
+        # with this one by a few ULPs around 1.0, and a gate that passes
+        # while both bracket endpoints are negative is a `ValueError` from
+        # `~scipy.optimize.brentq`.
+        return 0.0
+
+    # A bracket rather than a guess. The function falls monotonically from a
+    # positive value at zero -- the branch above ruled out the alternative --
+    # and at this upper bound every ``sigma**2 + excess**2`` is at least
+    # ``excess**2``, so the sum is at most ``nfree`` and the function is at
+    # most zero. So a root lies between them.
+    upper = np.sqrt(np.sum(residual**2) / fit_result.nfree)
+
+    return float(brentq(reduced_chi_square_less_one, 0.0, upper))
+
+
+def _reported_redchi(fit_result, sigma, weights):
+    """
+    Reduced chi-square measured against the uncertainties as quoted.
+
+    `lmfit`'s ``redchi`` is measured against the sigmas the fit actually
+    divided by, which are floored at ``min_fit_sigma``. Below the floor that
+    understates how far the residuals sit from the errors that were quoted
+    -- an image whose quoted errors are far too small would report a small,
+    healthy-looking value for exactly the case the statistic exists to
+    catch. Undoing the weighting and dividing by the raw sigma instead keeps
+    the floor where it belongs: on each star's leverage in the fit, and
+    nowhere in the reporting.
+
+    Parameters
+    ----------
+
+    fit_result : `lmfit.minimizer.MinimizerResult`
+        The fit to describe.
+
+    sigma : `numpy.ndarray` or None
+        Uncertainty of each star that was fit, as quoted -- before the
+        floor. `None` for an unweighted fit, whose ``redchi`` involves no
+        sigmas and is reported as `lmfit` computed it.
+
+    weights : `numpy.ndarray` or float
+        Weight the fit gave each residual, floor included. Unused when
+        ``sigma`` is `None`.
+
+    Returns
+    -------
+    float
+        The reduced chi-square of the reported fit against the quoted
+        uncertainties.
+    """
+    if sigma is None:
+        return fit_result.redchi
+
+    residual = np.asarray(fit_result.residual) / weights
+    return float(np.sum((residual / sigma) ** 2) / fit_result.nfree)
 
 
 def _coefficient_uncertainties(fit_result):
@@ -665,6 +879,7 @@ def transform_to_catalog(
     expected=None,
     in_place=True,
     fit_diff=True,
+    min_fit_sigma=_MIN_FIT_SIGMA,
 ):
     """
     Transform a set of instrumental magnitudes to a standard system using either
@@ -762,6 +977,22 @@ def transform_to_catalog(
         If ``True``, fit the difference between the instrumental and catalog magnitude
         instead of the treating the catalog mag as the dependent variable.
 
+    min_fit_sigma : float, optional
+        Smallest uncertainty, in magnitudes, a star is allowed to claim when
+        the fit weights it; a star whose combined uncertainty is smaller is
+        weighted as if it were this. A least-squares weight goes as one over
+        the variance, so without a floor a single star claiming a tiny
+        uncertainty can hold most of a fit's weight; see issue #694. The
+        default of 0.01 is about the smallest uncertainty credible for a
+        single ground-based measurement tied to a survey catalog. Pass ``0``
+        to apply no floor -- legitimate when the quoted errors really are
+        believable below the default, e.g. stacked photometry of bright
+        stars against a catalog with trustworthy millimagnitude errors. Must
+        not be negative, and has no effect on an unweighted fit. The floor
+        applies only to the fit's weighting: ``fit_redchi``,
+        ``fit_excess_scatter`` and every reported per-star error, including
+        ``mag_cal_error``, are measured against the errors as quoted.
+
     Returns
     -------
 
@@ -769,12 +1000,14 @@ def transform_to_catalog(
         Table containing the calibrated magnitudes and the fit parameters. The
         columns added are ``mag_cal`` and, if ``obs_error_column`` was given,
         ``mag_cal_error``; the fit coefficients ``a``, ``b``, ``c``, ``d`` and
-        ``z``, with their uncertainties ``a_error`` through ``z_error`` and
-        the goodness of fit ``fit_redchi``; and ``mag_cat`` and ``color_cat``,
-        the matched catalog magnitude and color. ``mag_cal`` is NaN for rows
-        with no usable catalog match, as are all of the columns for rows in an
-        image that could not be fit and for rows in other passbands that had
-        no value already.
+        ``z``, with their uncertainties ``a_error`` through ``z_error``, the
+        goodness of fit ``fit_redchi`` and the three weighting diagnostics
+        ``fit_cat_error_missing_frac``, ``fit_max_weight_share`` and
+        ``fit_excess_scatter``; and ``mag_cat`` and ``color_cat``, the matched
+        catalog magnitude and color. ``mag_cal`` is NaN for rows with no
+        usable catalog match, as are all of the columns for rows in an image
+        that could not be fit and for rows in other passbands that had no
+        value already.
 
         Every column that comes from the catalog match -- ``mag_cal``,
         ``mag_cal_error``, ``mag_cat`` and ``color_cat`` -- is NaN for a star
@@ -782,6 +1015,12 @@ def transform_to_catalog(
         them can hold the values of an unrelated star. ``mag_cal_error`` is
         NaN wherever ``mag_cal`` is, for whatever reason, so a finite
         calibrated error always has a calibrated magnitude to go with it.
+
+        A star is allowed to *influence the fit*, as opposed to be given
+        values derived from its match, only if its nearest catalog entry is
+        closer than 1.0 arcsec. So the stars behind the coefficients are a
+        subset of those with a finite ``mag_cat``, and the fit cannot be
+        reproduced from the output table by selecting on ``mag_cat`` alone.
 
         ``result.meta["transform_weighting"]`` records how the fit for this
         call was weighted, keyed by ``obs_filter`` exactly as it was passed:
@@ -800,7 +1039,7 @@ def transform_to_catalog(
     zero and is therefore known exactly, so its uncertainty is exactly zero
     rather than a small number.
 
-    ``fit_redchi`` is `lmfit`'s reduced chi-square: the summed squared
+    ``fit_redchi`` is the reduced chi-square: the summed squared
     residuals per degree of freedom, i.e. divided by the number of stars fit
     minus the number of terms varied. It is a chi-square only when
     ``obs_error_column`` is given, because only then is anything dividing the
@@ -835,8 +1074,55 @@ def transform_to_catalog(
     ``fit_redchi`` well above one, and where the catalog's uncertainty is the
     reason, weighting cannot know that but the scatter still shows up there.
 
-    The reported uncertainties are scaled by ``fit_redchi``, because `lmfit`'s
-    ``scale_covar`` is left on. They therefore describe the scatter actually
+    Whichever way it is weighted, the total uncertainty the fit weights each
+    star by is bounded below by ``min_fit_sigma``, 0.01 mag by default and
+    ``0`` for no floor. Without one, a single star claiming a tiny
+    uncertainty can hold most of a fit's weight; see issue #694. The floor
+    applies to the weighting and to nothing else: ``fit_redchi`` and
+    ``fit_excess_scatter`` are measured against the errors as quoted, so an
+    image whose quoted errors are far too small still raises the alarm those
+    columns exist for, and no reported per-star error -- ``mag_cal_error``
+    included -- is raised to the floor.
+
+    The three diagnostic columns describe how the fit was weighted, which
+    ``fit_redchi`` cannot: it is a ratio, and an image whose errors are wrong
+    in the right way reports a healthy-looking one.
+
+    ``fit_cat_error_missing_frac`` is the fraction of the stars in the fit
+    whose catalog error the fit could not use. It is 1.0 when the catalog has
+    no error column for the band and when the fit is unweighted, both of which
+    are the same statement -- nothing was known about any of them. A value
+    near one says ``fit_redchi`` is not comparable with another band's:
+    APASS DR9 reports an error of exactly zero for most of its B stars in a
+    typical field and almost none of its V stars, and the stars it does that
+    for are the faint ones, so without the sigma floor the fit would weight
+    the worst-measured stars the most heavily.
+
+    ``fit_max_weight_share`` is the largest share of the fit's total
+    statistical weight held by any one star, so a fit spread evenly over N
+    stars reports ``1/N`` and one star running the fit reports a number near
+    one. It is the column that catches the case above, which nothing else in
+    the output reveals.
+
+    ``fit_excess_scatter`` is the scatter, in magnitudes, that would have to be
+    added in quadrature to every star's uncertainty to bring ``fit_redchi`` to
+    one: how far the stars sit from the model over and above what they claim.
+    It is zero when the residuals are already no larger than the errors claim,
+    and NaN for an unweighted fit, which has no errors for its residuals to be
+    excessive with respect to. It is reported rather than folded into the
+    weights, because a fit that absorbs its own excess scatter has a reduced
+    chi-square of one by construction and can no longer report that anything
+    is wrong. Real contributors seen in it include flat-field gradients across
+    the field and the catalog's own photometry -- neither of which any
+    weighting scheme can repair. Note that it understates the excess when
+    ``fit_cat_error_missing_frac`` is large, since the sigmas it is measured
+    against are then missing a term rather than merely being small.
+
+    The reported uncertainties are scaled by the reduced chi-square of the
+    fit as it was weighted -- `lmfit`'s ``scale_covar`` is left on -- which
+    is ``fit_redchi`` itself except when sigmas sit below ``min_fit_sigma``,
+    where the weighting stops following the quoted errors and the reported
+    ``fit_redchi`` does not. They therefore describe the scatter actually
     observed about the fit rather than the instrumental errors that were
     quoted, which is the more robust of the two: it stays right when the
     quoted errors are systematically wrong. The price is that ``fit_redchi``
@@ -886,6 +1172,12 @@ def transform_to_catalog(
         raise TypeError(
             f"vary must be a sequence of term names, not the string {vary!r}. "
             f"Did you mean {(vary,)!r}?"
+        )
+
+    if min_fit_sigma < 0:
+        raise ValueError(
+            f"min_fit_sigma must not be negative, got {min_fit_sigma}. Pass 0 "
+            "to apply no floor to the uncertainties the fit weights by."
         )
 
     # Preserve the order the caller gave, minus any duplicates.
@@ -972,6 +1264,9 @@ def transform_to_catalog(
     coefficients = {name: np.full(n_rows, np.nan) for name in _COEFF_NAMES}
     coefficient_errors = {name: np.full(n_rows, np.nan) for name in _COEFF_NAMES}
     fit_redchis = np.full(n_rows, np.nan)
+    fit_diagnostics = {
+        name: np.full(n_rows, np.nan) for name in _FIT_DIAGNOSTIC_COLUMNS
+    }
     cal_mags = np.full(n_rows, np.nan)
     cal_errors = np.full(n_rows, np.nan)
     cat_mags = np.full(n_rows, np.nan)
@@ -1148,9 +1443,10 @@ def transform_to_catalog(
             # instead of for the whole image. This is what keeps a catalog's
             # single-observation stars, reported with zero error, in the fit
             # exactly as they were before catalog-error weighting existed.
-            cat_error = np.where(
-                np.isfinite(cat_error) & (cat_error > 0), cat_error, 0.0
-            )
+            # The mask is kept as well as applied: it is the one place this
+            # decision is made, and `_fit_diagnostics` reports it below.
+            cat_error_usable = np.isfinite(cat_error) & (cat_error > 0)
+            cat_error = np.where(cat_error_usable, cat_error, 0.0)
 
         # Both halves have to be good for the *same* star. Checking each on
         # its own is not enough: the two sets can be disjoint, which leaves
@@ -1178,14 +1474,29 @@ def transform_to_catalog(
         fit_data = cat_mag[good] - offset
 
         if obs_error_column is None:
+            # An unweighted fit divides its residuals by nothing, so there is
+            # no sigma to floor here and none for the excess-scatter
+            # diagnostic below to measure the residuals against.
+            sigma = None
             weights = 1.0
-        elif cat_error_column is None:
-            weights = 1.0 / errors[good]
         else:
-            # In quadrature, because the residual being fit is the
-            # difference between a measured magnitude and a catalog one and
-            # is uncertain by both of them.
-            weights = 1.0 / np.hypot(errors[good], cat_error[good])
+            if cat_error_column is None:
+                sigma = errors[good]
+            else:
+                # In quadrature, because the residual being fit is the
+                # difference between a measured magnitude and a catalog one and
+                # is uncertain by both of them.
+                sigma = np.hypot(errors[good], cat_error[good])
+
+            # Bounded below so that no one star can take the fit over; see
+            # ``min_fit_sigma`` and issue #694. The floor goes on the total
+            # the fit divides by rather than on either error separately,
+            # because it is the total that decides the star's weight -- and
+            # on the weights alone: ``sigma`` stays as quoted, because the
+            # reported ``fit_redchi`` and ``fit_excess_scatter`` are measured
+            # against it below, and a statistic measured against the floor
+            # would call badly under-quoted errors healthy.
+            weights = 1.0 / np.maximum(sigma, min_fit_sigma)
 
         # Fewer stars than terms has to be caught before the fit rather than
         # after it: with nothing left to fit, lmfit takes the square root of
@@ -1296,7 +1607,18 @@ def transform_to_catalog(
             coefficients[name][rows] = values[name]
             coefficient_errors[name][rows] = uncertainties[name]
 
-        fit_redchis[rows] = fit_result.redchi
+        fit_redchis[rows] = _reported_redchi(fit_result, sigma, weights)
+
+        # How the fit was weighted, rather than where it landed. Written
+        # alongside ``fit_redchi`` because they are the numbers that say
+        # whether that one can be taken at face value.
+        for name, value in _fit_diagnostics(
+            fit_result,
+            sigma,
+            weights,
+            None if cat_error_column is None else cat_error_usable[good],
+        ).items():
+            fit_diagnostics[name][rows] = value
 
         cal_mags[rows] = cal_mag
         cat_mags[rows] = np.where(matched, cat_mag, np.nan)
@@ -1335,6 +1657,8 @@ def transform_to_catalog(
         }
     )
     output_columns[_FIT_REDCHI_COLUMN] = fit_redchis
+    for name in _FIT_DIAGNOSTIC_COLUMNS:
+        output_columns[name] = fit_diagnostics[name]
 
     _write_output_columns(result, output_columns, in_passband)
 
