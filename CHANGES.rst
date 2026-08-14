@@ -131,6 +131,12 @@ Other Changes and Additions
   settings have been migrated to the new format. [#666]
 + ``stellarphot.transit_fitting`` now imports its transit-model classes
   lazily. [#666]
++ ``transform_to_catalog()`` no longer rescales the fit covariance by the
+  reduced chi-square, so ``a_error``...``z_error`` and ``mag_cal_error``
+  believe the errors as quoted -- for an image whose ``fit_redchi`` is above
+  one they come out smaller than before, and ``fit_excess_scatter`` reports
+  explicitly what the rescaling used to absorb silently. Unweighted fits
+  still scale by the observed scatter, the only scale they have. [#690]
 + ``stellarphot/notebooks/transform-to-appas-dr9.ipynb`` reports the quality of
   each image's fit -- a table of ``z``, ``z_error`` and ``fit_redchi`` per
   image, and error bars and a ``fit_redchi`` panel on the plot of ``z`` against

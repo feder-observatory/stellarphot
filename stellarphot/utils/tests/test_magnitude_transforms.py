@@ -174,10 +174,10 @@ _FAKE_CATALOG_SCATTER = 1e-12
 # rule -- it is what a *transformed* band looks like, which the tests that
 # care about say explicitly by passing ``cat_error=None``. Small enough
 # against the observed errors used here that it changes no number any other
-# test in this file asserts on: the fit weights are 1/sqrt(obs^2 + cat^2), and
-# `lmfit` rescales the covariance by the reduced chi-square, so a catalog
-# error this far below the observed ones is invisible in both the fit and its
-# reported uncertainties.
+# test in this file asserts on: the fit weights are 1/sqrt(obs^2 + cat^2), so
+# a catalog error this far below the observed ones moves the weights, and the
+# uncertainties believed from them, by well under a percent. The tests that
+# predict an uncertainty to better than that fold it into their prediction.
 _FAKE_CATALOG_ERROR = 0.001
 
 
@@ -1229,27 +1229,22 @@ def test_transform_to_catalog_uncertainty_falls_as_stars_are_added(mocker):
     # uncertainty would scale that way. See issue #677.
     sigma = 0.02
 
-    # lmfit scales the covariance by the reduced chi-square, so a single fit's
-    # reported uncertainty carries the scatter of its own noise realization --
-    # about 15% at 25 stars, which is most of the effect being measured.
-    # Averaging a handful of realizations makes this a statement about the
-    # design rather than about one draw.
-    seeds = (54321, 1, 2, 3, 7)
+    # One seed is enough: the reported uncertainty comes from the quoted
+    # errors and the design of the fit (see the issue #690 tests below), so
+    # the noise realization barely moves it -- it only jitters the design
+    # matrix's magnitude column.
+    seed = 54321
     z_error = {}
 
     for n_stars in (25, 250):
         catalog, ra, dec, instrumental = _generate_fake_catalog(n_stars)
-        reported = [
-            _run_transform_to_catalog(
-                mocker,
-                catalog,
-                _generate_observed_table(
-                    ra, dec, instrumental, noise_sigma=sigma, seed=seed
-                ),
-            )["z_error"][0]
-            for seed in seeds
-        ]
-        z_error[n_stars] = np.mean(reported)
+        z_error[n_stars] = _run_transform_to_catalog(
+            mocker,
+            catalog,
+            _generate_observed_table(
+                ra, dec, instrumental, noise_sigma=sigma, seed=seed
+            ),
+        )["z_error"][0]
 
     # Roughly sqrt(10), not exactly: the 25-star fit is not an exactly scaled
     # copy of the 250-star one, since its stars sample the same magnitude and
@@ -1257,6 +1252,207 @@ def test_transform_to_catalog_uncertainty_falls_as_stars_are_added(mocker):
     # sqrt(10) of 3.16 -- what matters is that it is nowhere near 1, which is
     # what a number that only looked like an uncertainty would give.
     assert z_error[25] / z_error[250] == pytest.approx(np.sqrt(10), rel=0.2)
+
+
+# What the coefficient uncertainties are measured against, all issue #690.
+# The covariance is reported as the fit was weighted -- lmfit's default
+# rescaling of it by the reduced chi-square, which retells the observed
+# scatter as grown coefficient errors, is turned off -- so the ``*_error``
+# columns believe the quoted errors and ``fit_redchi`` is an independent
+# alarm, the same convention issue #694 chose for the diagnostics.
+
+# Inputs of the fit `_underquoted_fit_result` shares between the tests that
+# read it: errors quoted five times smaller than the true scatter.
+_UNDERQUOTED_CLAIMED_ERROR = 0.02
+_UNDERQUOTED_NOISE_SIGMA = 0.1
+
+
+@pytest.fixture(scope="module")
+def _underquoted_fit_result(module_mocker):
+    """
+    The one under-quoted-errors fit shared by tests of what its errors mean.
+
+    `test_transform_to_catalog_uncertainties_believe_the_quoted_errors` and
+    `test_transform_to_catalog_error_uses_the_unscaled_covariance` both read
+    -- and neither mutates -- the result of fitting the same catalog: 50
+    stars whose true scatter, `_UNDERQUOTED_NOISE_SIGMA`, is five times the
+    `_UNDERQUOTED_CLAIMED_ERROR` they quote, seed 20260813, a=0.02 and
+    c=0.15. Computing it once here rather than twice keeps the tests from
+    drifting apart on inputs they mean to share.
+    """
+    result, _, _ = _fit_a_catalog(
+        module_mocker,
+        n_stars=50,
+        sigma=_UNDERQUOTED_NOISE_SIGMA,
+        seed=20260813,
+        mag_error=_UNDERQUOTED_CLAIMED_ERROR,
+        a=0.02,
+        c=0.15,
+    )
+    # Same reasoning as `_noisy_fit_result` above: the patch must not
+    # outlive the fit it was made for.
+    module_mocker.stopall()
+    return result
+
+
+def _predicted_coefficient_covariance(result, sigma_quoted):
+    """
+    The covariance a fit of the default terms should report, by hand.
+
+    The transform model is linear in its coefficients, so the covariance of
+    a weighted least-squares fit of it is exactly ``(J^T W J)^-1`` with
+    ``J`` the design matrix -- one column per varied term, evaluated at the
+    stars that were fit -- and ``W`` the diagonal of the squared weights.
+    Nothing about where the stars actually landed enters, which is the
+    behavior under test: the fit's own residuals must not rescale it.
+
+    Parameters
+    ----------
+
+    result : `astropy.table.Table`
+        A transform of a single image in which every star was fit, from
+        which the design matrix is rebuilt.
+
+    sigma_quoted : float
+        The one uncertainty every star quoted, observed and catalog errors
+        already combined.
+
+    Returns
+    -------
+    `numpy.ndarray`
+        Predicted covariance of the default varied terms, ordered
+        ``a``, ``c``, ``z``.
+    """
+    mag_inst = np.asarray(result["mag_inst"])
+    color = np.asarray(result["color_cat"])
+    jacobian = np.column_stack([mag_inst, color, np.ones_like(mag_inst)])
+    weight = 1.0 / max(sigma_quoted, _MIN_FIT_SIGMA)
+
+    return np.linalg.inv(weight**2 * (jacobian.T @ jacobian))
+
+
+def test_transform_to_catalog_uncertainties_believe_the_quoted_errors(
+    _underquoted_fit_result,
+):
+    # The choice issue #690 is about. These stars scatter five times as far
+    # from the model as their errors claim, and the reported coefficient
+    # uncertainties must stay at what the quoted errors predict rather than
+    # growing ~sqrt(fit_redchi) to match the observed scatter, which is what
+    # lmfit's scale_covar default silently did. The scatter is still
+    # reported, once, in fit_redchi -- under the old default the grown
+    # errors and that alarm were one observation dressed as two.
+    result = _underquoted_fit_result
+
+    sigma_quoted = np.hypot(_UNDERQUOTED_CLAIMED_ERROR, _FAKE_CATALOG_ERROR)
+    covariance = _predicted_coefficient_covariance(result, sigma_quoted)
+
+    for index, term in enumerate(("a", "c", "z")):
+        assert result[f"{term}_error"][0] == pytest.approx(
+            np.sqrt(covariance[index, index]), rel=1e-6
+        ), term
+
+    # The alarm survives, and is now the only place the observed scatter
+    # shows up.
+    assert result["fit_redchi"][0] == pytest.approx(
+        (_UNDERQUOTED_NOISE_SIGMA / sigma_quoted) ** 2, rel=0.3
+    )
+
+
+def test_transform_to_catalog_error_uses_the_unscaled_covariance(
+    _underquoted_fit_result,
+):
+    # mag_cal_error's transform half must come from the same unscaled
+    # covariance the coefficient columns report, so that everything in one
+    # row shares one convention: the quoted errors, believed. The prediction
+    # is the star's own quoted error through the fit_diff sensitivity of
+    # 1 + a, plus the hand-computed covariance pushed through the model's
+    # gradient, correlations included -- and nothing from the observed
+    # scatter, which is the part scale_covar used to fold in. See issue
+    # #690.
+    result = _underquoted_fit_result
+
+    sigma_quoted = np.hypot(_UNDERQUOTED_CLAIMED_ERROR, _FAKE_CATALOG_ERROR)
+    covariance = _predicted_coefficient_covariance(result, sigma_quoted)
+
+    mag_inst = np.asarray(result["mag_inst"])
+    color = np.asarray(result["color_cat"])
+    gradients = np.column_stack([mag_inst, color, np.ones_like(mag_inst)])
+    transform_var = np.einsum("si,ij,sj->s", gradients, covariance, gradients)
+    measurement_var = ((1 + result["a"][0]) * _UNDERQUOTED_CLAIMED_ERROR) ** 2
+
+    np.testing.assert_allclose(
+        np.asarray(result["mag_cal_error"]),
+        np.sqrt(measurement_var + transform_var),
+        rtol=1e-6,
+    )
+
+
+def test_transform_to_catalog_uncertainties_scale_with_the_quoted_errors(mocker):
+    # Under the old scale_covar default this was structurally impossible:
+    # rescaling every weight by k scales the raw covariance by k**2 and the
+    # internal reduced chi-square by 1/k**2, so the reported uncertainties
+    # could not move whatever the quoted errors said -- which would make
+    # error plumbing like issues #680 and #692 invisible in every reported
+    # error. Believing the quoted errors means tripling them must triple
+    # each one. See issue #690.
+    n_stars = 30
+    sigma = 0.02
+    base_error = 0.02
+    scale = 3.0
+
+    # No catalog errors, so the quoted observed error is the whole sigma and
+    # scaling it scales the weights exactly.
+    catalog, ra, dec, instrumental = _generate_fake_catalog(
+        n_stars, a=0.02, c=0.15, cat_error=None
+    )
+
+    quoted, tripled = (
+        _run_transform_to_catalog(
+            mocker,
+            catalog,
+            _generate_observed_table(
+                ra,
+                dec,
+                instrumental,
+                noise_sigma=sigma,
+                seed=24680,
+                mag_error=k * base_error,
+            ),
+        )
+        for k in (1.0, scale)
+    )
+
+    # mag_cal_error is in the list because both of its halves quote: the
+    # measurement half is the tripled error itself and the transform half
+    # comes from the tripled-error covariance.
+    for column in ("a_error", "c_error", "z_error", "mag_cal_error"):
+        np.testing.assert_allclose(
+            np.asarray(tripled[column]),
+            scale * np.asarray(quoted[column]),
+            rtol=1e-7,
+            err_msg=column,
+        )
+
+
+def test_transform_to_catalog_unweighted_uncertainties_use_the_scatter(
+    _unweighted_fit_result,
+):
+    # An unweighted fit quotes no errors to believe, so the observed scatter
+    # is the only scale its covariance can take: scale_covar stays on for
+    # exactly this case, and the reported errors are the unweighted
+    # (J^T J)^-1 times the residual variance per degree of freedom -- which
+    # is what fit_redchi holds for an unweighted fit. See issue #690.
+    result = _unweighted_fit_result
+
+    mag_inst = np.asarray(result["mag_inst"])
+    color = np.asarray(result["color_cat"])
+    jacobian = np.column_stack([mag_inst, color, np.ones_like(mag_inst)])
+    covariance = np.linalg.inv(jacobian.T @ jacobian) * result["fit_redchi"][0]
+
+    for index, term in enumerate(("a", "c", "z")):
+        assert result[f"{term}_error"][0] == pytest.approx(
+            np.sqrt(covariance[index, index]), rel=1e-6
+        ), term
 
 
 @pytest.mark.parametrize(
@@ -1751,25 +1947,70 @@ def test_transform_to_catalog_not_in_place_leaves_input_alone(mocker):
         np.testing.assert_array_equal(observed[name], values)
 
 
-def test_transform_to_catalog_error_reduces_to_instrumental_for_a_perfect_fit(mocker):
+def _measurement_half_of_the_error(mocker, **fit_kwargs):
+    """
+    The measurement half of ``mag_cal_error``, isolated by a twin fit.
+
+    `_fit_a_catalog` is run twice on the same noiseless catalog: once with
+    every star quoting `_MIN_FIT_SIGMA` and once with every star quoting a
+    negligible 1e-12. The transform half of the error cannot simply be
+    assumed away -- the covariance it comes from believes the quoted errors
+    rather than the residuals (issue #690), so it does not vanish even for a
+    perfect fit -- but it can be subtracted out: both runs' quoted sigmas
+    sit at or under the ``min_fit_sigma`` floor, and ``cat_error=None``
+    keeps the catalog from lifting either off it, so the two fits share
+    their weights and with them their transform term exactly. What survives
+    the difference in quadrature is the measurement half of the first run's
+    error, for stars that quoted `_MIN_FIT_SIGMA`.
+
+    Parameters
+    ----------
+
+    mocker : `pytest_mock.MockerFixture`
+        Fixture used to patch the catalog fetch.
+
+    **fit_kwargs
+        Passed on to `_fit_a_catalog`, e.g. the coefficients the catalog is
+        built from and the terms to vary.
+
+    Returns
+    -------
+    measurement : `numpy.ndarray`
+        The measurement half of each star's reported ``mag_cal_error``.
+
+    instrumental : `numpy.ndarray`
+        Instrumental magnitude of each star, from `_fit_a_catalog`.
+    """
+    result, _, instrumental = _fit_a_catalog(
+        mocker=mocker, mag_error=_MIN_FIT_SIGMA, cat_error=None, **fit_kwargs
+    )
+    negligible, _, _ = _fit_a_catalog(
+        mocker=mocker, mag_error=1e-12, cat_error=None, **fit_kwargs
+    )
+
+    measurement = np.sqrt(
+        np.asarray(result["mag_cal_error"]) ** 2
+        - np.asarray(negligible["mag_cal_error"]) ** 2
+    )
+
+    return measurement, instrumental
+
+
+def test_transform_to_catalog_error_scales_the_input_error_by_the_fit(mocker):
     # The calibrated error has two parts: the star's own measurement error,
     # scaled by how much the calibrated magnitude moves when the instrumental
-    # one does, and the uncertainty of the transform the star was calibrated
-    # through. This catalog follows the model to within
-    # _FAKE_CATALOG_SCATTER, so the fit to it has a reduced chi-square of
-    # about 1.5e-20 and the second part comes out around 1e-13 -- nothing.
-    # What is left is the first part exactly, which is why this limit is worth
-    # pinning: it is what makes the noisy tests below interpretable, because
-    # anything they see above (1 + a) * mag_error there is the transform term
-    # and not an artifact of the fixtures. See issue #674.
+    # one does -- 1 + a under the default terms, the instrumental magnitude
+    # appearing both inside the model and in the fit_diff add-back -- and the
+    # uncertainty of the transform the star was calibrated through, which the
+    # twin-fit helper above subtracts away. Pinning the measurement half
+    # exactly is what makes the noisy tests below interpretable: anything
+    # they see above (1 + a) * mag_error there is the transform term and not
+    # an artifact of the fixtures. See issue #674.
     a = 0.02
-    mag_error = 0.01
 
-    result, _, _ = _fit_a_catalog(mocker, a=a, mag_error=mag_error)
+    measurement, _ = _measurement_half_of_the_error(mocker, a=a)
 
-    np.testing.assert_allclose(
-        result["mag_cal_error"], (1 + a) * mag_error, rtol=0, atol=1e-8
-    )
+    np.testing.assert_allclose(measurement, (1 + a) * _MIN_FIT_SIGMA, rtol=0, atol=1e-8)
 
 
 def test_transform_to_catalog_error_includes_the_transform_uncertainty(
@@ -1803,7 +2044,8 @@ def test_transform_to_catalog_error_includes_the_transform_uncertainty(
 
     # Measured at about 1.35, and set by the geometry of the fit rather than
     # by the noise -- it comes out the same to three figures for every seed
-    # tried, because scaling the covariance scales every star's share of it.
+    # tried, because the shape of the covariance comes from the design matrix
+    # and the weights, which the noise never enters.
     assert ends > 1.2 * middle
 
 
@@ -1886,10 +2128,8 @@ def test_transform_to_catalog_error_matches_a_monte_carlo(mocker):
         reported.append(result["mag_cal_error"][-1])
 
     # Measured ratio 1.03. The 15% is room for the sampling error of a
-    # 300-trial standard deviation, about 4%, and for the reported error
-    # itself varying from realization to realization -- lmfit scales the
-    # covariance by the reduced chi-square, so it carries the scatter of the
-    # noise draw it was fit to.
+    # 300-trial standard deviation, about 4%, on top of the ~10%
+    # conservatism explained above.
     assert np.std(calibrated) == pytest.approx(np.mean(reported), rel=0.15)
 
 
@@ -1899,20 +2139,13 @@ def test_transform_to_catalog_error_includes_the_quadratic_sensitivity(mocker):
     # fit -- and it is different for every star. Nothing writes that
     # expression down: it falls out of the instrumental magnitude appearing
     # twice in the model, once inside it and once in the fit_diff add-back,
-    # which is exactly why it needs a test of its own. On this catalog the fit
-    # is perfect, so the transform term is negligible and the sensitivity is
-    # the whole answer. See issue #674.
+    # which is exactly why it needs a test of its own. The twin-fit helper
+    # subtracts away the transform term, leaving the sensitivity times the
+    # quoted error alone. See issue #674.
     a, b = 0.02, 0.01
-    mag_error = 0.01
 
-    result, _, instrumental = _fit_a_catalog(
-        mocker,
-        a=a,
-        b=b,
-        c=0.15,
-        d=0.05,
-        vary=("a", "b", "c", "d", "z"),
-        mag_error=mag_error,
+    measurement, instrumental = _measurement_half_of_the_error(
+        mocker, a=a, b=b, c=0.15, d=0.05, vary=("a", "b", "c", "d", "z")
     )
 
     sensitivity = 1 + a + 2 * b * instrumental
@@ -1923,7 +2156,7 @@ def test_transform_to_catalog_error_includes_the_quadratic_sensitivity(mocker):
     assert np.ptp(sensitivity) > 0.05
 
     np.testing.assert_allclose(
-        result["mag_cal_error"], np.abs(sensitivity) * mag_error, rtol=0, atol=1e-8
+        measurement, np.abs(sensitivity) * _MIN_FIT_SIGMA, rtol=0, atol=1e-8
     )
 
 
@@ -2817,6 +3050,29 @@ def _observations_with_unusable_rows(case, ra, dec, instrumental):
     return observed
 
 
+def _assert_rows_blind_to_the_spoiled_ones(mocker, catalog, observed, result):
+    """
+    Assert the surviving rows never learn the spoiled rows existed.
+
+    The reference is the same catalog transformed against the same
+    observations with the first `_N_UNUSABLE_ROWS` rows removed rather than
+    spoiled. The fit sees exactly the same usable stars either way, so
+    every calibrated number of the surviving rows must come out identical
+    -- bit for bit, not approximately: any difference at all means a
+    spoiled row reached the fit or the propagation.
+    """
+    reference = _run_transform_to_catalog(
+        mocker, catalog, Table(observed[_N_UNUSABLE_ROWS:]).group_by("file")
+    )
+
+    for column in ("mag_cal", "mag_cal_error"):
+        np.testing.assert_array_equal(
+            np.asarray(result[column][_N_UNUSABLE_ROWS:]),
+            np.asarray(reference[column]),
+            err_msg=column,
+        )
+
+
 def test_transform_to_catalog_nans_error_for_unusable_input_error(mocker):
     # An error that is zero or negative is meaningless, and the fit already
     # excludes those stars. The calibrated error must not be finite for them
@@ -2835,9 +3091,7 @@ def test_transform_to_catalog_nans_error_for_unusable_input_error(mocker):
     result = _run_transform_to_catalog(mocker, catalog, observed)
 
     assert np.isnan(result["mag_cal_error"][:_N_UNUSABLE_ROWS]).all()
-    np.testing.assert_allclose(
-        result["mag_cal_error"][_N_UNUSABLE_ROWS:], 0.01, rtol=0, atol=1e-8
-    )
+    _assert_rows_blind_to_the_spoiled_ones(mocker, catalog, observed, result)
 
     # The stars are only left out of the *fit*. They still have perfectly good
     # instrumental magnitudes, so they still get calibrated magnitudes.
@@ -2866,9 +3120,7 @@ def test_transform_to_catalog_nans_error_where_there_is_no_magnitude(mocker):
         rtol=0,
         atol=1e-6,
     )
-    np.testing.assert_allclose(
-        result["mag_cal_error"][_N_UNUSABLE_ROWS:], 0.01, rtol=0, atol=1e-8
-    )
+    _assert_rows_blind_to_the_spoiled_ones(mocker, catalog, observed, result)
 
 
 @pytest.mark.parametrize(

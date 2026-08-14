@@ -1118,18 +1118,24 @@ def transform_to_catalog(
     ``fit_cat_error_missing_frac`` is large, since the sigmas it is measured
     against are then missing a term rather than merely being small.
 
-    The reported uncertainties are scaled by the reduced chi-square of the
-    fit as it was weighted -- `lmfit`'s ``scale_covar`` is left on -- which
-    is ``fit_redchi`` itself except when sigmas sit below ``min_fit_sigma``,
-    where the weighting stops following the quoted errors and the reported
-    ``fit_redchi`` does not. They therefore describe the scatter actually
-    observed about the fit rather than the instrumental errors that were
-    quoted, which is the more robust of the two: it stays right when the
-    quoted errors are systematically wrong. The price is that ``fit_redchi``
-    and the ``*_error`` columns are not independent diagnostics. An image
-    whose stars scatter twice as far from the model as they claim reports both
-    a ``fit_redchi`` near four and coefficient uncertainties twice as large,
-    and that is one observation rather than two agreeing ones.
+    The reported uncertainties believe the errors the fit was weighted by --
+    the quoted errors, floored at ``min_fit_sigma`` -- rather than the
+    scatter actually observed about the fit: `lmfit`'s ``scale_covar``
+    rescaling, which multiplies the covariance by the reduced chi-square so
+    that the reported errors track the observed scatter whatever the quoted
+    errors said, is turned off. That makes ``fit_redchi`` and the
+    ``*_error`` columns independent diagnostics: an image whose stars
+    scatter twice as far from the model as they claim reports the
+    quoted-error uncertainties and a ``fit_redchi`` near four, where the
+    rescaling reported that one observation twice, dressed as two agreeing
+    ones. The excess the rescaling used to fold in silently is reported
+    instead, explicitly, in ``fit_excess_scatter``, for the caller to act
+    on. The price is stated rather than hidden: when the quoted errors are
+    systematically wrong, the ``*_error`` columns are wrong with them, and
+    ``fit_redchi`` far from one is the alarm that says so. An unweighted
+    fit quotes no errors to believe, so it keeps the rescaling: its
+    uncertainties are scaled to the observed scatter, the only scale it
+    has.
 
     ``mag_cal_error`` combines the star's own measurement error with the
     uncertainty of the fitted transform, correlations between the terms
@@ -1145,19 +1151,20 @@ def transform_to_catalog(
     catalog color, so the color's uncertainty is a real, knowingly omitted
     contribution -- roughly ``c * sigma_color`` -- tracked as issue #691. What
     the catalog reliably contributes is its field-wide scatter about the
-    transform, already absorbed because ``lmfit`` scales the covariance by
-    ``fit_redchi``; and its systematic tie to the standard system -- about
-    0.02 mag for APASS DR9 -- which is identical for every star in every
-    image, so a per-star column would mislead, appearing to average down by
-    the square root of the number of stars.
+    transform, which lands in ``fit_excess_scatter``; and its systematic tie
+    to the standard system -- about 0.02 mag for APASS DR9 -- which is
+    identical for every star in every image, so a per-star column would
+    mislead, appearing to average down by the square root of the number of
+    stars.
 
-    One consequence of that scaling is worth knowing. The transform half of
-    ``mag_cal_error`` corrects itself when the quoted instrumental errors are
-    systematically wrong, because the covariance it comes from was scaled by
-    the scatter actually observed; the measurement half does not, because it is
-    those quoted errors. So an image with a ``fit_redchi`` far from one is
-    reporting calibrated errors whose two halves disagree about how much to
-    trust the input, which is the reason to read that column.
+    Both halves of ``mag_cal_error`` therefore believe the errors as quoted:
+    the measurement half is the star's own quoted error propagated, and the
+    transform half comes from a covariance weighted by everyone's. So an
+    image whose ``fit_redchi`` is far from one is reporting a
+    ``mag_cal_error`` that is wrong by roughly the square root of that
+    factor, and ``fit_excess_scatter`` is the size of what its quoted inputs
+    missed -- which is the reason to read those columns before believing
+    this one.
     """
     if obs_error_column is None:
         warnings.warn(
@@ -1519,11 +1526,20 @@ def transform_to_catalog(
             # the best starting guess available.
             params["z"].set(value=float(np.median(fit_data)))
 
+        # The covariance is reported as the fit was weighted rather than
+        # rescaled by the reduced chi-square: the quoted errors are believed,
+        # and their disagreement with the observed scatter is reported once,
+        # in ``fit_redchi`` and ``fit_excess_scatter``, instead of also being
+        # folded silently into the coefficient uncertainties. An unweighted
+        # fit quotes no errors to believe, so the observed scatter is the
+        # only scale its covariance can take and the rescaling stays on.
+        # See issue #690.
         fit_result = lmfit.minimize(
             _transform_residual,
             params,
             method="least_squares",
             args=(fit_mag, fit_color, fit_data, weights),
+            scale_covar=sigma is None,
         )
 
         if not fit_result.success:
