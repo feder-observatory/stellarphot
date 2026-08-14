@@ -1248,10 +1248,11 @@ def test_transform_to_catalog_uncertainty_falls_as_stars_are_added(mocker):
 
     # Roughly sqrt(10), not exactly: the 25-star fit is not an exactly scaled
     # copy of the 250-star one, since its stars sample the same magnitude and
-    # color ranges more coarsely. The measured ratio is about 3.4 against a
-    # sqrt(10) of 3.16 -- what matters is that it is nowhere near 1, which is
-    # what a number that only looked like an uncertainty would give.
-    assert z_error[25] / z_error[250] == pytest.approx(np.sqrt(10), rel=0.2)
+    # color ranges more coarsely. The measured ratio is 3.58 against a
+    # sqrt(10) of 3.16, so the tolerance is set to leave real headroom on
+    # both sides -- what matters is that the ratio is nowhere near 1, which
+    # is what a number that only looked like an uncertainty would give.
+    assert z_error[25] / z_error[250] == pytest.approx(np.sqrt(10), rel=0.25)
 
 
 # What the coefficient uncertainties are measured against, all issue #690.
@@ -1295,16 +1296,41 @@ def _underquoted_fit_result(module_mocker):
     return result
 
 
+def _design_matrix(result):
+    """
+    Design matrix of the default terms, rebuilt from a transform's output.
+
+    One row per star and one column per varied term, in the order ``a``,
+    ``c``, ``z`` -- the order every prediction and assertion below indexes
+    by, which is why this is written down exactly once.
+
+    Parameters
+    ----------
+
+    result : `astropy.table.Table`
+        A transform of a single image in which every star was fit.
+
+    Returns
+    -------
+    `numpy.ndarray`
+        The design matrix.
+    """
+    mag_inst = np.asarray(result["mag_inst"])
+    color = np.asarray(result["color_cat"])
+
+    return np.column_stack([mag_inst, color, np.ones_like(mag_inst)])
+
+
 def _predicted_coefficient_covariance(result, sigma_quoted):
     """
     The covariance a fit of the default terms should report, by hand.
 
     The transform model is linear in its coefficients, so the covariance of
     a weighted least-squares fit of it is exactly ``(J^T W J)^-1`` with
-    ``J`` the design matrix -- one column per varied term, evaluated at the
-    stars that were fit -- and ``W`` the diagonal of the squared weights.
-    Nothing about where the stars actually landed enters, which is the
-    behavior under test: the fit's own residuals must not rescale it.
+    ``J`` the design matrix and ``W`` the diagonal of the squared weights,
+    floored exactly as the fit floors them. Nothing about where the stars
+    actually landed enters, which is the behavior under test: the fit's own
+    residuals must not rescale it.
 
     Parameters
     ----------
@@ -1320,15 +1346,49 @@ def _predicted_coefficient_covariance(result, sigma_quoted):
     Returns
     -------
     `numpy.ndarray`
-        Predicted covariance of the default varied terms, ordered
-        ``a``, ``c``, ``z``.
+        Predicted covariance of the default varied terms, in
+        `_design_matrix` order.
     """
-    mag_inst = np.asarray(result["mag_inst"])
-    color = np.asarray(result["color_cat"])
-    jacobian = np.column_stack([mag_inst, color, np.ones_like(mag_inst)])
+    jacobian = _design_matrix(result)
     weight = 1.0 / max(sigma_quoted, _MIN_FIT_SIGMA)
 
     return np.linalg.inv(weight**2 * (jacobian.T @ jacobian))
+
+
+def _predicted_mag_cal_error(result, covariance, mag_error):
+    """
+    The ``mag_cal_error`` every star should report, by hand.
+
+    The measurement half is the star's own quoted error through the
+    ``fit_diff`` sensitivity of ``1 + a``; the transform half is the given
+    coefficient covariance pushed through the model's gradient --
+    which, the model being linear, is the star's design-matrix row again --
+    correlations included.
+
+    Parameters
+    ----------
+
+    result : `astropy.table.Table`
+        A transform of a single image in which every star was fit.
+
+    covariance : `numpy.ndarray`
+        Coefficient covariance to propagate, in `_design_matrix` order.
+
+    mag_error : float
+        The one observed error every star quoted, *not* combined with the
+        catalog's: the catalog error weights the fit but is not part of any
+        star's own measurement.
+
+    Returns
+    -------
+    `numpy.ndarray`
+        Predicted ``mag_cal_error`` of each star.
+    """
+    gradients = _design_matrix(result)
+    transform_var = np.einsum("si,ij,sj->s", gradients, covariance, gradients)
+    measurement_var = ((1 + result["a"][0]) * mag_error) ** 2
+
+    return np.sqrt(measurement_var + transform_var)
 
 
 def test_transform_to_catalog_uncertainties_believe_the_quoted_errors(
@@ -1374,15 +1434,9 @@ def test_transform_to_catalog_error_uses_the_unscaled_covariance(
     sigma_quoted = np.hypot(_UNDERQUOTED_CLAIMED_ERROR, _FAKE_CATALOG_ERROR)
     covariance = _predicted_coefficient_covariance(result, sigma_quoted)
 
-    mag_inst = np.asarray(result["mag_inst"])
-    color = np.asarray(result["color_cat"])
-    gradients = np.column_stack([mag_inst, color, np.ones_like(mag_inst)])
-    transform_var = np.einsum("si,ij,sj->s", gradients, covariance, gradients)
-    measurement_var = ((1 + result["a"][0]) * _UNDERQUOTED_CLAIMED_ERROR) ** 2
-
     np.testing.assert_allclose(
         np.asarray(result["mag_cal_error"]),
-        np.sqrt(measurement_var + transform_var),
+        _predicted_mag_cal_error(result, covariance, _UNDERQUOTED_CLAIMED_ERROR),
         rtol=1e-6,
     )
 
@@ -1421,6 +1475,18 @@ def test_transform_to_catalog_uncertainties_believe_the_floor_when_it_binds(mock
             np.sqrt(covariance[index, index]), rel=1e-6
         ), term
 
+    # mag_cal_error's two halves split at the floor: the transform half
+    # comes from the floored covariance just pinned, while the measurement
+    # half is the star's own error exactly as quoted -- never raised. This
+    # is the only place that split is pinned in absolute terms below the
+    # floor; the twin-fit tests above cancel the transform half by
+    # construction and could not see it drift.
+    np.testing.assert_allclose(
+        np.asarray(result["mag_cal_error"]),
+        _predicted_mag_cal_error(result, covariance, claimed),
+        rtol=1e-6,
+    )
+
 
 def test_transform_to_catalog_uncertainties_scale_with_the_quoted_errors(mocker):
     # Under the old scale_covar default this was structurally impossible:
@@ -1430,30 +1496,23 @@ def test_transform_to_catalog_uncertainties_scale_with_the_quoted_errors(mocker)
     # error plumbing like issues #680 and #692 invisible in every reported
     # error. Believing the quoted errors means tripling them must triple
     # each one. See issue #690.
-    n_stars = 30
-    sigma = 0.02
     base_error = 0.02
     scale = 3.0
 
-    # No catalog errors, so the quoted observed error is the whole sigma and
-    # scaling it scales the weights exactly.
-    catalog, ra, dec, instrumental = _generate_fake_catalog(
-        n_stars, a=0.02, c=0.15, cat_error=None
-    )
-
+    # cat_error=None so the quoted observed error is the whole sigma and
+    # scaling it scales the weights exactly; same seed, so the two fits see
+    # the very same stars.
     quoted, tripled = (
-        _run_transform_to_catalog(
+        _fit_a_catalog(
             mocker,
-            catalog,
-            _generate_observed_table(
-                ra,
-                dec,
-                instrumental,
-                noise_sigma=sigma,
-                seed=24680,
-                mag_error=k * base_error,
-            ),
-        )
+            n_stars=30,
+            sigma=0.02,
+            seed=24680,
+            mag_error=k * base_error,
+            a=0.02,
+            c=0.15,
+            cat_error=None,
+        )[0]
         for k in (1.0, scale)
     )
 
@@ -1479,9 +1538,7 @@ def test_transform_to_catalog_unweighted_uncertainties_use_the_scatter(
     # is what fit_redchi holds for an unweighted fit. See issue #690.
     result = _unweighted_fit_result
 
-    mag_inst = np.asarray(result["mag_inst"])
-    color = np.asarray(result["color_cat"])
-    jacobian = np.column_stack([mag_inst, color, np.ones_like(mag_inst)])
+    jacobian = _design_matrix(result)
     covariance = np.linalg.inv(jacobian.T @ jacobian) * result["fit_redchi"][0]
 
     for index, term in enumerate(("a", "c", "z")):
@@ -3092,15 +3149,16 @@ def _assert_rows_blind_to_the_spoiled_ones(mocker, catalog, observed, result):
     The reference is the same catalog transformed against the same
     observations with the first `_N_UNUSABLE_ROWS` rows removed rather than
     spoiled. The fit sees exactly the same usable stars either way, so
-    every calibrated number of the surviving rows must come out identical
-    -- bit for bit, not approximately: any difference at all means a
-    spoiled row reached the fit or the propagation.
+    every output column of the surviving rows -- per-star and per-image
+    diagnostics alike -- must come out identical, bit for bit, not
+    approximately: any difference at all means a spoiled row reached the
+    fit, the diagnostics, or the propagation.
     """
     reference = _run_transform_to_catalog(
         mocker, catalog, Table(observed[_N_UNUSABLE_ROWS:]).group_by("file")
     )
 
-    for column in ("mag_cal", "mag_cal_error"):
+    for column in sorted(_TRANSFORM_OUTPUT_COLUMNS):
         np.testing.assert_array_equal(
             np.asarray(result[column][_N_UNUSABLE_ROWS:]),
             np.asarray(reference[column]),

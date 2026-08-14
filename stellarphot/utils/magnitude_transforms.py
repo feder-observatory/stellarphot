@@ -1164,14 +1164,17 @@ def transform_to_catalog(
     mislead, appearing to average down by the square root of the number of
     stars.
 
-    Both halves of ``mag_cal_error`` therefore believe the errors as quoted:
-    the measurement half is the star's own quoted error propagated, and the
-    transform half comes from a covariance weighted by everyone's. So an
-    image whose ``fit_redchi`` is far from one is reporting a
+    Both halves of ``mag_cal_error`` therefore believe the errors the fit
+    was weighted by: the measurement half is the star's own quoted error
+    propagated, exactly as quoted, and the transform half comes from the
+    covariance weighted by everyone's -- floored at ``min_fit_sigma``. So
+    an image whose ``fit_redchi`` is far from one is reporting a
     ``mag_cal_error`` that is wrong by roughly the square root of that
-    factor, and ``fit_excess_scatter`` is the size of what its quoted inputs
-    missed -- which is the reason to read those columns before believing
-    this one.
+    factor -- except when the quoted errors sit under the floor, where the
+    transform half already believes the floor rather than the quoted
+    errors and that rule of thumb overcorrects -- and ``fit_excess_scatter``
+    is the size of what its quoted inputs missed. That is the reason to
+    read those columns before believing this one.
     """
     if obs_error_column is None:
         warnings.warn(

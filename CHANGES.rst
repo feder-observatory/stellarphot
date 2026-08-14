@@ -150,9 +150,9 @@ Bug Fixes
 + ``transform_to_catalog()`` now floors the uncertainty it weights each star
   by at ``min_fit_sigma``, a new keyword defaulting to 0.01 mag (pass 0 for
   no floor), so a single star claiming a tiny uncertainty can no longer hold
-  most of a fit's weight. The floor changes only the weighting;
-  ``fit_redchi``, ``fit_excess_scatter`` and ``mag_cal_error`` are measured
-  against the errors as quoted. [#694]
+  most of a fit's weight. ``fit_redchi`` and ``fit_excess_scatter`` are
+  measured against the errors as quoted; see the entry for ``#690`` above
+  for what the reported uncertainties believe. [#694]
 + ``transform_to_catalog()`` reports the 1.0 arcsec match limit stars must
   meet to enter the fit, which is tighter than the documented 1.5 arcsec
   limit for the columns derived from the match. [#694]
