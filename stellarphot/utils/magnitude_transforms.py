@@ -59,8 +59,9 @@ _FIT_REDCHI_COLUMN = "fit_redchi"
 # Applied to the total sigma the fit weights by, so it bounds the weight of a
 # star however its sigma got small -- a zero catalog error, a tiny observed
 # error, or a band whose catalog has no error column at all. It floors the
-# weighting alone; the reported ``fit_redchi``, ``fit_excess_scatter`` and
-# ``mag_cal_error`` are all measured against the errors as quoted.
+# weighting, and with it the covariance the reported uncertainties come from
+# (see issue #690); the reported ``fit_redchi`` and ``fit_excess_scatter``
+# are still measured against the errors as quoted.
 _MIN_FIT_SIGMA = 0.01
 
 # Names of the columns describing how the fit was weighted, as opposed to where
@@ -989,9 +990,13 @@ def transform_to_catalog(
         believable below the default, e.g. stacked photometry of bright
         stars against a catalog with trustworthy millimagnitude errors. Must
         not be negative, and has no effect on an unweighted fit. The floor
-        applies only to the fit's weighting: ``fit_redchi``,
-        ``fit_excess_scatter`` and every reported per-star error, including
-        ``mag_cal_error``, are measured against the errors as quoted.
+        applies to the fit's weighting, and through it to the covariance
+        behind ``a_error``...``z_error`` and the transform half of
+        ``mag_cal_error`` (see issue #690): a fit whose quoted errors sit
+        under the floor reports uncertainties at the floor's scale, which
+        overstates them when those tiny errors are genuine -- the case
+        passing ``0`` exists for. ``fit_redchi`` and ``fit_excess_scatter``
+        are still measured against the errors as quoted.
 
     Returns
     -------
@@ -1078,11 +1083,13 @@ def transform_to_catalog(
     star by is bounded below by ``min_fit_sigma``, 0.01 mag by default and
     ``0`` for no floor. Without one, a single star claiming a tiny
     uncertainty can hold most of a fit's weight; see issue #694. The floor
-    applies to the weighting and to nothing else: ``fit_redchi`` and
+    applies to the weighting -- and therefore to the covariance the
+    reported uncertainties come from, which is the fit's as it was actually
+    weighted (see below) -- but not to the alarms: ``fit_redchi`` and
     ``fit_excess_scatter`` are measured against the errors as quoted, so an
-    image whose quoted errors are far too small still raises the alarm those
-    columns exist for, and no reported per-star error -- ``mag_cal_error``
-    included -- is raised to the floor.
+    image whose quoted errors are far too small still raises the alarm
+    those columns exist for. The measurement half of ``mag_cal_error`` is
+    the star's own error exactly as quoted, never raised to the floor.
 
     The three diagnostic columns describe how the fit was weighted, which
     ``fit_redchi`` cannot: it is a ratio, and an image whose errors are wrong

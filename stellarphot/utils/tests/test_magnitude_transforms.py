@@ -1387,6 +1387,41 @@ def test_transform_to_catalog_error_uses_the_unscaled_covariance(
     )
 
 
+def test_transform_to_catalog_uncertainties_believe_the_floor_when_it_binds(mocker):
+    # The other side of believing the errors as the fit was *weighted*: when
+    # every star quotes an error under the min_fit_sigma floor, the weights
+    # -- and so the covariance the reported uncertainties come from -- are
+    # the floor's, not the quoted errors'. Truthful sub-floor errors
+    # therefore come out overstated, by about floor/quoted, which is the
+    # price of bounding any one star's leverage; ``min_fit_sigma=0`` is the
+    # documented escape. Pinned here so the trade-off stays a choice rather
+    # than becoming an accident. Under the old scale_covar default the floor
+    # cancelled out of the rescaled covariance and could not reach the
+    # reported errors at all. See issue #690.
+    claimed = 0.002
+
+    result, _, _ = _fit_a_catalog(
+        mocker,
+        n_stars=40,
+        sigma=claimed,
+        seed=20260814,
+        mag_error=claimed,
+        cat_error=None,
+        a=0.02,
+        c=0.15,
+    )
+
+    # The helper floors its weights exactly as the fit does, so with a
+    # sub-floor sigma this prediction is the floor's covariance -- about
+    # (floor / claimed) = 5 times the quoted errors' prediction.
+    covariance = _predicted_coefficient_covariance(result, claimed)
+
+    for index, term in enumerate(("a", "c", "z")):
+        assert result[f"{term}_error"][0] == pytest.approx(
+            np.sqrt(covariance[index, index]), rel=1e-6
+        ), term
+
+
 def test_transform_to_catalog_uncertainties_scale_with_the_quoted_errors(mocker):
     # Under the old scale_covar default this was structurally impossible:
     # rescaling every weight by k scales the raw covariance by k**2 and the
