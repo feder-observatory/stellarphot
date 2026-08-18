@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 from astropy import units as u
 from astropy.coordinates import SkyCoord
-from astropy.table import Table, vstack
+from astropy.table import MaskedColumn, QTable, Table, vstack
 from astropy.utils.data import get_pkg_data_filename
 from astropy.utils.exceptions import AstropyUserWarning
 
@@ -1054,6 +1054,52 @@ def test_transform_to_catalog_combines_the_errors_in_quadrature(mocker):
             np.asarray(combined_by_the_code[column]),
             np.asarray(combined_by_the_test[column]),
             err_msg=column,
+        )
+
+
+def test_to_float_array_strips_units():
+    """
+    Unit-bearing input must come back as a plain float array.
+
+    Real photometry files can carry a unit on ``mag_error`` (one in the wild
+    reports ``1 / adu``), and because `~stellarphot.core.PhotometryData` is a
+    ``QTable`` such a column arrives here as a `~astropy.units.Quantity`,
+    which keeps its class -- and its unit -- through ``numpy.ma``. If the
+    unit survives conversion, the weighting arithmetic in
+    ``transform_to_catalog`` (``np.hypot`` of the observed and catalog
+    errors, and the ``np.maximum`` sigma floor) raises
+    `~astropy.units.UnitConversionError` mixing it with plain floats.
+    """
+    quantity = np.array([1.0, 2.0]) * (u.one / u.adu)
+    converted = _to_float_array(quantity)
+    assert type(converted) is np.ndarray
+    np.testing.assert_array_equal(converted, [1.0, 2.0])
+
+    masked = MaskedColumn([1.0, 2.0], mask=[False, True], unit=u.mag)
+    converted = _to_float_array(masked)
+    assert type(converted) is np.ndarray
+    np.testing.assert_array_equal(converted, [1.0, np.nan])
+
+
+def test_transform_to_catalog_tolerates_units_on_the_error_column(mocker):
+    # A unit on the error column must not change the fit, let alone crash
+    # it. Run the same observations twice, as the plain table the other
+    # tests use and as a QTable whose ``mag_error`` is a Quantity with the
+    # unit seen in a real photometry file; the outputs must be identical.
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20, a=0.02, c=0.15)
+
+    plain = _run_transform_to_catalog(
+        mocker, catalog, _generate_observed_table(ra, dec, instrumental)
+    )
+
+    with_unit = QTable(_generate_observed_table(ra, dec, instrumental))
+    with_unit["mag_error"] = with_unit["mag_error"] * (u.one / u.adu)
+    with_unit = with_unit.group_by("file")
+    result = _run_transform_to_catalog(mocker, catalog, with_unit)
+
+    for column in ("mag_cal", "mag_cal_error", "a", "c", "z", "a_error"):
+        np.testing.assert_array_equal(
+            np.asarray(result[column]), np.asarray(plain[column]), err_msg=column
         )
 
 

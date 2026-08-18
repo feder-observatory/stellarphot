@@ -147,6 +147,10 @@ Other Changes and Additions
 
 Bug Fixes
 ^^^^^^^^^
++ ``transform_to_catalog()`` no longer crashes with a ``UnitConversionError``
+  when the observed error column carries a unit, as columns of the
+  ``QTable``-based ``PhotometryData`` can. The unit is dropped when the
+  column is converted for fitting, as was already done for its mask. [#696]
 + ``transform_to_catalog()`` now floors the uncertainty it weights each star
   by at ``min_fit_sigma``, a new keyword defaulting to 0.01 mag (pass 0 for
   no floor), so a single star claiming a tiny uncertainty can no longer hold

@@ -224,6 +224,13 @@ def _to_float_array(values):
     through `numpy.ma` handles both -- unmasked input passes through
     `numpy.ma.asarray` without a mask, which makes `numpy.ma.filled` a no-op.
 
+    The final `~numpy.asarray` drops any array subclass that survives the
+    trip through `numpy.ma`. A `~astropy.units.Quantity` does survive it,
+    unit and all -- and error columns in real photometry files can carry a
+    unit -- which would crash the weighting arithmetic downstream:
+    ``np.hypot`` of the observed and catalog errors and the ``np.maximum``
+    sigma floor both refuse to mix a unit-bearing array with plain floats.
+
     Parameters
     ----------
 
@@ -235,7 +242,9 @@ def _to_float_array(values):
     `numpy.ndarray`
         Float array with NaN wherever the input was masked.
     """
-    return np.ma.filled(np.ma.asarray(values, dtype=float), np.nan)
+    return np.asarray(
+        np.ma.filled(np.ma.asarray(values, dtype=float), np.nan), dtype=float
+    )
 
 
 def _underdetermined_reason(fit_result, vary):
