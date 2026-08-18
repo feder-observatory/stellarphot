@@ -180,6 +180,12 @@ _FAKE_CATALOG_SCATTER = 1e-12
 # predict an uncertainty to better than that fold it into their prediction.
 _FAKE_CATALOG_ERROR = 0.001
 
+# Seed shared by every noise realization drawn in this file. Any single value
+# works equally well -- the assertions below are either exact or deliberately
+# loose enough to hold for any seed -- so one constant means one rerun checks
+# every test's numbers at once.
+_SEED = 13579
+
 
 def _generate_fake_catalog(
     n_stars,
@@ -767,12 +773,12 @@ def _noisy_fit_result(module_mocker):
     `test_transform_to_catalog_error_includes_the_transform_uncertainty` and
     `test_transform_to_catalog_error_uses_the_whole_covariance` all read --
     and none of them mutate -- the result of fitting the same catalog: 50
-    stars, noise sigma 0.02, seed 20260811, a=0.02 and c=0.15. Computing it
+    stars, noise sigma 0.02, the shared seed, a=0.02 and c=0.15. Computing it
     once here rather than three times keeps the tests from drifting apart on
     inputs they mean to share.
     """
     result, _, _ = _fit_a_catalog(
-        module_mocker, n_stars=50, sigma=0.02, seed=20260811, a=0.02, c=0.15
+        module_mocker, n_stars=50, sigma=0.02, seed=_SEED, a=0.02, c=0.15
     )
     # The patch has done its job once the fit is computed. Left in place it
     # would outlive every later test in the module -- module_mocker unwinds at
@@ -790,15 +796,15 @@ def _unweighted_fit_result(module_mocker):
     `test_transform_to_catalog_reports_unweighted_fit_statistic` and
     `test_transform_to_catalog_diagnostics_for_an_unweighted_fit` both read
     -- and neither mutates -- the result of the same fit with no error
-    column: 100 stars, noise sigma 0.02, seed 13579. Computing it once here
-    rather than twice keeps the tests from drifting apart on inputs they
-    mean to share.
+    column: 100 stars, noise sigma 0.02, the shared seed. Computing it once
+    here rather than twice keeps the tests from drifting apart on inputs
+    they mean to share.
     """
     n_stars = 100
 
     catalog, ra, dec, instrumental = _generate_fake_catalog(n_stars)
     observed = _generate_observed_table(
-        ra, dec, instrumental, noise_sigma=0.02, seed=13579
+        ra, dec, instrumental, noise_sigma=0.02, seed=_SEED
     )
 
     with pytest.warns(AstropyUserWarning, match="rror weighting"):
@@ -928,7 +934,7 @@ def _one_star_with_a_large_error(mocker, n_stars=20, cat_error=_FAKE_CATALOG_ERR
     # callers, so it changes nothing about what they ask; it is added only
     # because a residual of exactly zero is a state real data never reaches.
     observed = _generate_observed_table(
-        ra, dec, observed_mags, noise_sigma=sigma, seed=8811, mag_error=errors
+        ra, dec, observed_mags, noise_sigma=sigma, seed=_SEED, mag_error=errors
     )
 
     return _run_transform_to_catalog(mocker, catalog, observed)
@@ -986,7 +992,7 @@ def test_transform_to_catalog_weights_by_the_catalog_error_too(mocker):
     catalog["mag_error_R"][0] = 10.0
 
     observed = _generate_observed_table(
-        ra, dec, observed_mags, noise_sigma=sigma, seed=8811, mag_error=0.001
+        ra, dec, observed_mags, noise_sigma=sigma, seed=_SEED, mag_error=0.001
     )
 
     result = _run_transform_to_catalog(mocker, catalog, observed)
@@ -1022,7 +1028,7 @@ def test_transform_to_catalog_combines_the_errors_in_quadrature(mocker):
     catalog["mag_error_R"] = cat_error
 
     observed = _generate_observed_table(
-        ra, dec, instrumental, noise_sigma=sigma, seed=97531, mag_error=obs_error
+        ra, dec, instrumental, noise_sigma=sigma, seed=_SEED, mag_error=obs_error
     )
     combined_by_the_code = _run_transform_to_catalog(mocker, catalog, observed)
 
@@ -1032,7 +1038,7 @@ def test_transform_to_catalog_combines_the_errors_in_quadrature(mocker):
         dec,
         instrumental,
         noise_sigma=sigma,
-        seed=97531,
+        seed=_SEED,
         mag_error=np.hypot(obs_error, cat_error),
     )
 
@@ -1098,7 +1104,7 @@ def test_transform_to_catalog_negligible_catalog_error_changes_nothing(mocker):
         n_stars, a=0.02, c=0.15, cat_error=1e-30
     )
     observed = _generate_observed_table(
-        ra, dec, instrumental, noise_sigma=sigma, seed=13579
+        ra, dec, instrumental, noise_sigma=sigma, seed=_SEED
     )
 
     negligible = _run_transform_to_catalog(mocker, catalog, observed, in_place=False)
@@ -1144,7 +1150,7 @@ def test_transform_to_catalog_treats_unusable_catalog_errors_as_observed_only(
     observed_mags[0] -= 0.8
 
     observed = _generate_observed_table(
-        ra, dec, observed_mags, noise_sigma=sigma, seed=8811, mag_error=0.01
+        ra, dec, observed_mags, noise_sigma=sigma, seed=_SEED, mag_error=0.01
     )
 
     unusable_catalog = catalog.copy()
@@ -1233,7 +1239,7 @@ def test_transform_to_catalog_uncertainty_falls_as_stars_are_added(mocker):
     # errors and the design of the fit (see the issue #690 tests below), so
     # the noise realization barely moves it -- it only jitters the design
     # matrix's magnitude column.
-    seed = 54321
+    seed = _SEED
     z_error = {}
 
     for n_stars in (25, 250):
@@ -1277,7 +1283,7 @@ def _underquoted_fit_result(module_mocker):
     `test_transform_to_catalog_error_uses_the_unscaled_covariance` both read
     -- and neither mutates -- the result of fitting the same catalog: 50
     stars whose true scatter, `_UNDERQUOTED_NOISE_SIGMA`, is five times the
-    `_UNDERQUOTED_CLAIMED_ERROR` they quote, seed 20260813, a=0.02 and
+    `_UNDERQUOTED_CLAIMED_ERROR` they quote, the shared seed, a=0.02 and
     c=0.15. Computing it once here rather than twice keeps the tests from
     drifting apart on inputs they mean to share.
     """
@@ -1285,7 +1291,7 @@ def _underquoted_fit_result(module_mocker):
         module_mocker,
         n_stars=50,
         sigma=_UNDERQUOTED_NOISE_SIGMA,
-        seed=20260813,
+        seed=_SEED,
         mag_error=_UNDERQUOTED_CLAIMED_ERROR,
         a=0.02,
         c=0.15,
@@ -1325,13 +1331,6 @@ def _predicted_coefficient_covariance(result, sigma_quoted):
     """
     The covariance a fit of the default terms should report, by hand.
 
-    The transform model is linear in its coefficients, so the covariance of
-    a weighted least-squares fit of it is exactly ``(J^T W J)^-1`` with
-    ``J`` the design matrix and ``W`` the diagonal of the squared weights,
-    floored exactly as the fit floors them. Nothing about where the stars
-    actually landed enters, which is the behavior under test: the fit's own
-    residuals must not rescale it.
-
     Parameters
     ----------
 
@@ -1348,6 +1347,15 @@ def _predicted_coefficient_covariance(result, sigma_quoted):
     `numpy.ndarray`
         Predicted covariance of the default varied terms, in
         `_design_matrix` order.
+
+    Notes
+    -----
+    The transform model is linear in its coefficients, so the covariance of
+    a weighted least-squares fit of it is exactly ``(J^T W J)^-1`` with
+    ``J`` the design matrix and ``W`` the diagonal of the squared weights,
+    floored exactly as the fit floors them. Nothing about where the stars
+    actually landed enters, which is the behavior under test: the fit's own
+    residuals must not rescale it.
     """
     jacobian = _design_matrix(result)
     weight = 1.0 / max(sigma_quoted, _MIN_FIT_SIGMA)
@@ -1358,12 +1366,6 @@ def _predicted_coefficient_covariance(result, sigma_quoted):
 def _predicted_mag_cal_error(result, covariance, mag_error):
     """
     The ``mag_cal_error`` every star should report, by hand.
-
-    The measurement half is the star's own quoted error through the
-    ``fit_diff`` sensitivity of ``1 + a``; the transform half is the given
-    coefficient covariance pushed through the model's gradient --
-    which, the model being linear, is the star's design-matrix row again --
-    correlations included.
 
     Parameters
     ----------
@@ -1383,6 +1385,14 @@ def _predicted_mag_cal_error(result, covariance, mag_error):
     -------
     `numpy.ndarray`
         Predicted ``mag_cal_error`` of each star.
+
+    Notes
+    -----
+    The measurement half is the star's own quoted error through the
+    ``fit_diff`` sensitivity of ``1 + a``; the transform half is the given
+    coefficient covariance pushed through the model's gradient --
+    which, the model being linear, is the star's design-matrix row again --
+    correlations included.
     """
     gradients = _design_matrix(result)
     transform_var = np.einsum("si,ij,sj->s", gradients, covariance, gradients)
@@ -1458,7 +1468,7 @@ def test_transform_to_catalog_uncertainties_believe_the_floor_when_it_binds(mock
         mocker,
         n_stars=40,
         sigma=claimed,
-        seed=20260814,
+        seed=_SEED,
         mag_error=claimed,
         cat_error=None,
         a=0.02,
@@ -1507,7 +1517,7 @@ def test_transform_to_catalog_uncertainties_scale_with_the_quoted_errors(mocker)
             mocker,
             n_stars=30,
             sigma=0.02,
-            seed=24680,
+            seed=_SEED,
             mag_error=k * base_error,
             a=0.02,
             c=0.15,
@@ -1576,7 +1586,7 @@ def test_transform_to_catalog_reports_reduced_chi_square(
         dec,
         instrumental,
         noise_sigma=sigma,
-        seed=13579,
+        seed=_SEED,
         mag_error=error_scale * sigma,
     )
 
@@ -1637,7 +1647,7 @@ def test_transform_to_catalog_floors_the_fit_sigma(mocker, cat_error):
     at_the_floor[:10] = _MIN_FIT_SIGMA
 
     fit_kwargs = dict(
-        mocker=mocker, n_stars=n_stars, sigma=0.02, seed=24680, cat_error=cat_error
+        mocker=mocker, n_stars=n_stars, sigma=0.02, seed=_SEED, cat_error=cat_error
     )
     below, _, _ = _fit_a_catalog(mag_error=errors, **fit_kwargs)
     floored, _, _ = _fit_a_catalog(mag_error=at_the_floor, **fit_kwargs)
@@ -1664,7 +1674,7 @@ def test_transform_to_catalog_floor_preserves_the_redchi_alarm(mocker):
     claimed = 0.0002
 
     result, _, _ = _fit_a_catalog(
-        mocker, n_stars=100, sigma=sigma, seed=13579, mag_error=claimed, cat_error=None
+        mocker, n_stars=100, sigma=sigma, seed=_SEED, mag_error=claimed, cat_error=None
     )
 
     assert result["fit_redchi"][0] == pytest.approx((sigma / claimed) ** 2, rel=0.3)
@@ -1680,7 +1690,7 @@ def test_transform_to_catalog_floor_preserves_the_excess_scatter_alarm(mocker):
     claimed = 0.002
 
     result, _, _ = _fit_a_catalog(
-        mocker, n_stars=300, sigma=sigma, seed=97531, mag_error=claimed, cat_error=None
+        mocker, n_stars=300, sigma=sigma, seed=_SEED, mag_error=claimed, cat_error=None
     )
 
     assert result["fit_excess_scatter"][0] == pytest.approx(
@@ -1706,7 +1716,7 @@ def test_transform_to_catalog_respects_a_custom_min_fit_sigma(mocker):
         mocker=mocker,
         n_stars=n_stars,
         sigma=0.02,
-        seed=24680,
+        seed=_SEED,
         cat_error=None,
         min_fit_sigma=floor,
     )
@@ -1734,7 +1744,7 @@ def test_transform_to_catalog_min_fit_sigma_zero_disables_the_floor(mocker):
         mocker,
         n_stars=n_stars,
         sigma=0.02,
-        seed=2468,
+        seed=_SEED,
         mag_error=errors,
         cat_error=None,
         min_fit_sigma=0,
@@ -1782,7 +1792,7 @@ def test_transform_to_catalog_reports_fraction_with_no_catalog_error(mocker, n_z
         mocker,
         n_stars=n_stars,
         sigma=0.02,
-        seed=1234,
+        seed=_SEED,
         mag_error=0.02,
         cat_error=cat_error,
     )
@@ -1819,7 +1829,7 @@ def test_transform_to_catalog_reports_max_single_star_weight_share(mocker):
         mocker,
         n_stars=n_stars,
         sigma=0.02,
-        seed=2468,
+        seed=_SEED,
         mag_error=errors,
         cat_error=None,
     )
@@ -1852,7 +1862,7 @@ def test_transform_to_catalog_reports_excess_scatter(mocker):
         mocker,
         n_stars=n_stars,
         sigma=sigma,
-        seed=31415,
+        seed=_SEED,
         mag_error=claimed,
         cat_error=None,
     )
@@ -1869,7 +1879,7 @@ def test_transform_to_catalog_reports_no_excess_scatter_when_errors_describe_the
     # the column says exactly zero rather than a small positive number that
     # would read as a real finding.
     result, _, _ = _fit_a_catalog(
-        mocker, n_stars=200, sigma=0.02, seed=31415, mag_error=0.05, cat_error=None
+        mocker, n_stars=200, sigma=0.02, seed=_SEED, mag_error=0.05, cat_error=None
     )
 
     assert result["fit_excess_scatter"][0] == 0.0
@@ -2210,7 +2220,7 @@ def test_transform_to_catalog_error_matches_a_monte_carlo(mocker):
     reported = []
     for trial in range(n_trials):
         observed = _generate_observed_table(
-            ra, dec, instrumental, noise_sigma=sigma, seed=10000 + trial
+            ra, dec, instrumental, noise_sigma=sigma, seed=_SEED + trial
         )
         result = transform_to_catalog(
             observed,
@@ -3517,7 +3527,7 @@ def test_transform_to_catalog_against_a_real_catalog(cat_name):
         u.Quantity(np.asarray(stars["dec"]), u.degree),
         instrumental,
         noise_sigma=_REMOTE_SCATTER,
-        seed=680,
+        seed=_SEED,
     )
 
     try:

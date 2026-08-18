@@ -979,24 +979,12 @@ def transform_to_catalog(
         instead of the treating the catalog mag as the dependent variable.
 
     min_fit_sigma : float, optional
-        Smallest uncertainty, in magnitudes, a star is allowed to claim when
-        the fit weights it; a star whose combined uncertainty is smaller is
-        weighted as if it were this. A least-squares weight goes as one over
-        the variance, so without a floor a single star claiming a tiny
-        uncertainty can hold most of a fit's weight; see issue #694. The
-        default of 0.01 is about the smallest uncertainty credible for a
-        single ground-based measurement tied to a survey catalog. Pass ``0``
-        to apply no floor -- legitimate when the quoted errors really are
-        believable below the default, e.g. stacked photometry of bright
-        stars against a catalog with trustworthy millimagnitude errors. Must
-        not be negative, and has no effect on an unweighted fit. The floor
-        applies to the fit's weighting, and through it to the covariance
-        behind ``a_error``...``z_error`` and the transform half of
-        ``mag_cal_error`` (see issue #690): a fit whose quoted errors sit
-        under the floor reports uncertainties at the floor's scale, which
-        overstates them when those tiny errors are genuine -- the case
-        passing ``0`` exists for. ``fit_redchi`` and ``fit_excess_scatter``
-        are still measured against the errors as quoted.
+        Floor, in magnitudes, on the per-star uncertainty the fit weights
+        by; pass ``0`` to apply no floor. The default of 0.01 is about the
+        smallest error credible for a single ground-based measurement tied
+        to a survey catalog; see issue #694. Must not be negative, and has
+        no effect on an unweighted fit. See Notes for how the floor reaches
+        the reported uncertainties.
 
     Returns
     -------
@@ -1083,9 +1071,7 @@ def transform_to_catalog(
     star by is bounded below by ``min_fit_sigma``, 0.01 mag by default and
     ``0`` for no floor. Without one, a single star claiming a tiny
     uncertainty can hold most of a fit's weight; see issue #694. The floor
-    applies to the weighting -- and therefore to the covariance the
-    reported uncertainties come from, which is the fit's as it was actually
-    weighted (see below) -- but not to the alarms: ``fit_redchi`` and
+    applies to the weighting but not to the alarms: ``fit_redchi`` and
     ``fit_excess_scatter`` are measured against the errors as quoted, so an
     image whose quoted errors are far too small still raises the alarm
     those columns exist for. The measurement half of ``mag_cal_error`` is
@@ -1126,23 +1112,20 @@ def transform_to_catalog(
     against are then missing a term rather than merely being small.
 
     The reported uncertainties believe the errors the fit was weighted by --
-    the quoted errors, floored at ``min_fit_sigma`` -- rather than the
-    scatter actually observed about the fit: `lmfit`'s ``scale_covar``
-    rescaling, which multiplies the covariance by the reduced chi-square so
-    that the reported errors track the observed scatter whatever the quoted
-    errors said, is turned off. That makes ``fit_redchi`` and the
-    ``*_error`` columns independent diagnostics: an image whose stars
-    scatter twice as far from the model as they claim reports the
-    quoted-error uncertainties and a ``fit_redchi`` near four, where the
-    rescaling reported that one observation twice, dressed as two agreeing
-    ones. The excess the rescaling used to fold in silently is reported
-    instead, explicitly, in ``fit_excess_scatter``, for the caller to act
-    on. The price is stated rather than hidden: when the quoted errors are
-    systematically wrong, the ``*_error`` columns are wrong with them, and
-    ``fit_redchi`` far from one is the alarm that says so. An unweighted
-    fit quotes no errors to believe, so it keeps the rescaling: its
-    uncertainties are scaled to the observed scatter, the only scale it
-    has.
+    the quoted errors, floored at ``min_fit_sigma`` -- not the scatter
+    observed about the fit. That keeps ``fit_redchi`` and the ``*_error``
+    columns independent: stars scattering beyond their quoted errors leave
+    the reported uncertainties alone and instead raise ``fit_redchi``, with
+    ``fit_excess_scatter`` giving the size of what the quoted errors
+    missed. When the quoted errors are wrong, the ``*_error`` columns are
+    wrong with them, and ``fit_redchi`` far from one is the alarm that says
+    so -- ``mag_cal_error`` is then off by roughly its square root. The one
+    exception is quoted errors below the floor: there the reported
+    uncertainties take the floor's scale, overstated by about
+    floor/quoted, and that rule of thumb overcorrects; pass
+    ``min_fit_sigma=0`` when errors that small are genuine. An unweighted
+    fit quotes no errors to believe, so its uncertainties are scaled to the
+    observed scatter, the only scale it has.
 
     ``mag_cal_error`` combines the star's own measurement error with the
     uncertainty of the fitted transform, correlations between the terms
@@ -1163,18 +1146,6 @@ def transform_to_catalog(
     identical for every star in every image, so a per-star column would
     mislead, appearing to average down by the square root of the number of
     stars.
-
-    Both halves of ``mag_cal_error`` therefore believe the errors the fit
-    was weighted by: the measurement half is the star's own quoted error
-    propagated, exactly as quoted, and the transform half comes from the
-    covariance weighted by everyone's -- floored at ``min_fit_sigma``. So
-    an image whose ``fit_redchi`` is far from one is reporting a
-    ``mag_cal_error`` that is wrong by roughly the square root of that
-    factor -- except when the quoted errors sit under the floor, where the
-    transform half already believes the floor rather than the quoted
-    errors and that rule of thumb overcorrects -- and ``fit_excess_scatter``
-    is the size of what its quoted inputs missed. That is the reason to
-    read those columns before believing this one.
     """
     if obs_error_column is None:
         warnings.warn(
