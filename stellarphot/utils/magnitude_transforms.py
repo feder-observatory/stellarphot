@@ -369,11 +369,8 @@ def _fit_diagnostics(fit_result, sigma, weights, redchi_quoted, cat_error_usable
         ``1.0`` for an unweighted fit.
 
     redchi_quoted : float
-        ``fit_redchi`` for this fit, i.e. `_quoted_redchi` already called on
-        ``fit_result``, ``sigma`` and ``weights``. Passed through to
-        `_excess_scatter` so the number that gates ``fit_excess_scatter`` is
-        the exact float reported as ``fit_redchi`` alongside it, not a
-        second sum of the same quantity computed some other way.
+        ``fit_redchi`` for this fit -- `_quoted_redchi` of the three
+        arguments above -- passed through to `_excess_scatter`.
 
     cat_error_usable : `numpy.ndarray` or None
         Boolean mask over the stars that were fit: whether each one's
@@ -417,20 +414,6 @@ def _quoted_redchi(fit_result, sigma, weights):
     """
     Reduced chi-square measured against the uncertainties as quoted.
 
-    `lmfit`'s ``redchi`` is measured against the sigmas the fit actually
-    divided by, which are floored at ``min_fit_sigma``. Below the floor that
-    understates how far the residuals sit from the errors that were quoted
-    -- an image whose quoted errors are far too small would report a small,
-    healthy-looking value for exactly the case the statistic exists to
-    catch. Undoing the weighting and dividing by the raw sigma instead keeps
-    the floor where it belongs: on each star's leverage in the fit, and
-    nowhere in the reporting.
-
-    This is also the value `_excess_scatter` gates on: whether any scatter
-    needs inventing at all is exactly the question of whether this reduced
-    chi-square already sits at or below one, so the two share this one
-    computation rather than each summing the same quantity independently.
-
     Parameters
     ----------
 
@@ -451,6 +434,22 @@ def _quoted_redchi(fit_result, sigma, weights):
     float
         The reduced chi-square of the reported fit against the quoted
         uncertainties.
+
+    Notes
+    -----
+    `lmfit`'s ``redchi`` is measured against the sigmas the fit actually
+    divided by, which are floored at ``min_fit_sigma``. Below the floor that
+    understates how far the residuals sit from the errors that were quoted
+    -- an image whose quoted errors are far too small would report a small,
+    healthy-looking value for exactly the case the statistic exists to
+    catch. Undoing the weighting and dividing by the raw sigma instead keeps
+    the floor where it belongs: on each star's leverage in the fit, and
+    nowhere in the reporting.
+
+    This is also the value `_excess_scatter` gates on: whether any scatter
+    needs inventing at all is exactly the question of whether this reduced
+    chi-square already sits at or below one, so the two share this one
+    computation rather than each summing the same quantity independently.
     """
     if sigma is None:
         return fit_result.redchi
@@ -503,11 +502,7 @@ def _excess_scatter(fit_result, sigma, weights, redchi_quoted=None):
 
     redchi_quoted : float, optional
         ``_quoted_redchi(fit_result, sigma, weights)`` for this fit, if the
-        caller already has it -- computed here otherwise, so this function
-        stays usable on its own. `transform_to_catalog` passes it in so the
-        number that gates this function is the exact float it also reports
-        as ``fit_redchi``, rather than a second sum of the same quantity
-        that could round differently by a few ULPs around 1.0. Ignored when
+        caller already has it -- computed here otherwise. Ignored when
         ``sigma`` is `None`.
 
     Returns
@@ -516,6 +511,13 @@ def _excess_scatter(fit_result, sigma, weights, redchi_quoted=None):
         The excess scatter in magnitudes; zero when the residuals are already
         no larger than the errors claim, and NaN for an unweighted fit, whose
         residuals have no errors to be excessive with respect to.
+
+    Notes
+    -----
+    `transform_to_catalog` passes ``redchi_quoted`` in so that the value
+    gating this function is the exact float it reports as ``fit_redchi``,
+    rather than a second sum of the same quantity that could round
+    differently by a few ULPs around 1.0.
     """
     if sigma is None or fit_result.nfree <= 0:
         # Nothing was divided by anything, so "how far the residuals sit from
