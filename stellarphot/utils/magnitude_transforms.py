@@ -227,24 +227,53 @@ def _to_float_array(values):
     The final `~numpy.asarray` drops any array subclass that survives the
     trip through `numpy.ma`. A `~astropy.units.Quantity` does survive it,
     unit and all -- and error columns in real photometry files can carry a
-    unit -- which would crash the weighting arithmetic downstream:
+    unit -- which would otherwise crash the weighting arithmetic downstream:
     ``np.hypot`` of the observed and catalog errors and the ``np.maximum``
     sigma floor both refuse to mix a unit-bearing array with plain floats.
+    Dropping the unit unconditionally is not the fix, though: an error
+    column quoted in mmag would then enter the fit as if it were mag,
+    silently wrong by a factor of 1000. So the unit, if there is one, is
+    read off *before* the trip through `numpy.ma` and used afterward --
+    converting to magnitudes when it is convertible to them, passing a
+    dimensionless unit through unchanged, and raising rather than guessing
+    for anything else.
 
     Parameters
     ----------
 
     values : array-like
-        Values to convert. May be a `~astropy.table.MaskedColumn`.
+        Values to convert. May be a `~astropy.table.MaskedColumn` or a
+        `~astropy.units.Quantity`, with or without a unit.
 
     Returns
     -------
     `numpy.ndarray`
-        Float array with NaN wherever the input was masked.
+        Float array with NaN wherever the input was masked, converted to
+        magnitudes if the input carried a unit convertible to them.
+
+    Raises
+    ------
+    `~astropy.units.UnitConversionError`
+        If ``values`` has a unit that is neither dimensionless nor
+        convertible to magnitudes. Raised rather than stripped silently, the
+        same complaint `numpy.hypot` used to raise mixing a unit-bearing
+        array with plain floats before this function handled units at all.
     """
-    return np.asarray(
+    unit = getattr(values, "unit", None)
+    filled = np.asarray(
         np.ma.filled(np.ma.asarray(values, dtype=float), np.nan), dtype=float
     )
+
+    if unit is None or unit.is_equivalent(u.dimensionless_unscaled):
+        return filled
+
+    if not unit.is_equivalent(u.mag):
+        raise u.UnitConversionError(
+            f"Cannot use values with unit {unit!r} here: it is not "
+            "convertible to magnitudes and is not dimensionless."
+        )
+
+    return (filled * unit).to_value(u.mag)
 
 
 def _underdetermined_reason(fit_result, vary):
@@ -314,7 +343,7 @@ def _underdetermined_reason(fit_result, vary):
     return None
 
 
-def _fit_diagnostics(fit_result, sigma, weights, cat_error_usable):
+def _fit_diagnostics(fit_result, sigma, weights, redchi_quoted, cat_error_usable):
     """
     Describe how one image's fit was weighted, as opposed to where it landed.
 
@@ -338,6 +367,13 @@ def _fit_diagnostics(fit_result, sigma, weights, cat_error_usable):
         Weight the fit gave each residual, floor included -- the caller's
         own ``weights``, not something re-derived from ``sigma``. The scalar
         ``1.0`` for an unweighted fit.
+
+    redchi_quoted : float
+        ``fit_redchi`` for this fit, i.e. `_quoted_redchi` already called on
+        ``fit_result``, ``sigma`` and ``weights``. Passed through to
+        `_excess_scatter` so the number that gates ``fit_excess_scatter`` is
+        the exact float reported as ``fit_redchi`` alongside it, not a
+        second sum of the same quantity computed some other way.
 
     cat_error_usable : `numpy.ndarray` or None
         Boolean mask over the stars that were fit: whether each one's
@@ -371,11 +407,64 @@ def _fit_diagnostics(fit_result, sigma, weights, cat_error_usable):
     return {
         _FIT_CAT_ERROR_MISSING_COLUMN: missing_fraction,
         _FIT_MAX_WEIGHT_SHARE_COLUMN: max_weight_share,
-        _FIT_EXCESS_SCATTER_COLUMN: _excess_scatter(fit_result, sigma, weights),
+        _FIT_EXCESS_SCATTER_COLUMN: _excess_scatter(
+            fit_result, sigma, weights, redchi_quoted
+        ),
     }
 
 
-def _excess_scatter(fit_result, sigma, weights):
+def _quoted_redchi(fit_result, sigma, weights):
+    """
+    Reduced chi-square measured against the uncertainties as quoted.
+
+    `lmfit`'s ``redchi`` is measured against the sigmas the fit actually
+    divided by, which are floored at ``min_fit_sigma``. Below the floor that
+    understates how far the residuals sit from the errors that were quoted
+    -- an image whose quoted errors are far too small would report a small,
+    healthy-looking value for exactly the case the statistic exists to
+    catch. Undoing the weighting and dividing by the raw sigma instead keeps
+    the floor where it belongs: on each star's leverage in the fit, and
+    nowhere in the reporting.
+
+    This is also the value `_excess_scatter` gates on: whether any scatter
+    needs inventing at all is exactly the question of whether this reduced
+    chi-square already sits at or below one, so the two share this one
+    computation rather than each summing the same quantity independently.
+
+    Parameters
+    ----------
+
+    fit_result : `lmfit.minimizer.MinimizerResult`
+        The fit to describe.
+
+    sigma : `numpy.ndarray` or None
+        Uncertainty of each star that was fit, as quoted -- before the
+        floor. `None` for an unweighted fit, whose ``redchi`` involves no
+        sigmas and is reported as `lmfit` computed it.
+
+    weights : `numpy.ndarray` or float
+        Weight the fit gave each residual, floor included. Unused when
+        ``sigma`` is `None`.
+
+    Returns
+    -------
+    float
+        The reduced chi-square of the reported fit against the quoted
+        uncertainties.
+    """
+    if sigma is None:
+        return fit_result.redchi
+
+    residual = np.asarray(fit_result.residual) / weights
+    # The same operand order as `_excess_scatter`'s bracket function at zero
+    # excess -- ``residual**2 / sigma**2``, not ``(residual / sigma)**2``.
+    # The gate there compares this value to one, and a value that disagreed
+    # with the bracket by one ULP around it could hand
+    # `~scipy.optimize.brentq` two negative endpoints -- a `ValueError`.
+    return float(np.sum(residual**2 / sigma**2) / fit_result.nfree)
+
+
+def _excess_scatter(fit_result, sigma, weights, redchi_quoted=None):
     """
     Scatter that would have to be added to every sigma to explain the residuals.
 
@@ -412,6 +501,15 @@ def _excess_scatter(fit_result, sigma, weights):
         Weight the fit gave each residual, floor included. Unused when
         ``sigma`` is `None`.
 
+    redchi_quoted : float, optional
+        ``_quoted_redchi(fit_result, sigma, weights)`` for this fit, if the
+        caller already has it -- computed here otherwise, so this function
+        stays usable on its own. `transform_to_catalog` passes it in so the
+        number that gates this function is the exact float it also reports
+        as ``fit_redchi``, rather than a second sum of the same quantity
+        that could round differently by a few ULPs around 1.0. Ignored when
+        ``sigma`` is `None`.
+
     Returns
     -------
     float
@@ -425,6 +523,19 @@ def _excess_scatter(fit_result, sigma, weights):
         # would say the errors were checked and found adequate.
         return np.nan
 
+    if redchi_quoted is None:
+        redchi_quoted = _quoted_redchi(fit_result, sigma, weights)
+
+    if redchi_quoted - 1.0 <= 0.0:
+        # The stars are already no further from the model than they claim to
+        # be uncertain, so no excess is needed and none is invented. The gate
+        # is the same computation reported as fit_redchi, not a second sum
+        # of the same quantity that could disagree with it by a few ULPs
+        # around 1.0 -- and a gate that passed while both bracket endpoints
+        # below evaluate negative would be a `ValueError` from
+        # `~scipy.optimize.brentq`.
+        return 0.0
+
     # Undo the weighting: lmfit's residual is the model minus the data times
     # the weights, and what is needed here is the difference itself, so that
     # it can be divided by the sigmas as quoted rather than as floored.
@@ -433,65 +544,25 @@ def _excess_scatter(fit_result, sigma, weights):
     def reduced_chi_square_less_one(excess):
         return np.sum(residual**2 / (sigma**2 + excess**2)) / fit_result.nfree - 1.0
 
-    if reduced_chi_square_less_one(0.0) <= 0.0:
-        # The stars are already no further from the model than they claim to
-        # be uncertain, so no excess is needed and none is invented. The gate
-        # is the bracket function itself, not a reduced chi-square computed
-        # some other way: any other formulation of the same sum can disagree
-        # with this one by a few ULPs around 1.0, and a gate that passes
-        # while both bracket endpoints are negative is a `ValueError` from
-        # `~scipy.optimize.brentq`.
-        return 0.0
-
     # A bracket rather than a guess. The function falls monotonically from a
     # positive value at zero -- the branch above ruled out the alternative --
     # and at this upper bound every ``sigma**2 + excess**2`` is at least
     # ``excess**2``, so the sum is at most ``nfree`` and the function is at
     # most zero. So a root lies between them.
     upper = np.sqrt(np.sum(residual**2) / fit_result.nfree)
+    upper_value = reduced_chi_square_less_one(upper)
+
+    if upper_value >= 0.0:
+        # Mathematically ``upper_value`` is at most zero, by the argument
+        # above -- so a positive value here only means it landed close
+        # enough to zero that rounding pushed it over, which happens when
+        # ``sigma`` sits many orders of magnitude below the residuals.
+        # ``upper`` is then the root already, to within that same rounding,
+        # and handing `~scipy.optimize.brentq` two endpoints that evaluate
+        # to the same sign would raise `ValueError` instead of finding it.
+        return float(upper)
 
     return float(brentq(reduced_chi_square_less_one, 0.0, upper))
-
-
-def _reported_redchi(fit_result, sigma, weights):
-    """
-    Reduced chi-square measured against the uncertainties as quoted.
-
-    `lmfit`'s ``redchi`` is measured against the sigmas the fit actually
-    divided by, which are floored at ``min_fit_sigma``. Below the floor that
-    understates how far the residuals sit from the errors that were quoted
-    -- an image whose quoted errors are far too small would report a small,
-    healthy-looking value for exactly the case the statistic exists to
-    catch. Undoing the weighting and dividing by the raw sigma instead keeps
-    the floor where it belongs: on each star's leverage in the fit, and
-    nowhere in the reporting.
-
-    Parameters
-    ----------
-
-    fit_result : `lmfit.minimizer.MinimizerResult`
-        The fit to describe.
-
-    sigma : `numpy.ndarray` or None
-        Uncertainty of each star that was fit, as quoted -- before the
-        floor. `None` for an unweighted fit, whose ``redchi`` involves no
-        sigmas and is reported as `lmfit` computed it.
-
-    weights : `numpy.ndarray` or float
-        Weight the fit gave each residual, floor included. Unused when
-        ``sigma`` is `None`.
-
-    Returns
-    -------
-    float
-        The reduced chi-square of the reported fit against the quoted
-        uncertainties.
-    """
-    if sigma is None:
-        return fit_result.redchi
-
-    residual = np.asarray(fit_result.residual) / weights
-    return float(np.sum((residual / sigma) ** 2) / fit_result.nfree)
 
 
 def _coefficient_uncertainties(fit_result):
@@ -1171,10 +1242,11 @@ def transform_to_catalog(
             f"Did you mean {(vary,)!r}?"
         )
 
-    if min_fit_sigma < 0:
+    if not np.isfinite(min_fit_sigma) or min_fit_sigma < 0:
         raise ValueError(
-            f"min_fit_sigma must not be negative, got {min_fit_sigma}. Pass 0 "
-            "to apply no floor to the uncertainties the fit weights by."
+            "min_fit_sigma must be a finite, non-negative number, got "
+            f"{min_fit_sigma}. Pass 0 to apply no floor to the uncertainties "
+            "the fit weights by."
         )
 
     # Preserve the order the caller gave, minus any duplicates.
@@ -1613,7 +1685,12 @@ def transform_to_catalog(
             coefficients[name][rows] = values[name]
             coefficient_errors[name][rows] = uncertainties[name]
 
-        fit_redchis[rows] = _reported_redchi(fit_result, sigma, weights)
+        # Computed once and shared with `_fit_diagnostics` below, so the
+        # value reported here as ``fit_redchi`` is the exact float that
+        # gates ``fit_excess_scatter`` too, rather than two independent sums
+        # of the same quantity that could round differently.
+        redchi_quoted = _quoted_redchi(fit_result, sigma, weights)
+        fit_redchis[rows] = redchi_quoted
 
         # How the fit was weighted, rather than where it landed. Written
         # alongside ``fit_redchi`` because they are the numbers that say
@@ -1622,6 +1699,7 @@ def transform_to_catalog(
             fit_result,
             sigma,
             weights,
+            redchi_quoted,
             None if cat_error_column is None else cat_error_usable[good],
         ).items():
             fit_diagnostics[name][rows] = value
