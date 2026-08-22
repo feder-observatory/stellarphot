@@ -138,6 +138,11 @@ Other Changes and Additions
   come out smaller than before, and ``fit_excess_scatter`` reports
   explicitly what the rescaling used to absorb silently. Unweighted fits
   still scale by the observed scatter, the only scale they have. [#690]
++ ``mag_cal_error`` from ``transform_to_catalog()`` now includes the image's
+  ``fit_excess_scatter`` in quadrature, so it reflects the scatter actually
+  observed about the transform rather than only the quoted errors, which
+  understated it by several times on real data. The previous value is
+  ``sqrt(mag_cal_error**2 - fit_excess_scatter**2)``. [#698]
 + ``stellarphot/notebooks/transform-to-appas-dr9.ipynb`` reports the quality of
   each image's fit -- a table of ``z``, ``z_error`` and ``fit_redchi`` per
   image, and error bars and a ``fit_redchi`` panel on the plot of ``z`` against

@@ -48,13 +48,14 @@ The ``mag_column`` and ``mag_error_column`` arguments name the calibrated
 magnitude column and its uncertainty column to read for the target and the
 check star.
 
-``mag_cal_error`` is computed from the input uncertainties as quoted and is
-no longer rescaled by the goodness of the transform fit, so it is smaller
-than in earlier releases whenever the fit's scatter exceeds the quoted
-errors. Before submitting, check the ``fit_redchi`` and
-``fit_excess_scatter`` columns produced by
+``mag_cal_error`` combines the input uncertainties as quoted, the
+uncertainty of the transform fit and, in quadrature, the image's
+``fit_excess_scatter`` -- the scatter observed about the transform beyond
+what the quoted errors account for -- so it reflects the scatter actually
+seen in the data. Before submitting, it is still worth checking the
+``fit_redchi`` and ``fit_excess_scatter`` columns produced by
 :func:`~stellarphot.utils.magnitude_transforms.transform_to_catalog` to see
-whether the quoted uncertainties account for the scatter actually observed.
+how much of that error the quoted uncertainties failed to explain.
 
 .. note::
 

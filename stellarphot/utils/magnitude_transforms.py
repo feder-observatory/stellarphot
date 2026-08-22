@@ -474,9 +474,11 @@ def _excess_scatter(fit_result, sigma, weights, redchi_quoted=None):
     own photometry, neither of which any weighting scheme can fix; see
     issue #694.
 
-    Reported rather than folded into the weights. A fit that absorbs its own
-    excess scatter has a reduced chi-square of one by construction, which
-    destroys the one diagnostic that revealed any of this.
+    Reported rather than folded into the weights, and carried into
+    ``mag_cal_error`` per star by `_calibrated_with_uncertainty`. A fit that
+    absorbs its own excess scatter has a reduced chi-square of one by
+    construction, which destroys the one diagnostic that revealed any of
+    this.
 
     The best-fit residuals are held fixed rather than the model being refit
     with the widened sigmas. Refitting would move them, but a scatter term
@@ -656,13 +658,15 @@ def _nan_is_an_expected_input():
         yield
 
 
-def _calibrated_with_uncertainty(fit_result, covar, mag_inst, color, errors, fit_diff):
+def _calibrated_with_uncertainty(
+    fit_result, covar, mag_inst, color, errors, fit_diff, excess_scatter=0.0
+):
     """
     Calibrated magnitude of every star, and how uncertain each one is.
 
     The returned error carries the star's own measurement error plus the
     uncertainty of the fitted transform, correlations between the transform's
-    terms included.
+    terms included, plus the image's excess scatter.
 
     Parameters
     ----------
@@ -692,6 +696,10 @@ def _calibrated_with_uncertainty(fit_result, covar, mag_inst, color, errors, fit
         instrumental magnitudes, in which case the instrumental magnitude is
         added back here.
 
+    excess_scatter : float, optional
+        The image's ``fit_excess_scatter``, added in quadrature to every
+        star's uncertainty. Zero, NaN and negative values add nothing.
+
     Returns
     -------
     calibrated : `numpy.ndarray`
@@ -714,6 +722,14 @@ def _calibrated_with_uncertainty(fit_result, covar, mag_inst, color, errors, fit
     This slightly over-counts the uncertainty of a star that was itself in
     the fit, since its own noise also helped move the coefficients; erring
     high there is deliberate.
+
+    The excess scatter is added after the propagation, not to the star's
+    measurement error before it. `_excess_scatter` measures it in
+    calibrated-magnitude residual space -- against ``hypot(errors,
+    cat_error)`` with no ``1 + a`` factor -- so adding it before the
+    propagation would scale it by the ``fit_diff`` sensitivity a second
+    time. It is the same number for every star in the image, so it does
+    not bend the star-to-star shape of the transform term. See issue #698.
     """
     if covar is None or errors is None:
         # NaN inputs propagate through plain float arithmetic without
@@ -740,7 +756,12 @@ def _calibrated_with_uncertainty(fit_result, covar, mag_inst, color, errors, fit
         if fit_diff:
             calibrated = calibrated + star_mag
 
-        return unumpy.nominal_values(calibrated), unumpy.std_devs(calibrated)
+        uncertainty = unumpy.std_devs(calibrated)
+
+    if np.isfinite(excess_scatter) and excess_scatter > 0:
+        uncertainty = np.hypot(uncertainty, excess_scatter)
+
+    return unumpy.nominal_values(calibrated), uncertainty
 
 
 def _check_known_terms(terms, argument_name):
@@ -1193,37 +1214,47 @@ def transform_to_catalog(
     ``fit_cat_error_missing_frac`` is large, since the sigmas it is measured
     against are then missing a term rather than merely being small.
 
-    The reported uncertainties believe the errors the fit was weighted by --
-    the quoted errors, floored at ``min_fit_sigma`` -- not the scatter
-    observed about the fit. That keeps ``fit_redchi`` and the ``*_error``
-    columns independent: stars scattering beyond their quoted errors leave
-    the reported uncertainties alone and instead raise ``fit_redchi``, with
+    The coefficient uncertainties believe the errors the fit was weighted
+    by -- the quoted errors, floored at ``min_fit_sigma`` -- not the scatter
+    observed about the fit. That keeps ``fit_redchi`` and the coefficient
+    ``*_error`` columns independent: stars scattering beyond their quoted
+    errors leave those columns alone and instead raise ``fit_redchi``, with
     ``fit_excess_scatter`` giving the size of what the quoted errors
-    missed. When the quoted errors are wrong, the ``*_error`` columns are
-    wrong with them, and ``fit_redchi`` far from one is the alarm that says
-    so -- ``mag_cal_error`` is then off by roughly its square root. The one
-    exception is quoted errors below the floor: there the reported
-    uncertainties take the floor's scale, overstated by about
-    floor/quoted, and that rule of thumb overcorrects; pass
-    ``min_fit_sigma=0`` when errors that small are genuine. An unweighted
+    missed; only ``mag_cal_error``, below, picks that excess up. When the
+    quoted errors are wrong, the coefficient ``*_error`` columns are wrong
+    with them, and ``fit_redchi`` far from one is the alarm that says so --
+    they are then off by roughly its square root. The one exception is
+    quoted errors below the floor: there the coefficient uncertainties take
+    the floor's scale, overstated by about floor/quoted, and that rule of
+    thumb overcorrects; pass ``min_fit_sigma=0`` when errors that small are
+    genuine. An unweighted
     fit quotes no errors to believe, so its uncertainties are scaled to the
     observed scatter, the only scale it has.
 
     ``mag_cal_error`` combines the star's own measurement error with the
     uncertainty of the fitted transform, correlations between the terms
-    included. The transform term is a significant contribution -- the part a
-    plain measurement-error column omits entirely -- that grows as the number
-    of fitted stars shrinks, and it is worked out per star because a fit
-    predicts best at the centroid of the stars it was fit to. It is NaN,
-    rather than falling back to the measurement error alone, for an image
-    whose fit left no usable covariance behind.
+    included, and then adds the image's ``fit_excess_scatter`` in
+    quadrature. The transform term is a significant contribution -- the
+    part a plain measurement-error column omits entirely -- that grows as
+    the number of fitted stars shrinks, and it is worked out per star
+    because a fit predicts best at the centroid of the stars it was fit to.
+    The excess term is what makes the column reflect the scatter actually
+    observed about the transform rather than only the quoted errors, which
+    on real data understated it by several times; the value without it is
+    ``sqrt(mag_cal_error**2 - fit_excess_scatter**2)``. The transform term
+    itself still believes the quoted errors, so when those are too small it
+    remains understated by about ``sqrt(fit_redchi)`` -- but it is the
+    ``O(1/N)`` part of the total. ``mag_cal_error`` is NaN, rather than
+    falling back to the measurement error alone, for an image whose fit
+    left no usable covariance behind.
 
     A star's catalog entry decides whether it was matched. When a color term
     (``c`` or ``d``) is fit, though, the model also applies that star's
     catalog color, so the color's uncertainty is a real, knowingly omitted
     contribution -- roughly ``c * sigma_color`` -- tracked as issue #691. What
     the catalog reliably contributes is its field-wide scatter about the
-    transform, which lands in ``fit_excess_scatter``; and its systematic tie
+    transform, which lands in ``fit_excess_scatter`` and, through it, in
+    ``mag_cal_error``; and its systematic tie
     to the standard system -- about 0.02 mag for APASS DR9 -- which is
     identical for every star in every image, so a per-star column would
     mislead, appearing to average down by the square root of the number of
@@ -1593,7 +1624,8 @@ def transform_to_catalog(
         # The covariance is reported as the fit was weighted rather than
         # rescaled by the reduced chi-square: the quoted errors are believed,
         # and their disagreement with the observed scatter is reported once,
-        # in ``fit_redchi`` and ``fit_excess_scatter``, instead of also being
+        # in ``fit_redchi`` and ``fit_excess_scatter`` -- and carried into
+        # ``mag_cal_error`` per star from there -- instead of also being
         # folded silently into the coefficient uncertainties. An unweighted
         # fit quotes no errors to believe, so the observed scatter is the
         # only scale its covariance can take and the rescaling stays on.
@@ -1667,11 +1699,40 @@ def transform_to_catalog(
             # value with a negative standard deviation.
             star_errors = np.where(np.isfinite(errors) & (errors > 0), errors, np.nan)
 
+        # Computed once and shared with `_fit_diagnostics` below, so the
+        # value reported here as ``fit_redchi`` is the exact float that
+        # gates ``fit_excess_scatter`` too, rather than two independent sums
+        # of the same quantity that could round differently.
+        redchi_quoted = _quoted_redchi(fit_result, sigma, weights)
+        fit_redchis[rows] = redchi_quoted
+
+        # How the fit was weighted, rather than where it landed. Written
+        # alongside ``fit_redchi`` because they are the numbers that say
+        # whether that one can be taken at face value. Computed before the
+        # calibrated errors because the excess scatter goes into those too,
+        # and this one float being both the column and the term is what
+        # keeps the two from disagreeing.
+        diagnostics = _fit_diagnostics(
+            fit_result,
+            sigma,
+            weights,
+            redchi_quoted,
+            None if cat_error_column is None else cat_error_usable[good],
+        )
+        for name, value in diagnostics.items():
+            fit_diagnostics[name][rows] = value
+
         # Calculate calibrated magnitudes for every star in the image, not
         # just the ones the fit used, propagating the uncertainty of the
         # fit into them when there is one to propagate.
         cal_mag, cal_error = _calibrated_with_uncertainty(
-            fit_result, covar, mag_inst, model_color, star_errors, fit_diff
+            fit_result,
+            covar,
+            mag_inst,
+            model_color,
+            star_errors,
+            fit_diff,
+            diagnostics[_FIT_EXCESS_SCATTER_COLUMN],
         )
 
         # One cut for everything that comes from the match: a star matched
@@ -1686,25 +1747,6 @@ def transform_to_catalog(
         for name in _COEFF_NAMES:
             coefficients[name][rows] = values[name]
             coefficient_errors[name][rows] = uncertainties[name]
-
-        # Computed once and shared with `_fit_diagnostics` below, so the
-        # value reported here as ``fit_redchi`` is the exact float that
-        # gates ``fit_excess_scatter`` too, rather than two independent sums
-        # of the same quantity that could round differently.
-        redchi_quoted = _quoted_redchi(fit_result, sigma, weights)
-        fit_redchis[rows] = redchi_quoted
-
-        # How the fit was weighted, rather than where it landed. Written
-        # alongside ``fit_redchi`` because they are the numbers that say
-        # whether that one can be taken at face value.
-        for name, value in _fit_diagnostics(
-            fit_result,
-            sigma,
-            weights,
-            redchi_quoted,
-            None if cat_error_column is None else cat_error_usable[good],
-        ).items():
-            fit_diagnostics[name][rows] = value
 
         cal_mags[rows] = cal_mag
         cat_mags[rows] = np.where(matched, cat_mag, np.nan)
