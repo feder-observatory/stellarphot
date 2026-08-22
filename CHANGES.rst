@@ -131,6 +131,13 @@ Other Changes and Additions
   settings have been migrated to the new format. [#666]
 + ``stellarphot.transit_fitting`` now imports its transit-model classes
   lazily. [#666]
++ ``transform_to_catalog()`` no longer rescales the fit covariance by the
+  reduced chi-square, so ``a_error``...``z_error`` and ``mag_cal_error``
+  believe the errors the fit was weighted by -- as quoted, floored at
+  ``min_fit_sigma``. For an image whose ``fit_redchi`` is above one they
+  come out smaller than before, and ``fit_excess_scatter`` reports
+  explicitly what the rescaling used to absorb silently. Unweighted fits
+  still scale by the observed scatter, the only scale they have. [#690]
 + ``stellarphot/notebooks/transform-to-appas-dr9.ipynb`` reports the quality of
   each image's fit -- a table of ``z``, ``z_error`` and ``fit_redchi`` per
   image, and error bars and a ``fit_redchi`` panel on the plot of ``z`` against
@@ -140,12 +147,17 @@ Other Changes and Additions
 
 Bug Fixes
 ^^^^^^^^^
++ ``transform_to_catalog()`` no longer crashes with a ``UnitConversionError``
+  when the observed error column carries a unit, as columns of the
+  ``QTable``-based ``PhotometryData`` can. A unit convertible to magnitudes
+  (e.g. mmag) is converted rather than dropped, so it can no longer enter
+  the fit 1000x wrong; any other non-dimensionless unit still raises. [#696]
 + ``transform_to_catalog()`` now floors the uncertainty it weights each star
   by at ``min_fit_sigma``, a new keyword defaulting to 0.01 mag (pass 0 for
   no floor), so a single star claiming a tiny uncertainty can no longer hold
-  most of a fit's weight. The floor changes only the weighting;
-  ``fit_redchi``, ``fit_excess_scatter`` and ``mag_cal_error`` are measured
-  against the errors as quoted. [#694]
+  most of a fit's weight. ``fit_redchi`` and ``fit_excess_scatter`` are
+  measured against the errors as quoted; see the entry for ``#690`` above
+  for what the reported uncertainties believe. [#694]
 + ``transform_to_catalog()`` reports the 1.0 arcsec match limit stars must
   meet to enter the fit, which is tighter than the documented 1.5 arcsec
   limit for the columns derived from the match. [#694]

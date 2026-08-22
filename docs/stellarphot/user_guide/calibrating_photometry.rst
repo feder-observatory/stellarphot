@@ -48,6 +48,14 @@ The ``mag_column`` and ``mag_error_column`` arguments name the calibrated
 magnitude column and its uncertainty column to read for the target and the
 check star.
 
+``mag_cal_error`` is computed from the input uncertainties as quoted and is
+no longer rescaled by the goodness of the transform fit, so it is smaller
+than in earlier releases whenever the fit's scatter exceeds the quoted
+errors. Before submitting, check the ``fit_redchi`` and
+``fit_excess_scatter`` columns produced by
+:func:`~stellarphot.utils.magnitude_transforms.transform_to_catalog` to see
+whether the quoted uncertainties account for the scatter actually observed.
+
 .. note::
 
    This release supports ``DATE=JD`` only. The AAVSO spec also allows ``HJD``
