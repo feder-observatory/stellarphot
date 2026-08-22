@@ -14,13 +14,13 @@ from stellarphot.conftest import SERVER_DOWN_ERRORS
 from ...catalogs import apass_dr9, refcat2
 from ...core import PhotometryData
 from .. import magnitude_transforms
+from ..fit_diagnostics import excess_scatter
 from ..magnitude_system_transforms import (
     transform_apass_bands,
     transform_refcat2_bands,
 )
 from ..magnitude_transforms import (
     _MIN_FIT_SIGMA,
-    _excess_scatter,
     _to_float_array,
     calibrated_from_instrumental,
     filter_transform,
@@ -1886,7 +1886,7 @@ def test_excess_scatter_returns_zero_when_redchi_is_barely_above_one():
         redchi=np.nextafter(1.0, 2.0),
     )
 
-    assert _excess_scatter(fit_result, sigma, 1.0 / sigma) == 0.0
+    assert excess_scatter(fit_result, sigma, 1.0 / sigma) == 0.0
 
 
 def test_excess_scatter_survives_an_upper_bracket_that_rounds_positive():
@@ -1910,7 +1910,7 @@ def test_excess_scatter_survives_an_upper_bracket_that_rounds_positive():
 
     fit_result = SimpleNamespace(residual=residual, nfree=residual.size)
 
-    result = _excess_scatter(fit_result, sigma, 1.0)
+    result = excess_scatter(fit_result, sigma, 1.0)
 
     assert np.isfinite(result)
     assert result == pytest.approx(np.sqrt(np.mean(residual**2)))
@@ -1983,7 +1983,7 @@ def test_transform_to_catalog_reports_max_single_star_weight_share(mocker):
     assert reported[0] == pytest.approx(expected)
 
 
-def test_transform_to_catalog_reports_excess_scatter(mocker):
+def test_transform_to_catalog_reportsexcess_scatter(mocker):
     # The third diagnostic: how much scatter, added in quadrature to every
     # star's sigma, the fit would need before its residuals matched the errors
     # it was given. Reported rather than folded into the weights, because a
