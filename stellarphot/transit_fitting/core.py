@@ -5,6 +5,8 @@ from astropy import units as u
 from astropy.table import Table
 from pydantic import BaseModel
 
+from ..utils.fit_diagnostics import excess_scatter
+
 try:
     from pytransit import RoadRunnerModel
 except ImportError:  # pragma: no cover
@@ -98,6 +100,19 @@ class TransitModelFit:
         Result of the most recent call to ``fit``, including fit statistics
         like ``bic`` and ``nvarys``. ``None`` until ``fit`` has been run.
 
+    fit_redchi : float or None
+        Reduced chi-square of the most recent fit: the summed squared
+        residuals per degree of freedom, in units of the quoted errors when
+        ``weights`` are set and in flux units squared otherwise. ``None``
+        until ``fit`` has been run.
+
+    fit_excess_scatter : float or None
+        Scatter, in the units of ``data``, that would have to be added in
+        quadrature to every point's quoted error to bring ``fit_redchi`` to
+        one; zero when the residuals are already no larger than the errors
+        claim, and NaN for an unweighted fit. ``None`` until ``fit`` has
+        been run.
+
     times, airmass, width, spp, data, weights : array-like or None
         Independent variables and data for the fit; see the property
         docstrings.
@@ -111,6 +126,17 @@ class TransitModelFit:
     set. Enable them via `TransitModelOptions`, directly (e.g.
     ``mod.params["airmass_trend"].vary = True``) or with
     ``compare_detrend_options(apply_best=True)``.
+
+    The parameter uncertainties of a weighted fit are measured against the
+    flux errors as quoted (``weights = 1 / error``): lmfit's default of
+    rescaling the covariance so that the reduced chi-square comes out one
+    is turned off, as it is in
+    `~stellarphot.utils.magnitude_transforms.transform_to_catalog` (issues
+    #690 and #699). Errors quoted ten times too small therefore give
+    ``stderr`` values ten times too small -- and a ``fit_redchi`` near 100
+    and a ``fit_excess_scatter`` near the real noise to say so. An
+    unweighted fit keeps the rescaling, since it has no quoted errors and
+    the residuals are then its only estimate of the noise.
 
     Examples
     --------
@@ -128,6 +154,11 @@ class TransitModelFit:
 
         print(mod.params["rp"].value, mod.params["rp"].stderr)
         print(result.bic)
+
+        # Do the flux errors describe the data? A reduced chi-square well
+        # above one, and an excess scatter comparable to the errors, say
+        # they are too small -- and so are the stderr values above.
+        print(mod.fit_redchi, mod.fit_excess_scatter)
 
         # Which detrending parameters does the BIC favor?
         bic_table = mod.compare_detrend_options()
@@ -160,6 +191,8 @@ class TransitModelFit:
         self.weights = None
         self.params = _default_params()
         self.fit_result = None
+        self.fit_redchi = None
+        self.fit_excess_scatter = None
         self._detrend_parameters = set()
         self._all_detrend_params = ["airmass", "width", "spp"]
 
@@ -331,10 +364,22 @@ class TransitModelFit:
         # handles a starting value that sits exactly on a bound (the default
         # inclination of 90 degrees is on its upper bound); MINPACK leastsq
         # does not.
+        #
+        # The stderr of a weighted fit is taken at face value rather than
+        # rescaled so that its reduced chi-square is one: lmfit's default
+        # ``scale_covar=True`` would make that rescaling silently, and so
+        # erase the one statistic that shows whether the quoted flux errors
+        # describe the data. A mismatch is reported in ``fit_redchi`` and
+        # ``fit_excess_scatter`` instead, the same convention as
+        # ``transform_to_catalog`` (issues #690 and #699). An unweighted fit
+        # has no quoted errors to believe, so the rescaling stays on there,
+        # with redchi -- in flux units squared -- as the one estimate of the
+        # noise available.
         return lmfit.minimize(
             self._residual,
             params,
             method="least_squares",
+            scale_covar=self.weights is None,
             args=(
                 covariates["airmass"],
                 covariates["width"],
@@ -491,7 +536,16 @@ class TransitModelFit:
         ------
         ValueError
             If the times or the data have not been set. If the fit itself
-            raises, ``params`` and ``fit_result`` are left untouched.
+            raises, ``params``, ``fit_result``, ``fit_redchi`` and
+            ``fit_excess_scatter`` are left untouched.
+
+        Notes
+        -----
+        When ``weights`` are set, the uncertainties written to ``params`` are
+        measured against the errors as quoted, not rescaled to force the
+        reduced chi-square to one (lmfit's ``scale_covar`` is off). Whether
+        the quoted errors describe the data is reported instead, in
+        ``fit_redchi`` and ``fit_excess_scatter``; see the class docstring.
         """
         if self.times is None:
             raise ValueError("The times must be set before trying to fit.")
@@ -500,7 +554,18 @@ class TransitModelFit:
 
         result = self._run_fit(self.params)
 
+        # Every diagnostic is computed before any state is assigned, so a
+        # fit that raises leaves the instance exactly as it was.
+        if self.weights is None:
+            sigma = None
+        else:
+            sigma = 1 / np.asarray(self.weights, dtype=float)
+        redchi = result.redchi
+        excess = excess_scatter(result, sigma, self.weights, redchi_quoted=redchi)
+
         self.fit_result = result
+        self.fit_redchi = redchi
+        self.fit_excess_scatter = excess
 
         # Copy the best-fit values and uncertainties back into the user's
         # parameters without touching vary/min/max, so user choices (e.g. a

@@ -702,3 +702,70 @@ def test_failed_fit_leaves_state_untouched(monkeypatch):
     }
     assert params_before == params_after
     assert getattr(tmod, "fit_result", None) is fit_result_before
+
+
+# Noise in the fit-diagnostic tests below: large enough that a fit with
+# under-quoted weights is unambiguously far from its errors, small enough
+# that the fit still converges on the right transit.
+_DIAGNOSTIC_NOISE_DEV = 0.01
+
+
+def _fit_with_uniform_weights(quoted_error):
+    # A transit fit of the same noisy light curve, every point quoted with
+    # the same error -- ``None`` for an unweighted fit -- so the diagnostics
+    # tests differ only in what the points claim about themselves.
+    tmod = _make_transit_model_with_data(noise_dev=_DIAGNOSTIC_NOISE_DEV)
+    if quoted_error is not None:
+        tmod.weights = np.full(len(tmod.data), 1.0 / quoted_error)
+    tmod.fit()
+    return tmod
+
+
+def test_fit_stderr_believes_quoted_weights():
+    # With scale_covar off, stderr scales with the quoted error rather than
+    # being rescaled to whatever the residuals imply (issues #690 and #699):
+    # quoting errors ten times too small makes stderr ten times too small,
+    # and the reduced chi-square says so.
+    truthful = _fit_with_uniform_weights(_DIAGNOSTIC_NOISE_DEV)
+    underquoted = _fit_with_uniform_weights(_DIAGNOSTIC_NOISE_DEV / 10)
+
+    # Loose enough to cover the two fits converging along slightly
+    # different paths, far tighter than the factor of ten at stake.
+    assert underquoted.params["rp"].stderr == pytest.approx(
+        0.1 * truthful.params["rp"].stderr, rel=1e-2
+    )
+    assert underquoted.fit_redchi == pytest.approx(100, rel=0.3)
+
+
+def test_fit_reports_excess_scatter():
+    quoted_error = 0.002
+    underquoted = _fit_with_uniform_weights(quoted_error)
+    truthful = _fit_with_uniform_weights(_DIAGNOSTIC_NOISE_DEV)
+
+    expected_excess = np.sqrt(_DIAGNOSTIC_NOISE_DEV**2 - quoted_error**2)
+    assert underquoted.fit_excess_scatter == pytest.approx(expected_excess, rel=0.15)
+    assert truthful.fit_excess_scatter == 0.0
+
+
+def test_fit_diagnostics_for_an_unweighted_fit():
+    # Without weights there are no errors to be excessive with respect to,
+    # and lmfit's redchi (in flux units squared) is reported as is. The
+    # covariance is then still scaled by redchi -- the only estimate of the
+    # noise available -- so stderr is what a fit quoting the true noise
+    # would give, times the square root of that fit's reduced chi-square,
+    # which is how far the realized noise of this seed sits from nominal.
+    unweighted = _fit_with_uniform_weights(None)
+    truthful = _fit_with_uniform_weights(_DIAGNOSTIC_NOISE_DEV)
+
+    assert np.isnan(unweighted.fit_excess_scatter)
+    assert unweighted.fit_redchi == unweighted.fit_result.redchi
+    assert unweighted.params["rp"].stderr == pytest.approx(
+        truthful.params["rp"].stderr * np.sqrt(truthful.fit_redchi), rel=1e-2
+    )
+
+
+def test_diagnostics_are_none_before_fit():
+    tmod = _make_transit_model_with_data(noise_dev=_DIAGNOSTIC_NOISE_DEV)
+
+    assert tmod.fit_redchi is None
+    assert tmod.fit_excess_scatter is None
