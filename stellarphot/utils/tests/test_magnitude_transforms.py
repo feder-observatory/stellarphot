@@ -1561,9 +1561,7 @@ def _predicted_mag_cal_error(result, covariance, mag_error, excess_scatter=0.0):
     coefficient covariance pushed through the model's gradient --
     which, the model being linear, is the star's design-matrix row again --
     correlations included. The excess scatter is added after both, not
-    through ``1 + a``: it is measured in calibrated-magnitude residual
-    space, where the ``1 + a`` sensitivity has already been applied. See
-    issue #698.
+    through ``1 + a``; `_calibrated_with_uncertainty` says why.
     """
     gradients = _design_matrix(result)
     transform_var = np.einsum("si,ij,sj->s", gradients, covariance, gradients)
@@ -1675,12 +1673,10 @@ def test_transform_to_catalog_error_unchanged_when_errors_describe_the_data(
 
 
 def test_transform_to_catalog_error_adds_the_excess_after_the_transform(mocker):
-    # fit_excess_scatter is measured in calibrated-magnitude residual space,
-    # where the fit_diff sensitivity of 1 + a has already acted, so it joins
-    # mag_cal_error after the propagation through the transform rather than
-    # being added to the star's measurement error before it. With a = 0.3
-    # the two candidates differ by nearly a third of the excess, which on
-    # under-quoted errors is most of the reported value. Not larger: the
+    # The excess joins mag_cal_error after the propagation through the
+    # transform, not before it (see `_calibrated_with_uncertainty`). With
+    # a = 0.3 the two candidates differ by nearly a third of the excess,
+    # which on under-quoted errors is most of the reported value. Not larger: the
     # pre-fit cut at one magnitude from the median of mag_cat - mag_inst
     # starts dropping stars around a = 0.5, and the hand-computed covariance
     # assumes every star was fit. See issue #698.
@@ -2413,11 +2409,8 @@ def _error_without_the_excess_scatter(result):
 
     Notes
     -----
-    The tests below are about the *shape* of the propagated covariance --
-    how the transform term varies from star to star. The excess scatter is
-    one number for the whole image, added in quadrature, and on truthfully
-    quoted errors it is zero or a small positive fluctuation; either way it
-    is not what those tests measure, so they strip it first.
+    The tests below measure the star-to-star *shape* of the transform term;
+    the excess is one number per image, so they strip it first.
     """
     return np.sqrt(
         np.asarray(result["mag_cal_error"]) ** 2
