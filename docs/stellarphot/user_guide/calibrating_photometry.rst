@@ -54,7 +54,9 @@ than in earlier releases whenever the fit's scatter exceeds the quoted
 errors. Before submitting, check the ``fit_redchi`` and
 ``fit_excess_scatter`` columns produced by
 :func:`~stellarphot.utils.magnitude_transforms.transform_to_catalog` to see
-whether the quoted uncertainties account for the scatter actually observed.
+whether the quoted uncertainties account for the scatter actually observed,
+and ``fit_sigma_floor_frac`` to see how many of the stars were weighted by
+the ``min_fit_sigma`` floor rather than by their own errors.
 
 .. note::
 
