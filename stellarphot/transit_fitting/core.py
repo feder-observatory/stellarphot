@@ -365,16 +365,8 @@ class TransitModelFit:
         # inclination of 90 degrees is on its upper bound); MINPACK leastsq
         # does not.
         #
-        # The stderr of a weighted fit is taken at face value rather than
-        # rescaled so that its reduced chi-square is one: lmfit's default
-        # ``scale_covar=True`` would make that rescaling silently, and so
-        # erase the one statistic that shows whether the quoted flux errors
-        # describe the data. A mismatch is reported in ``fit_redchi`` and
-        # ``fit_excess_scatter`` instead, the same convention as
-        # ``transform_to_catalog`` (issues #690 and #699). An unweighted fit
-        # has no quoted errors to believe, so the rescaling stays on there,
-        # with redchi -- in flux units squared -- as the one estimate of the
-        # noise available.
+        # scale_covar is off for a weighted fit so that stderr believes the
+        # quoted errors; see the class Notes (issues #690 and #699).
         return lmfit.minimize(
             self._residual,
             params,
@@ -541,11 +533,9 @@ class TransitModelFit:
 
         Notes
         -----
-        When ``weights`` are set, the uncertainties written to ``params`` are
-        measured against the errors as quoted, not rescaled to force the
-        reduced chi-square to one (lmfit's ``scale_covar`` is off). Whether
-        the quoted errors describe the data is reported instead, in
-        ``fit_redchi`` and ``fit_excess_scatter``; see the class docstring.
+        The uncertainties written to ``params`` believe the quoted errors;
+        ``fit_redchi`` and ``fit_excess_scatter`` say whether the data does.
+        See the class Notes.
         """
         if self.times is None:
             raise ValueError("The times must be set before trying to fit.")
