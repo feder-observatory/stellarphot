@@ -1943,55 +1943,41 @@ def test_transform_to_catalog_floor_preserves_the_excess_scatter_alarm(mocker):
     assert result["fit_excess_scatter"][0] == pytest.approx(
         np.sqrt(sigma**2 - claimed**2), rel=0.15
     )
-
-
-def test_transform_to_catalog_reports_fraction_at_the_floor(mocker):
-    # The floor is silent: a star whose sigma it raised looks, in every other
-    # column, like one that quoted the floor to begin with. This column says
-    # how much of the fit the floor decided -- here half the stars, so 0.5,
-    # repeated down every row because it is a property of the image.
-    errors = _errors_straddling_the_floor(_MIN_FIT_SIGMA)
-
-    result, _, _ = _fit_a_catalog(
-        mocker,
-        n_stars=_STRADDLE_N_STARS,
-        sigma=0.02,
-        seed=_SEED,
-        mag_error=errors,
-        cat_error=None,
-    )
-
-    fraction = np.asarray(result["fit_sigma_floor_frac"])
-    np.testing.assert_array_equal(fraction, fraction[0])
-    assert fraction[0] == pytest.approx(_STRADDLE_N_BELOW / _STRADDLE_N_STARS)
-
-
-def test_transform_to_catalog_reports_every_sigma_at_the_floor(mocker):
-    # The inputs of `test_..._floor_preserves_the_excess_scatter_alarm`: every
-    # star quotes an error under the floor, so the floor set every weight and
-    # the fit was, in effect, unweighted. That is exactly what 1.0 means.
-    result, _, _ = _fit_a_catalog(
-        mocker, n_stars=300, sigma=0.008, seed=_SEED, mag_error=0.002, cat_error=None
-    )
-
+    # Every star quoted an error under the floor, so the floor set every
+    # weight and the fit was in effect unweighted -- which is what 1.0 means.
     assert result["fit_sigma_floor_frac"][0] == 1.0
 
 
-def test_transform_to_catalog_reports_no_sigma_at_the_floor_without_one(mocker):
-    # With no floor nothing can sit at it, even errors far below the default.
-    errors = _errors_straddling_the_floor(_MIN_FIT_SIGMA)
-
-    result, _, _ = _fit_a_catalog(
-        mocker,
+@pytest.mark.parametrize(
+    "min_fit_sigma, expected",
+    [(None, 0.5), (0, 0.0)],
+    ids=["default_floor", "no_floor"],
+)
+def test_transform_to_catalog_reports_the_sigma_floor_fraction(
+    mocker, min_fit_sigma, expected
+):
+    # The floor is silent: a star whose sigma it raised looks, in every other
+    # column, like one that quoted the floor to begin with. This column says
+    # how much of the fit the floor decided: half the stars here quote an
+    # error under the default floor, so 0.5, and with no floor nothing can
+    # sit at it, so 0.0. It is repeated down every row because it is a
+    # property of the image.
+    fit_kwargs = dict(
+        mocker=mocker,
         n_stars=_STRADDLE_N_STARS,
         sigma=0.02,
         seed=_SEED,
-        mag_error=errors,
+        mag_error=_errors_straddling_the_floor(_MIN_FIT_SIGMA),
         cat_error=None,
-        min_fit_sigma=0,
     )
+    if min_fit_sigma is not None:
+        fit_kwargs["min_fit_sigma"] = min_fit_sigma
 
-    assert result["fit_sigma_floor_frac"][0] == 0.0
+    result, _, _ = _fit_a_catalog(**fit_kwargs)
+
+    fraction = np.asarray(result["fit_sigma_floor_frac"])
+    np.testing.assert_array_equal(fraction, fraction[0])
+    assert fraction[0] == pytest.approx(expected)
 
 
 def _expected_max_weight_share(errors):
