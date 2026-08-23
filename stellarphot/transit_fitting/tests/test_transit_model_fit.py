@@ -4,6 +4,7 @@ from astropy.table import Table
 from astropy.utils.data import get_pkg_data_filename
 
 from stellarphot.transit_fitting import TransitModelFit
+from stellarphot.utils.fit_diagnostics import quoted_redchi
 
 pytest.importorskip("pytransit")
 pytest.importorskip("lmfit")
@@ -710,13 +711,21 @@ def test_failed_fit_leaves_state_untouched(monkeypatch):
 _DIAGNOSTIC_NOISE_DEV = 0.01
 
 
-def _fit_with_uniform_weights(quoted_error):
+def _fit_with_uniform_weights(quoted_error, zero_weight_index=None):
     # A transit fit of the same noisy light curve, every point quoted with
     # the same error -- ``None`` for an unweighted fit -- so the diagnostics
     # tests differ only in what the points claim about themselves.
+    #
+    # ``zero_weight_index`` zeroes one point's weight, lmfit's idiom for
+    # excluding it -- exercising the fit-diagnostics' zero-weight handling
+    # (issue #702) in a real fit rather than only in the unit tests of
+    # `~stellarphot.utils.fit_diagnostics`.
     tmod = _make_transit_model_with_data(noise_dev=_DIAGNOSTIC_NOISE_DEV)
     if quoted_error is not None:
-        tmod.weights = np.full(len(tmod.data), 1.0 / quoted_error)
+        weights = np.full(len(tmod.data), 1.0 / quoted_error)
+        if zero_weight_index is not None:
+            weights[zero_weight_index] = 0.0
+        tmod.weights = weights
     tmod.fit()
     return tmod
 
@@ -762,6 +771,20 @@ def test_fit_diagnostics_for_an_unweighted_fit():
     assert unweighted.params["rp"].stderr == pytest.approx(
         truthful.params["rp"].stderr * np.sqrt(truthful.fit_redchi), rel=1e-2
     )
+
+
+def test_fit_succeeds_with_a_zero_weight_point():
+    # Under-quoted so redchi > 1, matching the branch of excess_scatter that
+    # actually calls brentq rather than the early zero return.
+    quoted_error = _DIAGNOSTIC_NOISE_DEV / 10
+    tmod = _fit_with_uniform_weights(quoted_error, zero_weight_index=0)
+
+    assert np.isfinite(tmod.fit_excess_scatter)
+    assert tmod.fit_excess_scatter > 0.0
+
+    with np.errstate(divide="ignore"):
+        sigma = 1.0 / tmod.weights
+    assert tmod.fit_redchi == quoted_redchi(tmod.fit_result, sigma, tmod.weights)
 
 
 def test_diagnostics_are_none_before_fit():

@@ -3,15 +3,33 @@ Diagnostics of a weighted least-squares fit: how the residuals compare to the
 uncertainties the points were quoted with.
 
 Shared by `~stellarphot.utils.magnitude_transforms.transform_to_catalog` and
-`~stellarphot.transit_fitting.TransitModelFit`, both of which fit with
-``scale_covar=False`` (issues #690 and #699) and report these numbers instead
-of letting `lmfit` rescale the covariance to make the reduced chi-square one.
+`~stellarphot.transit_fitting.TransitModelFit`, both of which turn off the
+rescaling for a weighted fit (issues #690 and #699) and report these numbers
+instead of letting `lmfit` rescale the covariance to make the reduced
+chi-square one.
 """
 
 import numpy as np
 from scipy.optimize import brentq
 
 __all__ = ["excess_scatter", "quoted_redchi"]
+
+
+def _unweighted_residual(fit_result, sigma, weights):
+    """
+    Undo the weighting of ``fit_result.residual`` and drop zero-weight points.
+
+    A weight of zero is `lmfit`'s idiom for excluding a point: its weighted
+    residual is zero and its sigma (``1 / weight``) is infinite, so it would
+    divide out to ``0 / 0``. Those points contribute nothing to chi-square,
+    so they are dropped from the sums instead of divided by. ``weights`` may
+    be a scalar.
+    """
+    residual = np.asarray(fit_result.residual, dtype=float)
+    w = np.broadcast_to(np.asarray(weights, dtype=float), residual.shape)
+    good = w != 0
+    sigma = np.broadcast_to(np.asarray(sigma, dtype=float), w.shape)[good]
+    return residual[good] / w[good], sigma
 
 
 def quoted_redchi(fit_result, sigma, weights):
@@ -61,13 +79,17 @@ def quoted_redchi(fit_result, sigma, weights):
     if sigma is None:
         return fit_result.redchi
 
-    residual = np.asarray(fit_result.residual) / weights
+    residual, sigma = _unweighted_residual(fit_result, sigma, weights)
     # The same operand order as `excess_scatter`'s bracket function at zero
     # excess -- ``residual**2 / sigma**2``, not ``(residual / sigma)**2``.
     # The gate there compares this value to one, and a value that disagreed
     # with the bracket by one ULP around it could hand
     # `~scipy.optimize.brentq` two negative endpoints -- a `ValueError`.
-    return float(np.sum(residual**2 / sigma**2) / fit_result.nfree)
+    #
+    # Divide by max(1, nfree), matching lmfit's own redchi convention (its
+    # `_calculate_statistics`) so a fit with no degrees of freedom left
+    # reports chisqr rather than raising or returning inf.
+    return float(np.sum(residual**2 / sigma**2) / max(1, fit_result.nfree))
 
 
 def excess_scatter(fit_result, sigma, weights, redchi_quoted=None):
@@ -76,10 +98,11 @@ def excess_scatter(fit_result, sigma, weights, redchi_quoted=None):
 
     The value ``s`` at which adding ``s`` in quadrature to each point's
     uncertainty brings the reduced chi-square to one: how far the points sit
-    from the model over and above what they claim to be uncertain by. Real
-    contributors seen in it, in a magnitude transform, include flat-field
-    gradients and the catalog's own photometry, neither of which any
-    weighting scheme can fix; see issue #694.
+    from the model over and above what they claim to be uncertain by. In
+    `~stellarphot.utils.magnitude_transforms.transform_to_catalog`'s case,
+    real contributors seen in it include flat-field gradients and the
+    catalog's own photometry, neither of which any weighting scheme can fix;
+    see issue #694.
 
     Parameters
     ----------
@@ -105,9 +128,10 @@ def excess_scatter(fit_result, sigma, weights, redchi_quoted=None):
     Returns
     -------
     float
-        The excess scatter in magnitudes; zero when the residuals are already
-        no larger than the errors claim, and NaN for an unweighted fit, whose
-        residuals have no errors to be excessive with respect to.
+        The excess scatter, in the units of ``sigma``; zero when the
+        residuals are already no larger than the errors claim, and NaN for
+        an unweighted fit, whose residuals have no errors to be excessive
+        with respect to.
 
     Notes
     -----
@@ -150,7 +174,7 @@ def excess_scatter(fit_result, sigma, weights, redchi_quoted=None):
     # Undo the weighting: lmfit's residual is the model minus the data times
     # the weights, and what is needed here is the difference itself, so that
     # it can be divided by the sigmas as quoted rather than as floored.
-    residual = np.asarray(fit_result.residual) / weights
+    residual, sigma = _unweighted_residual(fit_result, sigma, weights)
 
     def reduced_chi_square_less_one(excess):
         return np.sum(residual**2 / (sigma**2 + excess**2)) / fit_result.nfree - 1.0

@@ -5,7 +5,7 @@ from astropy import units as u
 from astropy.table import Table
 from pydantic import BaseModel
 
-from ..utils.fit_diagnostics import excess_scatter
+from ..utils.fit_diagnostics import excess_scatter, quoted_redchi
 
 try:
     from pytransit import RoadRunnerModel
@@ -112,6 +112,12 @@ class TransitModelFit:
         one; zero when the residuals are already no larger than the errors
         claim, and NaN for an unweighted fit. ``None`` until ``fit`` has
         been run.
+
+        Both attributes describe the most recent call to ``fit``.
+        ``compare_detrend_options()`` alone does not update them, since it
+        fits each candidate combination directly; called with
+        ``apply_best=True`` it does, because it finishes by calling ``fit``
+        on the winning combination.
 
     times, airmass, width, spp, data, weights : array-like or None
         Independent variables and data for the fit; see the property
@@ -549,8 +555,12 @@ class TransitModelFit:
         if self.weights is None:
             sigma = None
         else:
-            sigma = 1 / np.asarray(self.weights, dtype=float)
-        redchi = result.redchi
+            # A weight of zero -- lmfit's idiom for excluding a point -- maps
+            # to an infinite sigma here; quoted_redchi and excess_scatter
+            # both drop such points rather than dividing by that weight.
+            with np.errstate(divide="ignore"):
+                sigma = 1 / np.asarray(self.weights, dtype=float)
+        redchi = quoted_redchi(result, sigma, self.weights)
         excess = excess_scatter(result, sigma, self.weights, redchi_quoted=redchi)
 
         self.fit_result = result
