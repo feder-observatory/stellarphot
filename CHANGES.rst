@@ -157,6 +157,11 @@ Other Changes and Additions
   and the new ``fit_redchi`` and ``fit_excess_scatter`` attributes report
   the mismatch instead. The diagnostics both fits share live in the new
   ``stellarphot.utils.fit_diagnostics`` module. [#699]
++ ``transform_to_catalog()`` now fetches its catalog from a cone around the
+  positions observed in the fitted passband, instead of a fixed degree around
+  the first observed star, so a small field no longer pulls a degree-wide
+  catalog. Pass the new ``search_radius`` to set the cone size instead; a
+  derived cone wider than a degree warns. [#686]
 
 Bug Fixes
 ^^^^^^^^^
