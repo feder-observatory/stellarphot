@@ -147,6 +147,12 @@ Other Changes and Additions
   time. It no longer passes ``cat_filter`` and ``cat_color``, which
   ``transform_to_catalog`` now works out for itself, and its unused imports
   have been dropped. [#677, #680]
++ ``TransitModelFit`` now follows the convention #690 adopted for
+  ``transform_to_catalog``: a weighted fit's ``stderr`` values believe the
+  quoted errors rather than being rescaled to a reduced chi-square of one,
+  and the new ``fit_redchi`` and ``fit_excess_scatter`` attributes report
+  the mismatch instead. The diagnostics both fits share live in the new
+  ``stellarphot.utils.fit_diagnostics`` module. [#699]
 
 Bug Fixes
 ^^^^^^^^^

@@ -21,3 +21,4 @@ All of the classes and functions defined in `stellarphot` are listed below, grou
 .. automodapi:: stellarphot.transit_fitting.io
 .. automodapi:: stellarphot.transit_fitting.plotting
 .. automodapi:: stellarphot.utils
+.. automodapi:: stellarphot.utils.fit_diagnostics

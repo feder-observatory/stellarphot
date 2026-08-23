@@ -14,13 +14,13 @@ from stellarphot.conftest import SERVER_DOWN_ERRORS
 from ...catalogs import apass_dr9, refcat2
 from ...core import PhotometryData
 from .. import magnitude_transforms
+from ..fit_diagnostics import excess_scatter, quoted_redchi
 from ..magnitude_system_transforms import (
     transform_apass_bands,
     transform_refcat2_bands,
 )
 from ..magnitude_transforms import (
     _MIN_FIT_SIGMA,
-    _excess_scatter,
     _to_float_array,
     calibrated_from_instrumental,
     filter_transform,
@@ -1972,7 +1972,7 @@ def test_excess_scatter_returns_zero_when_redchi_is_barely_above_one():
         redchi=np.nextafter(1.0, 2.0),
     )
 
-    assert _excess_scatter(fit_result, sigma, 1.0 / sigma) == 0.0
+    assert excess_scatter(fit_result, sigma, 1.0 / sigma) == 0.0
 
 
 def test_excess_scatter_survives_an_upper_bracket_that_rounds_positive():
@@ -1996,10 +1996,116 @@ def test_excess_scatter_survives_an_upper_bracket_that_rounds_positive():
 
     fit_result = SimpleNamespace(residual=residual, nfree=residual.size)
 
-    result = _excess_scatter(fit_result, sigma, 1.0)
+    result = excess_scatter(fit_result, sigma, 1.0)
 
     assert np.isfinite(result)
     assert result == pytest.approx(np.sqrt(np.mean(residual**2)))
+
+
+def _fit_result_with_zero_weight(raw_residual_good, sigma_good, nfree):
+    """
+    A fake fit result with one zero-weight point appended.
+
+    Zero weight is `lmfit`'s idiom for excluding a point: its weighted
+    residual is zero and, since ``sigma = 1 / weight``, its sigma is
+    infinite. Neither `quoted_redchi` nor `excess_scatter` should raise or
+    warn dividing by that weight, and the dropped point should not
+    contribute to either sum.
+
+    Returns
+    -------
+    fit_result, sigma, weights
+        Arrays one longer than ``raw_residual_good``, with the zero-weight
+        point last.
+    """
+    weights_good = 1.0 / np.asarray(sigma_good, dtype=float)
+    weighted_residual_good = weights_good * np.asarray(raw_residual_good, dtype=float)
+
+    residual = np.append(weighted_residual_good, 0.0)
+    weights = np.append(weights_good, 0.0)
+    with np.errstate(divide="ignore"):
+        sigma = 1.0 / weights
+
+    fit_result = SimpleNamespace(residual=residual, nfree=nfree)
+    return fit_result, sigma, weights
+
+
+@pytest.mark.parametrize(
+    "raw_residual, expect_redchi_above_one",
+    [(np.full(4, 1.5), True), (np.full(4, 0.1), False)],
+)
+def test_quoted_redchi_ignores_a_zero_weight_point(
+    raw_residual, expect_redchi_above_one
+):
+    sigma_good = np.full(4, 1.0)
+    nfree = 4
+    fit_result, sigma, weights = _fit_result_with_zero_weight(
+        raw_residual, sigma_good, nfree
+    )
+
+    result = quoted_redchi(fit_result, sigma, weights)
+
+    assert result == pytest.approx(np.sum(raw_residual**2 / sigma_good**2) / nfree)
+    assert (result > 1.0) == expect_redchi_above_one
+
+
+def test_quoted_redchi_with_nfree_zero_matches_lmfits_chisqr_convention():
+    # A fit with as many varied parameters as points has no degrees of
+    # freedom left. lmfit's own redchi is then chisqr / max(1, nfree) rather
+    # than a division by zero (its `_calculate_statistics`); quoted_redchi
+    # should agree instead of raising ZeroDivisionError or returning inf.
+    residual = np.array([1.0, 2.0, 3.0])
+    sigma = np.array([1.0, 1.0, 1.0])
+    weights = np.array([1.0, 1.0, 1.0])
+    fit_result = SimpleNamespace(residual=residual, nfree=0)
+
+    result = quoted_redchi(fit_result, sigma, weights)
+
+    expected_chisqr = np.sum((residual / weights) ** 2 / sigma**2)
+    assert np.isfinite(result)
+    assert result == pytest.approx(expected_chisqr)
+
+
+def test_excess_scatter_ignores_a_zero_weight_point_when_redchi_is_above_one():
+    raw_residual = np.full(4, 1.5)
+    sigma_good = np.full(4, 1.0)
+    nfree = 4
+
+    reference = SimpleNamespace(residual=(1.0 / sigma_good) * raw_residual, nfree=nfree)
+    expected = excess_scatter(reference, sigma_good, 1.0 / sigma_good)
+
+    fit_result, sigma, weights = _fit_result_with_zero_weight(
+        raw_residual, sigma_good, nfree
+    )
+    result = excess_scatter(fit_result, sigma, weights)
+
+    assert np.isfinite(result)
+    assert result > 0.0
+    assert result == pytest.approx(expected)
+
+
+def test_excess_scatter_ignores_a_zero_weight_point_when_redchi_is_at_or_below_one():
+    raw_residual = np.full(4, 0.1)
+    sigma_good = np.full(4, 1.0)
+    nfree = 4
+
+    fit_result, sigma, weights = _fit_result_with_zero_weight(
+        raw_residual, sigma_good, nfree
+    )
+    result = excess_scatter(fit_result, sigma, weights)
+
+    assert result == 0.0
+
+
+def test_excess_scatter_accepts_a_scalar_weight_with_an_array_sigma():
+    # A scalar weight must still broadcast through the zero-weight mask.
+    residual = np.array([0.5, -1.5, 2.0, -0.5])
+    sigma = np.array([1.0, 1.0, 1.0, 1.0])
+    fit_result = SimpleNamespace(residual=residual, nfree=residual.size)
+
+    result = excess_scatter(fit_result, sigma, 1.0)
+
+    assert np.isfinite(result)
 
 
 @pytest.mark.parametrize("n_zero", [0, 5, 20])

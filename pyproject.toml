@@ -73,6 +73,8 @@ gui = [
 exoplanet = [
     "pytransit",  # lmfit, the other half of the transit fitter, is a core
                   # dependency because the magnitude transform needs it too
+    "mako",  # pyopencl >= 2026.1.3, which pytransit imports, imports mako at
+             # module level but only lists it under its own test extra
 ]
 # Everything a user needs for the full interactive experience.
 all = [
