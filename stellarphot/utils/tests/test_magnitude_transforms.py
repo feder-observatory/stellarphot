@@ -1600,9 +1600,9 @@ def test_transform_to_catalog_error_unchanged_when_errors_describe_the_data(mock
     # The other direction of issue #698: errors quoted generously, above the
     # true scatter, so the excess is exactly zero rather than a small
     # positive number that would read as a real finding, and adding zero in
-    # quadrature must leave mag_cal_error bit-identical to what the quoted
-    # errors and the unscaled covariance predict on their own -- the value
-    # reported before #698.
+    # quadrature must leave mag_cal_error equal, to the 1e-6 the hand
+    # formula is checked at, to what the quoted errors and the unscaled
+    # covariance predict on their own -- the value reported before #698.
     claimed = 0.05
 
     result, _, _ = _fit_a_catalog(
@@ -2109,6 +2109,43 @@ def test_transform_to_catalog_diagnostics_for_an_unweighted_fit(
     assert result["fit_cat_error_missing_frac"][0] == 1.0
 
 
+def _fit_two_images(mocker, catalog, first, second):
+    """
+    Transform two images of one synthetic catalog in a single call.
+
+    Parameters
+    ----------
+
+    mocker : `pytest_mock.MockerFixture`
+        Fixture used to patch the catalog fetch.
+
+    catalog : `_FakeCatalogTable`
+        Catalog both images are transformed against.
+
+    first, second : dict
+        Keyword arguments to `_generate_observed_table` for each image,
+        ``file_name`` included so the images can be told apart.
+
+    Returns
+    -------
+    result : `astropy.table.Table`
+        The transformed observations of both images.
+
+    in_first, in_second : `numpy.ndarray`
+        Boolean masks selecting each image's rows of ``result``.
+    """
+    observed = _combine_observed_tables(
+        _generate_observed_table(**first), _generate_observed_table(**second)
+    )
+    result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    return (
+        result,
+        np.asarray(result["file"] == first["file_name"]),
+        np.asarray(result["file"] == second["file_name"]),
+    )
+
+
 def test_transform_to_catalog_fits_each_image_separately(mocker):
     # Coefficients are fit per group, so two images of the same stars with
     # different zero points should each get their own.
@@ -2119,20 +2156,17 @@ def test_transform_to_catalog_fits_each_image_separately(mocker):
 
     # The second image is fainter by a constant, so its zero point is larger by
     # that constant while the other coefficients stay at zero.
-    observed = _combine_observed_tables(
-        _generate_observed_table(ra, dec, instrumental, file_name="image_1.fit"),
-        _generate_observed_table(
-            ra,
-            dec,
-            instrumental - zero_point_offset,
+    result, first, second = _fit_two_images(
+        mocker,
+        catalog,
+        dict(ra=ra, dec=dec, instrumental=instrumental, file_name="image_1.fit"),
+        dict(
+            ra=ra,
+            dec=dec,
+            instrumental=instrumental - zero_point_offset,
             file_name="image_2.fit",
         ),
     )
-
-    result = _run_transform_to_catalog(mocker, catalog, observed)
-
-    first = result["file"] == "image_1.fit"
-    second = result["file"] == "image_2.fit"
 
     np.testing.assert_allclose(
         result["z"][first], _FAKE_CATALOG_ZERO_POINT, rtol=0, atol=1e-6
@@ -2165,21 +2199,19 @@ def test_transform_to_catalog_handles_regrouped_row_order(mocker):
 
     catalog, ra, dec, instrumental = _generate_fake_catalog(n_stars)
 
-    observed = _combine_observed_tables(
+    result, _, from_short_image = _fit_two_images(
+        mocker,
+        catalog,
         # Added first, sorts second.
-        _generate_observed_table(ra, dec, instrumental, file_name="z_image.fit"),
+        dict(ra=ra, dec=dec, instrumental=instrumental, file_name="z_image.fit"),
         # Added second, sorts first, and has fewer stars.
-        _generate_observed_table(
-            ra[:n_in_short_image],
-            dec[:n_in_short_image],
-            instrumental[:n_in_short_image] - zero_point_offset,
+        dict(
+            ra=ra[:n_in_short_image],
+            dec=dec[:n_in_short_image],
+            instrumental=instrumental[:n_in_short_image] - zero_point_offset,
             file_name="a_image.fit",
         ),
     )
-
-    result = _run_transform_to_catalog(mocker, catalog, observed)
-
-    from_short_image = result["file"] == "a_image.fit"
 
     # Each image gets its own zero point, and neither picks up the other's.
     np.testing.assert_allclose(
@@ -2204,6 +2236,55 @@ def test_transform_to_catalog_handles_regrouped_row_order(mocker):
         )
         np.testing.assert_allclose(
             result["mag_cat"][selection], truth, rtol=0, atol=1e-6
+        )
+
+
+def test_transform_to_catalog_error_uses_each_images_own_excess_scatter(mocker):
+    # The excess is one number per image, not per table; see the Notes of
+    # `_calibrated_with_uncertainty`. Two images of the same stars quoting the
+    # same under-quoted error but scattering by different amounts get
+    # different excesses, and each image's mag_cal_error must carry its own.
+    n_stars = 50
+    catalog, ra, dec, instrumental = _generate_fake_catalog(n_stars)
+
+    result, first, second = _fit_two_images(
+        mocker,
+        catalog,
+        dict(
+            ra=ra,
+            dec=dec,
+            instrumental=instrumental,
+            file_name="image_1.fit",
+            mag_error=_UNDERQUOTED_CLAIMED_ERROR,
+            noise_sigma=_UNDERQUOTED_NOISE_SIGMA,
+            seed=_SEED,
+        ),
+        dict(
+            ra=ra,
+            dec=dec,
+            instrumental=instrumental,
+            file_name="image_2.fit",
+            mag_error=_UNDERQUOTED_CLAIMED_ERROR,
+            noise_sigma=_UNDERQUOTED_NOISE_SIGMA / 2,
+            seed=_SEED,
+        ),
+    )
+
+    excesses = [result["fit_excess_scatter"][rows][0] for rows in (first, second)]
+    assert all(excess > 0 for excess in excesses)
+    # Without this the test could not tell one image's excess from the other's.
+    assert not np.isclose(excesses[0], excesses[1], rtol=0.1)
+
+    sigma_quoted = np.hypot(_UNDERQUOTED_CLAIMED_ERROR, _FAKE_CATALOG_ERROR)
+    for rows, excess in zip((first, second), excesses, strict=True):
+        image = result[rows]
+        covariance = _predicted_coefficient_covariance(image, sigma_quoted)
+        np.testing.assert_allclose(
+            np.asarray(image["mag_cal_error"]),
+            _predicted_mag_cal_error(
+                image, covariance, _UNDERQUOTED_CLAIMED_ERROR, excess
+            ),
+            rtol=1e-6,
         )
 
 

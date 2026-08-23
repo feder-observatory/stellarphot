@@ -93,11 +93,14 @@ for refcat2 -- while the Johnson-Cousins R and I are added afterwards by
 :func:`~stellarphot.utils.magnitude_system_transforms.transform_apass_bands`
 and
 :func:`~stellarphot.utils.magnitude_system_transforms.transform_refcat2_bands`,
-which return magnitudes and no errors. So the fallback is the normal case for
-R and I, the bands most often calibrated, until issue #685 teaches those
-transforms to propagate errors. When the fallback is in use, ``fit_redchi``
-is the column to watch: an image whose stars scatter about the transform by
-more than they claim to be uncertain reports a ``fit_redchi`` well above one,
+which propagate the catalog's errors through the band transforms into
+``mag_error_R`` and ``mag_error_I``. Those two are a floor rather than a
+full error, because the USNO'-to-SDSS-DR7 step of the transform has no
+published residual to add. So the fallback is the exception: it applies only
+where a catalog lacks an error for a star or a band. When the fallback is in
+use, ``fit_redchi`` is the column to watch: an image whose stars scatter
+about the transform by more than they claim to be uncertain reports a
+``fit_redchi`` well above one,
 and where the catalog's uncertainty is the reason, weighting cannot know that
 but the scatter still shows up there.
 
@@ -108,7 +111,7 @@ hold most of a fit's weight; see issue #694. The floor applies to the
 weighting but not to the alarms: ``fit_redchi`` and ``fit_excess_scatter``
 are measured against the errors as quoted, so an image whose quoted errors
 are far too small still raises the alarm those columns exist for. The
-measurement half of ``mag_cal_error`` is the star's own error exactly as
+measurement term of ``mag_cal_error`` is the star's own error exactly as
 quoted, never raised to the floor.
 
 Reading ``fit_redchi``
@@ -203,4 +206,8 @@ reliably contributes is its field-wide scatter about the transform, which
 lands in ``fit_excess_scatter``; and its systematic tie to the standard
 system -- about 0.02 mag for APASS DR9 -- which is identical for every star
 in every image, so a per-star column would mislead, appearing to average
-down by the square root of the number of stars.
+down by the square root of the number of stars. Most of
+``fit_excess_scatter``, measured against two catalogs, turns out to be
+per-star observational scatter rather than catalog noise, which is why it is
+added to every star's ``mag_cal_error`` directly; see the Notes of
+:func:`~stellarphot.utils.magnitude_transforms.transform_to_catalog`.

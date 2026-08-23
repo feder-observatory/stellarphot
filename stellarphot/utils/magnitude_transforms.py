@@ -696,7 +696,7 @@ def _calibrated_with_uncertainty(
 
     excess_scatter : float, optional
         The image's ``fit_excess_scatter``, added in quadrature to every
-        star's uncertainty. Non-positive values add nothing.
+        star's uncertainty. Non-positive or NaN values add nothing.
 
     Returns
     -------
@@ -725,8 +725,8 @@ def _calibrated_with_uncertainty(
     measurement error before it. `_excess_scatter` measures it in
     calibrated-magnitude residual space -- against ``hypot(errors,
     cat_error)`` with no ``1 + a`` factor -- so adding it before the
-    propagation would scale it by the ``fit_diff`` sensitivity a second
-    time. It is the same number for every star in the image, so it does
+    propagation would scale it by a ``1 + a`` sensitivity it already
+    carries. It is the same number for every star in the image, so it does
     not bend the star-to-star shape of the transform term. See issue #698.
     """
     if covar is None or errors is None:
@@ -1150,7 +1150,7 @@ def transform_to_catalog(
     scatter observed about the fit, so stars scattering beyond their quoted
     errors raise ``fit_redchi`` and ``fit_excess_scatter`` instead of
     growing the ``*_error`` columns. The floor reaches the weighting only:
-    ``fit_redchi``, ``fit_excess_scatter`` and the measurement half of
+    ``fit_redchi``, ``fit_excess_scatter`` and the measurement term of
     ``mag_cal_error`` are measured against the errors as quoted. An
     unweighted fit quotes no errors to believe, so its uncertainties are
     scaled to the observed scatter, the only scale it has.
@@ -1161,7 +1161,16 @@ def transform_to_catalog(
     quadrature. The excess term is what makes the column reflect the scatter
     actually observed about the transform rather than only the quoted
     errors, which on real data understated it by several times; the value
-    without it is ``sqrt(mag_cal_error**2 - fit_excess_scatter**2)``.
+    without it is ``sqrt(mag_cal_error**2 - fit_excess_scatter**2)``. Once
+    the excess is above zero, ``mag_cal_error`` no longer scales with the
+    quoted errors the way ``a_error`` through ``z_error`` do. It is added
+    per star, rather than only through the coefficient covariance, because
+    measured across many images of one field against two catalogs most of
+    it is per-star observational scatter that a target suffers too; the
+    catalog's own noise, which reaches a target only through the
+    coefficients, is the minority, so the column over-counts that part by
+    of order 20 percent and under-counts by about as much when a catalog
+    over-quotes its errors.
     ``mag_cal_error`` is NaN, rather than falling back to the measurement
     error alone, for an image whose fit left no usable covariance behind.
 
