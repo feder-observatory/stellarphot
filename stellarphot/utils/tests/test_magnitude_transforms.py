@@ -1,5 +1,4 @@
 import logging
-import warnings
 from types import SimpleNamespace
 
 import numpy as np
@@ -513,32 +512,6 @@ def _run_transform_to_catalog(
     call_kwargs.update(kwargs)
 
     return transform_to_catalog(observed, obs_filter, cat_name=cat_name, **call_kwargs)
-
-
-def _fetch_call_args(cat_name="apass_dr9"):
-    """
-    Return the field center and radius the patched catalog fetch was called
-    with.
-
-    Parameters
-    ----------
-
-    cat_name : str, optional
-        Name of the catalog fetch to inspect, patched onto
-        `~stellarphot.utils.magnitude_transforms` by `_patch_catalog_fetch`.
-
-    Returns
-    -------
-    center : `astropy.coordinates.SkyCoord`
-        The field center the fetch was called with, i.e. its first
-        positional argument.
-
-    radius : `astropy.units.Quantity`
-        The cone search radius the fetch was called with, i.e. its
-        ``radius`` keyword argument.
-    """
-    call_args = getattr(magnitude_transforms, cat_name).call_args
-    return call_args.args[0], call_args.kwargs["radius"]
 
 
 # Every output column whose value comes from the catalog entry a star was
@@ -1171,7 +1144,7 @@ def test_to_float_array_leaves_unitless_input_alone():
     np.testing.assert_array_equal(converted, [1.0, np.nan])
 
 
-def test__observed_field_single_star_gets_the_margin_as_its_radius():
+def test_observed_field_single_star_gets_the_margin_as_its_radius():
     # This is why the margin exists at all: without it, a single-star field
     # -- max separation from its own centroid is exactly zero -- would ask
     # for a zero-radius cone and never find its own star in the catalog.
@@ -1184,7 +1157,7 @@ def test__observed_field_single_star_gets_the_margin_as_its_radius():
     assert u.allclose(radius, _CATALOG_RADIUS_MARGIN, atol=1e-6 * u.arcsec)
 
 
-def test__observed_field_center_survives_the_ra_wrap():
+def test_observed_field_center_survives_the_ra_wrap():
     # A naive mean of the RA values of 359.9 and 0.1 degrees is 180 degrees
     # -- the far side of the sky from both stars -- which would ask for a
     # cone containing neither of them. Averaging the unit cartesian vectors
@@ -1201,32 +1174,25 @@ def test__observed_field_center_survives_the_ra_wrap():
 
 
 @pytest.mark.parametrize("case", ["nan", "masked"])
-def test__observed_field_ignores_positions_that_are_not_finite(case):
+def test_observed_field_ignores_positions_that_are_not_finite(case):
     # A NaN or masked entry in either column must drop the whole row, not
     # just poison the mean -- checked here by comparing against the field
-    # computed from the good rows alone.
+    # computed from the good rows alone. Two extra rows, one with a bad ra
+    # and one with a bad dec, confirm a row is dropped even when it has one
+    # finite coordinate.
     ra_good = u.Quantity([180.0, 180.01, 179.99], u.degree)
     dec_good = u.Quantity([45.0, 45.01, 44.99], u.degree)
     center_good, radius_good = _observed_field(ra_good, dec_good)
 
+    ra_values = np.concatenate([ra_good.value, [180.5, 180.5]])
+    dec_values = np.concatenate([dec_good.value, [45.5, 45.5]])
     if case == "nan":
-        # One extra row with a bad ra, one with a bad dec: both must be
-        # dropped even though each has one finite coordinate.
-        ra = u.Quantity(np.concatenate([ra_good.value, [np.nan, 180.5]]), u.degree)
-        dec = u.Quantity(np.concatenate([dec_good.value, [45.5, np.nan]]), u.degree)
+        ra_values[3], dec_values[4] = np.nan, np.nan
+        ra = u.Quantity(ra_values, u.degree)
+        dec = u.Quantity(dec_values, u.degree)
     else:
-        # Same idea with masks instead of NaNs: one extra row masked in ra,
-        # one masked in dec.
-        ra = MaskedColumn(
-            np.concatenate([ra_good.value, [180.5, 180.5]]),
-            mask=[False, False, False, True, False],
-            unit=u.degree,
-        )
-        dec = MaskedColumn(
-            np.concatenate([dec_good.value, [45.5, 45.5]]),
-            mask=[False, False, False, False, True],
-            unit=u.degree,
-        )
+        ra = MaskedColumn(ra_values, mask=[False] * 3 + [True, False], unit=u.degree)
+        dec = MaskedColumn(dec_values, mask=[False] * 4 + [True], unit=u.degree)
 
     center, radius = _observed_field(ra, dec)
 
@@ -1234,7 +1200,7 @@ def test__observed_field_ignores_positions_that_are_not_finite(case):
     assert u.allclose(radius, radius_good)
 
 
-def test__observed_field_raises_when_no_position_is_finite():
+def test_observed_field_raises_when_no_position_is_finite():
     ra = u.Quantity([np.nan, np.nan], u.degree)
     dec = u.Quantity([np.nan, np.nan], u.degree)
 
@@ -2908,12 +2874,13 @@ def test_transform_to_catalog_default_radius_encloses_observations(mocker):
     observed = _generate_observed_table(ra, dec, instrumental)
 
     _run_transform_to_catalog(mocker, catalog, observed)
-    center, radius = _fetch_call_args()
+    center = magnitude_transforms.apass_dr9.call_args.args[0]
+    radius = magnitude_transforms.apass_dr9.call_args.kwargs["radius"]
 
     # The field here spans under an arcminute and does not cross the RA
     # wrap, so a plain mean of the columns is an independent check of the
     # centroid -- the wrap case, where a plain mean fails, is covered by
-    # test__observed_field_center_survives_the_ra_wrap above.
+    # test_observed_field_center_survives_the_ra_wrap above.
     expected_center = SkyCoord(
         np.mean(observed["ra"]), np.mean(observed["dec"]), unit="degree"
     )
@@ -2923,7 +2890,6 @@ def test_transform_to_catalog_default_radius_encloses_observations(mocker):
         center
     )
     assert u.allclose(radius, separations.max() + _CATALOG_RADIUS_MARGIN)
-    assert (separations <= radius).all()
 
     # The point of the issue: `_generate_star_coordinates` lays the stars on
     # a grid 10 arcsec apart, so a 20-star field is under an arcminute
@@ -2936,7 +2902,7 @@ def test_transform_to_catalog_explicit_radius_is_used(mocker):
     observed = _generate_observed_table(ra, dec, instrumental)
 
     _run_transform_to_catalog(mocker, catalog, observed, search_radius=5 * u.arcmin)
-    _, radius = _fetch_call_args()
+    radius = magnitude_transforms.apass_dr9.call_args.kwargs["radius"]
 
     # 5 arcmin is far larger than the derived radius for this field (well
     # under an arcminute), so this also confirms the explicit value really
@@ -2944,18 +2910,41 @@ def test_transform_to_catalog_explicit_radius_is_used(mocker):
     assert u.allclose(radius, 5 * u.arcmin)
 
 
+def test_transform_to_catalog_cone_covers_only_the_fitted_passband(mocker):
+    # Only the rows in ``obs_filter`` are ever matched against the catalog,
+    # so drawing the cone around the whole table would be issue #686 again
+    # through a different door: a night of several targets in several bands
+    # would pull a multi-degree catalog to calibrate one arcminute of sky.
+    # The two bands here sit some twenty degrees apart, which no single
+    # cone around both could be mistaken for.
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20)
+    in_band = _generate_observed_table(ra, dec, instrumental, passband="R")
+
+    other_ra, other_dec = _generate_star_coordinates(
+        20, ra_start=200 * u.degree, dec_start=25 * u.degree
+    )
+    other_band = _generate_observed_table(
+        other_ra, other_dec, instrumental, passband="I", file_name="image_2.fit"
+    )
+
+    _run_transform_to_catalog(
+        mocker, catalog, _combine_observed_tables(in_band, other_band), obs_filter="R"
+    )
+    center = magnitude_transforms.apass_dr9.call_args.args[0]
+    radius = magnitude_transforms.apass_dr9.call_args.kwargs["radius"]
+
+    expected_center = SkyCoord(
+        np.mean(in_band["ra"]), np.mean(in_band["dec"]), unit="degree"
+    )
+    assert center.separation(expected_center) < 1 * u.arcsec
+
+    # The R field alone is under an arcminute across, so the cone is a hair
+    # over the margin -- and nowhere near large enough to reach the I stars.
+    assert radius < 2 * u.arcmin
+
+
 def _wide_field_observations():
-    """
-    Build observations spread over a field wider than `_WIDE_FIELD_RADIUS`.
-
-    Returns
-    -------
-    catalog : `_FakeCatalogTable`
-        Synthetic catalog covering the positions.
-
-    observed : `astropy.table.Table`
-        Observations of those positions, grouped by file.
-    """
+    """Observations spread over a field wider than `_WIDE_FIELD_RADIUS`."""
     # 20 stars on a grid 40 arcmin apart span about two degrees, so the cone
     # drawn around them comes out well over the one degree that used to be
     # hardcoded -- which is exactly the case the warning is about.
@@ -2965,52 +2954,61 @@ def _wide_field_observations():
     return catalog, _generate_observed_table(ra, dec, instrumental)
 
 
-def test_transform_to_catalog_warns_when_the_derived_cone_is_wide(mocker):
+@pytest.mark.parametrize(
+    "wide_field, search_radius, expect_warn",
+    [(False, None, False), (True, None, True), (True, 3 * u.degree, False)],
+    ids=["ordinary_field", "derived_wide_cone", "explicit_wide_radius"],
+)
+def test_transform_to_catalog_warns_only_for_a_derived_wide_cone(
+    mocker, recwarn, wide_field, search_radius, expect_warn
+):
     # A field this wide is almost always a mosaic, or ra/dec columns that
     # hold more than one field's worth of stars. Before the cone was derived
     # such a table quietly got a one degree catalog and calibrated against
     # whatever fell inside it; now it gets a cone that really covers the
-    # table, which is correct but is also a query worth hearing about.
-    catalog, observed = _wide_field_observations()
+    # table, which is correct but is also a query worth hearing about --
+    # unless the caller asked for that width on purpose.
+    if wide_field:
+        catalog, observed = _wide_field_observations()
+    else:
+        catalog, ra, dec, instrumental = _generate_fake_catalog(20)
+        observed = _generate_observed_table(ra, dec, instrumental)
 
-    with pytest.warns(AstropyUserWarning, match="search_radius"):
-        _run_transform_to_catalog(mocker, catalog, observed)
+    kwargs = {} if search_radius is None else {"search_radius": search_radius}
+    _run_transform_to_catalog(mocker, catalog, observed, **kwargs)
 
-    _, radius = _fetch_call_args()
-    assert radius > _WIDE_FIELD_RADIUS
-
-
-def test_transform_to_catalog_does_not_warn_for_an_ordinary_field(mocker):
-    catalog, ra, dec, instrumental = _generate_fake_catalog(20)
-    observed = _generate_observed_table(ra, dec, instrumental)
-
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        _run_transform_to_catalog(mocker, catalog, observed)
-
-    assert not [
-        warning for warning in caught if "search_radius" in str(warning.message)
+    caught = [
+        w
+        for w in recwarn.list
+        if issubclass(w.category, AstropyUserWarning)
+        and "search_radius" in str(w.message)
     ]
-
-
-def test_transform_to_catalog_does_not_warn_for_an_explicit_wide_radius(mocker):
-    # Asking for a wide cone on purpose is not something to be warned about;
-    # only a cone that came out wide on its own is.
-    catalog, observed = _wide_field_observations()
-
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        _run_transform_to_catalog(mocker, catalog, observed, search_radius=3 * u.degree)
-
-    assert not [
-        warning for warning in caught if "search_radius" in str(warning.message)
-    ]
+    assert bool(caught) is expect_warn
+    if expect_warn:
+        radius = magnitude_transforms.apass_dr9.call_args.kwargs["radius"]
+        assert radius > _WIDE_FIELD_RADIUS
 
 
 @pytest.mark.parametrize(
     "bad_radius",
-    [0.1, 5 * u.meter, -1 * u.arcmin, 0 * u.arcmin, np.nan * u.arcmin],
-    ids=["no_unit", "wrong_unit", "negative", "zero", "nan"],
+    [
+        0.1,
+        5 * u.meter,
+        -1 * u.arcmin,
+        0 * u.arcmin,
+        np.nan * u.arcmin,
+        u.Quantity([5], u.arcmin),
+        u.Quantity([5, 6], u.arcmin),
+    ],
+    ids=[
+        "no_unit",
+        "wrong_unit",
+        "negative",
+        "zero",
+        "nan",
+        "single_element_array",
+        "multi_element_array",
+    ],
 )
 def test_transform_to_catalog_rejects_a_bad_search_radius(mocker, bad_radius):
     # Validating up front, before the catalog fetch, means a bad argument

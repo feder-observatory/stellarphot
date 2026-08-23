@@ -115,6 +115,12 @@ _CATALOG_RADIUS_MARGIN = 1 * u.arcmin
 # `search_radius` is a deliberate choice and passes without comment.
 _WIDE_FIELD_RADIUS = 1 * u.degree
 
+# The catalogs `transform_to_catalog` knows how to fetch. Named here so that
+# the check of the caller's `cat_name`, which happens up front alongside the
+# other argument checks, and the fetch itself, which happens much further
+# down, cannot drift apart.
+_CATALOG_NAMES = ("apass_dr9", "refcat2")
+
 # The color conventionally used with each canonical passband, for a caller
 # who names a band but no color. Which color goes with a band is a convention
 # rather than something derivable, so a band that is not here has to be asked
@@ -1057,9 +1063,9 @@ def transform_to_catalog(
 
     search_radius : `astropy.units.Quantity`, optional
         Angular radius of the cone the calibration catalog is fetched from,
-        which must be a positive, finite angle. Defaults to the radius that
-        encloses every observed position, plus a one arcminute margin, about
-        the centroid of those positions. See Notes.
+        which must be a single positive, finite angle. Defaults to the radius
+        that encloses every position observed in ``obs_filter``, plus a one
+        arcminute margin, about the centroid of those positions. See Notes.
 
     Returns
     -------
@@ -1152,10 +1158,14 @@ def transform_to_catalog(
     error alone, for an image whose fit left no usable covariance behind.
 
     The catalog is fetched once per call, from a cone centered on the
-    centroid of the observed positions and just large enough to hold them
-    all. It used to be a fixed degree around whichever star happened to be
-    first in the table, so a call asked Vizier for every row of a degree-wide
-    cone however small the field really was; see issue #686.
+    centroid of the positions observed in ``obs_filter`` and just large
+    enough to hold them all. Rows in other passbands are left out of it:
+    they are never matched against the catalog, so sizing the cone from them
+    only costs sky -- and the field of view can shift a little between bands
+    even when the images are of one target. It used to be a fixed degree
+    around whichever star happened to be first in the table, so a call asked
+    Vizier for every row of a degree-wide cone however small the field really
+    was; see issue #686.
     ``search_radius`` is therefore the way to make the cone deliberately
     *larger* than the field -- to calibrate against stars outside it, say --
     rather than the way to keep a query small, which the default already
@@ -1200,12 +1210,22 @@ def transform_to_catalog(
                 "search_radius must be an angle, such as 5 * u.arcmin, got "
                 f"{search_radius!r}."
             )
+        if not search_radius.isscalar:
+            raise ValueError(
+                f"search_radius must be a single angle, got {search_radius!r}."
+            )
         if not np.isfinite(search_radius.value) or search_radius.value <= 0:
             raise ValueError(
                 "search_radius must be a positive, finite angle, got "
                 f"{search_radius!r}. Leave it out to search the field the "
                 "observations cover."
             )
+
+    if cat_name not in _CATALOG_NAMES:
+        raise ValueError(
+            f"Unknown catalog name {cat_name}. Must be one of "
+            f"{' or '.join(repr(name) for name in _CATALOG_NAMES)}."
+        )
 
     # Preserve the order the caller gave, minus any duplicates.
     vary = tuple(dict.fromkeys(vary))
@@ -1299,21 +1319,21 @@ def transform_to_catalog(
     cat_mags = np.full(n_rows, np.nan)
     cat_colors = np.full(n_rows, np.nan)
 
-    # Every row of the table, rather than only the rows in this passband:
-    # the images in it are of one field, and one cone drawn around all of
-    # them serves the calls for the other passbands too.
+    # Only the rows in this passband: they are the only ones ever matched
+    # against the catalog, so they are the only ones the cone has to cover.
     field_center, field_radius = _observed_field(
-        observed_mags_grouped["ra"], observed_mags_grouped["dec"]
+        observed_mags_grouped["ra"][in_passband],
+        observed_mags_grouped["dec"][in_passband],
     )
     if search_radius is None:
         search_radius = field_radius
         if search_radius > _WIDE_FIELD_RADIUS:
             warnings.warn(
-                f"The observed positions span {field_radius.to(u.degree):.2f}, "
-                "so the catalog will be fetched from a cone that wide and the "
-                "query may be slow. That is usually a table holding more than "
-                "one field; if it is not, pass search_radius to set the cone "
-                "size yourself.",
+                "The catalog will be fetched from a cone of radius "
+                f"{field_radius.to(u.degree):.2f} about the center of the "
+                "observed positions, and a query that wide may be slow. That "
+                "is usually a table holding more than one field; if it is "
+                "not, pass search_radius to set the cone size yourself.",
                 AstropyUserWarning,
                 stacklevel=2,
             )
@@ -1336,10 +1356,11 @@ def transform_to_catalog(
             passbands=["B", "V", "R", "I"],
             transformer=transform_refcat2_bands,
         )
-    else:
-        raise ValueError(
-            f"Unknown catalog name {cat_name}. Must be one of 'apass_dr9' or 'refcat2'."
-        )
+    else:  # pragma: no cover
+        # Unreachable: `cat_name` was checked against `_CATALOG_NAMES` above.
+        # Kept so that adding a name to that tuple without adding a branch
+        # here fails loudly rather than leaving `cat` unbound.
+        raise ValueError(f"No catalog fetch is implemented for {cat_name}.")
 
     # cat_filter and cat_color are only ever strings until this point, so a
     # band the catalog cannot supply -- "U" against apass_dr9 or refcat2,
