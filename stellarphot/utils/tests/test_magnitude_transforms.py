@@ -2030,12 +2030,6 @@ def _fit_result_with_zero_weight(raw_residual_good, sigma_good, nfree):
     return fit_result, sigma, weights
 
 
-def _expected_quoted_redchi(raw_residual_good, sigma_good, nfree):
-    raw_residual_good = np.asarray(raw_residual_good, dtype=float)
-    sigma_good = np.asarray(sigma_good, dtype=float)
-    return float(np.sum(raw_residual_good**2 / sigma_good**2) / nfree)
-
-
 @pytest.mark.parametrize(
     "raw_residual, expect_redchi_above_one",
     [(np.full(4, 1.5), True), (np.full(4, 0.1), False)],
@@ -2051,8 +2045,7 @@ def test_quoted_redchi_ignores_a_zero_weight_point(
 
     result = quoted_redchi(fit_result, sigma, weights)
 
-    expected = _expected_quoted_redchi(raw_residual, sigma_good, nfree)
-    assert result == pytest.approx(expected)
+    assert result == pytest.approx(np.sum(raw_residual**2 / sigma_good**2) / nfree)
     assert (result > 1.0) == expect_redchi_above_one
 
 

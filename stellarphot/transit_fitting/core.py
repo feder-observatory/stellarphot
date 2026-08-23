@@ -536,12 +536,6 @@ class TransitModelFit:
             If the times or the data have not been set. If the fit itself
             raises, ``params``, ``fit_result``, ``fit_redchi`` and
             ``fit_excess_scatter`` are left untouched.
-
-        Notes
-        -----
-        The uncertainties written to ``params`` believe the quoted errors;
-        ``fit_redchi`` and ``fit_excess_scatter`` say whether the data does.
-        See the class Notes.
         """
         if self.times is None:
             raise ValueError("The times must be set before trying to fit.")
@@ -561,7 +555,7 @@ class TransitModelFit:
             with np.errstate(divide="ignore"):
                 sigma = 1 / np.asarray(self.weights, dtype=float)
         redchi = quoted_redchi(result, sigma, self.weights)
-        excess = excess_scatter(result, sigma, self.weights, redchi_quoted=redchi)
+        excess = excess_scatter(result, sigma, self.weights)
 
         self.fit_result = result
         self.fit_redchi = redchi

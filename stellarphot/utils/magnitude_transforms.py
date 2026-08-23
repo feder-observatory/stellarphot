@@ -343,7 +343,7 @@ def _underdetermined_reason(fit_result, vary):
     return None
 
 
-def _fit_diagnostics(fit_result, sigma, weights, redchi_quoted, cat_error_usable):
+def _fit_diagnostics(fit_result, sigma, weights, cat_error_usable):
     """
     Describe how one image's fit was weighted, as opposed to where it landed.
 
@@ -367,10 +367,6 @@ def _fit_diagnostics(fit_result, sigma, weights, redchi_quoted, cat_error_usable
         Weight the fit gave each residual, floor included -- the caller's
         own ``weights``, not something re-derived from ``sigma``. The scalar
         ``1.0`` for an unweighted fit.
-
-    redchi_quoted : float
-        ``fit_redchi`` for this fit -- `quoted_redchi` of the three
-        arguments above -- passed through to `excess_scatter`.
 
     cat_error_usable : `numpy.ndarray` or None
         Boolean mask over the stars that were fit: whether each one's
@@ -404,9 +400,7 @@ def _fit_diagnostics(fit_result, sigma, weights, redchi_quoted, cat_error_usable
     return {
         _FIT_CAT_ERROR_MISSING_COLUMN: missing_fraction,
         _FIT_MAX_WEIGHT_SHARE_COLUMN: max_weight_share,
-        _FIT_EXCESS_SCATTER_COLUMN: excess_scatter(
-            fit_result, sigma, weights, redchi_quoted
-        ),
+        _FIT_EXCESS_SCATTER_COLUMN: excess_scatter(fit_result, sigma, weights),
     }
 
 
@@ -1461,12 +1455,7 @@ def transform_to_catalog(
             # value with a negative standard deviation.
             star_errors = np.where(np.isfinite(errors) & (errors > 0), errors, np.nan)
 
-        # Computed once and shared with `_fit_diagnostics` below, so the
-        # value reported here as ``fit_redchi`` is the exact float that
-        # gates ``fit_excess_scatter`` too, rather than two independent sums
-        # of the same quantity that could round differently.
-        redchi_quoted = quoted_redchi(fit_result, sigma, weights)
-        fit_redchis[rows] = redchi_quoted
+        fit_redchis[rows] = quoted_redchi(fit_result, sigma, weights)
 
         # How the fit was weighted, rather than where it landed. Written
         # alongside ``fit_redchi`` because they are the numbers that say
@@ -1476,7 +1465,6 @@ def transform_to_catalog(
             fit_result,
             sigma,
             weights,
-            redchi_quoted,
             None if cat_error_column is None else cat_error_usable[good],
         )
         for name, value in diagnostics.items():

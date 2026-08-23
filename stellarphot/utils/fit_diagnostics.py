@@ -67,32 +67,19 @@ def quoted_redchi(fit_result, sigma, weights):
     errors are far too small would report a small, healthy-looking value for
     exactly the case the statistic exists to catch. Undoing the weighting
     and dividing by the raw sigma instead keeps the floor where it belongs:
-    on each point's leverage in the fit, and nowhere in the reporting. A
-    caller with no floor passes the same sigmas the fit used and gets
-    ``fit_result.redchi`` back, to rounding.
-
-    This is also the value `excess_scatter` gates on: whether any scatter
-    needs inventing at all is exactly the question of whether this reduced
-    chi-square already sits at or below one, so the two share this one
-    computation rather than each summing the same quantity independently.
+    on each point's leverage in the fit, and nowhere in the reporting.
     """
     if sigma is None:
         return fit_result.redchi
 
     residual, sigma = _unweighted_residual(fit_result, sigma, weights)
-    # The same operand order as `excess_scatter`'s bracket function at zero
-    # excess -- ``residual**2 / sigma**2``, not ``(residual / sigma)**2``.
-    # The gate there compares this value to one, and a value that disagreed
-    # with the bracket by one ULP around it could hand
-    # `~scipy.optimize.brentq` two negative endpoints -- a `ValueError`.
-    #
     # Divide by max(1, nfree), matching lmfit's own redchi convention (its
     # `_calculate_statistics`) so a fit with no degrees of freedom left
     # reports chisqr rather than raising or returning inf.
-    return float(np.sum(residual**2 / sigma**2) / max(1, fit_result.nfree))
+    return float(np.sum((residual / sigma) ** 2) / max(1, fit_result.nfree))
 
 
-def excess_scatter(fit_result, sigma, weights, redchi_quoted=None):
+def excess_scatter(fit_result, sigma, weights):
     """
     Scatter that would have to be added to every sigma to explain the residuals.
 
@@ -120,11 +107,6 @@ def excess_scatter(fit_result, sigma, weights, redchi_quoted=None):
         Weight the fit gave each residual, floor included. Unused when
         ``sigma`` is `None`.
 
-    redchi_quoted : float, optional
-        ``quoted_redchi(fit_result, sigma, weights)`` for this fit, if the
-        caller already has it -- computed here otherwise. Ignored when
-        ``sigma`` is `None`.
-
     Returns
     -------
     float
@@ -144,32 +126,12 @@ def excess_scatter(fit_result, sigma, weights, redchi_quoted=None):
     that is the same for every point barely changes where a fit lands -- it
     rescales the weights nearly uniformly -- and holding them fixed keeps this
     a description of the fit that was actually reported.
-
-    Callers such as
-    `~stellarphot.utils.magnitude_transforms.transform_to_catalog` pass
-    ``redchi_quoted`` in so that the value gating this function is the
-    exact float they report as ``fit_redchi``,
-    rather than a second sum of the same quantity that could round
-    differently by a few ULPs around 1.0.
     """
     if sigma is None or fit_result.nfree <= 0:
         # Nothing was divided by anything, so "how far the residuals sit from
         # what the points claim" has no meaning. NaN rather than zero, which
         # would say the errors were checked and found adequate.
         return np.nan
-
-    if redchi_quoted is None:
-        redchi_quoted = quoted_redchi(fit_result, sigma, weights)
-
-    if redchi_quoted - 1.0 <= 0.0:
-        # The points are already no further from the model than they claim to
-        # be uncertain, so no excess is needed and none is invented. The gate
-        # is the same computation reported as fit_redchi, not a second sum
-        # of the same quantity that could disagree with it by a few ULPs
-        # around 1.0 -- and a gate that passed while both bracket endpoints
-        # below evaluate negative would be a `ValueError` from
-        # `~scipy.optimize.brentq`.
-        return 0.0
 
     # Undo the weighting: lmfit's residual is the model minus the data times
     # the weights, and what is needed here is the difference itself, so that
@@ -179,22 +141,14 @@ def excess_scatter(fit_result, sigma, weights, redchi_quoted=None):
     def reduced_chi_square_less_one(excess):
         return np.sum(residual**2 / (sigma**2 + excess**2)) / fit_result.nfree - 1.0
 
-    # A bracket rather than a guess. The function falls monotonically from a
-    # positive value at zero -- the branch above ruled out the alternative --
-    # and at this upper bound every ``sigma**2 + excess**2`` is at least
-    # ``excess**2``, so the sum is at most ``nfree`` and the function is at
-    # most zero. So a root lies between them.
-    upper = np.sqrt(np.sum(residual**2) / fit_result.nfree)
-    upper_value = reduced_chi_square_less_one(upper)
+    if reduced_chi_square_less_one(0.0) <= 0.0:
+        # The points are already no further from the model than they claim to
+        # be uncertain, so no excess is needed and none is invented.
+        return 0.0
 
-    if upper_value >= 0.0:
-        # Mathematically ``upper_value`` is at most zero, by the argument
-        # above -- so a positive value here only means it landed close
-        # enough to zero that rounding pushed it over, which happens when
-        # ``sigma`` sits many orders of magnitude below the residuals.
-        # ``upper`` is then the root already, to within that same rounding,
-        # and handing `~scipy.optimize.brentq` two endpoints that evaluate
-        # to the same sign would raise `ValueError` instead of finding it.
-        return float(upper)
-
+    # The function falls monotonically from a positive value at zero. At
+    # ``upper`` every ``sigma**2 + excess**2`` is at least ``4 * rms**2``, so
+    # the sum is at most ``nfree / 4`` and the function is at most -3/4:
+    # comfortably negative, so a root lies between the two.
+    upper = 2 * np.sqrt(np.sum(residual**2) / fit_result.nfree)
     return float(brentq(reduced_chi_square_less_one, 0.0, upper))

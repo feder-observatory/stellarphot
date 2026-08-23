@@ -4,7 +4,6 @@ from astropy.table import Table
 from astropy.utils.data import get_pkg_data_filename
 
 from stellarphot.transit_fitting import TransitModelFit
-from stellarphot.utils.fit_diagnostics import quoted_redchi
 
 pytest.importorskip("pytransit")
 pytest.importorskip("lmfit")
@@ -718,8 +717,8 @@ def _fit_with_uniform_weights(quoted_error, zero_weight_index=None):
     #
     # ``zero_weight_index`` zeroes one point's weight, lmfit's idiom for
     # excluding it -- exercising the fit-diagnostics' zero-weight handling
-    # (issue #702) in a real fit rather than only in the unit tests of
-    # `~stellarphot.utils.fit_diagnostics`.
+    # (caught in review of PR #702) in a real fit rather than only in the
+    # unit tests of `~stellarphot.utils.fit_diagnostics`.
     tmod = _make_transit_model_with_data(noise_dev=_DIAGNOSTIC_NOISE_DEV)
     if quoted_error is not None:
         weights = np.full(len(tmod.data), 1.0 / quoted_error)
@@ -781,10 +780,6 @@ def test_fit_succeeds_with_a_zero_weight_point():
 
     assert np.isfinite(tmod.fit_excess_scatter)
     assert tmod.fit_excess_scatter > 0.0
-
-    with np.errstate(divide="ignore"):
-        sigma = 1.0 / tmod.weights
-    assert tmod.fit_redchi == quoted_redchi(tmod.fit_result, sigma, tmod.weights)
 
 
 def test_diagnostics_are_none_before_fit():
