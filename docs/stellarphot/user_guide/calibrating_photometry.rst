@@ -112,7 +112,12 @@ weighting but not to the alarms: ``fit_redchi`` and ``fit_excess_scatter``
 are measured against the errors as quoted, so an image whose quoted errors
 are far too small still raises the alarm those columns exist for. The
 measurement term of ``mag_cal_error`` is the star's own error exactly as
-quoted, never raised to the floor.
+quoted, never raised to the floor. The floor is otherwise silent -- a star
+it raised looks like one that quoted the floor -- so ``fit_sigma_floor_frac``
+reports the fraction of each image's fitted stars it decided. Near zero, the
+floor was a safeguard that did not fire; at one, every star weighed the same
+and the fit was in effect unweighted, so the ``*_error`` columns are sized
+by the floor rather than by anything measured.
 
 Reading ``fit_redchi``
 ----------------------

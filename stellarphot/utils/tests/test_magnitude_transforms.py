@@ -655,6 +655,7 @@ _FIT_COLUMNS = (
     "fit_cat_error_missing_frac",
     "fit_max_weight_share",
     "fit_excess_scatter",
+    "fit_sigma_floor_frac",
 )
 
 # The columns transform_to_catalog adds to the table it is given.
@@ -1823,10 +1824,32 @@ def test_transform_to_catalog_reports_unweighted_fit_statistic(
     assert reported[0] == pytest.approx(_UNWEIGHTED_SIGMA**2, rel=0.3)
 
 
-# The sigma floor and the three fit diagnostics, all of them issue #694:
-# one star claiming a tiny uncertainty quietly held most of a fit's weight.
-# Flooring the sigma bounds how much any one star can be worth; the
-# diagnostics say when it happened.
+# The sigma floor and the fit diagnostics, all of them issue #694: one star
+# claiming a tiny uncertainty quietly held most of a fit's weight. Flooring
+# the sigma bounds how much any one star can be worth; the diagnostics say
+# when it happened.
+
+
+# Number of stars, and how many of them quote an error under the floor, in
+# the errors `_errors_straddling_the_floor` builds.
+_STRADDLE_N_STARS = 20
+_STRADDLE_N_BELOW = 10
+
+
+def _errors_straddling_the_floor(floor_value):
+    """
+    Quoted errors for `_STRADDLE_N_STARS` stars, half of them under the floor.
+
+    The sub-floor half spans two orders of magnitude, so that no single
+    substituted value could reproduce them, and the rest sit well above the
+    floor so the weights are not uniform -- a uniformly weighted fit lands in
+    the same place whatever the weights are scaled by.
+    """
+    errors = np.full(_STRADDLE_N_STARS, 5 * floor_value)
+    errors[:_STRADDLE_N_BELOW] = np.geomspace(
+        floor_value / 100, floor_value / 2, _STRADDLE_N_BELOW
+    )
+    return errors
 
 
 @pytest.mark.parametrize("cat_error", [None, 0.0], ids=["observed", "combined"])
@@ -1845,22 +1868,22 @@ def test_transform_to_catalog_floors_the_fit_sigma(mocker, floor, cat_error):
     # (`_MIN_FIT_SIGMA`), and ``0.05`` passes an explicit floor the caller
     # chose, so the same changes-nothing expectation is pinned at a floor
     # other than the default too.
-    n_stars = 20
     floor_value = _MIN_FIT_SIGMA if floor is None else floor
 
-    # Half the stars claim an error below the floor, spanning two orders of
-    # magnitude so that no single substituted value could reproduce them, and
-    # half claim one well above it so the weights are not uniform -- a
-    # uniformly weighted fit lands in the same place whatever the weights are
-    # scaled by, and would pass this test with no floor at all.
-    errors = np.full(n_stars, 5 * floor_value)
-    errors[:10] = np.geomspace(floor_value / 100, floor_value / 2, 10)
+    # Half the stars claim an error below the floor; without a floor the
+    # non-uniform weights would let them steer the fit and this test would
+    # fail, which is what makes it a test of the floor.
+    errors = _errors_straddling_the_floor(floor_value)
 
     at_the_floor = errors.copy()
-    at_the_floor[:10] = floor_value
+    at_the_floor[:_STRADDLE_N_BELOW] = floor_value
 
     fit_kwargs = dict(
-        mocker=mocker, n_stars=n_stars, sigma=0.02, seed=_SEED, cat_error=cat_error
+        mocker=mocker,
+        n_stars=_STRADDLE_N_STARS,
+        sigma=0.02,
+        seed=_SEED,
+        cat_error=cat_error,
     )
     if floor is not None:
         fit_kwargs["min_fit_sigma"] = floor
@@ -1872,7 +1895,16 @@ def test_transform_to_catalog_floors_the_fit_sigma(mocker, floor, cat_error):
     # means a sub-floor sigma reached the fit. ``mag_cal_error`` and
     # ``fit_redchi`` are left out because both are reported against the
     # star's own quoted errors, which really do differ between the two runs.
-    for column in ("a", "c", "z", "mag_cal", "fit_max_weight_share"):
+    # ``fit_sigma_floor_frac`` is in: a sigma raised to the floor and one
+    # already sitting on it are both "at the floor", so the two runs agree.
+    for column in (
+        "a",
+        "c",
+        "z",
+        "mag_cal",
+        "fit_max_weight_share",
+        "fit_sigma_floor_frac",
+    ):
         np.testing.assert_array_equal(
             np.asarray(below[column]),
             np.asarray(floored[column]),
@@ -1911,6 +1943,41 @@ def test_transform_to_catalog_floor_preserves_the_excess_scatter_alarm(mocker):
     assert result["fit_excess_scatter"][0] == pytest.approx(
         np.sqrt(sigma**2 - claimed**2), rel=0.15
     )
+    # Every star quoted an error under the floor, so the floor set every
+    # weight and the fit was in effect unweighted -- which is what 1.0 means.
+    assert result["fit_sigma_floor_frac"][0] == 1.0
+
+
+@pytest.mark.parametrize(
+    "min_fit_sigma, expected",
+    [(None, 0.5), (0, 0.0)],
+    ids=["default_floor", "no_floor"],
+)
+def test_transform_to_catalog_reports_the_sigma_floor_fraction(
+    mocker, min_fit_sigma, expected
+):
+    # The floor is silent: a star whose sigma it raised looks, in every other
+    # column, like one that quoted the floor to begin with. This column says
+    # how much of the fit the floor decided: half the stars here quote an
+    # error under the default floor, so 0.5, and with no floor nothing can
+    # sit at it, so 0.0. It is repeated down every row because it is a
+    # property of the image.
+    fit_kwargs = dict(
+        mocker=mocker,
+        n_stars=_STRADDLE_N_STARS,
+        sigma=0.02,
+        seed=_SEED,
+        mag_error=_errors_straddling_the_floor(_MIN_FIT_SIGMA),
+        cat_error=None,
+    )
+    if min_fit_sigma is not None:
+        fit_kwargs["min_fit_sigma"] = min_fit_sigma
+
+    result, _, _ = _fit_a_catalog(**fit_kwargs)
+
+    fraction = np.asarray(result["fit_sigma_floor_frac"])
+    np.testing.assert_array_equal(fraction, fraction[0])
+    assert fraction[0] == pytest.approx(expected)
 
 
 def _expected_max_weight_share(errors):
@@ -2206,11 +2273,13 @@ def test_transform_to_catalog_diagnostics_for_an_unweighted_fit(
 ):
     # Without an error column there are no sigmas, so there is no scatter to
     # call excessive and the column says so with NaN rather than zero, which
-    # would claim the errors were checked and found adequate. The weight share
+    # would claim the errors were checked and found adequate. The same goes
+    # for the floor fraction: no sigmas, so none to floor. The weight share
     # is still meaningful: every star counts the same, so each holds 1/N.
     result = _unweighted_fit_result
 
     assert np.isnan(result["fit_excess_scatter"][0])
+    assert np.isnan(result["fit_sigma_floor_frac"][0])
     assert result["fit_max_weight_share"][0] == pytest.approx(1.0 / _UNWEIGHTED_N_STARS)
     assert result["fit_cat_error_missing_frac"][0] == 1.0
 

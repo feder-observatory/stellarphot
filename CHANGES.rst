@@ -37,6 +37,10 @@ New Features
   in three new columns beside ``fit_redchi``: ``fit_cat_error_missing_frac``,
   ``fit_max_weight_share`` and ``fit_excess_scatter``; see its docstring for
   what each means. [#694]
++ ``transform_to_catalog()`` also reports ``fit_sigma_floor_frac``, the
+  fraction of each image's fitted stars whose quoted uncertainty sat at or
+  below ``min_fit_sigma``, so the floor set their weight instead of their
+  errors. It is NaN for an unweighted fit. [#697]
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^

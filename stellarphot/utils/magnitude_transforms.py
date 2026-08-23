@@ -66,13 +66,15 @@ _MIN_FIT_SIGMA = 0.01
 
 # Names of the columns describing how the fit was weighted, as opposed to where
 # it landed. Each answers a question ``fit_redchi`` cannot: whether the catalog
-# knew its own errors at all, whether one star ran the fit, and how far the
-# residuals sit from the errors that were quoted.
+# knew its own errors at all, whether one star ran the fit, how far the
+# residuals sit from the errors that were quoted, and how much of the
+# weighting the ``min_fit_sigma`` floor decided.
 _FIT_CAT_ERROR_MISSING_COLUMN = "fit_cat_error_missing_frac"
 _FIT_MAX_WEIGHT_SHARE_COLUMN = "fit_max_weight_share"
 _FIT_EXCESS_SCATTER_COLUMN = "fit_excess_scatter"
+_FIT_SIGMA_FLOOR_COLUMN = "fit_sigma_floor_frac"
 
-# The three as one tuple, mirroring `_COEFF_NAMES` above: `_fit_diagnostics`
+# The four as one tuple, mirroring `_COEFF_NAMES` above: `_fit_diagnostics`
 # returns a dict keyed by exactly these names, and the per-image write loop
 # and the output-column block both iterate over them, so adding a diagnostic
 # is an edit here and in that return dict rather than a hunt for every site.
@@ -80,6 +82,7 @@ _FIT_DIAGNOSTIC_COLUMNS = (
     _FIT_CAT_ERROR_MISSING_COLUMN,
     _FIT_MAX_WEIGHT_SHARE_COLUMN,
     _FIT_EXCESS_SCATTER_COLUMN,
+    _FIT_SIGMA_FLOOR_COLUMN,
 )
 
 # How close an observed star must be to a catalog entry, in arcseconds. Two
@@ -343,11 +346,11 @@ def _underdetermined_reason(fit_result, vary):
     return None
 
 
-def _fit_diagnostics(fit_result, sigma, weights, cat_error_usable):
+def _fit_diagnostics(fit_result, sigma, weights, cat_error_usable, min_fit_sigma):
     """
     Describe how one image's fit was weighted, as opposed to where it landed.
 
-    Three numbers that ``fit_redchi`` cannot supply on its own, all of them
+    Four numbers that ``fit_redchi`` cannot supply on its own, all of them
     from issue #694: a reduced chi-square is a ratio, so an image whose errors
     are wrong in the right way reports a healthy-looking one.
 
@@ -374,11 +377,24 @@ def _fit_diagnostics(fit_result, sigma, weights, cat_error_usable):
         `None` when the catalog had no error column for the band, or when
         the fit was unweighted and never consulted one.
 
+    min_fit_sigma : float
+        The floor the caller applied to ``sigma`` to get ``weights``.
+
     Returns
     -------
     dict
         Keyed by `_FIT_DIAGNOSTIC_COLUMNS`, ready to be written to the rows
         of this image.
+
+    Notes
+    -----
+    The floor fraction counts the stars whose quoted sigma is at or below
+    ``min_fit_sigma`` -- ``<=`` rather than ``<`` because that is what
+    ``np.maximum(sigma, min_fit_sigma)`` does: a star quoting exactly the
+    floor gets the same weight as one raised to it, and this column should
+    not tell the two apart. It is NaN for an unweighted fit, which had no
+    sigmas to floor, rather than 0.0, which would claim they were all
+    above it.
     """
     # A catalog with no error column for the band knows nothing about any of
     # these stars, which is the same statement as a column of zeros rather than
@@ -397,10 +413,16 @@ def _fit_diagnostics(fit_result, sigma, weights, cat_error_usable):
     )
     max_weight_share = float(statistical_weight.max() / statistical_weight.sum())
 
+    if sigma is None:
+        floor_fraction = np.nan
+    else:
+        floor_fraction = float(np.mean(sigma <= min_fit_sigma))
+
     return {
         _FIT_CAT_ERROR_MISSING_COLUMN: missing_fraction,
         _FIT_MAX_WEIGHT_SHARE_COLUMN: max_weight_share,
         _FIT_EXCESS_SCATTER_COLUMN: excess_scatter(fit_result, sigma, weights),
+        _FIT_SIGMA_FLOOR_COLUMN: floor_fraction,
     }
 
 
@@ -922,8 +944,10 @@ def transform_to_catalog(
         by; pass ``0`` to apply no floor. The default of 0.01 is about the
         smallest error credible for a single ground-based measurement tied
         to a survey catalog; see issue #694. Must not be negative, and has
-        no effect on an unweighted fit. See :ref:`calibration-fit-quality`
-        for how the floor reaches the reported uncertainties.
+        no effect on an unweighted fit. ``fit_sigma_floor_frac`` reports
+        the fraction of each image's stars it applied to. See
+        :ref:`calibration-fit-quality` for how the floor reaches the
+        reported uncertainties.
 
     Returns
     -------
@@ -933,13 +957,13 @@ def transform_to_catalog(
         columns added are ``mag_cal`` and, if ``obs_error_column`` was given,
         ``mag_cal_error``; the fit coefficients ``a``, ``b``, ``c``, ``d`` and
         ``z``, with their uncertainties ``a_error`` through ``z_error``, the
-        goodness of fit ``fit_redchi`` and the three weighting diagnostics
-        ``fit_cat_error_missing_frac``, ``fit_max_weight_share`` and
-        ``fit_excess_scatter``; and ``mag_cat`` and ``color_cat``, the matched
-        catalog magnitude and color. ``mag_cal`` is NaN for rows with no
-        usable catalog match, as are all of the columns for rows in an image
-        that could not be fit and for rows in other passbands that had no
-        value already.
+        goodness of fit ``fit_redchi`` and the four weighting diagnostics
+        ``fit_cat_error_missing_frac``, ``fit_max_weight_share``,
+        ``fit_excess_scatter`` and ``fit_sigma_floor_frac``; and ``mag_cat``
+        and ``color_cat``, the matched catalog magnitude and color.
+        ``mag_cal`` is NaN for rows with no usable catalog match, as are all
+        of the columns for rows in an image that could not be fit and for
+        rows in other passbands that had no value already.
 
         Every column that comes from the catalog match -- ``mag_cal``,
         ``mag_cal_error``, ``mag_cat`` and ``color_cat`` -- is NaN for a star
@@ -965,7 +989,7 @@ def transform_to_catalog(
     Notes
     -----
 
-    The coefficients, their uncertainties, ``fit_redchi`` and the three
+    The coefficients, their uncertainties, ``fit_redchi`` and the four
     weighting diagnostics describe the fit for one image rather than any one
     star, so each of them is the same on every row of that image. A term
     that is not in ``vary`` is held at exactly zero and is therefore known
@@ -982,6 +1006,9 @@ def transform_to_catalog(
     in magnitudes, that would have to be added in quadrature to every star's
     uncertainty to bring ``fit_redchi`` to one -- zero when the residuals
     are already no larger than the errors claim, NaN for an unweighted fit.
+    ``fit_sigma_floor_frac`` is the fraction of the fitted stars whose
+    quoted uncertainty sat at or below ``min_fit_sigma``, so whose weight
+    the floor set rather than their errors -- NaN for an unweighted fit.
 
     The coefficient uncertainties believe the errors the fit was weighted by
     -- the quoted errors, floored at ``min_fit_sigma`` -- rather than the
@@ -1466,6 +1493,7 @@ def transform_to_catalog(
             sigma,
             weights,
             None if cat_error_column is None else cat_error_usable[good],
+            min_fit_sigma,
         )
         for name, value in diagnostics.items():
             fit_diagnostics[name][rows] = value
