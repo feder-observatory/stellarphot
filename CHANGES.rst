@@ -157,6 +157,13 @@ Other Changes and Additions
   and the new ``fit_redchi`` and ``fit_excess_scatter`` attributes report
   the mismatch instead. The diagnostics both fits share live in the new
   ``stellarphot.utils.fit_diagnostics`` module. [#699]
++ ``transform_to_catalog()`` gains a ``search_radius`` argument. By default the
+  catalog cone search is now centered on the centroid of the observed positions
+  and sized to enclose them plus a one arcminute margin, instead of a fixed one
+  degree around the first observed star, so calibrating a small field no longer
+  pulls a degree-wide catalog from Vizier. A table whose positions span more
+  than a degree now warns, since the cone derived from it is one no call could
+  previously produce. [#686]
 
 Bug Fixes
 ^^^^^^^^^
