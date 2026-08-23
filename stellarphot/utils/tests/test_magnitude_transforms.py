@@ -1494,7 +1494,7 @@ def _predicted_coefficient_covariance(result, sigma_quoted):
     return np.linalg.inv(weight**2 * (jacobian.T @ jacobian))
 
 
-def _predicted_mag_cal_error(result, covariance, mag_error):
+def _predicted_mag_cal_error(result, covariance, mag_error, excess_scatter=0.0):
     """
     The ``mag_cal_error`` every star should report, by hand.
 
@@ -1512,6 +1512,11 @@ def _predicted_mag_cal_error(result, covariance, mag_error):
         catalog's: the catalog error weights the fit but is not part of any
         star's own measurement.
 
+    excess_scatter : float, optional
+        The image's ``fit_excess_scatter``, added in quadrature as is. Zero,
+        the default, predicts the error of a fit whose quoted errors already
+        describe the data.
+
     Returns
     -------
     `numpy.ndarray`
@@ -1523,13 +1528,14 @@ def _predicted_mag_cal_error(result, covariance, mag_error):
     ``fit_diff`` sensitivity of ``1 + a``; the transform half is the given
     coefficient covariance pushed through the model's gradient --
     which, the model being linear, is the star's design-matrix row again --
-    correlations included.
+    correlations included. The excess scatter is added after both, not
+    through ``1 + a``; `_calibrated_with_uncertainty` says why.
     """
     gradients = _design_matrix(result)
     transform_var = np.einsum("si,ij,sj->s", gradients, covariance, gradients)
     measurement_var = ((1 + result["a"][0]) * mag_error) ** 2
 
-    return np.sqrt(measurement_var + transform_var)
+    return np.sqrt(measurement_var + transform_var + excess_scatter**2)
 
 
 def test_transform_to_catalog_uncertainties_believe_the_quoted_errors(
@@ -1565,16 +1571,87 @@ def test_transform_to_catalog_error_uses_the_unscaled_covariance(
     # is the star's own quoted error through the fit_diff sensitivity of
     # 1 + a, plus the hand-computed covariance pushed through the model's
     # gradient, correlations included -- and nothing from the observed
-    # scatter, which is the part scale_covar used to fold in. See issue
-    # #690.
+    # scatter in the *covariance*, which is the part scale_covar used to
+    # fold in. The observed scatter enters once, as the image's
+    # fit_excess_scatter added in quadrature on the outside (issue #698) --
+    # which is also what brings mag_cal_error, the column
+    # write_aavso_extended copies into MAGERR, up to the scatter actually
+    # observed, the closure issue #694 asked for. See issue #690.
     result = _underquoted_fit_result
+
+    excess = result["fit_excess_scatter"][0]
+    assert excess > 0
+
+    sigma_quoted = np.hypot(_UNDERQUOTED_CLAIMED_ERROR, _FAKE_CATALOG_ERROR)
+    covariance = _predicted_coefficient_covariance(result, sigma_quoted)
+
+    reported = np.asarray(result["mag_cal_error"])
+    np.testing.assert_allclose(
+        reported,
+        _predicted_mag_cal_error(
+            result, covariance, _UNDERQUOTED_CLAIMED_ERROR, excess
+        ),
+        rtol=1e-6,
+    )
+    np.testing.assert_allclose(reported, _UNDERQUOTED_NOISE_SIGMA, rtol=0.2)
+
+
+def test_transform_to_catalog_error_unchanged_when_errors_describe_the_data(mocker):
+    # The other direction of issue #698: errors quoted generously, above the
+    # true scatter, so the excess is exactly zero rather than a small
+    # positive number that would read as a real finding, and adding zero in
+    # quadrature must leave mag_cal_error equal, to the 1e-6 the hand
+    # formula is checked at, to what the quoted errors and the unscaled
+    # covariance predict on their own -- the value reported before #698.
+    claimed = 0.05
+
+    result, _, _ = _fit_a_catalog(
+        mocker, n_stars=200, sigma=0.02, seed=_SEED, mag_error=claimed, cat_error=None
+    )
+
+    assert result["fit_excess_scatter"][0] == 0.0
+
+    covariance = _predicted_coefficient_covariance(result, claimed)
+    np.testing.assert_allclose(
+        np.asarray(result["mag_cal_error"]),
+        _predicted_mag_cal_error(result, covariance, claimed),
+        rtol=1e-6,
+    )
+
+
+def test_transform_to_catalog_error_adds_the_excess_after_the_transform(mocker):
+    # The excess joins mag_cal_error after the propagation through the
+    # transform, not before it (see `_calibrated_with_uncertainty`). With
+    # a = 0.3 the wrong answer -- the excess folded into the quoted error and
+    # scaled by 1 + a along with it -- differs from the right one by nearly
+    # a third of the excess, which on under-quoted errors is most of the
+    # reported value, so the tight match below can tell them apart. Not
+    # larger: the pre-fit cut at one magnitude from the median of
+    # mag_cat - mag_inst starts dropping stars around a = 0.5, and the
+    # hand-computed covariance assumes every star was fit. See issue #698.
+    a = 0.3
+
+    result, _, _ = _fit_a_catalog(
+        mocker,
+        n_stars=50,
+        sigma=_UNDERQUOTED_NOISE_SIGMA,
+        seed=_SEED,
+        mag_error=_UNDERQUOTED_CLAIMED_ERROR,
+        a=a,
+        c=0.15,
+    )
+
+    excess = result["fit_excess_scatter"][0]
+    assert excess > 0
 
     sigma_quoted = np.hypot(_UNDERQUOTED_CLAIMED_ERROR, _FAKE_CATALOG_ERROR)
     covariance = _predicted_coefficient_covariance(result, sigma_quoted)
 
     np.testing.assert_allclose(
         np.asarray(result["mag_cal_error"]),
-        _predicted_mag_cal_error(result, covariance, _UNDERQUOTED_CLAIMED_ERROR),
+        _predicted_mag_cal_error(
+            result, covariance, _UNDERQUOTED_CLAIMED_ERROR, excess
+        ),
         rtol=1e-6,
     )
 
@@ -1618,7 +1695,9 @@ def test_transform_to_catalog_uncertainties_believe_the_floor_when_it_binds(mock
     # construction and could not see it drift.
     np.testing.assert_allclose(
         np.asarray(result["mag_cal_error"]),
-        _predicted_mag_cal_error(result, covariance, claimed),
+        _predicted_mag_cal_error(
+            result, covariance, claimed, result["fit_excess_scatter"][0]
+        ),
         rtol=1e-6,
     )
 
@@ -1631,7 +1710,11 @@ def test_transform_to_catalog_uncertainties_scale_with_the_quoted_errors(mocker)
     # error plumbing like issues #680 and #692 invisible in every reported
     # error. Believing the quoted errors means tripling them must triple
     # each one. See issue #690.
-    base_error = 0.02
+    # The base error is quoted generously, above the noise, so that neither
+    # fit has an excess scatter for mag_cal_error to pick up (issue #698):
+    # that term does not scale with the quoted errors, and it is not what
+    # this test is about.
+    base_error = 0.03
     scale = 3.0
 
     # cat_error=None so the quoted observed error is the whole sigma and
@@ -1650,6 +1733,9 @@ def test_transform_to_catalog_uncertainties_scale_with_the_quoted_errors(mocker)
         )[0]
         for k in (1.0, scale)
     )
+
+    assert quoted["fit_excess_scatter"][0] == 0.0
+    assert tripled["fit_excess_scatter"][0] == 0.0
 
     # mag_cal_error is in the list because both of its halves quote: the
     # measurement half is the tripled error itself and the transform half
@@ -2009,19 +2095,6 @@ def test_transform_to_catalog_reports_excess_scatter(mocker):
     assert reported[0] == pytest.approx(np.sqrt(sigma**2 - claimed**2), rel=0.15)
 
 
-def test_transform_to_catalog_reports_no_excess_scatter_when_errors_describe_the_data(
-    mocker,
-):
-    # Errors that are, if anything, generous: there is no excess to infer and
-    # the column says exactly zero rather than a small positive number that
-    # would read as a real finding.
-    result, _, _ = _fit_a_catalog(
-        mocker, n_stars=200, sigma=0.02, seed=_SEED, mag_error=0.05, cat_error=None
-    )
-
-    assert result["fit_excess_scatter"][0] == 0.0
-
-
 def test_transform_to_catalog_diagnostics_for_an_unweighted_fit(
     _unweighted_fit_result,
 ):
@@ -2036,6 +2109,43 @@ def test_transform_to_catalog_diagnostics_for_an_unweighted_fit(
     assert result["fit_cat_error_missing_frac"][0] == 1.0
 
 
+def _fit_two_images(mocker, catalog, first, second):
+    """
+    Transform two images of one synthetic catalog in a single call.
+
+    Parameters
+    ----------
+
+    mocker : `pytest_mock.MockerFixture`
+        Fixture used to patch the catalog fetch.
+
+    catalog : `_FakeCatalogTable`
+        Catalog both images are transformed against.
+
+    first, second : dict
+        Keyword arguments to `_generate_observed_table` for each image,
+        ``file_name`` included so the images can be told apart.
+
+    Returns
+    -------
+    result : `astropy.table.Table`
+        The transformed observations of both images.
+
+    in_first, in_second : `numpy.ndarray`
+        Boolean masks selecting each image's rows of ``result``.
+    """
+    observed = _combine_observed_tables(
+        _generate_observed_table(**first), _generate_observed_table(**second)
+    )
+    result = _run_transform_to_catalog(mocker, catalog, observed)
+
+    return (
+        result,
+        np.asarray(result["file"] == first["file_name"]),
+        np.asarray(result["file"] == second["file_name"]),
+    )
+
+
 def test_transform_to_catalog_fits_each_image_separately(mocker):
     # Coefficients are fit per group, so two images of the same stars with
     # different zero points should each get their own.
@@ -2046,20 +2156,17 @@ def test_transform_to_catalog_fits_each_image_separately(mocker):
 
     # The second image is fainter by a constant, so its zero point is larger by
     # that constant while the other coefficients stay at zero.
-    observed = _combine_observed_tables(
-        _generate_observed_table(ra, dec, instrumental, file_name="image_1.fit"),
-        _generate_observed_table(
-            ra,
-            dec,
-            instrumental - zero_point_offset,
+    result, first, second = _fit_two_images(
+        mocker,
+        catalog,
+        dict(ra=ra, dec=dec, instrumental=instrumental, file_name="image_1.fit"),
+        dict(
+            ra=ra,
+            dec=dec,
+            instrumental=instrumental - zero_point_offset,
             file_name="image_2.fit",
         ),
     )
-
-    result = _run_transform_to_catalog(mocker, catalog, observed)
-
-    first = result["file"] == "image_1.fit"
-    second = result["file"] == "image_2.fit"
 
     np.testing.assert_allclose(
         result["z"][first], _FAKE_CATALOG_ZERO_POINT, rtol=0, atol=1e-6
@@ -2092,21 +2199,19 @@ def test_transform_to_catalog_handles_regrouped_row_order(mocker):
 
     catalog, ra, dec, instrumental = _generate_fake_catalog(n_stars)
 
-    observed = _combine_observed_tables(
+    result, _, from_short_image = _fit_two_images(
+        mocker,
+        catalog,
         # Added first, sorts second.
-        _generate_observed_table(ra, dec, instrumental, file_name="z_image.fit"),
+        dict(ra=ra, dec=dec, instrumental=instrumental, file_name="z_image.fit"),
         # Added second, sorts first, and has fewer stars.
-        _generate_observed_table(
-            ra[:n_in_short_image],
-            dec[:n_in_short_image],
-            instrumental[:n_in_short_image] - zero_point_offset,
+        dict(
+            ra=ra[:n_in_short_image],
+            dec=dec[:n_in_short_image],
+            instrumental=instrumental[:n_in_short_image] - zero_point_offset,
             file_name="a_image.fit",
         ),
     )
-
-    result = _run_transform_to_catalog(mocker, catalog, observed)
-
-    from_short_image = result["file"] == "a_image.fit"
 
     # Each image gets its own zero point, and neither picks up the other's.
     np.testing.assert_allclose(
@@ -2131,6 +2236,55 @@ def test_transform_to_catalog_handles_regrouped_row_order(mocker):
         )
         np.testing.assert_allclose(
             result["mag_cat"][selection], truth, rtol=0, atol=1e-6
+        )
+
+
+def test_transform_to_catalog_error_uses_each_images_own_excess_scatter(mocker):
+    # The excess is one number per image, not per table; see the Notes of
+    # `_calibrated_with_uncertainty`. Two images of the same stars quoting the
+    # same under-quoted error but scattering by different amounts get
+    # different excesses, and each image's mag_cal_error must carry its own.
+    n_stars = 50
+    catalog, ra, dec, instrumental = _generate_fake_catalog(n_stars)
+
+    result, first, second = _fit_two_images(
+        mocker,
+        catalog,
+        dict(
+            ra=ra,
+            dec=dec,
+            instrumental=instrumental,
+            file_name="image_1.fit",
+            mag_error=_UNDERQUOTED_CLAIMED_ERROR,
+            noise_sigma=_UNDERQUOTED_NOISE_SIGMA,
+            seed=_SEED,
+        ),
+        dict(
+            ra=ra,
+            dec=dec,
+            instrumental=instrumental,
+            file_name="image_2.fit",
+            mag_error=_UNDERQUOTED_CLAIMED_ERROR,
+            noise_sigma=_UNDERQUOTED_NOISE_SIGMA / 2,
+            seed=_SEED,
+        ),
+    )
+
+    excesses = [result["fit_excess_scatter"][rows][0] for rows in (first, second)]
+    assert all(excess > 0 for excess in excesses)
+    # Without this the test could not tell one image's excess from the other's.
+    assert not np.isclose(excesses[0], excesses[1], rtol=0.1)
+
+    sigma_quoted = np.hypot(_UNDERQUOTED_CLAIMED_ERROR, _FAKE_CATALOG_ERROR)
+    for rows, excess in zip((first, second), excesses, strict=True):
+        image = result[rows]
+        covariance = _predicted_coefficient_covariance(image, sigma_quoted)
+        np.testing.assert_allclose(
+            np.asarray(image["mag_cal_error"]),
+            _predicted_mag_cal_error(
+                image, covariance, _UNDERQUOTED_CLAIMED_ERROR, excess
+            ),
+            rtol=1e-6,
         )
 
 
@@ -2253,6 +2407,33 @@ def test_transform_to_catalog_error_scales_the_input_error_by_the_fit(mocker):
     np.testing.assert_allclose(measurement, (1 + a) * _MIN_FIT_SIGMA, rtol=0, atol=1e-8)
 
 
+def _error_without_the_excess_scatter(result):
+    """
+    ``mag_cal_error`` with the image's ``fit_excess_scatter`` taken back out.
+
+    Parameters
+    ----------
+
+    result : `astropy.table.Table`
+        A transform of a single image.
+
+    Returns
+    -------
+    `numpy.ndarray`
+        What ``mag_cal_error`` was before issue #698: the quoted error
+        through the transform plus the transform's own uncertainty.
+
+    Notes
+    -----
+    The tests below measure the star-to-star *shape* of the transform term;
+    the excess is one number per image, so they strip it first.
+    """
+    return np.sqrt(
+        np.asarray(result["mag_cal_error"]) ** 2
+        - np.asarray(result["fit_excess_scatter"]) ** 2
+    )
+
+
 def test_transform_to_catalog_error_includes_the_transform_uncertainty(
     _noisy_fit_result,
 ):
@@ -2265,7 +2446,7 @@ def test_transform_to_catalog_error_includes_the_transform_uncertainty(
     result = _noisy_fit_result
     n_stars = len(result)
 
-    reported = np.asarray(result["mag_cal_error"])
+    reported = _error_without_the_excess_scatter(result)
 
     # What used to be reported, and what is now a floor rather than an answer.
     measurement_only = (1 + result["a"][0]) * sigma
@@ -2302,7 +2483,7 @@ def test_transform_to_catalog_error_uses_the_whole_covariance(_noisy_fit_result)
 
     result = _noisy_fit_result
 
-    reported = np.asarray(result["mag_cal_error"])
+    reported = _error_without_the_excess_scatter(result)
 
     # The same propagation with every correlation thrown away, built from the
     # columns the table already reports.
@@ -2365,7 +2546,7 @@ def test_transform_to_catalog_error_matches_a_monte_carlo(mocker):
             cat_color=("R", "I"),
         )
         calibrated.append(result["mag_cal"][-1])
-        reported.append(result["mag_cal_error"][-1])
+        reported.append(_error_without_the_excess_scatter(result)[-1])
 
     # Measured ratio 1.03. The 15% is room for the sampling error of a
     # 300-trial standard deviation, about 4%, on top of the ~10%
