@@ -1,4 +1,4 @@
-# Notebook in the "Stellarphot setup" section of the launcher
+# Notebook in the "Stellarphot 1 - setup" section of the launcher
 
 - title: 1 - Saveable settings
   description: Settings for camera, observatory and passbands
@@ -6,9 +6,9 @@
   icon: ../stellarphot/stellarphot-logo.svg
   cwd: not_used
   type: notebook
-  catalog: Stellarphot setup
+  catalog: Stellarphot 1 - setup
 
-# Notebook in the "Stellarphot photometry" section of the launcher
+# Notebooks in the "Stellarphot 2 - photometry" section of the launcher
 
 - title: 2 - Seeing profile and comparison stars
   description: Choose aperture settings and stars to perform photometry on
@@ -16,7 +16,7 @@
   icon: ../stellarphot/stellarphot-logo.svg
   cwd: not_used
   type: notebook
-  catalog: Stellarphot photometry
+  catalog: Stellarphot 2 - photometry
 
 - title: 3 - Review settings
   description: Choose comparison stars
@@ -24,7 +24,7 @@
   icon: ../stellarphot/stellarphot-logo.svg
   cwd: not_used
   type: notebook
-  catalog: Stellarphot photometry
+  catalog: Stellarphot 2 - photometry
 
 - title: 4 - Launch photometry
   description: Perform photometry on images
@@ -32,9 +32,9 @@
   icon: ../stellarphot/stellarphot-logo.svg
   cwd: not_used
   type: notebook
-  catalog: Stellarphot photometry
+  catalog: Stellarphot 2 - photometry
 
-# Notebook in the "Stellarphot analysis and tools" section of the launcher
+# Notebooks in the "Stellarphot 3 - analysis and tools" section of the launcher
 
 - title: Generate TESS target list
   description: Retrieve TESS target list and TIC information
@@ -42,7 +42,7 @@
   icon: ../stellarphot/stellarphot-logo.svg
   cwd: not_used
   type: notebook
-  catalog: Stellarphot analysis and tools
+  catalog: Stellarphot 3 - analysis and tools
 
 - title: Calculate relative flux
   description: Add a relative flux column to the photometry table
@@ -50,7 +50,7 @@
   icon: ../stellarphot/stellarphot-logo.svg
   cwd: not_used
   type: notebook
-  catalog: Stellarphot analysis and tools
+  catalog: Stellarphot 3 - analysis and tools
 
 - title: Calibrate magnitudes
   description: Calibrate magnitudes to APASS DR9
@@ -58,7 +58,7 @@
   icon: ../stellarphot/stellarphot-logo.svg
   cwd: not_used
   type: notebook
-  catalog: Stellarphot analysis and tools
+  catalog: Stellarphot 3 - analysis and tools
 
 - title: Initial exoplanet model
   description: Do an initial fit to a transit
@@ -66,7 +66,7 @@
   icon: ../stellarphot/stellarphot-logo.svg
   cwd: not_used
   type: notebook
-  catalog: Stellarphot analysis and tools
+  catalog: Stellarphot 3 - analysis and tools
 
 - title: Second exoplanet model fit
   description: Second transit model fit
@@ -74,7 +74,7 @@
   icon: ../stellarphot/stellarphot-logo.svg
   cwd: not_used
   type: notebook
-  catalog: Stellarphot analysis and tools
+  catalog: Stellarphot 3 - analysis and tools
 
 - title: Exoplanet model fit with EXOTIC
   description: The final exoplanet fit
@@ -82,4 +82,4 @@
   icon: ../stellarphot/stellarphot-logo.svg
   cwd: not_used
   type: notebook
-  catalog: Stellarphot analysis and tools
+  catalog: Stellarphot 3 - analysis and tools

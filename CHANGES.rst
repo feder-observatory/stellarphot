@@ -165,6 +165,10 @@ Other Changes and Additions
 
 Bug Fixes
 ^^^^^^^^^
++ The three stellarphot sections of the JupyterLab launcher are now named
+  ``Stellarphot 1 - setup``, ``Stellarphot 2 - photometry`` and
+  ``Stellarphot 3 - analysis and tools``, so they appear in that order on
+  JupyterLab 4.6, which sorts launcher sections alphabetically. [#632]
 + ``transform_to_catalog()`` no longer crashes with a ``UnitConversionError``
   when the observed error column carries a unit, as columns of the
   ``QTable``-based ``PhotometryData`` can. A unit convertible to magnitudes
