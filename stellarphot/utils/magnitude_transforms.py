@@ -333,7 +333,7 @@ def _to_degree_array(values):
     return filled if unit is None else (filled * unit).to_value(u.degree)
 
 
-def _validate_angle(name, value, example, hint):
+def _validate_angle(name, value, hint):
     """
     Check that a keyword argument is a single positive, finite angle.
 
@@ -345,10 +345,6 @@ def _validate_angle(name, value, example, hint):
 
     value : `astropy.units.Quantity` or anything that can be made one
         The value the caller passed.
-
-    example : str
-        An example of an acceptable value, such as ``"5 * u.arcmin"``, for
-        the error message.
 
     hint : str
         Sentence appended to the message for a value of the right kind but
@@ -375,10 +371,12 @@ def _validate_angle(name, value, example, hint):
         value = u.Quantity(value)
     except (TypeError, ValueError) as err:
         raise ValueError(
-            f"{name} must be an angle, such as {example}, got {value!r}."
+            f"{name} must be an angle, such as 5 * u.arcmin, got {value!r}."
         ) from err
     if not value.unit.is_equivalent(u.degree):
-        raise ValueError(f"{name} must be an angle, such as {example}, got {value!r}.")
+        raise ValueError(
+            f"{name} must be an angle, such as 5 * u.arcmin, got {value!r}."
+        )
     if not value.isscalar:
         raise ValueError(f"{name} must be a single angle, got {value!r}.")
     if not np.isfinite(value.value) or value.value <= 0:
@@ -1290,7 +1288,6 @@ def transform_to_catalog(
         search_radius = _validate_angle(
             "search_radius",
             search_radius,
-            "5 * u.arcmin",
             "Leave it out to search the field the observations cover.",
         )
 
@@ -1299,7 +1296,6 @@ def transform_to_catalog(
     match_radius = _validate_angle(
         "match_radius",
         match_radius,
-        "2 * u.arcsec",
         f"Leave it out to use the default of {_CAL_MATCH_RADIUS}.",
     )
     # A star in the fit is promised a finite mag_cat, which a match radius
