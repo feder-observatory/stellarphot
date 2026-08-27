@@ -87,31 +87,23 @@ _FIT_DIAGNOSTIC_COLUMNS = (
 
 # How close an observed star must be to a catalog entry. Two limits rather
 # than one: a star must match tightly to be allowed to influence the fit, and
-# less tightly to be given values derived from its match.
-#
-# The band between the two is deliberate. A limit of 1 arcsec everywhere can
-# stop a variable that really is in the catalog from matching at all -- V2480
-# Cyg's VSX position is 1.73 arcsec from its APASS DR9 position -- and a star
-# in that band is well enough matched to calibrate, just not well enough to
-# calibrate everything else against. Which stars *define* the transform is a
-# different and riskier decision from which stars *receive* a calibrated
-# magnitude, so only the second limit is a keyword (``match_radius``, whose
-# default this is); the fit limit stays fixed. Issue #668 put V2480 Cyg at
-# 1.3 arcsec and set the second limit at 1.5, which still left the star
-# uncalibrated; see issue #707.
-_FIT_MATCH_ARCSEC = 1.0
-_CAL_MATCH_RADIUS = 2.5 * u.arcsec
+# less tightly to be given values derived from its match. Which stars
+# *define* the transform is a different and riskier decision from which stars
+# *receive* a calibrated magnitude, so only the second limit is a keyword
+# (``match_radius``, whose default this is); the fit limit stays fixed. The
+# Notes of ``transform_to_catalog`` say why the band between them exists,
+# and issue #707 is where the default comes from.
+_FIT_MATCH_RADIUS = 1.0 * u.arcsec
+_CAL_MATCH_RADIUS = 2.0 * u.arcsec
 
 # Added to the radius of the cone the calibration catalog is fetched from, so
-# that the cone is a little larger than the field the observations cover. A
+# that the cone is a little larger than the field the observations cover: a
 # star at the very edge of the field still has to find its catalog counterpart
-# inside the cone, and a counterpart is at most ``match_radius`` away, so an
-# arcminute is generous for any match radius that makes sense. A radius on
-# the scale of the margin is not rejected, since all it costs is that an edge
-# star's counterpart may fall outside the cone -- what an explicit
-# `search_radius` smaller than the field already allows. The margin is also
-# what gives a field whose positions span nothing at all -- a single star, or
-# one image of one target -- a cone of a sensible size rather than of no size.
+# inside the cone. ``match_radius`` may not exceed this margin, so a
+# counterpart close enough to match is always close enough to have been
+# fetched. The margin is also what gives a field whose positions span nothing
+# at all -- a single star, or one image of one target -- a cone of a sensible
+# size rather than of no size.
 _CATALOG_RADIUS_MARGIN = 1 * u.arcmin
 
 # Derived cone size above which the caller is told what is about to be asked
@@ -372,10 +364,19 @@ def _validate_angle(name, value, example, hint):
     ------
 
     ValueError
-        If the value is not an angle, is not a scalar, or is not positive
-        and finite. The message begins with ``name``.
+        If the value cannot be made a Quantity, is not an angle, is not a
+        scalar, or is not positive and finite. The message begins with
+        ``name``.
     """
-    value = u.Quantity(value)
+    # Quantity raises TypeError for None and ValueError for a string it
+    # cannot parse; neither message names the keyword, so both become the
+    # not-an-angle error.
+    try:
+        value = u.Quantity(value)
+    except (TypeError, ValueError) as err:
+        raise ValueError(
+            f"{name} must be an angle, such as {example}, got {value!r}."
+        ) from err
     if not value.unit.is_equivalent(u.degree):
         raise ValueError(f"{name} must be an angle, such as {example}, got {value!r}.")
     if not value.isscalar:
@@ -1126,7 +1127,9 @@ def transform_to_catalog(
         How far an observed star may be from its nearest catalog entry and
         still be given values derived from that match, which must be a
         single positive, finite angle no smaller than the 1.0 arcsec limit
-        for being used in the fit. Defaults to 2.5 arcsec. See Notes.
+        for being used in the fit and no larger than the one arcminute
+        margin of the catalog cone. Defaults to 2.0 arcsec; ``None`` means
+        the default. See Notes.
 
     Returns
     -------
@@ -1166,7 +1169,7 @@ def transform_to_catalog(
         this function is called once per passband on the same table, and a
         flat entry would be overwritten by the next call.
         ``result.meta["transform_match_radius"]`` records, keyed the same
-        way, the ``match_radius`` the call used, in arcseconds.
+        way, the ``match_radius`` the call used, as a Quantity in arcsec.
 
     Notes
     -----
@@ -1248,10 +1251,10 @@ def transform_to_catalog(
     and a star that far off is matched well enough to be calibrated, just
     not well enough to calibrate everything else against. So if the
     comparison stars have calibrated magnitudes and the target does not,
-    check its separation from its catalog entry and, if that is the reason,
-    raise ``match_radius``. The fit limit is not a keyword: widening it
-    changes which stars the coefficients come from, which is a different
-    decision.
+    its catalog entry is probably further away than ``match_radius``, and
+    raising ``match_radius`` is the remedy. The fit limit is not a keyword:
+    widening it changes which stars the coefficients come from, which is a
+    different decision.
 
     How the fit is weighted, what the floor does and does not reach, how to
     read the diagnostics and the coefficient uncertainties, and what the
@@ -1291,6 +1294,8 @@ def transform_to_catalog(
             "Leave it out to search the field the observations cover.",
         )
 
+    if match_radius is None:
+        match_radius = _CAL_MATCH_RADIUS
     match_radius = _validate_angle(
         "match_radius",
         match_radius,
@@ -1300,11 +1305,21 @@ def transform_to_catalog(
     # A star in the fit is promised a finite mag_cat, which a match radius
     # tighter than the fit limit would break. Equality is fine: the fit cut
     # is strict and the calibration cut is not.
-    if match_radius < _FIT_MATCH_ARCSEC * u.arcsec:
+    if match_radius < _FIT_MATCH_RADIUS:
         raise ValueError(
-            f"match_radius must be at least {_FIT_MATCH_ARCSEC} arcsec, the "
+            f"match_radius must be at least {_FIT_MATCH_RADIUS}, the "
             "distance within which a star is used in the fit, got "
             f"{match_radius!r}."
+        )
+    # The catalog cone reaches only _CATALOG_RADIUS_MARGIN beyond the observed
+    # field, so a wider match radius could match an edge star whose true
+    # counterpart is outside the cone to the nearest fetched entry instead,
+    # with nothing in the output to say so.
+    if match_radius > _CATALOG_RADIUS_MARGIN:
+        raise ValueError(
+            f"match_radius must be no more than {_CATALOG_RADIUS_MARGIN}, the "
+            "margin by which the catalog cone extends beyond the observed "
+            f"field, got {match_radius!r}."
         )
 
     if cat_name not in _CATALOG_NAMES:
@@ -1523,15 +1538,6 @@ def transform_to_catalog(
         cat_error_column = None
         weighting_mode = "observed"
 
-    # Recorded on the result rather than returned separately, keyed by
-    # obs_filter exactly as the caller passed it rather than as a flat entry,
-    # because this function is called once per passband on the same table --
-    # a flat entry would be overwritten by the next call, losing the first
-    # passband's mode.
-    result.meta.setdefault("transform_weighting", {})[obs_filter] = weighting_mode
-    match_radii = result.meta.setdefault("transform_match_radius", {})
-    match_radii[obs_filter] = match_radius.to(u.arcsec)
-
     for group_number, (file, one_image_all_bands) in enumerate(
         zip(
             observed_mags_grouped.groups.keys,
@@ -1575,7 +1581,7 @@ def transform_to_catalog(
         )
 
         # Impose some constraints on what is included in the fit
-        good_cat = np.isfinite(cat_mag) & (d2d.arcsecond < _FIT_MATCH_ARCSEC)
+        good_cat = np.isfinite(cat_mag) & (d2d < _FIT_MATCH_RADIUS)
         if fitting_color:
             good_cat = good_cat & np.isfinite(color)
         good_dat = (mag_inst < -3) & (mag_inst > -20) & np.isfinite(mag_inst)
@@ -1785,8 +1791,9 @@ def transform_to_catalog(
         # closely enough to be given a calibrated magnitude keeps the
         # catalog magnitude and color it was calibrated against, and a
         # star matched no better than this keeps none of them rather than
-        # reporting an unrelated star's values. The comparison is ``<=``
-        # so that the boundary stays where it has always been.
+        # reporting an unrelated star's values. The comparison is ``<=`` so
+        # that a match_radius equal to the fit limit still gives every fitted
+        # star a finite mag_cat: the fit cut above is strict, this one is not.
         matched = d2d <= match_radius
         cal_mag[~matched] = np.nan
 
@@ -1835,5 +1842,16 @@ def transform_to_catalog(
         output_columns[name] = fit_diagnostics[name]
 
     _write_output_columns(result, output_columns, in_passband)
+
+    # Recorded on the result rather than returned separately, keyed by
+    # obs_filter exactly as the caller passed it rather than as a flat entry,
+    # because this function is called once per passband on the same table --
+    # a flat entry would be overwritten by the next call, losing the first
+    # passband's mode. Written here, with the columns, so that an exception
+    # in the loop above leaves an in-place table without a record of a call
+    # that did not complete.
+    result.meta.setdefault("transform_weighting", {})[obs_filter] = weighting_mode
+    match_radii = result.meta.setdefault("transform_match_radius", {})
+    match_radii[obs_filter] = match_radius.to(u.arcsec)
 
     return result

@@ -178,8 +178,8 @@ Bug Fixes
   for what the reported uncertainties believe. [#694]
 + ``transform_to_catalog()`` reports the 1.0 arcsec match limit stars must
   meet to enter the fit, which is tighter than the limit for the columns
-  derived from the match (since ``#707`` below, the ``match_radius``
-  keyword). [#694]
+  derived from the match (the ``match_radius`` keyword since ``#707``).
+  [#694]
 + The comparison viewer's "Click closer to a star" message is now visible: it
   is shown in a status line under the image instead of being sent to a widget
   that was never displayed, and it is cleared by the next click that does hit
@@ -239,12 +239,10 @@ Bug Fixes
   ``n`` is 1, where it previously came back as ``(4,)`` and broke
   ``transform_refcat2_bands()`` on a one-row table. Errors whose shape does
   not match the magnitudes now raise instead of being reshaped. [#685]
-+ ``transform_to_catalog()`` has a new ``match_radius`` keyword, the limit
-  for calibrating a star from its nearest catalog entry, defaulting to 2.5
-  arcsec instead of the previous fixed 1.5; a star up to 2.5 arcsec from its
-  entry now gets a ``mag_cal`` rather than NaN. The fit still uses only
-  stars within 1.0 arcsec. V2480 Cyg's VSX position is actually 1.73 arcsec
-  from its APASS DR9 one, not the 1.3 assumed in #668. [#707]
++ ``transform_to_catalog()`` has a new ``match_radius`` keyword, the distance
+  within which a star is calibrated from its nearest catalog entry. The
+  default is 2.0 arcsec, up from a fixed 1.5; the fit itself still uses only
+  stars within 1.0 arcsec. [#707]
 
 2.1.2 (2026-07-19)
 -------------------

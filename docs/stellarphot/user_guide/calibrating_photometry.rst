@@ -218,11 +218,8 @@ added to every star's ``mag_cal_error`` directly; see the Notes of
 :func:`~stellarphot.utils.magnitude_transforms.transform_to_catalog`.
 
 A target whose ``mag_cal`` and ``mag_cat`` are NaN while the comparison
-stars around it are fine is usually more than ``match_radius`` -- 2.5
-arcsec by default -- from its catalog entry. A VSX position need not agree
-with the APASS or refcat2 position that closely, so check the separation
-and pass a larger ``match_radius`` to
-:func:`~stellarphot.utils.magnitude_transforms.transform_to_catalog`.
-The fit itself still uses only stars within 1.0 arcsec of their catalog
-entry, so raising ``match_radius`` does not change the coefficients, only
-which stars they are applied to.
+stars around it are fine is usually more than ``match_radius`` -- 2.0
+arcsec by default -- from its catalog entry, which a VSX position need not
+agree with that closely. Pass a larger ``match_radius`` to
+:func:`~stellarphot.utils.magnitude_transforms.transform_to_catalog`; its
+Notes explain why the fit's own, tighter limit is not a keyword.
