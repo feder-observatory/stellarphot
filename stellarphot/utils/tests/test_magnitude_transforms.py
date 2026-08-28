@@ -20,7 +20,9 @@ from ..magnitude_system_transforms import (
     transform_refcat2_bands,
 )
 from ..magnitude_transforms import (
+    _CAL_MATCH_RADIUS,
     _CATALOG_RADIUS_MARGIN,
+    _FIT_MATCH_RADIUS,
     _MIN_FIT_SIGMA,
     _WIDE_FIELD_RADIUS,
     _observed_field,
@@ -572,20 +574,48 @@ def test_transform_to_catalog_excludes_distant_matches(mocker):
 
 
 @pytest.mark.parametrize(
-    "offset, expect_nan",
+    "offset, match_radius, expect_nan",
     [
-        # The VSX and APASS DR9 positions of V2480 Cyg differ by about this much.
-        (1.3 * u.arcsec, False),
+        # The VSX and APASS DR9 positions of V2480 Cyg differ by 1.73 arcsec,
+        # so this is the offset the default has to accept. Issue #668 put it at
+        # 1.3 arcsec and set the limit at 1.5, which still dropped the star;
+        # see issue #707.
+        (1.73 * u.arcsec, None, False),
         # Far enough away that the match is no longer plausible.
-        (1.6 * u.arcsec, True),
+        (2.8 * u.arcsec, None, True),
+        # The limit from before match_radius existed, now opt-in, and still
+        # too tight for V2480 Cyg.
+        (1.73 * u.arcsec, 1.5 * u.arcsec, True),
+        # A wider radius accepts what the default rejects.
+        (2.8 * u.arcsec, 3 * u.arcsec, False),
+        # Bracketing the default constant itself, rather than a value that
+        # merely straddles some particular number, means a change to the
+        # default (or to the comparison operator that applies it) fails a
+        # behaviour test here, not only the meta test that checks the value
+        # is recorded. Exact equality is not tested: SkyCoord.separation
+        # lands within about 1e-7 mas of the limit on either side, so a case
+        # pinned to equality would be flaky rather than meaningful.
+        (_CAL_MATCH_RADIUS - 10 * u.mas, None, False),
+        (_CAL_MATCH_RADIUS + 10 * u.mas, None, True),
+    ],
+    ids=[
+        "default_accepts_v2480_cyg",
+        "default_rejects_wider",
+        "explicit_tighter_rejects",
+        "explicit_wider_accepts",
+        "default_accepts_just_inside",
+        "default_rejects_just_outside",
     ],
 )
-def test_transform_to_catalog_match_tolerance(mocker, offset, expect_nan):
+def test_transform_to_catalog_match_tolerance(mocker, offset, match_radius, expect_nan):
     # A star can be a little more than an arcsec from its catalog position --
     # the VSX position of a variable need not agree that closely with its
     # APASS position -- and should still end up with a calibrated magnitude.
     # It should not, however, be used in the fit for the transform
-    # coefficients, which requires a match within 1 arcsec. See issue #668.
+    # coefficients, which requires a match within 1 arcsec whatever
+    # match_radius is: the keyword widens which stars *receive* a calibrated
+    # magnitude, never which stars *define* the transform. See issues #668
+    # and #707.
     n_good = 20
 
     catalog, ra, dec, good_mags = _generate_fake_catalog(n_good)
@@ -603,7 +633,8 @@ def test_transform_to_catalog_match_tolerance(mocker, offset, expect_nan):
         np.append(good_mags, offset_mag),
     )
 
-    result = _run_transform_to_catalog(mocker, catalog, observed)
+    kwargs = {} if match_radius is None else {"match_radius": match_radius}
+    result = _run_transform_to_catalog(mocker, catalog, observed, **kwargs)
 
     # The offset star gets a calibrated magnitude only if its match is close
     # enough -- and everything else derived from that match goes with it,
@@ -626,7 +657,8 @@ def test_transform_to_catalog_match_tolerance(mocker, offset, expect_nan):
 
     # Either way the offset star is more than an arcsec from its catalog
     # position, so it should be left out of the fit, leaving the good stars
-    # as an exact fit.
+    # as an exact fit. Had it got in, its 0.5 magnitude offset would have
+    # dragged the zero point away from the true value.
     np.testing.assert_allclose(
         result["mag_cal"][:n_good],
         good_mags + _FAKE_CATALOG_ZERO_POINT,
@@ -2989,6 +3021,18 @@ def test_transform_to_catalog_warns_only_for_a_derived_wide_cone(
         assert radius > _WIDE_FIELD_RADIUS
 
 
+def _assert_rejected_before_fetch(mocker, catalog, observed, match, **kwargs):
+    """
+    Assert a call raises ``ValueError`` without ever reaching the catalog.
+
+    A bad argument should cost nothing more than raising -- not a wasted
+    Vizier round trip -- so every rejection test checks both halves.
+    """
+    with pytest.raises(ValueError, match=match):
+        _run_transform_to_catalog(mocker, catalog, observed, **kwargs)
+    assert magnitude_transforms.apass_dr9.call_count == 0
+
+
 @pytest.mark.parametrize(
     "bad_radius",
     [
@@ -2999,6 +3043,7 @@ def test_transform_to_catalog_warns_only_for_a_derived_wide_cone(
         np.nan * u.arcmin,
         u.Quantity([5], u.arcmin),
         u.Quantity([5, 6], u.arcmin),
+        "abc",
     ],
     ids=[
         "no_unit",
@@ -3008,18 +3053,63 @@ def test_transform_to_catalog_warns_only_for_a_derived_wide_cone(
         "nan",
         "single_element_array",
         "multi_element_array",
+        "not_a_number",
     ],
 )
-def test_transform_to_catalog_rejects_a_bad_search_radius(mocker, bad_radius):
+@pytest.mark.parametrize("keyword", ["search_radius", "match_radius"])
+def test_transform_to_catalog_rejects_a_bad_angle(mocker, keyword, bad_radius):
     # Validating up front, before the catalog fetch, means a bad argument
-    # costs nothing more than raising -- not a wasted Vizier round trip.
+    # costs nothing more than raising -- not a wasted Vizier round trip. The
+    # two angular keywords share the checks, so the same bad values are
+    # rejected by both, and the message names the keyword at fault -- even a
+    # value astropy cannot parse as a Quantity at all, such as "abc".
     catalog, ra, dec, instrumental = _generate_fake_catalog(20)
     observed = _generate_observed_table(ra, dec, instrumental)
 
-    with pytest.raises(ValueError):
-        _run_transform_to_catalog(mocker, catalog, observed, search_radius=bad_radius)
+    _assert_rejected_before_fetch(
+        mocker, catalog, observed, keyword, **{keyword: bad_radius}
+    )
 
-    assert magnitude_transforms.apass_dr9.call_count == 0
+
+def test_transform_to_catalog_rejects_match_radius_below_fit_limit(mocker):
+    # The docstring promises that every star in the fit has a finite mag_cat.
+    # A match_radius tighter than the 1 arcsec fit limit would break that: a
+    # star could define the transform yet be denied the values derived from
+    # its own match. The limit itself is allowed, since the fit cut is strict
+    # and the calibration cut is not.
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20)
+    observed = _generate_observed_table(ra, dec, instrumental)
+
+    _assert_rejected_before_fetch(
+        mocker, catalog, observed, "match_radius", match_radius=0.5 * u.arcsec
+    )
+
+    # Every star sits at zero offset from its catalog counterpart, so a
+    # match_radius equal to the fit limit is enough to calibrate all of them
+    # -- the promise the floor exists for.
+    result = _run_transform_to_catalog(
+        mocker, catalog, observed, match_radius=_FIT_MATCH_RADIUS
+    )
+    assert np.isfinite(result["mag_cal"]).all()
+
+
+def test_transform_to_catalog_rejects_match_radius_above_cone_margin(mocker):
+    # The catalog cone is the observed field plus _CATALOG_RADIUS_MARGIN. A
+    # match_radius wider than that margin would let an edge star whose true
+    # counterpart lies outside the cone match the nearest *fetched* entry
+    # instead, with nothing in the output to say so -- contradicting the
+    # promise that no catalog-derived column holds an unrelated star's
+    # values.
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20)
+    observed = _generate_observed_table(ra, dec, instrumental)
+
+    _assert_rejected_before_fetch(
+        mocker,
+        catalog,
+        observed,
+        "match_radius",
+        match_radius=_CATALOG_RADIUS_MARGIN + 1 * u.arcsec,
+    )
 
 
 def test_transform_to_catalog_fixes_unvaried_terms(mocker):
@@ -3468,6 +3558,19 @@ def _two_passband_observations(ra, dec, instrumental, i_offset=0.5):
     )
 
 
+def _transform_both_passbands(mocker, catalog, observed, **second_call_kwargs):
+    """
+    Calibrate the R rows, then the I rows of the same table, in that order.
+
+    The pattern several tests share: one call per passband, in_place=True by
+    default, so the second call's result carries both passbands' columns.
+    """
+    result = _run_transform_to_catalog(mocker, catalog, observed, obs_filter="R")
+    return _run_transform_to_catalog(
+        mocker, catalog, result, obs_filter="I", cat_filter="I", **second_call_kwargs
+    )
+
+
 def test_transform_to_catalog_handles_multiple_passbands(mocker):
     # Groups containing rows in passbands other than the one being fit used to
     # raise, because the output columns were built from the filtered rows but
@@ -3492,10 +3595,7 @@ def test_transform_to_catalog_successive_passband_calls_accumulate(mocker):
     catalog, ra, dec, instrumental = _generate_fake_catalog(20)
     observed = _two_passband_observations(ra, dec, instrumental)
 
-    result = _run_transform_to_catalog(mocker, catalog, observed, obs_filter="R")
-    result = _run_transform_to_catalog(
-        mocker, catalog, result, obs_filter="I", cat_filter="I"
-    )
+    result = _transform_both_passbands(mocker, catalog, observed)
 
     is_r = result["passband"] == "R"
 
@@ -4082,12 +4182,40 @@ def test_transform_to_catalog_weighting_meta_keeps_earlier_passbands(mocker):
     catalog, ra, dec, instrumental = _generate_fake_catalog(20)
     observed = _two_passband_observations(ra, dec, instrumental)
 
-    result = _run_transform_to_catalog(mocker, catalog, observed, obs_filter="R")
-    result = _run_transform_to_catalog(
-        mocker, catalog, result, obs_filter="I", cat_filter="I"
-    )
+    result = _transform_both_passbands(mocker, catalog, observed)
 
     assert result.meta["transform_weighting"] == {"R": "combined", "I": "combined"}
+
+
+def test_transform_to_catalog_records_match_radius_in_meta(mocker, tmp_path):
+    # Which stars were close enough to their catalog entry to be calibrated
+    # is set by match_radius, so a table made with the default and one made
+    # with a wider radius can differ in which rows have a finite mag_cal.
+    # Recording the radius, keyed by passband like the weighting mode, is what
+    # lets the two be told apart afterwards -- including a file written before
+    # the keyword existed, which has no entry at all.
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20)
+    observed = _two_passband_observations(ra, dec, instrumental)
+
+    # The R call takes the default, the I call an explicit, different radius.
+    result = _transform_both_passbands(
+        mocker, catalog, observed, match_radius=3 * u.arcsec
+    )
+    expected = {"R": _CAL_MATCH_RADIUS, "I": 3 * u.arcsec}
+    assert result.meta["transform_match_radius"] == expected
+
+    # The value is a Quantity nested in a dict, which is the part an ECSV
+    # round trip could lose -- the PR promises the record survives it.
+    path = tmp_path / "transformed.ecsv"
+    result.write(path)
+    assert Table.read(path).meta["transform_match_radius"] == expected
+
+    # match_radius=None is how a caller with a config dict leaves the keyword
+    # out, like search_radius=None, and it records the same default. A fresh
+    # table, since the calls above stamped the one they were given.
+    observed = _generate_observed_table(ra, dec, instrumental)
+    result = _run_transform_to_catalog(mocker, catalog, observed, match_radius=None)
+    assert result.meta["transform_match_radius"] == {"R": _CAL_MATCH_RADIUS}
 
 
 def test_transform_to_catalog_missing_catalog_band_raises_clean_error(mocker):

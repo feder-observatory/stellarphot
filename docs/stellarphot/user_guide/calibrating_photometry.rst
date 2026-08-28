@@ -216,3 +216,10 @@ down by the square root of the number of stars. Most of
 per-star observational scatter rather than catalog noise, which is why it is
 added to every star's ``mag_cal_error`` directly; see the Notes of
 :func:`~stellarphot.utils.magnitude_transforms.transform_to_catalog`.
+
+A target whose ``mag_cal`` and ``mag_cat`` are NaN while the comparison
+stars around it are fine is usually more than ``match_radius`` -- 2.0
+arcsec by default -- from its catalog entry, which a VSX position need not
+agree with that closely. Pass a larger ``match_radius`` to
+:func:`~stellarphot.utils.magnitude_transforms.transform_to_catalog`; its
+Notes explain why the fit's own, tighter limit is not a keyword.
