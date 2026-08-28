@@ -1,4 +1,5 @@
 import logging
+import warnings
 from types import SimpleNamespace
 
 import numpy as np
@@ -8,6 +9,7 @@ from astropy.coordinates import SkyCoord
 from astropy.table import MaskedColumn, QTable, Table, vstack
 from astropy.utils.data import get_pkg_data_filename
 from astropy.utils.exceptions import AstropyUserWarning
+from astropy.utils.metadata import MergeConflictWarning
 
 from stellarphot.conftest import SERVER_DOWN_ERRORS
 
@@ -4216,6 +4218,54 @@ def test_transform_to_catalog_records_match_radius_in_meta(mocker, tmp_path):
     observed = _generate_observed_table(ra, dec, instrumental)
     result = _run_transform_to_catalog(mocker, catalog, observed, match_radius=None)
     assert result.meta["transform_match_radius"] == {"R": _CAL_MATCH_RADIUS}
+
+
+def test_transform_to_catalog_meta_drops_passbands_not_in_table(mocker):
+    # The notebook flow is group_by("passband"), transform each group in
+    # place, then vstack. group_by copies meta into every group, so on a table
+    # that was transformed before each group starts with the *other*
+    # passband's entry from that earlier run. Left there, vstack merges the
+    # groups' conflicting dicts last-wins with a MergeConflictWarning, and
+    # since groups come out sorted the earlier passband keeps the stale value
+    # (issue #711). An entry for a passband with no rows in the table
+    # describes nothing in it, so the call drops it -- the same rule
+    # _merge_with_existing applies to the columns.
+    catalog, ra, dec, instrumental = _generate_fake_catalog(20)
+    observed = _two_passband_observations(ra, dec, instrumental)
+    earlier = _transform_both_passbands(
+        mocker, catalog, observed, match_radius=3 * u.arcsec
+    )
+    assert earlier.meta["transform_match_radius"] == {
+        "R": _CAL_MATCH_RADIUS,
+        "I": 3 * u.arcsec,
+    }
+
+    transformed = []
+    for group in earlier.group_by("passband").groups:
+        passband = group["passband"][0]
+        by_file = group.group_by("file")
+        _run_transform_to_catalog(
+            mocker,
+            catalog,
+            by_file,
+            obs_filter=passband,
+            cat_filter=passband,
+            match_radius=4 * u.arcsec,
+        )
+        # Each group's meta now describes that group alone.
+        assert by_file.meta["transform_match_radius"] == {passband: 4 * u.arcsec}
+        assert by_file.meta["transform_weighting"] == {passband: "combined"}
+        transformed.append(by_file)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", MergeConflictWarning)
+        result = vstack(transformed, join_type="outer")
+
+    assert result.meta["transform_match_radius"] == {
+        "R": 4 * u.arcsec,
+        "I": 4 * u.arcsec,
+    }
+    assert result.meta["transform_weighting"] == {"R": "combined", "I": "combined"}
 
 
 def test_transform_to_catalog_missing_catalog_band_raises_clean_error(mocker):
