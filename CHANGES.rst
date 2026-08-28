@@ -184,6 +184,11 @@ Bug Fixes
   meet to enter the fit, which is tighter than the limit for the columns
   derived from the match (the ``match_radius`` keyword since ``#707``).
   [#694]
++ ``transform_to_catalog()`` now drops the ``transform_weighting`` and
+  ``transform_match_radius`` entries in ``meta`` for passbands the table has
+  no rows in, so re-transforming a table one passband at a time and stacking
+  the results no longer keeps stale entries from an earlier run, with a
+  ``MergeConflictWarning``. [#711]
 + The comparison viewer's "Click closer to a star" message is now visible: it
   is shown in a status line under the image instead of being sent to a widget
   that was never displayed, and it is cleared by the next click that does hit

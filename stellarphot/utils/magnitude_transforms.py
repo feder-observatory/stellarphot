@@ -879,6 +879,54 @@ def _write_output_columns(table, columns, in_passband):
         )
 
 
+# Keys under which `transform_to_catalog` records, in the meta of the table it
+# writes to, how each passband's call was made. Each holds a dict keyed by
+# ``obs_filter``.
+_META_KEYS = ("transform_weighting", "transform_match_radius")
+
+
+def _record_call_in_meta(table, obs_filter, weighting_mode, match_radius):
+    """
+    Record how this call was made in the table's meta, keyed by passband.
+
+    Keyed by ``obs_filter`` rather than a flat entry because
+    `transform_to_catalog` is called once per passband on the same table, and
+    a flat entry would be overwritten by the next call, losing the first
+    passband's record.
+
+    Entries for passbands with no rows in the table are dropped, since they
+    describe nothing in it -- the same rule `_merge_with_existing` applies to
+    the columns. Without this, ``group_by("passband")`` on a table that has
+    been transformed before would hand every group a copy of the other
+    passbands' entries from the earlier run, and stacking the re-transformed
+    groups would merge those stale entries back in (issue #711).
+
+    Parameters
+    ----------
+
+    table : `astropy.table.Table`
+        Table whose meta the record is written to.
+
+    obs_filter : str
+        Passband this call transformed, exactly as the caller passed it.
+
+    weighting_mode : str
+        How the fit was weighted; see `transform_to_catalog`.
+
+    match_radius : `astropy.units.Quantity`
+        The match radius the call used.
+    """
+    present = set(table["passband"])
+    for key in _META_KEYS:
+        entries = table.meta.setdefault(key, {})
+        for passband in list(entries):
+            if passband not in present:
+                del entries[passband]
+
+    table.meta["transform_weighting"][obs_filter] = weighting_mode
+    table.meta["transform_match_radius"][obs_filter] = match_radius.to(u.arcsec)
+
+
 # For jester, using the transform for "all stars with Rc-Ic < 1.15"
 # from
 # http://www.sdss3.org/dr8/algorithms/sdssUBVRITransform.php#Jester2005
@@ -1168,6 +1216,10 @@ def transform_to_catalog(
         flat entry would be overwritten by the next call.
         ``result.meta["transform_match_radius"]`` records, keyed the same
         way, the ``match_radius`` the call used, as a Quantity in arcsec.
+        Both records describe only the rows of the table: each call drops
+        any entry for a passband the table has no rows in, so a table that
+        is split by passband, re-transformed and stacked again carries the
+        new calls' entries rather than the old ones.
 
     Notes
     -----
@@ -1839,15 +1891,9 @@ def transform_to_catalog(
 
     _write_output_columns(result, output_columns, in_passband)
 
-    # Recorded on the result rather than returned separately, keyed by
-    # obs_filter exactly as the caller passed it rather than as a flat entry,
-    # because this function is called once per passband on the same table --
-    # a flat entry would be overwritten by the next call, losing the first
-    # passband's mode. Written here, with the columns, so that an exception
-    # in the loop above leaves an in-place table without a record of a call
-    # that did not complete.
-    result.meta.setdefault("transform_weighting", {})[obs_filter] = weighting_mode
-    match_radii = result.meta.setdefault("transform_match_radius", {})
-    match_radii[obs_filter] = match_radius.to(u.arcsec)
+    # Written here, with the columns, so that an exception in the loop above
+    # leaves an in-place table without a record of a call that did not
+    # complete.
+    _record_call_in_meta(result, obs_filter, weighting_mode, match_radius)
 
     return result
