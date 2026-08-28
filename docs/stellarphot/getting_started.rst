@@ -73,10 +73,13 @@ If you open up JupyterLab, the launcher should have a section that looks like th
     :width: 400px
     :alt: JupyterLab Launcher with stellarphot notebooks
 
-Each of the notebooks corresponds to the steps in the previous section. Open each notebook in order, and run
-all of the cells in the notebook. In each will be a graphical interface to enter the camera and other settings
-(in notebook 1), measuring the seeing and choose comparison stars (in notebook 2), review all of your settings
-(in notebook 3), and perform photometry (in notebook 4).
+The launcher sections and the notebooks in them are numbered in the order you
+should use them. Each of the numbered notebooks corresponds to a step in the previous
+section. Open each notebook in order, and run all of the cells in the notebook. In each
+will be a graphical interface to enter the camera and other settings (in notebook 1),
+measuring the seeing and choose comparison stars (in notebook 2), review all of your
+settings (in notebook 3), and perform photometry (in notebook 4). The unnumbered
+notebooks in the "analysis and tools" section are not part of that sequence.
 
 When the photometry is done there will be a new notebook called `photometry_run.ipynb` that will have a record
 of the photometry that was done.

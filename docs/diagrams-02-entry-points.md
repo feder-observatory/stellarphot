@@ -45,19 +45,19 @@ flowchart LR
     classDef widget fill:#fff3e0,stroke:#ef6c00,color:#212121
     classDef api fill:#e8f5e9,stroke:#2e7d32,color:#212121
 
-    subgraph sg_setup["catalog: Stellarphot setup"]
+    subgraph sg_setup["catalog: Stellarphot 1 - setup"]
         direction TB
         nb01["1 - Saveable settings"]:::nb
     end
 
-    subgraph sg_phot["catalog: Stellarphot photometry"]
+    subgraph sg_phot["catalog: Stellarphot 2 - photometry"]
         direction TB
         nb02["2 - Seeing profile and<br/>comparison stars"]:::nb
         nb03["3 - Review settings"]:::nb
         nb04["4 - Launch photometry"]:::nb
     end
 
-    subgraph sg_tools["catalog: Stellarphot analysis and tools"]
+    subgraph sg_tools["catalog: Stellarphot 3 - analysis and tools"]
         direction TB
         nb_target["Generate TESS target list"]:::nb
         nb_flux["Calculate relative flux"]:::nb
