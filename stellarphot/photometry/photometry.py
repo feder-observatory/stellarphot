@@ -895,7 +895,9 @@ def multi_image_photometry(
     # Build image file collection
     ifc = ImageFileCollection(directory_with_images)
 
-    n_files_processed = 0
+    # Number of images whose OBJECT matched object_of_interest, whether or not
+    # photometry was successfully done on them.
+    n_files_matched = 0
 
     msg = f"Starting photometry of files in {directory_with_images} ... "
     if logfile is not None:
@@ -910,13 +912,13 @@ def multi_image_photometry(
 
     # Process all the files
     for this_ccd, this_fname in ifc.ccds(object=object_of_interest, return_fname=True):
+        n_files_matched += 1
         multilogger.info(f"multi_image_photometry: Processing image {this_fname}")
         if this_ccd.wcs is None:
             multilogger.warning("                   .... SKIPPING THIS IMAGE (NO WCS)")
             continue
 
         # Call single_image_photometry on each image
-        n_files_processed += 1
         multilogger.info("  Calling single_image_photometry ...")
         this_phot, this_missing_sources = single_image_photometry(
             this_ccd,
@@ -937,8 +939,21 @@ def multi_image_photometry(
             # And add the final table to the list of tables
             phots.append(this_phot)
 
-    if n_files_processed == 0:
-        raise RuntimeError("No images were processed!")
+    # Check that there is photometry to combine rather than that images were
+    # attempted -- every image that was attempted may have been skipped. See #670.
+    if not phots:
+        if n_files_matched == 0:
+            raise RuntimeError(
+                "No images were processed! No image in "
+                f"{directory_with_images} has an OBJECT keyword matching "
+                f"object_of_interest={object_of_interest!r}."
+            )
+        raise RuntimeError(
+            f"No photometry was produced! {n_files_matched} image(s) in "
+            f"{directory_with_images} were examined and every one of them was "
+            "skipped. See the warnings above for the reason each image was "
+            "skipped."
+        )
 
     ##
     ## Done processing individual images, now combine them into one table
