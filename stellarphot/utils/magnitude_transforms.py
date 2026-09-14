@@ -18,10 +18,34 @@ from .magnitude_system_transforms import transform_apass_bands, transform_refcat
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "UnsupportedPassbandError",
     "calibrated_from_instrumental",
     "filter_transform",
     "transform_to_catalog",
 ]
+
+
+class UnsupportedPassbandError(ValueError):
+    """
+    A passband cannot be calibrated against the catalog that was asked for.
+
+    Raised by `transform_to_catalog` when the catalog has no magnitude for a
+    passband it needs, and when the passband has no conventionally used color
+    and none was given, so the color term being fit has nothing to evaluate.
+
+    Notes
+    -----
+
+    This is a subclass of `ValueError`, which is what both of those checks
+    raised before it existed, so code catching `ValueError` is unaffected.
+    The narrower class is for a caller transforming every passband in a table
+    -- the shipped "Calibrate magnitudes" notebook loops over each unique
+    value of the ``passband`` column -- which can catch this to skip the bands
+    the catalog cannot calibrate, such as raw instrument filter names that
+    were never translated to AAVSO ones, without also swallowing the
+    ValueErrors that mean a genuinely broken call. See issue #637.
+    """
+
 
 # Coefficients of the transform model, in the order
 # `calibrated_from_instrumental` takes them. Keep the two in sync.
@@ -1446,7 +1470,7 @@ def transform_to_catalog(
     elif cat_filter in _CONVENTIONAL_COLOR:
         cat_color = _CONVENTIONAL_COLOR[cat_filter]
     elif fitting_color:
-        raise ValueError(
+        raise UnsupportedPassbandError(
             "No color is conventionally used with passband "
             f"{cat_filter!r}, so cat_color must be given explicitly. The "
             f"passbands with a default are {sorted(_CONVENTIONAL_COLOR)}."
@@ -1526,7 +1550,7 @@ def transform_to_catalog(
     )
     missing_bands = sorted(needed_bands - set(available_bands))
     if missing_bands:
-        raise ValueError(
+        raise UnsupportedPassbandError(
             f"The {cat_name} catalog has no magnitude for passband(s) "
             f"{missing_bands}, needed for cat_filter or cat_color. It has "
             f"magnitudes for {available_bands}."
