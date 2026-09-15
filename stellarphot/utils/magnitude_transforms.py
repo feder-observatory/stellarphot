@@ -29,21 +29,18 @@ class UnsupportedPassbandError(ValueError):
     """
     A passband cannot be calibrated against the catalog that was asked for.
 
-    Raised by `transform_to_catalog` when the catalog has no magnitude for a
-    passband it needs, and when the passband has no conventionally used color
-    and none was given, so the color term being fit has nothing to evaluate.
+    Raised by `transform_to_catalog` when the passband has no conventionally
+    used color and none was given, and when the catalog has no magnitude for a
+    passband the fit needs.
 
     Notes
     -----
 
-    This is a subclass of `ValueError`, which is what both of those checks
-    raised before it existed, so code catching `ValueError` is unaffected.
-    The narrower class is for a caller transforming every passband in a table
-    -- the shipped "Calibrate magnitudes" notebook loops over each unique
-    value of the ``passband`` column -- which can catch this to skip the bands
-    the catalog cannot calibrate, such as raw instrument filter names that
-    were never translated to AAVSO ones, without also swallowing the
-    ValueErrors that mean a genuinely broken call. See issue #637.
+    A caller transforming every passband in a table -- the shipped "Calibrate
+    magnitudes" notebook loops over each unique value of the ``passband``
+    column -- can catch this to skip the bands the catalog cannot calibrate
+    without also swallowing the other `ValueError` exceptions that
+    `transform_to_catalog` raises when the call itself is wrong.
     """
 
 
