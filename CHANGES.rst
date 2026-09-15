@@ -166,10 +166,8 @@ Other Changes and Additions
 Bug Fixes
 ^^^^^^^^^
 + ``seeing_plot()`` no longer raises a ``ValidationError`` when called without
-  ``photometry_settings``, which the documented default allows. The fallback
-  settings are now built from the ``gap`` and ``annulus_width`` fields of
-  ``PhotometryApertures`` instead of its read-only ``inner_annulus`` and
-  ``outer_annulus`` properties; the resulting radii are unchanged. [#667]
+  ``photometry_settings``; the fallback settings it builds now use the ``gap``
+  and ``annulus_width`` fields, and the annulus radii are unchanged. [#667]
 + ``compute_fwhm()`` no longer replaces NaN pixels with zero before fitting. [#641]
 + ``TransitModelFit`` no longer passes ``klims`` to pytransit 2.9.2 or newer,
   where it is deprecated and no longer needed. [#716]

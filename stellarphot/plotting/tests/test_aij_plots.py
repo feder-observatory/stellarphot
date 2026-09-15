@@ -1,16 +1,10 @@
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 
-import matplotlib
-import matplotlib.pyplot as plt
 import numpy as np
-import pytest
 from matplotlib.figure import Figure
 
 from stellarphot.plotting import seeing_plot
 from stellarphot.settings import PhotometryApertures
-
-# The plots are never displayed in the tests, so use a non-interactive backend.
-matplotlib.use("agg")
 
 HWHM = 3.0
 
@@ -43,15 +37,6 @@ def fake_profile_data(hwhm=HWHM):
         binned_counts=binned_counts,
         HWHM=hwhm,
     )
-
-
-@pytest.fixture(autouse=True)
-def close_figures():
-    """
-    Keep the figures the tests make from piling up.
-    """
-    yield
-    plt.close("all")
 
 
 def annotation_texts(fig):
