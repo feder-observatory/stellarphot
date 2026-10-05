@@ -1,12 +1,21 @@
+import warnings
+
 import astropy.units as u
 import numpy as np
 from astropy.coordinates import SkyCoord
 from astropy.table import QTable, Table
 from astropy.time import Time
+from astropy.utils.exceptions import AstropyDeprecationWarning
 
 from stellarphot import PhotometryData, SourceListData
 
 __all__ = ["add_in_quadrature", "calc_aij_relative_flux", "add_relative_flux_column"]
+
+# Largest separation between a comparison star's position and the input
+# position of the same star in the photometry data before the comparison
+# star table is judged not to be from the source list the photometry was
+# made from.
+_POSITION_CHECK_LIMIT = 1 * u.arcsec
 
 
 def add_in_quadrature(array):
@@ -14,6 +23,104 @@ def add_in_quadrature(array):
     Add an array of numbers in quadrature.
     """
     return np.sqrt((array**2).sum())
+
+
+def _sky_coords(table, ra_column="ra", dec_column="dec"):
+    """
+    Make a `~astropy.coordinates.SkyCoord` from two table columns, which are
+    taken to be in degrees if they have no unit.
+    """
+    if table[ra_column].unit is None:
+        unit = "degree"
+    else:
+        # Pulled this from the source code -- None is ok but need
+        # to match the number of coordinates.
+        unit = [None, None]
+    return SkyCoord(ra=table[ra_column], dec=table[dec_column], unit=unit)
+
+
+def _comp_rows_by_id(star_data, comp_stars, comp_coords, star_id_column):
+    """
+    Return a boolean mask of the rows of ``star_data`` that are comparison
+    stars, matched by ``star_id_column``, after checking that the comparison
+    star positions agree with the input positions in ``star_data``.
+    """
+    comp_ids = np.asarray(comp_stars[star_id_column])
+    star_ids = np.asarray(star_data[star_id_column])
+    is_comp = np.isin(star_ids, comp_ids)
+
+    if not np.any(is_comp):
+        return is_comp
+
+    # Compare every comparison star row in star_data with its entry in
+    # comp_stars. The input positions are the ones the photometry was made
+    # from, so a mismatch means comp_stars is not from that source list.
+    if "ra_input" in star_data.colnames:
+        star_coords = _sky_coords(star_data[is_comp], "ra_input", "dec_input")
+    else:
+        star_coords = _sky_coords(star_data[is_comp])
+
+    comp_index = {star_id: index for index, star_id in enumerate(comp_ids)}
+    comp_row = [comp_index[star_id] for star_id in star_ids[is_comp]]
+    separation = star_coords.separation(comp_coords[comp_row]).arcsec
+
+    worst = Table(
+        data=[star_ids[is_comp], separation], names=["star_id", "separation"]
+    ).group_by("star_id")
+    worst = worst.groups.aggregate(np.max)
+    mismatched = worst[worst["separation"] > _POSITION_CHECK_LIMIT.to_value(u.arcsec)]
+
+    if len(mismatched) > 0:
+        details = ", ".join(
+            f"{star_id_column} {star_id} ({separation:.2f} arcsec)"
+            for star_id, separation in mismatched.iterrows()
+        )
+        raise ValueError(
+            f"The positions of comparison star(s) {details} in comp_stars are "
+            f"more than {_POSITION_CHECK_LIMIT} from the input positions in "
+            "the photometry data for the same star, so the source list does "
+            "not appear to be the one the photometry was made from."
+        )
+
+    return is_comp
+
+
+def _comp_rows_by_position(star_data, comp_coords, star_id_column):
+    """
+    Return a boolean mask of the rows of ``star_data`` that are comparison
+    stars, matched by position. A star whose position is mismatched at any
+    one time is excluded at every time. Deprecated; kept for comparison star
+    tables that have no ``star_id_column``.
+    """
+    warnings.warn(
+        "Matching comparison stars to the photometry by position is deprecated; "
+        f"comp_stars should have a '{star_id_column}' column with the same "
+        "star ids as the photometry data, as a stellarphot source list does. "
+        "Deprecated since stellarphot 2.2.0; matching by position will be "
+        "removed in stellarphot 3.0.0.",
+        AstropyDeprecationWarning,
+        stacklevel=3,
+    )
+    star_data_coords = _sky_coords(star_data)
+
+    # Check for matches of stars in star data to the stars in comp_stars
+    # and eliminate as comps any stars for which the separation is bigger
+    # than 1.2 arcsec in any of the frames.
+    _, d2d, _ = star_data_coords.match_to_catalog_sky(comp_coords)
+
+    # Not sure this is really close enough for a good match...
+    good = d2d < 1.2 * u.arcsec
+
+    check_for_bad = Table(
+        data=[star_data[star_id_column].data, good], names=["star_id", "good"]
+    )
+    check_for_bad = check_for_bad.group_by("star_id")
+    is_all_good = check_for_bad.groups.aggregate(np.all)
+
+    for comp in is_all_good["star_id"][~is_all_good["good"]]:
+        good[star_data[star_id_column] == comp] = False
+
+    return good
 
 
 def calc_aij_relative_flux(
@@ -34,23 +141,21 @@ def calc_aij_relative_flux(
         Photometry data from one or more images.
 
     comp_stars : '~astropy.table.Table'
-        Table of comparison stars in the field. Must contain a column
-        called ``ra`` and a column called ``dec``.
-        NOTE that not all
-        of the comparison stars will necessarily be used. Stars in
-        this table are excluded from the comparison set if, in any
-        of the `star_data` for that comparison, the net counts are
-        ``NaN`` or if the angular distance between the position in
-        the `star_data` and the position in the `comp_stars` table
-        is too large.
+        Table of comparison stars in the field. Must contain the column
+        named by ``star_id_column``, with the same star ids as ``star_data``,
+        and either the column named by ``coord_column`` or columns called
+        ``ra`` and ``dec``. A table without ``star_id_column`` is matched
+        by position instead, which is deprecated. Not all of the comparison
+        stars will necessarily be used; see Notes.
 
     in_place : bool,  optional
         If ``True``, add new columns to input table. Otherwise, return
         new table with those columns added.
 
     coord_column : str,  optional
-        If provided, use this column to match comparison stars to coordinates.
-        If not provided, the coordinates are generated with SkyCoord.
+        If provided, use this column for the comparison star coordinates.
+        If not provided, the coordinates are generated with SkyCoord from
+        the ``ra`` and ``dec`` columns.
 
     counts_column_name : str,  optional
         If provided, use this column to find counts.
@@ -66,51 +171,55 @@ def calc_aij_relative_flux(
         The return type depends on the value of ``in_place``. If it is
         ``False``, then the new columns are returned as a separate table,
         otherwise the columns are simply added to the input table.
+
+    Raises
+    ------
+
+    ValueError
+        If the position of a comparison star in ``comp_stars`` is more than
+        1 arcsec from the input position of the star with the same id in
+        ``star_data``.
+
+    RuntimeError
+        If no comparison star is in ``star_data``, or if there is a time at
+        which no comparison star has valid data.
+
+    Notes
+    -----
+
+    Comparison stars are matched to ``star_data`` by star id because the
+    photometry code copies the ids from the source list, so the ids agree by
+    construction. Positions are only a sanity check: the comparison star
+    position is compared with the input position in ``star_data``
+    (``ra_input``/``dec_input`` if present, otherwise ``ra``/``dec``), and
+    a separation of more than 1 arcsec raises an error rather than silently
+    dropping the star, since it means ``comp_stars`` is not from the source
+    list the photometry was made from. Matching by position would instead
+    start dropping comparison stars once ``ra``/``dec`` in the photometry
+    are the measured centroid positions (see issue #710).
+
+    A comparison star is excluded from the comparison set at every time if,
+    at any one time, it is missing from ``star_data`` or its net counts are
+    ``NaN``.
     """
-
-    # Match comparison star list to instrumental magnitude information
-    if star_data["ra"].unit is None:
-        unit = "degree"
-    else:
-        # Pulled this from the source code -- None is ok but need
-        # to match the number of coordinates.
-        unit = [None, None]
-
-    star_data_coords = SkyCoord(ra=star_data["ra"], dec=star_data["dec"], unit=unit)
 
     if coord_column is not None:
         comp_coords = comp_stars[coord_column]
     else:
-        if comp_stars["ra"].unit is None:
-            unit = "degree"
-        else:
-            # Pulled this from the source code -- None is ok but need
-            # to match the number of coordinates.
-            unit = [None, None]
-        comp_coords = SkyCoord(ra=comp_stars["ra"], dec=comp_stars["dec"], unit=unit)
+        comp_coords = _sky_coords(comp_stars)
 
-    # Check for matches of stars in star data to the stars in comp_stars
-    # and eliminate as comps any stars for which the separation is bigger
-    # than 1.2 arcsec in any of the frames.
-    index, d2d, _ = star_data_coords.match_to_catalog_sky(comp_coords)
-
-    # Not sure this is really close enough for a good match...
-    good = d2d < 1.2 * u.arcsec
+    if star_id_column in comp_stars.colnames:
+        good = _comp_rows_by_id(star_data, comp_stars, comp_coords, star_id_column)
+    else:
+        good = _comp_rows_by_position(star_data, comp_coords, star_id_column)
 
     if not np.any(good):
         raise RuntimeError(
-            "No comparison stars matched the positions in the photometry "
+            "No comparison stars matched the stars in the photometry "
             "data, so relative flux cannot be calculated. Check that the "
-            "comparison star coordinates are correct."
+            "comparison star table is from the source list the photometry "
+            "was made from."
         )
-
-    check_for_bad = Table(
-        data=[star_data[star_id_column].data, good], names=["star_id", "good"]
-    )
-    check_for_bad = check_for_bad.group_by("star_id")
-    is_all_good = check_for_bad.groups.aggregate(np.all)
-
-    bad_comps = set(is_all_good["star_id"][~is_all_good["good"]])
 
     # Check for comps that are only in some of the images
     # Make a small table with just star IDs and date-obs
@@ -120,8 +229,7 @@ def calc_aij_relative_flux(
     ).group_by("date-obs")
     star_id_sets = check_for_missing.groups.aggregate(set)["star_id"]
     good_ids = set.intersection(*star_id_sets)
-    bad_comps_missing = set(is_all_good["star_id"]) - good_ids
-    bad_comps = bad_comps | bad_comps_missing
+    bad_comps = set(star_data[star_id_column]) - good_ids
 
     # Check whether any of the comp stars have NaN values and,
     # if they do, exclude them from the comp set.
@@ -152,8 +260,7 @@ def calc_aij_relative_flux(
             "There are one or more times in the photometry data at which "
             "none of the comparison stars has valid data, so relative flux "
             "cannot be calculated. A comparison star is excluded from every "
-            "time if it is missing, has NaN counts, or has a mismatched "
-            "position at even one time."
+            "time if it is missing or has NaN counts at even one time."
         )
 
     error_column_name = "noise_electrons"

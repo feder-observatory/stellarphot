@@ -167,6 +167,11 @@ Bug Fixes
 ^^^^^^^^^
 + ``TransitModelFit`` no longer passes ``klims`` to pytransit 2.9.2 or newer,
   where it is deprecated and no longer needed. [#716]
++ ``calc_aij_relative_flux()`` now matches comparison stars to the photometry
+  by ``star_id`` rather than by position, and raises ``ValueError`` if the
+  comparison star positions do not match the photometry's input positions.
+  Matching a ``comp_stars`` table with no ``star_id`` by position is
+  deprecated. [#723]
 + The three stellarphot sections of the JupyterLab launcher are now named
   ``Stellarphot 1 - setup``, ``Stellarphot 2 - photometry`` and
   ``Stellarphot 3 - analysis and tools``, so they appear in that order on
