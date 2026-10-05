@@ -1,9 +1,7 @@
 import os
-import warnings
 from copy import deepcopy
 
 import ipywidgets as ipw
-import matplotlib
 import pytest
 from astropy.nddata import CCDData
 from photutils.datasets import make_noise_image
@@ -57,6 +55,8 @@ def fake_settings_dir(mocker, tmp_path):
     )
 
 
+# Clicking a star calls plt.show(), which warns on the non-interactive backend.
+@pytest.mark.filterwarnings("ignore:FigureCanvasAgg is non-interactive:UserWarning")
 def test_seeing_profile_properties(tmp_path, profile_stars):
     # Here we make a seeing profile then load an image.
     profile_widget = spf.SeeingProfileWidget(
@@ -87,51 +87,45 @@ def test_seeing_profile_properties(tmp_path, profile_stars):
     assert profile_widget.aperture_settings.value == PhotometryApertures().model_dump()
 
     star_loc_x, star_loc_y = profile_stars["x_mean"][0], profile_stars["y_mean"][0]
-    # Sending a mock event will generate plots that we don't want to see
-    # so set the matplotlib backend to a non-interactive one
-    matplotlib.use("agg")
-    # matplotlib generates a warning that we are using a non-interactive backend
-    # so filter that warning out for the remainder of the test. There are at least
-    # a couple of times we generate this warning as values are changed.
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        # Simulate a click by sending the same message the bqplot front end
-        # would send to the production click dispatcher.
-        profile_widget._on_click_message(
-            profile_widget.iw._astro_im.interaction,
-            make_click_event(star_loc_x, star_loc_y),
-            [],
-        )
+    # Simulate a click by sending the same message the bqplot front end
+    # would send to the production click dispatcher.
+    profile_widget._on_click_message(
+        profile_widget.iw._astro_im.interaction,
+        make_click_event(star_loc_x, star_loc_y),
+        [],
+    )
 
-        # The FWHM should be close to 9.6
-        assert 9 < profile_widget.aperture_settings.value["fwhm_estimate"] < 10
+    # The FWHM should be close to 9.6
+    assert 9 < profile_widget.aperture_settings.value["fwhm_estimate"] < 10
 
-        # variable_aperture defaults to False, so the click should leave it
-        # False and use the fixed-pixel gap/annulus_width, not clobber it.
-        assert profile_widget.aperture_settings.value["variable_aperture"] is False
-        assert profile_widget.aperture_settings.value["gap"] == 5
-        assert profile_widget.aperture_settings.value["annulus_width"] == 15
+    # variable_aperture defaults to False, so the click should leave it
+    # False and use the fixed-pixel gap/annulus_width, not clobber it.
+    assert profile_widget.aperture_settings.value["variable_aperture"] is False
+    assert profile_widget.aperture_settings.value["gap"] == 5
+    assert profile_widget.aperture_settings.value["annulus_width"] == 15
 
-        # The click also marks the star. The style must be set explicitly:
-        # the astro-image-display-api default size is 5, half the size this
-        # marker has always rendered at.
-        aperture_style = profile_widget.iw.get_catalog_style(catalog_label="aperture")
-        assert aperture_style["shape"] == "circle"
-        assert aperture_style["color"] == "red"
-        assert aperture_style["size"] == 10
+    # The click also marks the star. The style must be set explicitly:
+    # the astro-image-display-api default size is 5, half the size this
+    # marker has always rendered at.
+    aperture_style = profile_widget.iw.get_catalog_style(catalog_label="aperture")
+    assert aperture_style["shape"] == "circle"
+    assert aperture_style["color"] == "red"
+    assert aperture_style["size"] == 10
 
-        # Get a copy of the current aperture settings
-        phot_aps = dict(profile_widget.aperture_settings.value)
-        new_radius = phot_aps["radius"] - 2
-        # Change the radius by directly setting the value of the widget that holds
-        # the value. That ends up being nested fairly deeply...
-        profile_widget.aperture_settings.di_widgets["radius"].value = new_radius
+    # Get a copy of the current aperture settings
+    phot_aps = dict(profile_widget.aperture_settings.value)
+    new_radius = phot_aps["radius"] - 2
+    # Change the radius by directly setting the value of the widget that holds
+    # the value. That ends up being nested fairly deeply...
+    profile_widget.aperture_settings.di_widgets["radius"].value = new_radius
 
-        # Make sure the settings are updated
-        phot_aps["radius"] = new_radius
-        assert profile_widget.aperture_settings.value == phot_aps
+    # Make sure the settings are updated
+    phot_aps["radius"] = new_radius
+    assert profile_widget.aperture_settings.value == phot_aps
 
 
+# Clicking a star calls plt.show(), which warns on the non-interactive backend.
+@pytest.mark.filterwarnings("ignore:FigureCanvasAgg is non-interactive:UserWarning")
 def test_seeing_profile_click_variable_aperture(tmp_path, profile_stars):
     # When variable_aperture is checked before a star click, the click should
     # keep it True and fill radius/gap/annulus_width with the variable-mode
@@ -157,21 +151,18 @@ def test_seeing_profile_click_variable_aperture(tmp_path, profile_stars):
     profile_widget.aperture_settings.di_widgets["variable_aperture"].value = True
 
     star_loc_x, star_loc_y = profile_stars["x_mean"][0], profile_stars["y_mean"][0]
-    matplotlib.use("agg")
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        profile_widget._on_click_message(
-            profile_widget.iw._astro_im.interaction,
-            make_click_event(star_loc_x, star_loc_y),
-            [],
-        )
+    profile_widget._on_click_message(
+        profile_widget.iw._astro_im.interaction,
+        make_click_event(star_loc_x, star_loc_y),
+        [],
+    )
 
-        ap_value = profile_widget.aperture_settings.value
-        assert ap_value["variable_aperture"] is True
-        assert ap_value["radius"] == VARIABLE_APERTURE_DEFAULTS["radius"]
-        assert ap_value["gap"] == VARIABLE_APERTURE_DEFAULTS["gap"]
-        assert ap_value["annulus_width"] == VARIABLE_APERTURE_DEFAULTS["annulus_width"]
-        assert ap_value["fwhm_estimate"] == profile_widget.rad_prof.FWHM
+    ap_value = profile_widget.aperture_settings.value
+    assert ap_value["variable_aperture"] is True
+    assert ap_value["radius"] == VARIABLE_APERTURE_DEFAULTS["radius"]
+    assert ap_value["gap"] == VARIABLE_APERTURE_DEFAULTS["gap"]
+    assert ap_value["annulus_width"] == VARIABLE_APERTURE_DEFAULTS["annulus_width"]
+    assert ap_value["fwhm_estimate"] == profile_widget.rad_prof.FWHM
 
 
 def test_load_fits_logs_matched_exposure_keyword(caplog, tmp_path):
@@ -267,6 +258,8 @@ def test_seeing_profile_save_box_title(tmp_path):
     assert AP_SETTING_SAVED in profile_widget.ap_title.value
 
 
+# Clicking a star calls plt.show(), which warns on the non-interactive backend.
+@pytest.mark.filterwarnings("ignore:FigureCanvasAgg is non-interactive:UserWarning")
 def test_seeing_profile_error_messages_no_star(tmp_path, capsys):
     # Make sure the appropriate error message is displayed when a click happens on
     # a region with no star, and that the message only appears once.
@@ -287,35 +280,27 @@ def test_seeing_profile_error_messages_no_star(tmp_path, capsys):
     profile_widget.load_fits()
 
     star_loc_x, star_loc_y = SHAPE[0] // 2, SHAPE[1] // 2
-    # Sending a mock event will generate plots that we don't want to see
-    # so set the matplotlib backend to a non-interactive one
-    matplotlib.use("agg")
-    # matplotlib generates a warning that we are using a non-interactive backend
-    # so filter that warning out for the remainder of the test. There are at least
-    # a couple of times we generate this warning as values are changed.
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        assert len(profile_widget.error_console.outputs) == 0
+    assert len(profile_widget.error_console.outputs) == 0
 
-        # Clicking once should generate an error...
-        profile_widget._on_click_message(
-            profile_widget.iw._astro_im.interaction,
-            make_click_event(star_loc_x, star_loc_y),
-            [],
-        )
-        assert len(profile_widget.error_console.outputs) == 1
-        assert (
-            "No star found at this location"
-            in profile_widget.error_console.outputs[0]["data"]["text/plain"]
-        )
+    # Clicking once should generate an error...
+    profile_widget._on_click_message(
+        profile_widget.iw._astro_im.interaction,
+        make_click_event(star_loc_x, star_loc_y),
+        [],
+    )
+    assert len(profile_widget.error_console.outputs) == 1
+    assert (
+        "No star found at this location"
+        in profile_widget.error_console.outputs[0]["data"]["text/plain"]
+    )
 
-        # Clicking a second time should also just have one error
-        profile_widget._on_click_message(
-            profile_widget.iw._astro_im.interaction,
-            make_click_event(star_loc_x, star_loc_y),
-            [],
-        )
-        assert len(profile_widget.error_console.outputs) == 1
+    # Clicking a second time should also just have one error
+    profile_widget._on_click_message(
+        profile_widget.iw._astro_im.interaction,
+        make_click_event(star_loc_x, star_loc_y),
+        [],
+    )
+    assert len(profile_widget.error_console.outputs) == 1
 
     # The message reaches the user through error_console only; it should
     # not also be printed to stdout. (Other widgets write terminal control

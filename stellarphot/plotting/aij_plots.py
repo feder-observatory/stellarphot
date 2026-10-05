@@ -44,10 +44,11 @@ def seeing_plot(
         if entered, file will save as png with this name
 
     photometry_settings : optional, `stellarphot.settings.PhotometryApertures`
-        The aperture settings used to create the plot. If not provided, the
-        aperture radius will be set to 4 * HWHM, the inner annulus will be set
-        to radius + 10, and the outer annulus will be set to radius + 25, and the
-        FWHM will be set to 2 * HWHM.
+        The aperture settings used to create the plot. If not provided, a
+        fixed (i.e. not variable) aperture is used with radius 4 * HWHM,
+        ``gap`` 10 pixels and ``annulus_width`` 15 pixels, so that the inner
+        annulus is at radius + 10 and the outer annulus at radius + 25, with
+        the FWHM estimate set to 2 * HWHM.
 
     figsize : tuple of int, optional
         Size of figure.
@@ -60,10 +61,15 @@ def seeing_plot(
     """
     if photometry_settings is None:
         radius = 4 * HWHM
+        # inner_annulus and outer_annulus are read-only properties of
+        # PhotometryApertures, so the annulus defaults have to be expressed
+        # with the gap and annulus_width fields: gap=10 puts the inner
+        # annulus at radius + 10 and annulus_width=15 puts the outer annulus
+        # at radius + 25.
         photometry_settings = PhotometryApertures(
             radius=radius,
-            inner_annulus=radius + 10,
-            outer_annulus=radius + 25,
+            gap=10,
+            annulus_width=15,
             fwhm_estimate=2 * HWHM,
             variable_aperture=False,
         )

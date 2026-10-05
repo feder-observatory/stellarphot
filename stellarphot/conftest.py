@@ -3,6 +3,8 @@
 import os
 import urllib.error
 
+import matplotlib
+import matplotlib.pyplot as plt
 import pytest
 import requests
 from astropy.coordinates import SkyCoord
@@ -37,6 +39,9 @@ SERVER_DOWN_ERRORS = (
 def pytest_configure(config):
     from astropy.utils.iers import conf as iers_conf
 
+    # The tests never display plots, so use a non-interactive backend.
+    matplotlib.use("agg")
+
     # Disable IERS auto download for testing
     iers_conf.auto_download = False
 
@@ -69,6 +74,15 @@ def pytest_unconfigure():
 
 
 # stellarphot fixtures
+
+
+@pytest.fixture(autouse=True)
+def close_figures():
+    """
+    Keep the figures the tests make from piling up.
+    """
+    yield
+    plt.close("all")
 
 
 @pytest.fixture
