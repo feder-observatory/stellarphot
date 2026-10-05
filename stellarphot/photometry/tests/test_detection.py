@@ -1,5 +1,3 @@
-import warnings
-
 import numpy as np
 import pytest
 from astropy import units as u
@@ -7,7 +5,6 @@ from astropy.nddata import CCDData
 from astropy.stats import gaussian_sigma_to_fwhm
 from astropy.table import QTable
 from astropy.utils.data import get_pkg_data_path
-from astropy.utils.exceptions import AstropyUserWarning
 
 from stellarphot import SourceListData
 from stellarphot.photometry import compute_fwhm, fast_fwhm_from_image, source_detection
@@ -56,13 +53,6 @@ def test_compute_fwhm_with_missing_data(mask_by_nan):
         image = CCDData(image, unit=u.adu, mask=np.zeros_like(image, dtype=bool))
         image.mask[y, x] = True
 
-    # We expect a warning about NaNs in the image, so catch it
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore",
-            message=("Input data contains unmasked non-finite values "),
-            category=AstropyUserWarning,
-        )
     fwhm_x, fwhm_y = compute_fwhm(
         image, sources, x_column="x_mean", y_column="y_mean", fit_method=FwhmMethods.FIT
     )

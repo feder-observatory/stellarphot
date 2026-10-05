@@ -137,11 +137,8 @@ def compute_fwhm(
                 # Make sure we get an odd fits shape
                 fit_shape = int(2 * ((5 * fwhm_estimate) // 2) + 1)
 
-                # fit_fwhm is supposed to handle NaNs automatically but it doesn't
-                # as of photutils 2.2.0
-                # see https://github.com/astropy/photutils/issues/2029
-                # For now replace any NaN with zero and hope for the best.
-                cutout.data[nan_mask] = 0
+                # fit_fwhm masks non-finite values itself, but pass the mask
+                # anyway since it may also contain the input image's mask.
                 fit = fit_fwhm(
                     cutout.data,
                     xypos=cutout_xy,

@@ -10960,7 +10960,7 @@ packages:
   - lmfit>=1.2.2
   - matplotlib
   - pandas
-  - photutils>=2,<3
+  - photutils>=2.3,<3
   - platformdirs
   - pydantic>=2
   - pyyaml
