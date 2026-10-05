@@ -27,6 +27,7 @@ from ..magnitude_transforms import (
     _FIT_MATCH_RADIUS,
     _MIN_FIT_SIGMA,
     _WIDE_FIELD_RADIUS,
+    UnsupportedPassbandError,
     _observed_field,
     _to_float_array,
     calibrated_from_instrumental,
@@ -3686,6 +3687,13 @@ def test_transform_to_catalog_accepts_equivalent_passband_names(mocker, cat_filt
     np.testing.assert_allclose(result["mag_cal"], catalog["mag_R"], rtol=0, atol=1e-6)
 
 
+def test_unsupported_passband_error_is_a_value_error():
+    # Both sites that raise it used to raise a plain ValueError, and callers
+    # (and the tests here) catch it as one. Narrowing the class must not
+    # narrow what an `except ValueError` sees.
+    assert issubclass(UnsupportedPassbandError, ValueError)
+
+
 def test_transform_to_catalog_unknown_default_color_raises(mocker):
     # The color that goes with a band is a convention rather than something
     # derivable, so a band with no convention recorded has to be asked about
@@ -3697,7 +3705,11 @@ def test_transform_to_catalog_unknown_default_color_raises(mocker):
     _catalog_posing_as_bands(catalog, TG="R")
     observed = _generate_observed_table(ra, dec, instrumental, passband="TG")
 
-    with pytest.raises(ValueError, match="cat_color must be given"):
+    # The dedicated class is what lets a caller looping over every passband in
+    # a table -- the shipped "Calibrate magnitudes" notebook does exactly that
+    # -- skip the bands this catalog cannot calibrate without also swallowing
+    # every other ValueError this function raises. See issue #637.
+    with pytest.raises(UnsupportedPassbandError, match="cat_color must be given"):
         _run_transform_to_catalog(mocker, catalog, observed, obs_filter="TG")
 
     # Naming the color is all it takes.
@@ -4277,7 +4289,9 @@ def test_transform_to_catalog_missing_catalog_band_raises_clean_error(mocker):
     observed = _generate_observed_table(ra, dec, instrumental, passband="V")
 
     with pytest.warns(AstropyUserWarning, match="passband 'V'.*passband 'U'"):
-        with pytest.raises(ValueError, match=r"'U'.*'I', 'R'") as exc_info:
+        with pytest.raises(
+            UnsupportedPassbandError, match=r"'U'.*'I', 'R'"
+        ) as exc_info:
             _run_transform_to_catalog(
                 mocker,
                 catalog,
