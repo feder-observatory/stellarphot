@@ -735,6 +735,11 @@ def _fit_with_uniform_weights(quoted_error, zero_weight_index=None):
     # (caught in review of PR #702) in a real fit rather than only in the
     # unit tests of `~stellarphot.utils.fit_diagnostics`.
     tmod = _make_transit_model_with_data(noise_dev=_DIAGNOSTIC_NOISE_DEV)
+    # Hold inclination at its true value. Free, it runs to its 90 degree
+    # bound with an enormous stderr, leaving the covariance so
+    # ill-conditioned that rp's stderr depends on exactly where each fit
+    # stops -- enough to differ by several percent between platforms.
+    tmod.params["inclination"].vary = False
     if quoted_error is not None:
         weights = np.full(len(tmod.data), 1.0 / quoted_error)
         if zero_weight_index is not None:
