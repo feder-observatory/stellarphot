@@ -165,6 +165,9 @@ Other Changes and Additions
 
 Bug Fixes
 ^^^^^^^^^
++ ``multi_image_photometry()`` now raises an informative ``RuntimeError`` when
+  no image produced photometry, instead of failing with ``ValueError: no
+  values provided to stack.`` [#670]
 + ``TransitModelFit`` no longer passes ``klims`` to pytransit 2.9.2 or newer,
   where it is deprecated and no longer needed. [#716]
 + The three stellarphot sections of the JupyterLab launcher are now named
