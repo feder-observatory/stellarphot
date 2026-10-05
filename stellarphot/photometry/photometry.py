@@ -234,9 +234,13 @@ def single_image_photometry(
         Photometry data for all the locations in which aperture photometry was
         performed.  This may be a subset of the sources in the sourcelist if
         locations were too close to the edge of the image or to each other for
-        successful aperture photometry.  If pixel (x/y) positions were used for
-        the photometry, but a valid WCS header was not available for `ccd_image`,
-        the output 'ra', 'dec', and 'bjd' columns will have np.nan values.
+        successful aperture photometry.  The 'ra' and 'dec' columns are the sky
+        position of the pixel position at which the photometry was done, and
+        the 'ra_input' and 'dec_input' columns are the sky positions from the
+        sourcelist.  If a valid WCS header was not available for `ccd_image`,
+        'ra' and 'dec' are the sourcelist values, which are np.nan if the
+        sourcelist had no sky positions; the 'bjd' column is np.nan whenever
+        'ra' and 'dec' are.
         The output also contains a boolean 'saturated' column that is ``True``
         for sources whose aperture contains one or more saturated (or
         otherwise non-finite) pixels; those sources have their
@@ -258,6 +262,19 @@ def single_image_photometry(
     to use the ra/dec positions in the sourcelist and the WCS of the `ccd_image`
     to compute the x/y positions on each image individually. In this scenario,
     the `use_coordinates` parameter should be set to "sky".
+
+    The 'ra' and 'dec' columns in the output are the *measured* positions --
+    the sky position, from the WCS of `ccd_image`, of the pixel position that
+    the photometry was done at. Those pixel positions are the centroids when
+    ``use_coordinates="sky"``, so the sourcelist positions are recorded
+    separately, as 'ra_input' and 'dec_input'. Reporting the input positions as
+    'ra'/'dec' meant that a sourcelist built from a catalog position -- a name
+    resolved to a VSX position, say -- carried that position into the
+    photometry table no matter how well the star was centroided, and the
+    calibration match in
+    :func:`stellarphot.utils.magnitude_transforms.transform_to_catalog` then had
+    to absorb the offset between the catalog the sourcelist came from and the
+    calibration catalog. See #710.
     """
 
     sourcelist = SourceListData.read(
@@ -381,15 +398,19 @@ def single_image_photometry(
     star_ids = sourcelist["star_id"].value
     xs = sourcelist["xcenter"].value
     ys = sourcelist["ycenter"].value
-    ra = sourcelist["ra"].value
-    dec = sourcelist["dec"].value
+    # The sky positions from the source list are the *input* positions. They
+    # are reported as ra_input/dec_input; the ra/dec columns are the measured
+    # positions, computed from the final pixel positions below. See #710.
+    # These are NaN if the source list has no sky positions.
+    ra_input = sourcelist["ra"].value
+    dec_input = sourcelist["dec"].value
     src_cnt = len(sourcelist)
 
     # If RA/Dec are available attempt to use them to determine the source positions
     if use_coordinates == "sky" and sourcelist.has_ra_dec:
         try:
             imgpos = ccd_image.wcs.world_to_pixel(
-                SkyCoord(ra, dec, unit=u.deg, frame="icrs")
+                SkyCoord(ra_input, dec_input, unit=u.deg, frame="icrs")
             )
             xs, ys = imgpos[0], imgpos[1]
         except AttributeError:
@@ -462,8 +483,8 @@ def single_image_photometry(
         star_ids = star_ids[non_overlap]
         xs = xs[non_overlap]
         ys = ys[non_overlap]
-        ra = ra[non_overlap]
-        dec = dec[non_overlap]
+        ra_input = ra_input[non_overlap]
+        dec_input = dec_input[non_overlap]
         msg += " ... removed them."
     else:
         msg += " ... keeping them."
@@ -485,8 +506,8 @@ def single_image_photometry(
     star_ids = star_ids[in_bounds]
     xs = xs[in_bounds]
     ys = ys[in_bounds]
-    ra = ra[in_bounds]
-    dec = dec[in_bounds]
+    ra_input = ra_input[in_bounds]
+    dec_input = dec_input[in_bounds]
     in_cnt = np.sum(in_bounds)
     out_cnt = np.sum(out_of_bounds)
     logger.info(
@@ -558,15 +579,19 @@ def single_image_photometry(
             ycen[too_much_shift] = ys[too_much_shift]
             xs, ys = xcen, ycen
 
-    # Compute RA/Dec if not already provided
-    if not sourcelist.has_ra_dec:
-        try:
-            skypos = ccd_image.wcs.pixel_to_world(xs, ys)
-            ra = skypos.ra.value
-            dec = skypos.dec.value
-        except AttributeError:
-            ra = [np.nan] * len(xs)
-            dec = [np.nan] * len(ys)
+    # Compute the sky position of the pixel position that the photometry is
+    # actually done at -- the centroid when use_coordinates="sky", the source
+    # list position otherwise -- so that the ra/dec in the output are the
+    # measured positions and not the (possibly offset) input ones. See #710.
+    try:
+        skypos = ccd_image.wcs.pixel_to_world(xs, ys)
+        ra = skypos.ra.value
+        dec = skypos.dec.value
+    except AttributeError:
+        # No WCS, so there is no measured sky position; the input positions
+        # are the best available (and are NaN if the source list had none).
+        ra = ra_input
+        dec = dec_input
 
     # Define apertures and annuli for the aperture photometry
     aper_locs = np.array([xs, ys]).T
@@ -609,6 +634,8 @@ def single_image_photometry(
     photom["star_id"] = star_ids
     photom["ra"] = ra * u.deg
     photom["dec"] = dec * u.deg
+    photom["ra_input"] = ra_input * u.deg
+    photom["dec_input"] = dec_input * u.deg
 
     # Flag the sources that have saturated pixels in their aperture (#591)
     photom["saturated"] = source_is_saturated

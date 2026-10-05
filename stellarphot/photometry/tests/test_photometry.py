@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from astropy import units as u
+from astropy.coordinates import SkyCoord
 from astropy.io import ascii
 from astropy.stats import gaussian_sigma_to_fwhm
 from astropy.utils.data import get_pkg_data_filename
@@ -144,10 +145,57 @@ def photometry_settings_for_test(
     )
 
 
+def write_photometry_inputs(
+    tmp_path, source_list, ccd_image, photometry_settings, use_coordinates=None
+):
+    """
+    Write a source list and an image to ``tmp_path`` and point the settings at them.
+
+    Parameters
+    ----------
+    tmp_path : pathlib.Path
+        Directory in which to write the source list and image.
+
+    source_list : `stellarphot.SourceListData`
+        Source list to write.
+
+    ccd_image : `astropy.nddata.CCDData`
+        Image to write.
+
+    photometry_settings : `stellarphot.settings.PhotometrySettings`
+        Settings whose source location settings are updated in place to point
+        at the source list that was written.
+
+    use_coordinates : str, optional
+        If given, the value to set ``use_coordinates`` to in the source
+        location settings.
+
+    Returns
+    -------
+    pathlib.Path
+        Path to the image file that was written.
+    """
+    source_list_file = tmp_path / "source_list.ecsv"
+    source_list.write(source_list_file, overwrite=True)
+
+    image_file = tmp_path / "fake_image.fits"
+    ccd_image.write(image_file, overwrite=True)
+
+    photometry_settings.source_location_settings.source_list_file = str(
+        source_list_file
+    )
+    if use_coordinates is not None:
+        photometry_settings.source_location_settings.use_coordinates = use_coordinates
+
+    return image_file
+
+
 class TestAperturePhotometry:
     @staticmethod
-    def create_source_list():
-        # This has X, Y
+    def create_source_list(dec_offset=0 * u.arcsec):
+        # This has X, Y. The RA/Dec are calculated from the x/y positions and
+        # the image WCS, offset in declination by dec_offset, which defaults to
+        # no offset at all.
         sources = FAKE_CCD_IMAGE.sources.copy()
 
         # Rename to match the expected names
@@ -159,7 +207,7 @@ class TestAperturePhotometry:
             sources["xcenter"], sources["ycenter"]
         )
         sources["ra"] = coords.ra
-        sources["dec"] = coords.dec
+        sources["dec"] = coords.dec + dec_offset
         sources["star_id"] = list(range(len(sources)))
         sources["xcenter"] = sources["xcenter"] * u.pixel
         sources["ycenter"] = sources["ycenter"] * u.pixel
@@ -449,8 +497,6 @@ class TestAperturePhotometry:
         # other sources is unaffected.
         fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
         source_list = self.create_source_list()
-        source_list_file = tmp_path / "source_list.ecsv"
-        source_list.write(source_list_file, overwrite=True)
 
         max_adu = photometry_settings_for_test.camera.max_data_value.value
 
@@ -461,12 +507,9 @@ class TestAperturePhotometry:
         y_sat = int(saturated_source["ycenter"].value)
         fake_CCDimage.data[y_sat : y_sat + 2, x_sat : x_sat + 2] = 2 * max_adu
 
-        photometry_settings_for_test.source_location_settings.source_list_file = str(
-            source_list_file
+        image_file = write_photometry_inputs(
+            tmp_path, source_list, fake_CCDimage, photometry_settings_for_test
         )
-
-        image_file = tmp_path / "fake_image.fits"
-        fake_CCDimage.write(image_file, overwrite=True)
 
         # Also do photometry on the image without saturated pixels for
         # comparison.
@@ -506,8 +549,6 @@ class TestAperturePhotometry:
         # as saturated.
         fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
         source_list = self.create_source_list()
-        source_list_file = tmp_path / "source_list.ecsv"
-        source_list.write(source_list_file, overwrite=True)
 
         max_adu = photometry_settings_for_test.camera.max_data_value.value
 
@@ -524,13 +565,13 @@ class TestAperturePhotometry:
             2 * max_adu
         )
 
-        photometry_settings_for_test.source_location_settings.source_list_file = str(
-            source_list_file
+        image_file = write_photometry_inputs(
+            tmp_path,
+            source_list,
+            fake_CCDimage,
+            photometry_settings_for_test,
+            use_coordinates="sky",
         )
-        photometry_settings_for_test.source_location_settings.use_coordinates = "sky"
-
-        image_file = tmp_path / "fake_image.fits"
-        fake_CCDimage.write(image_file, overwrite=True)
 
         ap_phot = AperturePhotometry(settings=photometry_settings_for_test)
 
@@ -563,6 +604,137 @@ class TestAperturePhotometry:
         assert not np.any(phot["saturated"][~saturated_row])
         assert np.all(np.isfinite(phot["aperture_net_cnts"][~saturated_row].value))
 
+    @staticmethod
+    def _input_row_index(source_list, phot):
+        # Index into source_list that matches, row by row, the star_id of the
+        # photometry table, which may be missing sources that were dropped.
+        idx = np.searchsorted(source_list["star_id"], phot["star_id"])
+        assert np.all(source_list["star_id"][idx] == phot["star_id"])
+        return idx
+
+    @pytest.mark.parametrize("use_coordinates", ["sky", "pixel"])
+    def test_ra_dec_are_measured_positions(
+        self, use_coordinates, tmp_path, photometry_settings_for_test
+    ):
+        # Regression test for #710: the output ra/dec used to be copied
+        # straight from the source list whenever the source list had sky
+        # positions, so a source list with catalog (e.g. VSX) positions that
+        # are offset from the star produced photometry whose ra/dec were the
+        # catalog position rather than the measured one. The output ra/dec
+        # must instead be the WCS projection of the pixel position the
+        # photometry was actually done at, with the source list values
+        # preserved in ra_input/dec_input.
+        fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
+
+        # Offset the input sky positions by a couple of pixels (the fake image
+        # is 0.75 arcsec/pixel), which is well inside the shift tolerance so
+        # centroiding recovers the true position.
+        dec_offset = 1.5 * u.arcsec
+        source_list = self.create_source_list(dec_offset=dec_offset)
+
+        image_file = write_photometry_inputs(
+            tmp_path,
+            source_list,
+            fake_CCDimage,
+            photometry_settings_for_test,
+            use_coordinates=use_coordinates,
+        )
+
+        ap_phot = AperturePhotometry(settings=photometry_settings_for_test)
+        phot, _ = ap_phot(image_file)
+
+        idx = self._input_row_index(source_list, phot)
+
+        # The input columns are the source list positions, offset and all.
+        np.testing.assert_allclose(
+            phot["ra_input"].to_value(u.deg), source_list["ra"][idx].to_value(u.deg)
+        )
+        np.testing.assert_allclose(
+            phot["dec_input"].to_value(u.deg), source_list["dec"][idx].to_value(u.deg)
+        )
+
+        output_coords = SkyCoord(phot["ra"], phot["dec"])
+
+        # The output ra/dec are the sky position of the pixel position used
+        # for the photometry.
+        measured_coords = fake_CCDimage.wcs.pixel_to_world(
+            phot["xcenter"].to_value(u.pixel), phot["ycenter"].to_value(u.pixel)
+        )
+        assert np.all(output_coords.separation(measured_coords) < 1e-5 * u.arcsec)
+
+        # ... which is the position of the star, not the offset input position.
+        true_coords = fake_CCDimage.wcs.pixel_to_world(
+            source_list["xcenter"][idx].to_value(u.pixel),
+            source_list["ycenter"][idx].to_value(u.pixel),
+        )
+        assert np.all(output_coords.separation(true_coords) < 0.5 * u.arcsec)
+        input_coords = SkyCoord(phot["ra_input"], phot["dec_input"])
+        assert np.all(output_coords.separation(input_coords) > dec_offset / 2)
+
+    def test_ra_dec_input_are_nan_when_source_list_has_no_sky_positions(
+        self, tmp_path, photometry_settings_for_test
+    ):
+        # A source list with only pixel positions has no input sky position to
+        # record, so ra_input/dec_input are NaN, but ra/dec are still measured
+        # from the image WCS. See #710.
+        fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
+        source_list = self.create_source_list()
+        source_list.drop_ra_dec()
+        assert not source_list.has_ra_dec
+
+        image_file = write_photometry_inputs(
+            tmp_path,
+            source_list,
+            fake_CCDimage,
+            photometry_settings_for_test,
+            use_coordinates="pixel",
+        )
+
+        ap_phot = AperturePhotometry(settings=photometry_settings_for_test)
+        phot, _ = ap_phot(image_file)
+
+        assert np.all(np.isnan(phot["ra_input"].to_value(u.deg)))
+        assert np.all(np.isnan(phot["dec_input"].to_value(u.deg)))
+
+        measured_coords = fake_CCDimage.wcs.pixel_to_world(
+            phot["xcenter"].to_value(u.pixel), phot["ycenter"].to_value(u.pixel)
+        )
+        output_coords = SkyCoord(phot["ra"], phot["dec"])
+        assert np.all(output_coords.separation(measured_coords) < 1e-5 * u.arcsec)
+
+    def test_ra_dec_fall_back_to_input_when_image_has_no_wcs(
+        self, tmp_path, photometry_settings_for_test
+    ):
+        # With no WCS there is no measured sky position, so the output ra/dec
+        # fall back to the source list values, which are also what
+        # ra_input/dec_input report. See #710.
+        fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
+        source_list = self.create_source_list(dec_offset=1.5 * u.arcsec)
+        fake_CCDimage.drop_wcs()
+
+        image_file = write_photometry_inputs(
+            tmp_path,
+            source_list,
+            fake_CCDimage,
+            photometry_settings_for_test,
+            use_coordinates="pixel",
+        )
+
+        ap_phot = AperturePhotometry(settings=photometry_settings_for_test)
+        phot, _ = ap_phot(image_file)
+
+        idx = self._input_row_index(source_list, phot)
+
+        for measured, input_name in (("ra", "ra_input"), ("dec", "dec_input")):
+            np.testing.assert_allclose(
+                phot[measured].to_value(u.deg),
+                source_list[measured][idx].to_value(u.deg),
+            )
+            np.testing.assert_allclose(
+                phot[input_name].to_value(u.deg),
+                source_list[measured][idx].to_value(u.deg),
+            )
+
     def test_sky_stats_annulus_only_without_outlier_rejection(
         self, tmp_path, photometry_settings_for_test
     ):
@@ -574,20 +746,16 @@ class TestAperturePhotometry:
         # should be computed from the pixels in the annulus only.
         fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
         source_list = self.create_source_list()
-        source_list_file = tmp_path / "source_list.ecsv"
-        source_list.write(source_list_file, overwrite=True)
 
         phot_options = (
             photometry_settings_for_test.photometry_optional_settings.model_copy()
         )
         phot_options.reject_background_outliers = False
         photometry_settings_for_test.photometry_optional_settings = phot_options
-        photometry_settings_for_test.source_location_settings.source_list_file = str(
-            source_list_file
-        )
 
-        image_file = tmp_path / "fake_image.fits"
-        fake_CCDimage.write(image_file, overwrite=True)
+        image_file = write_photometry_inputs(
+            tmp_path, source_list, fake_CCDimage, photometry_settings_for_test
+        )
 
         ap_phot = AperturePhotometry(settings=photometry_settings_for_test)
         phot, _ = ap_phot(image_file)

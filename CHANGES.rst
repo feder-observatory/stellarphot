@@ -165,6 +165,12 @@ Other Changes and Additions
 
 Bug Fixes
 ^^^^^^^^^
++ The ``ra`` and ``dec`` columns of the photometry table are now the sky
+  position of the pixel position the photometry was done at, instead of being
+  copied from the source list whenever the source list had sky positions. The
+  source list values are kept in the new ``ra_input``/``dec_input`` columns.
+  Calibration now matches each star at plate-solve accuracy rather than at
+  the accuracy of the catalog the source list came from. [#710]
 + ``TransitModelFit`` no longer passes ``klims`` to pytransit 2.9.2 or newer,
   where it is deprecated and no longer needed. [#716]
 + The three stellarphot sections of the JupyterLab launcher are now named

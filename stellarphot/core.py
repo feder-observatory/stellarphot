@@ -513,6 +513,12 @@ class PhotometryData(BaseEnhancedTable):
     file                  None
     =================     =======
 
+    The ``ra`` and ``dec`` columns are the sky position at which the photometry
+    was done. Tables produced by
+    `stellarphot.photometry.single_image_photometry` also carry ``ra_input``
+    and ``dec_input``, the sky positions from the source list, which are not
+    required (and are absent from photometry done before stellarphot 2.2.0).
+
     In addition to these required columns, the following columns are created based
     on the input data during creation.
 
