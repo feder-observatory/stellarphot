@@ -10,6 +10,7 @@ from astropy.utils.data import get_pkg_data_path
 
 from stellarphot import SourceListData
 from stellarphot.photometry import compute_fwhm, fast_fwhm_from_image, source_detection
+from stellarphot.photometry.source_detection import _subsampled_sky_estimate
 from stellarphot.photometry.tests.fake_image import FakeCCDImage, FakeImage
 from stellarphot.settings.models import FwhmMethods
 
@@ -325,6 +326,44 @@ def test_fast_fwhm_from_image_bad_aggregate():
             max_adu=65000,
             aggregate_by="foo",
         )
+
+
+def test_subsampled_sky_estimate_small_image_uses_every_pixel():
+    # An image with fewer than 4 * min_pixels pixels gets stride 1, so the
+    # estimate is exactly the full-image median.
+    rng = np.random.default_rng(SEED)
+    data = rng.normal(100, 5, size=(300, 400))
+    assert _subsampled_sky_estimate(data, min_pixels=250_000) == np.nanmedian(data)
+
+
+def test_subsampled_sky_estimate_stride_is_odd_and_keeps_min_pixels():
+    # 100x100 pixels with min_pixels=100 would allow a stride of 10, which is
+    # even. An even stride samples only one phase of any 2x2 pattern (a Bayer
+    # mosaic, even/odd column bias), so the stride is rounded down to the
+    # odd 9, which still leaves at least min_pixels in the subsample.
+    rng = np.random.default_rng(SEED)
+    data = rng.normal(100, 5, size=(100, 100))
+    stride = 9
+    assert data[::stride, ::stride].size >= 100
+    assert _subsampled_sky_estimate(data, min_pixels=100) == np.nanmedian(
+        data[::stride, ::stride]
+    )
+
+
+def test_subsampled_sky_estimate_samples_both_checkerboard_phases():
+    # A checkerboard of 0 and 100 has median 50 only if both phases are
+    # sampled equally; an even stride would return 0 or 100.
+    y, x = np.indices((100, 100))
+    data = np.where((x + y) % 2 == 0, 0.0, 100.0)
+    assert _subsampled_sky_estimate(data, min_pixels=100) == 50.0
+
+
+def test_subsampled_sky_estimate_ignores_nan():
+    rng = np.random.default_rng(SEED)
+    data = rng.normal(100, 5, size=(300, 400))
+    data[::7, ::11] = np.nan
+    assert np.isfinite(_subsampled_sky_estimate(data))
+    assert _subsampled_sky_estimate(data) == np.nanmedian(data)
 
 
 def test_fast_fwhm_from_image_does_not_mutate_input_mask():
