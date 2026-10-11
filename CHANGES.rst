@@ -163,9 +163,7 @@ Other Changes and Additions
   catalog. Pass the new ``search_radius`` to set the cone size instead; a
   derived cone wider than a degree warns. [#686]
 + ``compute_fwhm()`` now subtracts the sky from each source's cutout instead
-  of from the whole image once per source. On a 4096x4096 image with about
-  180 sources this makes ``single_image_photometry`` roughly three times
-  faster; the results are unchanged. [#728]
+  of from the whole image once per source. [#728]
 
 Bug Fixes
 ^^^^^^^^^
