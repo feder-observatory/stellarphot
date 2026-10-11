@@ -110,8 +110,12 @@ def compute_fwhm(
         except AttributeError:
             pass
 
-        # SKY SUBTRACT STUFF!!
-        cutout = Cutout2D(data - sky, (x, y), 5 * fwhm_estimate)
+        # Cut out the region around the source first, then subtract the
+        # sky from the cutout. Subtracting from the whole image first
+        # allocated a full-image temporary for every source, which dominated
+        # the run time of single_image_photometry on large images.
+        cutout = Cutout2D(data, (x, y), 5 * fwhm_estimate)
+        cutout.data = cutout.data - sky
 
         # Mask any NaNs in the data
         nan_mask = np.isnan(cutout.data)

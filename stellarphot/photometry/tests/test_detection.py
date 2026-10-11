@@ -1,3 +1,5 @@
+import tracemalloc
+
 import numpy as np
 import pytest
 from astropy import units as u
@@ -59,6 +61,35 @@ def test_compute_fwhm_with_missing_data(mask_by_nan):
 
     expected_fwhm = np.array(sources["x_stddev"] * gaussian_sigma_to_fwhm)
     assert np.allclose(fwhm_x, expected_fwhm, rtol=1e-2)
+
+
+def test_compute_fwhm_peak_memory_is_small_compared_to_image():
+    # Regression test: compute_fwhm used to subtract the per-source sky from
+    # the whole image before taking the cutout, so every source allocated a
+    # full-image temporary. That dominated the run time of
+    # single_image_photometry on large images. The sky must be subtracted from
+    # the cutout, so peak allocation during the call stays far below the size
+    # of the image.
+    fake_image = FakeImage(seed=SEED)
+    image = fake_image.image
+    sources = fake_image.sources
+
+    tracemalloc.start()
+    try:
+        fwhm_x, fwhm_y = compute_fwhm(
+            image,
+            sources,
+            x_column="x_mean",
+            y_column="y_mean",
+            sky_per_pix_column="sky_per_pix_avg",
+            fit_method=FwhmMethods.PROFILE,
+        )
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+
+    assert np.all(np.isfinite(fwhm_x))
+    assert peak < image.nbytes / 4
 
 
 @pytest.mark.parametrize("image_is_ccd", [True, False])
