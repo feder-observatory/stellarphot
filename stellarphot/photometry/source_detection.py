@@ -397,6 +397,46 @@ def _block_center_to_pixel(block_index, block_size):
     return block_size * (block_index + 0.5) - 0.5
 
 
+def _subsampled_sky_estimate(data, min_pixels=250_000):
+    """
+    Estimate the sky level of an image from the median of a regular subsample.
+
+    Parameters
+    ----------
+    data : `numpy.ndarray`
+        The image.
+    min_pixels : int, optional
+        The smallest number of pixels the subsample may have. Images with
+        fewer than four times this many pixels are used in full.
+
+    Returns
+    -------
+    sky : float
+        The median of every ``stride``-th pixel along each axis, ignoring
+        NaN. The stride is the integer part of the square root of the number
+        of pixels divided by ``min_pixels``, reduced by one if that is even.
+
+    Notes
+    -----
+    A regular grid samples the whole frame, so it sees the same gradients,
+    vignetting and nebulosity as the full image, and stars are a negligible
+    fraction of the pixels on either grid. The sampling error of the median is
+    roughly the per-pixel sky noise divided by the square root of the number
+    of pixels in the subsample, a small fraction of an ADU for the default
+    ``min_pixels``, and it costs a median of that many values instead of a
+    median of every pixel in the image.
+
+    The stride is kept odd so that every phase of a 2x2 pixel pattern is
+    sampled equally. An even stride on a raw color (Bayer) frame would sample
+    a single color channel, and on a sensor with even/odd column bias it would
+    sample a single column parity, which biases the sky.
+    """
+    stride = max(1, int(np.sqrt(data.size / min_pixels)))
+    if stride % 2 == 0:
+        stride -= 1
+    return np.nanmedian(data[::stride, ::stride])
+
+
 def fast_fwhm_from_image(
     ccd,
     fwhm_estimate,
@@ -452,6 +492,13 @@ def fast_fwhm_from_image(
     estimate the FWHM of the sources in the original image. Only the brightest
     sources are used to estimate the FWHM, and sources that are too bright (i.e.,
     have a peak flux greater than `max_adu`) are ignored.
+
+    The sky subtracted before the FWHM fits is a single value for the whole
+    image, the median of a regular subsample of at least 250,000 pixels. The
+    fits are of the brightest stars, whose peaks are thousands of times the
+    uncertainty of that median, so the subsample changes the FWHM by of order
+    0.1% or less while avoiding a median of every pixel, which on a 16
+    megapixel image takes longer than the fits themselves.
     """
     # Check whether the reduced fwhm is larger than the minimum and reset block_size
     # if it is too small.
@@ -526,6 +573,8 @@ def fast_fwhm_from_image(
     mask = np.zeros_like(data, dtype=bool) if mask is None else mask.copy()
     mask |= data > max_adu
 
+    sky = _subsampled_sky_estimate(data)
+
     with warnings.catch_warnings():
         # fit_2dgaussian generates some warnings if some of the fits do not converge.
         # This probably does not actually affect real images, but it affects tests.
@@ -538,7 +587,7 @@ def fast_fwhm_from_image(
         )
         # This is faster than calling our own compute_fwhm, so do this.
         fit = fit_2dgaussian(
-            data - np.nanmedian(data),
+            data - sky,
             xypos=list(
                 zip(
                     fwhm_est_sources["xcenter"],

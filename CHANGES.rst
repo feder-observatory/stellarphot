@@ -164,6 +164,10 @@ Other Changes and Additions
   derived cone wider than a degree warns. [#686]
 + ``compute_fwhm()`` now subtracts the sky from each source's cutout instead
   of from the whole image once per source. [#728]
++ ``fast_fwhm_from_image()`` now estimates the sky it subtracts before the
+  FWHM fits from the median of a regular subsample of the pixels instead of
+  every pixel. The measured FWHM changes by of order 0.1% or less, and the
+  call is about 40% faster on a 16 megapixel image. [#729]
 
 Bug Fixes
 ^^^^^^^^^
