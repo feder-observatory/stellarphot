@@ -1009,17 +1009,31 @@ class TestAperturePhotometry:
         with pytest.raises(RuntimeError, match="No images were processed"):
             ap_phot(tmp_path, object_of_interest="not-a-real-object")
 
+    @pytest.mark.parametrize(
+        "console_log,logfile",
+        [(True, None), (False, "skipped.log"), (False, None)],
+        ids=["console", "logfile_only", "neither"],
+    )
     def test_photometry_on_directory_all_images_skipped(
-        self, mocker, tmp_path, photometry_settings_for_test
+        self, mocker, tmp_path, photometry_settings_for_test, console_log, logfile
     ):
         # A single bad setting -- here a FWHM measurement that fails on every
         # image in variable-aperture mode -- can make single_image_photometry
         # skip every image. That used to end in a confusing
         # "ValueError: no values provided to stack." from vstack of an empty
         # list. See #670.
+        #
+        # The reason each image was skipped is only in the per-image warnings,
+        # so the error must point at wherever those went: the console, the log
+        # file, or nowhere.
         from stellarphot.photometry import photometry as phot_module
 
         mocker.patch.object(phot_module, "fast_fwhm_from_image", return_value=np.nan)
+
+        logging_settings = photometry_settings_for_test.logging_settings.model_copy()
+        logging_settings.console_log = console_log
+        logging_settings.logfile = logfile
+        photometry_settings_for_test.logging_settings = logging_settings
 
         fwhm_values = [5, 7.5, 10]
         with pytest.raises(
@@ -1031,9 +1045,19 @@ class TestAperturePhotometry:
 
         message = str(exc_info.value)
         assert f"{len(fwhm_values)} image" in message
-        # The message must point the user at the per-image warnings, which are
-        # the only place the actual reason for each skip appears.
-        assert "warning" in message
+        if console_log:
+            assert "warnings above" in message
+        elif logfile is not None:
+            # multi_image_photometry writes the log file into the image
+            # directory, and that is the path the user needs.
+            full_logfile = tmp_path / logfile
+            assert str(full_logfile) in message
+            assert "warnings above" not in message
+            assert "SKIPPING THIS IMAGE" in full_logfile.read_text()
+        else:
+            assert "not recorded" in message
+            assert "console_log=True" in message
+            assert "warnings above" not in message
 
     def _run_multi_image_photometry(
         self,
@@ -1200,18 +1224,7 @@ class TestAperturePhotometry:
         # Run photometry on a copy of FAKE_CCD_IMAGE with caplog attached to
         # the single_image_photometry logger, which sets propagate=False and
         # so is invisible to caplog's root-logger handler.
-        fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
-        image_file = tmp_path / "fake_image.fits"
-        fake_CCDimage.write(image_file, overwrite=True)
-
-        found_sources = source_detection(
-            fake_CCDimage, fwhm=fake_CCDimage.sources["x_stddev"].mean(), threshold=10
-        )
-        source_list_file = tmp_path / "source_list.ecsv"
-        found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
-        photometry_settings.source_location_settings.source_list_file = str(
-            source_list_file
-        )
+        image_file = self._write_image_and_source_list(tmp_path, photometry_settings)
 
         target_logger = logging.getLogger("single_image_photometry")
         target_logger.addHandler(caplog.handler)
@@ -1224,8 +1237,41 @@ class TestAperturePhotometry:
         return phot_data
 
     @staticmethod
+    def _write_image_and_source_list(tmp_path, photometry_settings):
+        # Write a copy of FAKE_CCD_IMAGE and a source list detected from it
+        # into tmp_path, point photometry_settings at the source list, and
+        # return the path of the image.
+        fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
+        image_file = tmp_path / "fake_image.fits"
+        fake_CCDimage.write(image_file, overwrite=True)
+
+        found_sources = source_detection(
+            fake_CCDimage, fwhm=fake_CCDimage.sources["x_stddev"].mean(), threshold=10
+        )
+        source_list_file = tmp_path / "source_list.ecsv"
+        found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
+        photometry_settings.source_location_settings.source_list_file = str(
+            source_list_file
+        )
+        return image_file
+
+    @staticmethod
     def _true_fwhm():
         return gaussian_sigma_to_fwhm * FAKE_CCD_IMAGE.sources["x_stddev"].mean()
+
+    @classmethod
+    def _use_variable_apertures(cls, photometry_settings, fwhm_estimate=None):
+        # Switch photometry_settings to variable apertures with
+        # radius/gap/annulus_width of 1.5/2.0/1.5 FWHM, seeded with the true
+        # FWHM of FAKE_CCD_IMAGE unless fwhm_estimate is given.
+        apertures = photometry_settings.photometry_apertures
+        apertures.variable_aperture = True
+        apertures.radius = 1.5
+        apertures.gap = 2.0
+        apertures.annulus_width = 1.5
+        apertures.fwhm_estimate = (
+            cls._true_fwhm() if fwhm_estimate is None else fwhm_estimate
+        )
 
     def test_variable_aperture_nan_fwhm_measurement_skips_image(
         self, caplog, tmp_path, monkeypatch, photometry_settings_for_test
@@ -1240,12 +1286,7 @@ class TestAperturePhotometry:
             phot_module, "fast_fwhm_from_image", lambda *_args, **_kwargs: np.nan
         )
 
-        apertures = photometry_settings_for_test.photometry_apertures
-        apertures.variable_aperture = True
-        apertures.radius = 1.5
-        apertures.gap = 2.0
-        apertures.annulus_width = 1.5
-        apertures.fwhm_estimate = self._true_fwhm()
+        self._use_variable_apertures(photometry_settings_for_test)
 
         phot_data = self._run_single_image_capturing_log(
             caplog, tmp_path, photometry_settings_for_test
@@ -1255,6 +1296,50 @@ class TestAperturePhotometry:
         # None photometry table rather than a None return value.
         assert phot_data[0] is None
         assert any("SKIPPING THIS IMAGE" in record.message for record in caplog.records)
+
+    def test_skipped_image_does_not_pin_logging_destination(
+        self, tmp_path, monkeypatch, photometry_settings_for_test
+    ):
+        # A skipped image returns before single_image_photometry removes the
+        # log handlers it added. Those handlers must not then be treated as
+        # "already set up" by the next call, or the logging settings of that
+        # call are ignored: here the warnings of the second run would go to
+        # the console the first run asked for instead of its own log file.
+        # The error multi_image_photometry raises when every image is skipped
+        # points at that log file, so it has to hold the warnings. See #670.
+        from stellarphot.photometry import photometry as phot_module
+
+        monkeypatch.setattr(
+            phot_module, "fast_fwhm_from_image", lambda *_args, **_kwargs: np.nan
+        )
+        self._use_variable_apertures(photometry_settings_for_test)
+        image_file = self._write_image_and_source_list(
+            tmp_path, photometry_settings_for_test
+        )
+
+        # First run: console only, image skipped, handlers left behind.
+        logging_settings = photometry_settings_for_test.logging_settings.model_copy()
+        logging_settings.console_log = True
+        logging_settings.logfile = None
+        photometry_settings_for_test.logging_settings = logging_settings
+        assert (
+            AperturePhotometry(settings=photometry_settings_for_test)(image_file)[0]
+            is None
+        )
+
+        # Second run: log file only.
+        logfile = tmp_path / "skipped.log"
+        logging_settings = logging_settings.model_copy()
+        logging_settings.console_log = False
+        logging_settings.logfile = str(logfile)
+        photometry_settings_for_test.logging_settings = logging_settings
+        assert (
+            AperturePhotometry(settings=photometry_settings_for_test)(image_file)[0]
+            is None
+        )
+
+        assert logfile.exists()
+        assert "SKIPPING THIS IMAGE" in logfile.read_text()
 
     def test_variable_aperture_fit_seed_uses_measured_fwhm(
         self, caplog, tmp_path, monkeypatch, photometry_settings_for_test
@@ -1278,12 +1363,7 @@ class TestAperturePhotometry:
 
         monkeypatch.setattr(phot_module, "compute_fwhm", capturing_compute_fwhm)
 
-        apertures = photometry_settings_for_test.photometry_apertures
-        apertures.variable_aperture = True
-        apertures.radius = 1.5
-        apertures.gap = 2.0
-        apertures.annulus_width = 1.5
-        apertures.fwhm_estimate = true_fwhm
+        self._use_variable_apertures(photometry_settings_for_test, true_fwhm)
 
         self._run_single_image_capturing_log(
             caplog, tmp_path, photometry_settings_for_test

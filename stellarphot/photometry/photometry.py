@@ -188,6 +188,10 @@ def _remove_our_handlers(logger):
     for handler in logger.handlers[:]:
         if getattr(handler, _STELLARPHOT_HANDLER, False):
             logger.removeHandler(handler)
+            # A skipped image leaves its handlers attached, so the file handler
+            # of an earlier call may still be open; closing is harmless for a
+            # handler that was already closed.
+            handler.close()
 
 
 def single_image_photometry(
@@ -307,18 +311,15 @@ def single_image_photometry(
 
     logger = logging.getLogger("single_image_photometry")
 
-    # Only add our handlers if we have not already added them to *this* logger
-    # on an earlier call. We deliberately look at this logger's own handlers
-    # rather than logger.hasHandlers() (which walks up to the root logger), so
-    # that handlers configured elsewhere -- e.g. the root logger in a notebook
-    # or test session -- do not stop us from setting up our own log file. See
-    # issues #152 and #153.
-    we_set_up_logging = any(
-        getattr(handler, _STELLARPHOT_HANDLER, False) for handler in logger.handlers
-    )
-    fh = None  # Default to file handler not existing
-    if not we_set_up_logging:
-        fh = _add_log_handlers(logger, logfile, console_log)
+    # Remove the handlers we added on an earlier call -- a skipped image
+    # returns before the cleanup at the end of this function, so they may
+    # still be attached and pointing at that call's destination -- and set up
+    # handlers for this call's logging settings. Only our own handlers are
+    # touched, so handlers configured elsewhere, e.g. on the root logger in a
+    # notebook or test session, neither stop us from setting up our log file
+    # nor get removed. See issues #152, #153 and #670.
+    _remove_our_handlers(logger)
+    fh = _add_log_handlers(logger, logfile, console_log)
     fh_exists = fh is not None
 
     #
@@ -948,11 +949,28 @@ def multi_image_photometry(
                 f"{directory_with_images} has an OBJECT keyword matching "
                 f"object_of_interest={object_of_interest!r}."
             )
+        # The reason each image was skipped is only in the per-image warnings,
+        # so point at wherever the logging settings sent those.
+        if console_log:
+            where_to_look = (
+                "See the warnings above for the reason each image was skipped."
+            )
+        elif logfile is not None:
+            where_to_look = (
+                f"See the warnings in the log file {logfile} for the reason "
+                "each image was skipped."
+            )
+        else:
+            where_to_look = (
+                "The reason each image was skipped was not recorded because "
+                "console_log is False and no logfile is set in the logging "
+                "settings; rerun with console_log=True or a logfile to see the "
+                "per-image warnings."
+            )
         raise RuntimeError(
             f"No photometry was produced! {n_files_matched} image(s) in "
             f"{directory_with_images} were examined and every one of them was "
-            "skipped. See the warnings above for the reason each image was "
-            "skipped."
+            f"skipped. {where_to_look}"
         )
 
     ##
