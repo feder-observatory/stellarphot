@@ -187,6 +187,61 @@ class TestAperturePhotometry:
 
         return fake_images
 
+    @staticmethod
+    def _prepare_image_directory(
+        directory,
+        fake_images,
+        photometry_settings,
+        use_coordinates="sky",
+        source_image=None,
+        drop_ra_dec=False,
+        suffix="fits",
+    ):
+        # Setup shared by the multi_image_photometry tests: write fake_images
+        # into directory, generate a source list by detecting sources in
+        # source_image (the first of fake_images by default) and point
+        # photometry_settings at that source list.
+        #
+        # Returns the OBJECT name of the images and the detected sources.
+        file_names = [
+            Path(directory) / f"tempfile_{i:02d}.{suffix}"
+            for i in range(1, len(fake_images) + 1)
+        ]
+        # Write the CCDData objects to files
+        for image, file_name in zip(fake_images, file_names, strict=True):
+            image.write(file_name)
+
+        if source_image is None:
+            source_image = fake_images[0]
+
+        # Generate the sourcelist
+        found_sources = source_detection(
+            source_image,
+            fwhm=source_image.sources["x_stddev"].mean(),
+            threshold=10,
+        )
+        if drop_ra_dec:
+            found_sources.drop_ra_dec()
+
+        source_list_file = Path(directory) / "source_list.ecsv"
+        found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
+
+        # Make a copy of photometry options, then modify the options to match
+        # what these tests expect.
+        phot_options = photometry_settings.photometry_optional_settings.model_copy()
+        phot_options.include_dig_noise = True
+        phot_options.reject_too_close = True
+        phot_options.reject_background_outliers = True
+        phot_options.fwhm_method = FwhmMethods.FIT
+        photometry_settings.photometry_optional_settings = phot_options
+
+        photometry_settings.source_location_settings.use_coordinates = use_coordinates
+        photometry_settings.source_location_settings.source_list_file = str(
+            source_list_file
+        )
+
+        return fake_images[0].header["OBJECT"], found_sources
+
     def test_create_aperture_photometry(self, tmp_path, photometry_settings_for_test):
         source_list = self.create_source_list()
         source_list_file = tmp_path / "source_list.ecsv"
@@ -621,48 +676,18 @@ class TestAperturePhotometry:
         # NOTE: ignore_cleanup_errors=True is needed to avoid an error
         #       when the temporary directory is deleted on Windows.
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp_dir:
-            # Come up with Filenames
-            temp_file_names = [
-                Path(temp_dir) / f"tempfile_{i:02d}.fit"
-                for i in range(1, num_files + 1)
-            ]
-            # Write the CCDData objects to files
-            for i, image in enumerate(fake_images):
-                image.write(temp_file_names[i])
+            object_name, found_sources = self._prepare_image_directory(
+                temp_dir,
+                fake_images,
+                photometry_settings_for_test,
+                use_coordinates=coords,
+                suffix="fit",
+            )
 
-            object_name = fake_images[0].header["OBJECT"]
             sources = fake_images[0].sources
             aperture_settings = photometry_settings_for_test.photometry_apertures
             aperture = aperture_settings.radius
 
-            # Generate the sourcelist
-            found_sources = source_detection(
-                fake_images[0],
-                fwhm=fake_images[0].sources["x_stddev"].mean(),
-                threshold=10,
-            )
-
-            source_list_file = Path(temp_dir) / "source_list.ecsv"
-            found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
-
-            # Make a copy of photometry options
-            phot_options = (
-                photometry_settings_for_test.photometry_optional_settings.model_copy()
-            )
-
-            # Modify options to match test before we used phot_options
-            phot_options.include_dig_noise = True
-            phot_options.reject_too_close = True
-            phot_options.reject_background_outliers = True
-            phot_options.fwhm_method = FwhmMethods.FIT
-
-            photometry_settings_for_test.photometry_optional_settings = phot_options
-            photometry_settings_for_test.source_location_settings.use_coordinates = (
-                coords
-            )
-            photometry_settings_for_test.source_location_settings.source_list_file = (
-                str(source_list_file)
-            )
             with warnings.catch_warnings():
                 warnings.filterwarnings(
                     "ignore",
@@ -916,47 +941,14 @@ class TestAperturePhotometry:
         # NOTE: ignore_cleanup_errors=True is needed to avoid an error
         #       when the temporary directory is deleted on Windows.
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp_dir:
-            # Come up with Filenames
-            temp_file_names = [
-                Path(temp_dir) / f"tempfile_{i:02d}.fits"
-                for i in range(1, num_files + 1)
-            ]
-            # Write the CCDData objects to files
-            for i, image in enumerate(fake_images):
-                image.write(temp_file_names[i])
-
-            object_name = fake_images[0].header["OBJECT"]
-
-            # Generate the sourcelist
-            found_sources = source_detection(
-                fake_images[0],
-                fwhm=fake_images[0].sources["x_stddev"].mean(),
-                threshold=10,
-            )
-
-            # Damage the sourcelist by removing the ra and dec columns
-            found_sources.drop_ra_dec()
-
-            source_list_file = Path(temp_dir) / "source_list.ecsv"
-            found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
-
-            phot_options = (
-                photometry_settings_for_test.photometry_optional_settings.model_copy()
-            )
-
-            # Modify options to match test before we used phot_options
-            phot_options.include_dig_noise = True
-            phot_options.reject_too_close = True
-            phot_options.reject_background_outliers = True
-            phot_options.fwhm_method = FwhmMethods.FIT
-
-            photometry_settings_for_test.photometry_optional_settings = phot_options
-            photometry_settings_for_test.source_location_settings.source_list_file = (
-                str(source_list_file)
-            )
-            # The setting below was implicit in the old default
-            photometry_settings_for_test.source_location_settings.use_coordinates = (
-                "sky"
+            # Damage the sourcelist by removing the ra and dec columns. The
+            # use_coordinates="sky" default of the helper was implicit in the
+            # old default of the settings.
+            object_name, _ = self._prepare_image_directory(
+                temp_dir,
+                fake_images,
+                photometry_settings_for_test,
+                drop_ra_dec=True,
             )
 
             ap_phot = AperturePhotometry(settings=photometry_settings_for_test)
@@ -972,59 +964,100 @@ class TestAperturePhotometry:
         clean_fake_images = self.list_of_fakes(num_files)
         fake_images = self.list_of_fakes(num_files)
 
+        for image in fake_images:
+            image.drop_wcs()
+
         # Write fake images (without WCS) to temporary directory and test
         # multi_image_photometry on them.
         # NOTE: ignore_cleanup_errors=True is needed to avoid an error
         #       when the temporary directory is deleted on Windows.
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp_dir:
-            # Come up with Filenames
-            temp_file_names = [
-                Path(temp_dir) / f"tempfile_{i:02d}.fits"
-                for i in range(1, num_files + 1)
-            ]
-            # Write the CCDData objects to files
-            for i, image in enumerate(fake_images):
-                image.drop_wcs()
-                image.write(temp_file_names[i])
-
-            object_name = fake_images[0].header["OBJECT"]
-
-            # Generate the sourcelist with RA/Dec information from a clean image
-            found_sources = source_detection(
-                clean_fake_images[0],
-                fwhm=clean_fake_images[0].sources["x_stddev"].mean(),
-                threshold=10,
-            )
-
-            source_list_file = Path(temp_dir) / "source_list.ecsv"
-            found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
-
-            phot_options = (
-                photometry_settings_for_test.photometry_optional_settings.model_copy()
-            )
-
-            # Modify options to match test before we used phot_options
-            phot_options.include_dig_noise = True
-            phot_options.reject_too_close = True
-            phot_options.reject_background_outliers = True
-            phot_options.fwhm_method = FwhmMethods.FIT
-
-            photometry_settings_for_test.photometry_optional_settings = phot_options
-            photometry_settings_for_test.source_location_settings.source_list_file = (
-                str(source_list_file)
-            )
-            # The settings below was implicit in the old default
-            photometry_settings_for_test.source_location_settings.use_coordinates = (
-                "sky"
+            # Generate the sourcelist with RA/Dec information from a clean
+            # image, since the images being processed have no WCS. The
+            # use_coordinates="sky" default of the helper was implicit in the
+            # old default of the settings.
+            object_name, _ = self._prepare_image_directory(
+                temp_dir,
+                fake_images,
+                photometry_settings_for_test,
+                source_image=clean_fake_images[0],
             )
 
             ap_phot = AperturePhotometry(settings=photometry_settings_for_test)
-            # Since none of the images will be valid, it should raise a RuntimeError
-            with pytest.raises(RuntimeError):
+            # Since none of the images will be valid, it should raise a
+            # RuntimeError that says every image was skipped. See #670.
+            with pytest.raises(
+                RuntimeError, match="every one of them was skipped"
+            ) as exc_info:
                 ap_phot(
                     temp_dir,
                     object_of_interest=object_name,
                 )
+            assert f"{num_files} image" in str(exc_info.value)
+
+    def test_photometry_on_directory_no_images_match_object(
+        self, tmp_path, photometry_settings_for_test
+    ):
+        # If no image in the directory has OBJECT matching object_of_interest
+        # then nothing is even attempted, and the error should say that rather
+        # than complain about stacking empty tables. See #670.
+        self._prepare_image_directory(
+            tmp_path, self.list_of_fakes(5), photometry_settings_for_test
+        )
+
+        ap_phot = AperturePhotometry(settings=photometry_settings_for_test)
+        with pytest.raises(RuntimeError, match="No images were processed"):
+            ap_phot(tmp_path, object_of_interest="not-a-real-object")
+
+    @pytest.mark.parametrize(
+        "console_log,logfile",
+        [(True, None), (False, "skipped.log"), (False, None)],
+        ids=["console", "logfile_only", "neither"],
+    )
+    def test_photometry_on_directory_all_images_skipped(
+        self, mocker, tmp_path, photometry_settings_for_test, console_log, logfile
+    ):
+        # A single bad setting -- here a FWHM measurement that fails on every
+        # image in variable-aperture mode -- can make single_image_photometry
+        # skip every image. That used to end in a confusing
+        # "ValueError: no values provided to stack." from vstack of an empty
+        # list. See #670.
+        #
+        # The reason each image was skipped is only in the per-image warnings,
+        # so the error must point at wherever those went: the console, the log
+        # file, or nowhere.
+        from stellarphot.photometry import photometry as phot_module
+
+        mocker.patch.object(phot_module, "fast_fwhm_from_image", return_value=np.nan)
+
+        logging_settings = photometry_settings_for_test.logging_settings.model_copy()
+        logging_settings.console_log = console_log
+        logging_settings.logfile = logfile
+        photometry_settings_for_test.logging_settings = logging_settings
+
+        fwhm_values = [5, 7.5, 10]
+        with pytest.raises(
+            RuntimeError, match="every one of them was skipped"
+        ) as exc_info:
+            self._run_multi_image_photometry(
+                tmp_path, photometry_settings_for_test, fwhm_values
+            )
+
+        message = str(exc_info.value)
+        assert f"{len(fwhm_values)} image" in message
+        if console_log:
+            assert "warnings above" in message
+        elif logfile is not None:
+            # multi_image_photometry writes the log file into the image
+            # directory, and that is the path the user needs.
+            full_logfile = tmp_path / logfile
+            assert str(full_logfile) in message
+            assert "warnings above" not in message
+            assert "SKIPPING THIS IMAGE" in full_logfile.read_text()
+        else:
+            assert "not recorded" in message
+            assert "console_log=True" in message
+            assert "warnings above" not in message
 
     def _run_multi_image_photometry(
         self,
@@ -1191,18 +1224,7 @@ class TestAperturePhotometry:
         # Run photometry on a copy of FAKE_CCD_IMAGE with caplog attached to
         # the single_image_photometry logger, which sets propagate=False and
         # so is invisible to caplog's root-logger handler.
-        fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
-        image_file = tmp_path / "fake_image.fits"
-        fake_CCDimage.write(image_file, overwrite=True)
-
-        found_sources = source_detection(
-            fake_CCDimage, fwhm=fake_CCDimage.sources["x_stddev"].mean(), threshold=10
-        )
-        source_list_file = tmp_path / "source_list.ecsv"
-        found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
-        photometry_settings.source_location_settings.source_list_file = str(
-            source_list_file
-        )
+        image_file = self._write_image_and_source_list(tmp_path, photometry_settings)
 
         target_logger = logging.getLogger("single_image_photometry")
         target_logger.addHandler(caplog.handler)
@@ -1215,8 +1237,41 @@ class TestAperturePhotometry:
         return phot_data
 
     @staticmethod
+    def _write_image_and_source_list(tmp_path, photometry_settings):
+        # Write a copy of FAKE_CCD_IMAGE and a source list detected from it
+        # into tmp_path, point photometry_settings at the source list, and
+        # return the path of the image.
+        fake_CCDimage = deepcopy(FAKE_CCD_IMAGE)
+        image_file = tmp_path / "fake_image.fits"
+        fake_CCDimage.write(image_file, overwrite=True)
+
+        found_sources = source_detection(
+            fake_CCDimage, fwhm=fake_CCDimage.sources["x_stddev"].mean(), threshold=10
+        )
+        source_list_file = tmp_path / "source_list.ecsv"
+        found_sources.write(source_list_file, format="ascii.ecsv", overwrite=True)
+        photometry_settings.source_location_settings.source_list_file = str(
+            source_list_file
+        )
+        return image_file
+
+    @staticmethod
     def _true_fwhm():
         return gaussian_sigma_to_fwhm * FAKE_CCD_IMAGE.sources["x_stddev"].mean()
+
+    @classmethod
+    def _use_variable_apertures(cls, photometry_settings, fwhm_estimate=None):
+        # Switch photometry_settings to variable apertures with
+        # radius/gap/annulus_width of 1.5/2.0/1.5 FWHM, seeded with the true
+        # FWHM of FAKE_CCD_IMAGE unless fwhm_estimate is given.
+        apertures = photometry_settings.photometry_apertures
+        apertures.variable_aperture = True
+        apertures.radius = 1.5
+        apertures.gap = 2.0
+        apertures.annulus_width = 1.5
+        apertures.fwhm_estimate = (
+            cls._true_fwhm() if fwhm_estimate is None else fwhm_estimate
+        )
 
     def test_variable_aperture_nan_fwhm_measurement_skips_image(
         self, caplog, tmp_path, monkeypatch, photometry_settings_for_test
@@ -1231,12 +1286,7 @@ class TestAperturePhotometry:
             phot_module, "fast_fwhm_from_image", lambda *_args, **_kwargs: np.nan
         )
 
-        apertures = photometry_settings_for_test.photometry_apertures
-        apertures.variable_aperture = True
-        apertures.radius = 1.5
-        apertures.gap = 2.0
-        apertures.annulus_width = 1.5
-        apertures.fwhm_estimate = self._true_fwhm()
+        self._use_variable_apertures(photometry_settings_for_test)
 
         phot_data = self._run_single_image_capturing_log(
             caplog, tmp_path, photometry_settings_for_test
@@ -1246,6 +1296,50 @@ class TestAperturePhotometry:
         # None photometry table rather than a None return value.
         assert phot_data[0] is None
         assert any("SKIPPING THIS IMAGE" in record.message for record in caplog.records)
+
+    def test_skipped_image_does_not_pin_logging_destination(
+        self, tmp_path, monkeypatch, photometry_settings_for_test
+    ):
+        # A skipped image returns before single_image_photometry removes the
+        # log handlers it added. Those handlers must not then be treated as
+        # "already set up" by the next call, or the logging settings of that
+        # call are ignored: here the warnings of the second run would go to
+        # the console the first run asked for instead of its own log file.
+        # The error multi_image_photometry raises when every image is skipped
+        # points at that log file, so it has to hold the warnings. See #670.
+        from stellarphot.photometry import photometry as phot_module
+
+        monkeypatch.setattr(
+            phot_module, "fast_fwhm_from_image", lambda *_args, **_kwargs: np.nan
+        )
+        self._use_variable_apertures(photometry_settings_for_test)
+        image_file = self._write_image_and_source_list(
+            tmp_path, photometry_settings_for_test
+        )
+
+        # First run: console only, image skipped, handlers left behind.
+        logging_settings = photometry_settings_for_test.logging_settings.model_copy()
+        logging_settings.console_log = True
+        logging_settings.logfile = None
+        photometry_settings_for_test.logging_settings = logging_settings
+        assert (
+            AperturePhotometry(settings=photometry_settings_for_test)(image_file)[0]
+            is None
+        )
+
+        # Second run: log file only.
+        logfile = tmp_path / "skipped.log"
+        logging_settings = logging_settings.model_copy()
+        logging_settings.console_log = False
+        logging_settings.logfile = str(logfile)
+        photometry_settings_for_test.logging_settings = logging_settings
+        assert (
+            AperturePhotometry(settings=photometry_settings_for_test)(image_file)[0]
+            is None
+        )
+
+        assert logfile.exists()
+        assert "SKIPPING THIS IMAGE" in logfile.read_text()
 
     def test_variable_aperture_fit_seed_uses_measured_fwhm(
         self, caplog, tmp_path, monkeypatch, photometry_settings_for_test
@@ -1269,12 +1363,7 @@ class TestAperturePhotometry:
 
         monkeypatch.setattr(phot_module, "compute_fwhm", capturing_compute_fwhm)
 
-        apertures = photometry_settings_for_test.photometry_apertures
-        apertures.variable_aperture = True
-        apertures.radius = 1.5
-        apertures.gap = 2.0
-        apertures.annulus_width = 1.5
-        apertures.fwhm_estimate = true_fwhm
+        self._use_variable_apertures(photometry_settings_for_test, true_fwhm)
 
         self._run_single_image_capturing_log(
             caplog, tmp_path, photometry_settings_for_test
