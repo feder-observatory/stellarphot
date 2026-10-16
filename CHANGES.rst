@@ -44,6 +44,9 @@ New Features
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
++ A ``profile`` pixi environment (the default environment plus ``pyinstrument``,
+  ``py-spy``, ``line_profiler`` and ``snakeviz``) is available for profiling
+  photometry runs. [#733]
 + ``stellarphot.utils.magnitude_transforms`` now has a single calibration
   pipeline instead of two. ``calculate_transform_coefficients()`` and
   ``transform_magnitudes()``, which nothing in the package or the shipped

@@ -295,6 +295,7 @@ docs = { features = ["docs"], solve-group = "default" }
 exoplanet = { features = ["exoplanet"], solve-group = "default" }
 gui = { features = ["gui"], solve-group = "default" }
 test = { features = ["test"], solve-group = "default" }
+profile = { features = ["profile"], solve-group = "default" }
 test-py312 = { features = ["test", "py312"]}
 test-py313 = { features = ["test", "py313"]}
 test-py314 = { features = ["test", "py314"]}
@@ -304,6 +305,12 @@ lab = { cmd = "jupyter lab", cwd = "stellarphot/notebooks" }
 
 [tool.pixi.feature.test.tasks]
 test = "pytest"
+
+[tool.pixi.feature.profile.pypi-dependencies]
+pyinstrument = "*"
+py-spy = "*"
+line_profiler = "*"
+snakeviz = "*"
 
 [tool.pixi.feature.py312.dependencies]
 python = '3.12.*'
