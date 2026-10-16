@@ -283,7 +283,7 @@ flowchart LR
 | Entry point | Module | Key arguments | What's behind it |
 |---|---|---|---|
 | `source_detection()` | `stellarphot.photometry` | `ccd`, `fwhm`, `sigma`, `iters`, `threshold`, `find_fwhm` | `DAOStarFinder` + `compute_fwhm()` → returns `SourceListData` |
-| `calc_aij_relative_flux()` | `stellarphot.differential_photometry` | `star_data`, `comp_stars`, `in_place`, `coord_column`, `star_id_column` | AIJ-style comparison-star ensemble flux |
+| `calc_aij_relative_flux()` | `stellarphot.differential_photometry` | `star_data`, `comp_stars`, `in_place`, `coord_column`, `star_id_column`, `position_check_limit` | AIJ-style comparison-star ensemble flux |
 | `TransitModelFit.setup_model()` / `.fit()` | `stellarphot.transit_fitting` | `t0`, `depth`, `duration`, `period`, `inclination`, plus airmass/width/sky detrending | pytransit transit model + lmfit (scipy `least_squares`) |
 | `transform_to_catalog()` | `stellarphot.utils` | photometry table, passband options, `vary` (terms to fit), `expected` (ranges to check them against) | Cross-match to APASS DR9 / RefCat2 and fit `calibrated_from_instrumental()` |
 | `write_aavso_extended()` | `stellarphot.io` | photometry table, destination path, header info | Formats and writes an AAVSO extended-format submission file |

@@ -170,6 +170,12 @@ Other Changes and Additions
 + ``fast_fwhm_from_image()`` now estimates the sky it subtracts before the
   FWHM fits from the median of a regular subsample of the pixels instead of
   every pixel. [#729]
++ ``calc_aij_relative_flux()`` now matches comparison stars to the photometry
+  by ``star_id`` instead of by position, raising ``ValueError`` if a
+  comparison star is more than ``position_check_limit`` (default 2 arcsec)
+  from the input position of the star with the same id. A ``comp_stars``
+  table with no ``star_id`` column is still matched by position, with a
+  deprecation warning; that will stop working in 3.0.0. [#723]
 
 Bug Fixes
 ^^^^^^^^^
@@ -188,11 +194,6 @@ Bug Fixes
   [#637]
 + ``TransitModelFit`` no longer passes ``klims`` to pytransit 2.9.2 or newer,
   where it is deprecated and no longer needed. [#716]
-+ ``calc_aij_relative_flux()`` now matches comparison stars to the photometry
-  by ``star_id`` rather than by position, and raises ``ValueError`` if the
-  comparison star positions do not match the photometry's input positions.
-  Matching a ``comp_stars`` table with no ``star_id`` by position is
-  deprecated. [#723]
 + The three stellarphot sections of the JupyterLab launcher are now named
   ``Stellarphot 1 - setup``, ``Stellarphot 2 - photometry`` and
   ``Stellarphot 3 - analysis and tools``, so they appear in that order on

@@ -4,9 +4,9 @@ import astropy.units as u
 import numpy as np
 import pytest
 from astropy.coordinates import SkyCoord
-from astropy.table import Table
+from astropy.table import Table, vstack
 from astropy.time import Time
-from astropy.utils.exceptions import AstropyDeprecationWarning
+from astropy.utils.exceptions import AstropyDeprecationWarning, AstropyUserWarning
 
 from stellarphot import PhotometryData, SourceListData
 from stellarphot.differential_photometry.aij_rel_fluxes import (
@@ -16,12 +16,46 @@ from stellarphot.differential_photometry.aij_rel_fluxes import (
 
 
 def _repeat(array, count):
+    """
+    Concatenate ``count`` copies of an array.
+
+    Parameters
+    ----------
+
+    array : array-like
+        The array to repeat.
+
+    count : int
+        Number of copies.
+
+    Returns
+    -------
+
+    `numpy.ndarray`
+        The copies, one after another.
+    """
     return np.concatenate([array for _ in range(count)])
 
 
 def _expected_at_all_times(expected, input_table):
     """
-    Repeat per-star expected values once for each time in ``input_table``.
+    Repeat per-star expected values once for each time in the input table.
+
+    Parameters
+    ----------
+
+    expected : array-like
+        One value per star, in star id order.
+
+    input_table : `astropy.table.Table`
+        Photometry table whose ``date-obs`` column sets the number of times.
+
+    Returns
+    -------
+
+    `numpy.ndarray`
+        ``expected`` tiled once per time, matching the row order of a table
+        sorted by time then star id.
     """
     n_times = len(np.unique(input_table["date-obs"]))
     return _repeat(expected, n_times)
@@ -29,9 +63,19 @@ def _expected_at_all_times(expected, input_table):
 
 def _add_input_positions(input_table):
     """
-    Add ``ra_input``/``dec_input`` columns that are copies of ``ra``/``dec``,
-    as the photometry table will have once ``ra``/``dec`` become the measured
-    centroid positions (see #710).
+    Add ``ra_input``/``dec_input`` columns that are copies of ``ra``/``dec``.
+
+    Parameters
+    ----------
+
+    input_table : `astropy.table.Table`
+        Photometry table to modify in place.
+
+    Notes
+    -----
+
+    This is what the photometry table will have once ``ra``/``dec`` become
+    the measured centroid positions (see #710).
     """
     input_table["ra_input"] = input_table["ra"].copy()
     input_table["dec_input"] = input_table["dec"].copy()
@@ -39,8 +83,20 @@ def _add_input_positions(input_table):
 
 def _comp_stars_without_ids(comp_star):
     """
-    Copy of ``comp_star`` with the ``star_id`` column removed, which forces
-    the deprecated matching by position.
+    Copy a comparison star table without its ``star_id`` column.
+
+    Parameters
+    ----------
+
+    comp_star : `astropy.table.Table`
+        Comparison star table with a ``star_id`` column.
+
+    Returns
+    -------
+
+    `astropy.table.Table`
+        Copy of ``comp_star`` without ``star_id``, which forces the
+        deprecated matching by position.
     """
     comps = comp_star.copy()
     comps.remove_column("star_id")
@@ -49,9 +105,32 @@ def _comp_stars_without_ids(comp_star):
 
 def _calc_with_positional_fallback(input_table, comp_star, **kwargs):
     """
-    Call ``calc_aij_relative_flux`` through the deprecated matching-by-position
-    path, checking that it warns. The project runs with warnings as errors,
-    so the warning must be caught here.
+    Call ``calc_aij_relative_flux`` through the deprecated position matching.
+
+    Parameters
+    ----------
+
+    input_table : `stellarphot.PhotometryData`
+        Photometry data.
+
+    comp_star : `astropy.table.Table`
+        Comparison star table; its ``star_id`` column is removed before the
+        call.
+
+    **kwargs
+        Passed on to ``calc_aij_relative_flux``.
+
+    Returns
+    -------
+
+    `stellarphot.PhotometryData`
+        Whatever ``calc_aij_relative_flux`` returns.
+
+    Notes
+    -----
+
+    The project runs with warnings as errors, so the deprecation warning
+    must be caught here, and this also checks that it is issued.
     """
     with pytest.warns(AstropyDeprecationWarning, match="deprecated"):
         return calc_aij_relative_flux(
@@ -61,9 +140,24 @@ def _calc_with_positional_fallback(input_table, comp_star, **kwargs):
 
 def _spoil_last_comp_row(input_table, bad_thing):
     """
-    Sort ``input_table`` so that its last row is comparison star 4 at the last
-    time, then make that row bad in the way ``bad_thing`` says. Returns a copy
-    of the row before it was modified.
+    Make the row for comparison star 4 at the last time bad in some way.
+
+    Parameters
+    ----------
+
+    input_table : `stellarphot.PhotometryData`
+        Photometry table, which is sorted in place by time then star id so
+        that its last row is comparison star 4 at the last time.
+
+    bad_thing : str
+        One of ``"RA"`` (move the position by 3 arcsec), ``"NaN"`` (set the
+        net counts to NaN) or ``"missing"`` (remove the row).
+
+    Returns
+    -------
+
+    `astropy.table.Table`
+        Copy of the row before it was modified.
     """
     input_table.sort(["date-obs", "star_id"])
 
@@ -89,8 +183,27 @@ def _check_last_comp_excluded(
     output_table, expected_flux, comp_star, last_one, bad_thing
 ):
     """
-    Check the relative fluxes at the last time when comparison star 4, the
-    star in ``last_one``, has been excluded from the comparison set.
+    Check the relative fluxes at the last time with comparison star 4 excluded.
+
+    Parameters
+    ----------
+
+    output_table : `stellarphot.PhotometryData`
+        Output of ``calc_aij_relative_flux``.
+
+    expected_flux : array-like
+        Expected relative flux of each star with all comparison stars in
+        the comparison set.
+
+    comp_star : `astropy.table.Table`
+        Table of the three comparison stars.
+
+    last_one : `astropy.table.Table`
+        The row of comparison star 4 at the last time, as returned by
+        `_spoil_last_comp_row`.
+
+    bad_thing : str
+        The ``bad_thing`` passed to `_spoil_last_comp_row`.
     """
     old_total_flux = comp_star["aperture_net_cnts"].sum()
     new_flux = old_total_flux - last_one["aperture_net_cnts"]
@@ -119,8 +232,26 @@ def _check_last_comp_excluded(
 
 def _raw_photometry_table():
     """
-    Generate an input raw photometry table and expected flux ratios
-    for use in tests.
+    Generate a photometry table and the relative fluxes expected from it.
+
+    Returns
+    -------
+
+    expected_flux_ratios : `astropy.units.Quantity`
+        Expected relative flux of each of the four stars.
+
+    expected_flux_error : `astropy.units.Quantity`
+        Expected relative flux error of each of the four stars.
+
+    photom : `stellarphot.PhotometryData`
+        Photometry of four stars at ten times, with star ids 1 to 4. Stars 2,
+        3 and 4 are the comparison stars.
+
+    comp_star : `stellarphot.PhotometryData`
+        Rows for the three comparison stars at the first time, which serve
+        as the comparison star table. This is a slice of ``photom`` that
+        shares its data, so assign new columns to it rather than modifying
+        its columns in place.
     """
 
     n_times = 10
@@ -194,6 +325,28 @@ def _raw_photometry_table():
     return expected_flux_ratios, expected_flux_error, photom, photom[1:4]
 
 
+def _expected_with_two_comps(input_table):
+    """
+    Relative fluxes expected when only stars 3 and 4 are comparison stars.
+
+    Parameters
+    ----------
+
+    input_table : `stellarphot.PhotometryData`
+        Photometry table from `_raw_photometry_table`.
+
+    Returns
+    -------
+
+    `numpy.ndarray`
+        Expected relative flux of every row of ``input_table``, in the order
+        of a table sorted by time then star id.
+    """
+    fluxes = np.array([10000.0, 20000, 30000, 40000])
+    comp_total = np.array([70000.0, 70000, 40000, 30000])
+    return _expected_at_all_times(fluxes / comp_total, input_table)
+
+
 @pytest.mark.parametrize("comp_ra_dec_have_units", [True, False])
 @pytest.mark.parametrize("star_ra_dec_have_units", [True, False])
 @pytest.mark.parametrize("in_place", [True, False])
@@ -242,17 +395,21 @@ def test_bad_comp_star(bad_thing):
     )
 
 
-def test_comp_star_position_mismatch_raises_error():
+def test_one_drifted_frame_does_not_exclude_comp_star():
     # Comparison stars are matched to the photometry by star_id, and the
-    # positions are only checked to catch a source list that is not the one
-    # the photometry was made from. That is an error, not a reason to
-    # silently drop the star. There is no ra_input column here, so the
-    # check uses ra/dec.
-    _, _, input_table, comp_star = _raw_photometry_table()
+    # position is checked once per star, not once per frame, since the input
+    # position is the same at every time. So a measured position that is off
+    # at one time (there is no ra_input column here, so ra/dec is checked)
+    # neither excludes the star nor aborts the calculation.
+    expected_flux, _, input_table, comp_star = _raw_photometry_table()
     _spoil_last_comp_row(input_table, "RA")
 
-    with pytest.raises(ValueError, match=r"star_id 4 \(.*arcsec\)"):
-        calc_aij_relative_flux(input_table, comp_star, in_place=False)
+    output_table = calc_aij_relative_flux(input_table, comp_star, in_place=False)
+
+    np.testing.assert_allclose(
+        output_table["relative_flux"],
+        _expected_at_all_times(expected_flux, input_table),
+    )
 
 
 def test_positional_fallback_excludes_comp_star_on_position_mismatch():
@@ -280,6 +437,24 @@ def test_positional_fallback_is_deprecated_and_matches_id_path():
 
     for column in ["relative_flux", "relative_flux_error", "comparison counts"]:
         np.testing.assert_allclose(by_position[column], by_id[column])
+
+
+def test_positional_fallback_reports_times_with_no_comp_stars():
+    # In the deprecated matching by position, a comparison star whose position
+    # is off at one time is excluded at every time. When that leaves some time
+    # with no comparison star the error must say so, rather than claim that no
+    # comparison star matched at all; here every comparison star matches at
+    # all but one time.
+    _, _, input_table, comp_star = _raw_photometry_table()
+    input_table.sort(["date-obs", "star_id"])
+    times = np.unique(input_table["date-obs"])
+
+    for star_id, time in zip([2, 3, 4], times[:3], strict=True):
+        row = (input_table["star_id"] == star_id) & (input_table["date-obs"] == time)
+        input_table["ra"][row] = input_table["ra"][row] + 3 * u.arcsec
+
+    with pytest.raises(RuntimeError, match="one or more times"):
+        _calc_with_positional_fallback(input_table, comp_star, in_place=False)
 
 
 def test_id_match_survives_measured_position_offsets():
@@ -323,6 +498,22 @@ def test_nan_measured_position_does_not_exclude_comp_star():
     )
 
 
+def test_only_one_input_position_column_falls_back_to_ra_dec():
+    # The input positions are used only when both ra_input and dec_input are
+    # present. With just one of them the check uses ra/dec, rather than
+    # failing on the missing column.
+    expected_flux, _, input_table, comp_star = _raw_photometry_table()
+    # Garbage that would fail the check if it were used.
+    input_table["ra_input"] = input_table["ra"] + 1 * u.degree
+
+    output_table = calc_aij_relative_flux(input_table, comp_star, in_place=False)
+
+    np.testing.assert_allclose(
+        output_table["relative_flux"],
+        _expected_at_all_times(expected_flux, input_table),
+    )
+
+
 def test_wrong_source_list_raises_error():
     # The star_ids match but one comparison star's position is 5 arcsec from
     # the input position in the photometry, so the comparison star table is
@@ -338,8 +529,121 @@ def test_wrong_source_list_raises_error():
     with pytest.raises(ValueError, match="does not appear to be") as excinfo:
         calc_aij_relative_flux(input_table, comp_star, in_place=False)
 
-    # Star 3 is the second comparison star, the one that was moved.
-    assert "star_id 3 (5.00 arcsec)" in str(excinfo.value)
+    # Star 3 is the second comparison star, the one that was moved. The
+    # separation and the limit are formatted the same way.
+    assert "star_id 3 (5 arcsec)" in str(excinfo.value)
+    assert "more than 2 arcsec" in str(excinfo.value)
+
+
+def test_coord_column_is_used_for_position_check():
+    # When coord_column is given, those coordinates, not ra/dec, are the
+    # ones checked against the input positions in the photometry.
+    _, _, input_table, comp_star = _raw_photometry_table()
+    coords = SkyCoord(ra=comp_star["ra"], dec=comp_star["dec"])
+    offsets = np.zeros(len(comp_star)) * u.arcsec
+    offsets[2] = 5 * u.arcsec
+    comp_star["coord"] = SkyCoord(ra=coords.ra, dec=coords.dec + offsets)
+
+    with pytest.raises(ValueError, match=r"star_id 4 \(5 arcsec\)"):
+        calc_aij_relative_flux(
+            input_table, comp_star, in_place=False, coord_column="coord"
+        )
+
+
+def test_position_check_limit_can_be_widened_or_skipped():
+    # A 5 arcsec offset fails the default 2 arcsec check (see above) but
+    # passes a wider limit, and None skips the check altogether.
+    expected_flux, _, input_table, comp_star = _raw_photometry_table()
+    comp_star["dec"] = comp_star["dec"] + 5 * u.arcsec
+    expected = _expected_at_all_times(expected_flux, input_table)
+
+    for limit in [10 * u.arcsec, None]:
+        output_table = calc_aij_relative_flux(
+            input_table, comp_star, in_place=False, position_check_limit=limit
+        )
+        np.testing.assert_allclose(output_table["relative_flux"], expected)
+
+
+@pytest.mark.parametrize(
+    "bad_limit,message",
+    [
+        (5, "must be an angle"),
+        ("two", "must be an angle"),
+        (0 * u.arcsec, "must be a positive, finite angle"),
+        (-1 * u.arcsec, "must be a positive, finite angle"),
+        ([1, 2] * u.arcsec, "must be a single angle"),
+    ],
+)
+def test_invalid_position_check_limit_raises_error(bad_limit, message):
+    _, _, input_table, comp_star = _raw_photometry_table()
+
+    with pytest.raises(ValueError, match=f"position_check_limit {message}"):
+        calc_aij_relative_flux(
+            input_table, comp_star, in_place=False, position_check_limit=bad_limit
+        )
+
+
+def test_comp_star_with_nan_position_is_not_checked_but_warns():
+    # A comparison star whose position is NaN in comp_stars (as it is for
+    # every star in an x/y-only source list) cannot be checked. It stays in
+    # the comparison set, and a warning says that it was not checked rather
+    # than passing silently.
+    expected_flux, _, input_table, comp_star = _raw_photometry_table()
+    dec = comp_star["dec"].copy()
+    dec[1] = np.nan
+    comp_star["dec"] = dec
+
+    with pytest.warns(AstropyUserWarning, match=r"star_id \[3\] could not be checked"):
+        output_table = calc_aij_relative_flux(input_table, comp_star, in_place=False)
+
+    np.testing.assert_allclose(
+        output_table["relative_flux"],
+        _expected_at_all_times(expected_flux, input_table),
+    )
+
+
+def test_comp_stars_without_coordinates_are_not_checked_but_warn():
+    # A comparison star table with ids but no coordinates at all is enough to
+    # match by, so it works, with a warning that the positions were not
+    # checked. With the check turned off there is nothing to warn about.
+    expected_flux, _, input_table, comp_star = _raw_photometry_table()
+    comps = Table({"star_id": comp_star["star_id"]})
+    expected = _expected_at_all_times(expected_flux, input_table)
+
+    with pytest.warns(AstropyUserWarning, match="no coordinates"):
+        output_table = calc_aij_relative_flux(input_table, comps, in_place=False)
+    np.testing.assert_allclose(output_table["relative_flux"], expected)
+
+    output_table = calc_aij_relative_flux(
+        input_table, comps, in_place=False, position_check_limit=None
+    )
+    np.testing.assert_allclose(output_table["relative_flux"], expected)
+
+
+def test_comp_star_with_no_photometry_warns():
+    # A comparison star whose id is in comp_stars but not in the photometry
+    # is not part of the comparison set. That must not be silent, because a
+    # regenerated source list renumbers its stars, so this is how a wrong
+    # comparison star table shows up when a few ids happen to line up.
+    _, _, input_table, comp_star = _raw_photometry_table()
+    comp_star["star_id"] = [100, 3, 4]
+
+    with pytest.warns(AstropyUserWarning, match=r"no photometry: \[100\]"):
+        output_table = calc_aij_relative_flux(input_table, comp_star, in_place=False)
+
+    np.testing.assert_allclose(
+        output_table["relative_flux"], _expected_with_two_comps(input_table)
+    )
+
+
+def test_duplicate_comp_star_ids_raise_error():
+    # A comparison star that appears twice in comp_stars has no sensible
+    # meaning, so it is an error rather than a matter of which row wins.
+    _, _, input_table, comp_star = _raw_photometry_table()
+    comps = vstack([Table(comp_star), Table(comp_star[:1])])
+
+    with pytest.raises(ValueError, match=r"more than one row for star_id \[2\]"):
+        calc_aij_relative_flux(input_table, comps, in_place=False)
 
 
 def test_comp_star_error_uses_self_excluded_ensemble():
