@@ -1246,9 +1246,10 @@ def test_from_vizier_falls_back_to_mirror(monkeypatch):
     # When the first VizieR server returns an empty result (e.g. the server's
     # database is down), from_vizier should retry against the next server in
     # the list and succeed.
-    monkeypatch.setattr("stellarphot.core.Vizier", FakeVizier)
+    monkeypatch.setattr("stellarphot.catalog_backends.Vizier", FakeVizier)
     monkeypatch.setattr(
-        "stellarphot.core.VIZIER_SERVERS", ("dead.example.com", "mirror.example.com")
+        "stellarphot.catalog_backends.VIZIER_SERVERS",
+        ("dead.example.com", "mirror.example.com"),
     )
     FakeVizier.results_by_server = {
         "dead.example.com": [],
@@ -1272,9 +1273,10 @@ def test_from_vizier_falls_back_to_mirror(monkeypatch):
 def test_from_vizier_all_servers_empty_raises(monkeypatch):
     # If every VizieR server returns an empty result the user should get an
     # informative error, not an IndexError.
-    monkeypatch.setattr("stellarphot.core.Vizier", FakeVizier)
+    monkeypatch.setattr("stellarphot.catalog_backends.Vizier", FakeVizier)
     monkeypatch.setattr(
-        "stellarphot.core.VIZIER_SERVERS", ("dead.example.com", "mirror.example.com")
+        "stellarphot.catalog_backends.VIZIER_SERVERS",
+        ("dead.example.com", "mirror.example.com"),
     )
     FakeVizier.results_by_server = {
         "dead.example.com": [],
@@ -1298,9 +1300,10 @@ def test_from_vizier_falls_back_on_network_error(monkeypatch):
     # When the first VizieR server fails at the network level (e.g. a read
     # timeout on a query the server cannot handle), from_vizier should retry
     # against the next server in the list and succeed.
-    monkeypatch.setattr("stellarphot.core.Vizier", FakeVizier)
+    monkeypatch.setattr("stellarphot.catalog_backends.Vizier", FakeVizier)
     monkeypatch.setattr(
-        "stellarphot.core.VIZIER_SERVERS", ("dead.example.com", "mirror.example.com")
+        "stellarphot.catalog_backends.VIZIER_SERVERS",
+        ("dead.example.com", "mirror.example.com"),
     )
     FakeVizier.results_by_server = {
         "dead.example.com": requests.exceptions.ReadTimeout("read timed out"),
@@ -1325,9 +1328,10 @@ def test_from_vizier_all_servers_error_raises(monkeypatch):
     # If every VizieR server fails at the network level the user should get
     # the same informative RuntimeError as when they all return empty, with
     # the network error chained as the cause.
-    monkeypatch.setattr("stellarphot.core.Vizier", FakeVizier)
+    monkeypatch.setattr("stellarphot.catalog_backends.Vizier", FakeVizier)
     monkeypatch.setattr(
-        "stellarphot.core.VIZIER_SERVERS", ("dead.example.com", "mirror.example.com")
+        "stellarphot.catalog_backends.VIZIER_SERVERS",
+        ("dead.example.com", "mirror.example.com"),
     )
     timeout_error = requests.exceptions.ReadTimeout("read timed out")
     FakeVizier.results_by_server = {

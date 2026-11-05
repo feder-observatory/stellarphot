@@ -128,6 +128,7 @@ def apass_dr9(
     padding=100,
     magnitude_limit=None,
     magnitude_limit_passband=None,
+    backends=None,
 ):
     """
     Return the items from APASS DR9 that are within the search radius and
@@ -160,6 +161,12 @@ def apass_dr9(
     magnitude_limit_passband : str, optional, default is "V"
         If provided, the passband to use for the magnitude limit. The name of
         the passband must be one of the AAVSO standard passband names.
+
+    backends : list of `stellarphot.catalog_backends.CatalogBackend`, optional
+        Sources to query, in order. Default is
+        `stellarphot.catalog_backends.default_backends`, which is controlled
+        by the ``STELLARPHOT_CATALOG_SOURCES`` and ``STELLARPHOT_CATALOG_DIR``
+        environment variables and otherwise tries VizieR first.
 
     Returns
     -------
@@ -226,6 +233,7 @@ def apass_dr9(
         colname_map=apass_colnames,
         magnitude_limit=magnitude_limit,
         magnitude_limit_passband=magnitude_limit_passband,
+        backends=backends,
     )
 
     # IAU requires an acronym to start, so make it APASS plus SP for stellarphot
@@ -262,6 +270,7 @@ def vsx_vizier(
     padding=100,
     magnitude_limit=None,
     magnitude_limit_passband=None,
+    backends=None,
 ):
     """
     Return the items from the copy of VSX on Vizier that are within the search
@@ -295,6 +304,12 @@ def vsx_vizier(
         There is no straightforward way to limit the VSX catalog by passband. The
         magnitude limit will be applied to the variable star's magnitude at maximum
         brightness, and the only valid value for this parameter is "max".
+
+    backends : list of `stellarphot.catalog_backends.CatalogBackend`, optional
+        Sources to query, in order. Default is
+        `stellarphot.catalog_backends.default_backends`, which is controlled
+        by the ``STELLARPHOT_CATALOG_SOURCES`` and ``STELLARPHOT_CATALOG_DIR``
+        environment variables and otherwise tries VizieR first.
 
     Returns
     -------
@@ -336,6 +351,7 @@ def vsx_vizier(
         tidy_catalog=False,
         magnitude_limit=magnitude_limit,
         magnitude_limit_passband=magnitude_limit_passband,
+        backends=backends,
     )
 
 
@@ -346,6 +362,7 @@ def refcat2(
     padding=100,
     magnitude_limit=None,
     magnitude_limit_passband=None,
+    backends=None,
 ):
     """
     Return the items from Refcat2 that are within the search radius and
@@ -378,6 +395,12 @@ def refcat2(
     magnitude_limit_passband : str, optional, default is "SR"
         If provided, the passband to use for the magnitude limit. The name of
         the passband must be one of the AAVSO standard passband names.
+
+    backends : list of `stellarphot.catalog_backends.CatalogBackend`, optional
+        Sources to query, in order. Default is
+        `stellarphot.catalog_backends.default_backends`, which is controlled
+        by the ``STELLARPHOT_CATALOG_SOURCES`` and ``STELLARPHOT_CATALOG_DIR``
+        environment variables and otherwise tries VizieR first.
 
     Returns
     -------
@@ -441,6 +464,7 @@ def refcat2(
         prepare_catalog=_process_refcat2,
         magnitude_limit=magnitude_limit,
         magnitude_limit_passband=magnitude_limit_passband,
+        backends=backends,
     )
 
     # Translate the passbands to AAVSO standard names.
