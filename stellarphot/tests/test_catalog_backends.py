@@ -9,7 +9,7 @@ from astropy.coordinates import SkyCoord
 from astropy.io import fits
 from astropy.io.votable import from_table, writeto
 from astropy.nddata import CCDData
-from astropy.table import MaskedColumn, Table
+from astropy.table import Column, MaskedColumn, Table
 from astropy.utils.data import get_pkg_data_filename
 from astropy.utils.exceptions import AstropyUserWarning
 from astropy.wcs import WCS
@@ -474,6 +474,42 @@ def test_write_local_store_layout_and_manifest(refcat2_store):
     )
     # The EY UMa field straddles Dec = +50, so the rows land in two zones.
     assert parts == ["zone=139", "zone=140"]
+
+
+class _UnitReadOnceColumn(Column):
+    """Column whose unit reads as `None` after the first read once armed."""
+
+    real_unit_reads = None  # None means not armed; the unit always reads.
+
+    @property
+    def unit(self):
+        if self.real_unit_reads is None:
+            return Column.unit.fget(self)
+        self.real_unit_reads -= 1
+        return Column.unit.fget(self) if self.real_unit_reads >= 0 else None
+
+    @unit.setter
+    def unit(self, unit):
+        Column.unit.fset(self, unit)
+
+
+def test_write_local_store_reads_each_unit_once(tmp_path):
+    """
+    Guard against a unit seen as set and then as `None` within one chunk.
+
+    One chunk in 720 of a 785-million-row build raised ``AttributeError``
+    because ``column.unit`` was not `None` when checked and `None` when used.
+    """
+    stars = Table(
+        [
+            _UnitReadOnceColumn([10.0, 20.0], name="RAJ2000", unit="deg"),
+            Column([1.0, 2.0], name="DEJ2000", unit="deg"),
+        ]
+    )
+    stars["RAJ2000"].real_unit_reads = 1
+    write_local_store(stars, tmp_path, "stars", "test/stars", "RAJ2000", "DEJ2000")
+    manifest = json.loads((tmp_path / "stars" / "catalog.json").read_text())
+    assert manifest["units"] == {"RAJ2000": "deg", "DEJ2000": "deg"}
 
 
 def test_local_store_roundtrip_matches_fixture(refcat2_store):

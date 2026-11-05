@@ -684,8 +684,9 @@ def write_local_store(
         columns = {}
         for colname in chunk.colnames:
             column = chunk[colname]
-            if column.unit is not None:
-                units[colname] = column.unit.to_string()
+            unit = column.unit
+            if unit is not None:
+                units[colname] = unit.to_string()
             values = np.ma.asarray(column)
             mask = np.ma.getmaskarray(values)
             data = np.ma.getdata(values)
