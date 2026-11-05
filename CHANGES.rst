@@ -10,7 +10,7 @@ New Features
   (``STELLARPHOT_CATALOG_DIR``), VizieR with a configurable mirror list, the
   AAVSO VSX web API, and APASS DR9 from the ESA Gaia archive.
   ``STELLARPHOT_CATALOG_SOURCES`` sets the order. ``VIZIER_SERVERS`` and
-  ``VIZIER_TIMEOUT`` moved from ``stellarphot.core`` to that module. [#736]
+  ``VIZIER_TIMEOUT`` moved from ``stellarphot.core`` to that module. [#739]
 + In variable-aperture photometry, the ``gap`` and ``annulus_width`` now
   scale with each image's measured FWHM, just like the aperture radius. All
   three quantities are interpreted as multiples of the per-image FWHM. In
