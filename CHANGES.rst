@@ -3,14 +3,12 @@
 
 New Features
 ^^^^^^^^^^^^
-+ Catalog lookups no longer depend on VizieR alone. ``CatalogData.from_vizier``
-  and the ``apass_dr9``, ``vsx_vizier`` and ``refcat2`` fetchers take a
-  ``backends`` argument and, by default, consult the new
-  ``stellarphot.catalog_backends`` module: a local Parquet copy of a catalog
-  (``STELLARPHOT_CATALOG_DIR``), VizieR with a configurable mirror list, the
-  AAVSO VSX web API, and APASS DR9 from the ESA Gaia archive.
-  ``STELLARPHOT_CATALOG_SOURCES`` sets the order. ``VIZIER_SERVERS`` and
-  ``VIZIER_TIMEOUT`` moved from ``stellarphot.core`` to that module. [#739]
++ Catalogs can come from a local Parquet store, VizieR mirrors, the AAVSO VSX
+  API or ESA's APASS DR9; see ``stellarphot.catalog_backends``. A local store
+  answers queries for its catalog, warning when it is shallower than the query.
+  ``pyarrow`` is now a required dependency. ``VIZIER_SERVERS`` and
+  ``VIZIER_TIMEOUT`` moved to ``stellarphot.catalog_backends``; the old names in
+  ``stellarphot.core`` are deprecated read-only aliases. [#739]
 + In variable-aperture photometry, the ``gap`` and ``annulus_width`` now
   scale with each image's measured FWHM, just like the aperture radius. All
   three quantities are interpreted as multiples of the per-image FWHM. In

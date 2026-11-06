@@ -13,6 +13,7 @@ Which backends are tried, and in what order, is controlled by environment
 variables (see `default_backends`) or by passing ``backends=`` explicitly.
 """
 
+import functools
 import io
 import json
 import os
@@ -21,6 +22,7 @@ import time
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import override
 from urllib.parse import urljoin
 
 import numpy as np
@@ -145,11 +147,25 @@ class CatalogBackend:
         """
         raise NotImplementedError
 
+    # Not @override: this is the base definition, so there is nothing to
+    # override; ``query`` is unused here but subclasses need it.
     def is_complete(self, query):  # noqa: ARG002
         """
-        Return ``True`` if an empty answer to ``query`` from this backend
-        means the region really is empty.
+        Report whether an empty answer to ``query`` means the region is empty.
 
+        Parameters
+        ----------
+        query : `ConeQuery`
+            The cone search that got an empty answer.
+
+        Returns
+        -------
+        bool
+            ``True`` if no rows from this backend means no matching sources
+            exist; the base class always returns ``True``.
+
+        Notes
+        -----
         `query_backends` stops at an empty answer from a complete backend
         and moves on from an empty answer from an incomplete one (a local
         copy shallower than the query, or a VizieR mirror that may not carry
@@ -447,16 +463,82 @@ class VizierBackend(CatalogBackend):
         self.servers = tuple(servers) if servers is not None else None
         self.timeout = timeout
 
-    def provides(self, catalog_id):  # noqa: ARG002
+    @override
+    def provides(self, catalog_id):
+        """
+        Report whether VizieR can answer queries for ``catalog_id``.
+
+        Parameters
+        ----------
+        catalog_id : str
+            VizieR identifier of the catalog.
+
+        Returns
+        -------
+        bool
+            Always ``True``.
+
+        Notes
+        -----
+        VizieR serves every catalog stellarphot uses, so this backend never
+        declines a catalog up front; a mirror that turns out not to carry it
+        answers with no rows and the next mirror is tried.
+        """
         return True
 
-    def is_complete(self, query):  # noqa: ARG002
-        # Every mirror answering nothing may mean an empty region, but it may
-        # also mean that none of them carries the catalog, as happened for
-        # APASS during the 2026 CDS outage.
+    @override
+    def is_complete(self, query):
+        """
+        Report whether an empty answer to ``query`` means the region is empty.
+
+        Parameters
+        ----------
+        query : `ConeQuery`
+            The cone search that got an empty answer.
+
+        Returns
+        -------
+        bool
+            Always ``False``.
+
+        Notes
+        -----
+        Every mirror answering nothing may mean an empty region, but it may
+        also mean that none of them carries the catalog, as happened for
+        APASS during the 2026 CDS outage, so `query_backends` moves on to the
+        next backend.
+        """
         return False
 
     def cone_search(self, query):
+        """
+        Return the rows in the cone from the first VizieR mirror that has any.
+
+        Parameters
+        ----------
+        query : `ConeQuery`
+            The cone search.
+
+        Returns
+        -------
+        `astropy.table.Table`
+            The rows, with VizieR column names. An empty table if every
+            mirror answered without rows.
+
+        Raises
+        ------
+        Exception
+            The last error raised by a mirror, if any mirror raised and none
+            returned rows.
+
+        Notes
+        -----
+        Mirrors are tried in the order of ``servers``, falling back to
+        `VIZIER_SERVERS` looked up at query time. A mirror that raises (network
+        or parse error) or answers with an error page or an empty VOTable is
+        skipped, and its answer is evicted from astroquery's cache with
+        `_evict_last_answer`.
+        """
         servers = self.servers if self.servers is not None else VIZIER_SERVERS
         timeout = self.timeout if self.timeout is not None else VIZIER_TIMEOUT
 
@@ -494,8 +576,21 @@ def _evict_last_answer(vizier):
     """
     Remove the answer to ``vizier``'s last query from astroquery's cache.
 
+    Parameters
+    ----------
+    vizier : `astroquery.vizier.VizierClass`
+        The instance that ran the query whose answer should be evicted.
+
+    Notes
+    -----
     astroquery caches every response, error pages included, so without this
-    a retry would replay the failure until the cache entry expires.
+    a retry would replay the failure until the cache entry expires (a week by
+    default). During the 2026 CDS outage some mirrors (NAOJ in particular)
+    answered most queries with an error-only, empty VOTable; caching that
+    answer would have made a passing failure look permanent. CDS timeouts
+    were never cached, since a timeout produces no response to cache.
+
+    A missing cache file, or one we may not remove, is ignored.
     """
     last_query = getattr(vizier, "_last_query", None)
     if last_query is None:
@@ -1335,38 +1430,44 @@ class EsaApassDr9Backend(TapApassBackend):
 # Selection and dispatch
 # --------------------------------------------------------------------------
 
+# Each factory takes the values of ``STELLARPHOT_CATALOG_DIR`` and
+# ``STELLARPHOT_VIZIER_SERVERS`` and returns a list of backends.
 _SOURCE_FACTORIES = {
-    "vizier": lambda: [VizierBackend(servers=_vizier_servers_from_env())],
-    "vsx_api": lambda: [AavsoVsxBackend()],
-    "apass_esa": lambda: [EsaApassDr9Backend()],
-    "local": lambda: [
-        LocalStoreBackend(root)
-        for root in os.environ.get(ENV_CATALOG_DIR, "").split(os.pathsep)
-        if root
+    "vizier": lambda _dirs, servers: [
+        VizierBackend(servers=_parse_vizier_servers(servers))
+    ],
+    "vsx_api": lambda _dirs, _servers: [AavsoVsxBackend()],
+    "apass_esa": lambda _dirs, _servers: [EsaApassDr9Backend()],
+    "local": lambda dirs, _servers: [
+        LocalStoreBackend(root) for root in dirs.split(os.pathsep) if root
     ],
 }
 
 
-def _vizier_servers_from_env():
-    value = os.environ.get(ENV_VIZIER_SERVERS, "")
+def _parse_vizier_servers(value):
     servers = tuple(s.strip() for s in value.split(",") if s.strip())
     return servers or None
 
 
-# The backend list built from the environment, keyed by the variables it was
-# built from, so that a notebook querying once per image does not re-scan
-# the local store directories and re-read their manifests every time.
-_default_backends_cache = (None, None)
-
-
 def default_backends():
     """
-    Build the backend list from the environment.
+    Return the backends selected by the environment, in the order to try them.
 
-    The list is cached and rebuilt only when one of the variables changes.
+    Returns
+    -------
+    tuple of `CatalogBackend`
+        The backends; the same tuple is returned until one of the
+        environment variables below changes.
 
-    Environment variables
-    ---------------------
+    Raises
+    ------
+    ValueError
+        If ``STELLARPHOT_CATALOG_SOURCES`` names an unknown source.
+
+    Notes
+    -----
+    The backends are configured by these environment variables:
+
     ``STELLARPHOT_CATALOG_SOURCES``
         Comma-separated, ordered list of sources to try, from ``local``,
         ``vizier``, ``vsx_api`` and ``apass_esa``. Default:
@@ -1376,18 +1477,22 @@ def default_backends():
         for the ``local`` source; without it ``local`` is skipped.
     ``STELLARPHOT_VIZIER_SERVERS``
         Comma-separated VizieR hostnames to try, overriding `VIZIER_SERVERS`.
+
+    The result is cached for the most recent values of the variables, so
+    that a notebook querying once per image does not re-scan the local store
+    directories and re-read their manifests every time. It is a tuple so that
+    a caller cannot change the cached list for everyone else.
     """
-    global _default_backends_cache
-
-    key = tuple(
-        os.environ.get(name, "")
-        for name in (ENV_CATALOG_SOURCES, ENV_CATALOG_DIR, ENV_VIZIER_SERVERS)
+    return _backends_for(
+        os.environ.get(ENV_CATALOG_SOURCES, ""),
+        os.environ.get(ENV_CATALOG_DIR, ""),
+        os.environ.get(ENV_VIZIER_SERVERS, ""),
     )
-    if _default_backends_cache[0] == key:
-        return _default_backends_cache[1]
 
-    order = key[0]
-    names = [n.strip() for n in order.split(",") if n.strip()] or list(
+
+@functools.lru_cache(maxsize=1)
+def _backends_for(sources, catalog_dirs, vizier_servers):
+    names = [n.strip() for n in sources.split(",") if n.strip()] or list(
         DEFAULT_SOURCE_ORDER
     )
     backends = []
@@ -1399,9 +1504,8 @@ def default_backends():
                 f"Unknown catalog source {name!r} in {ENV_CATALOG_SOURCES}; "
                 f"choose from {', '.join(_SOURCE_FACTORIES)}"
             ) from None
-        backends.extend(factory())
-    _default_backends_cache = (key, backends)
-    return backends
+        backends.extend(factory(catalog_dirs, vizier_servers))
+    return tuple(backends)
 
 
 def query_backends(query, backends=None):
@@ -1409,17 +1513,11 @@ def query_backends(query, backends=None):
     Run ``query`` against each backend that provides its catalog until one
     answers.
 
-    A backend that raises is skipped and the error recorded. An empty answer
-    from a backend whose `~CatalogBackend.is_complete` is true for the query
-    ends the search, so that an empty field does not cost a round of every
-    remaining source; an empty answer from an incomplete backend (a local
-    copy shallower than the query, a VizieR mirror) is passed over.
-
     Parameters
     ----------
     query : `ConeQuery`
         The cone search.
-    backends : list of `CatalogBackend`, optional
+    backends : sequence of `CatalogBackend`, optional
         Backends to try, in order. Defaults to `default_backends`.
 
     Returns
@@ -1431,6 +1529,18 @@ def query_backends(query, backends=None):
     ------
     RuntimeError
         If no backend returned any rows.
+
+    Notes
+    -----
+    A backend that raises is skipped and the error recorded. The first
+    backend to return rows answers the query, even a local store shallower
+    than the query (the store warns that fainter sources are missing).
+
+    An empty answer from a backend whose `~CatalogBackend.is_complete` is
+    true for the query ends the search, so that an empty field does not cost
+    a round of every remaining source; an empty answer from an incomplete
+    backend (a local copy shallower than the query, a VizieR mirror) is
+    passed over.
     """
     backends = default_backends() if backends is None else list(backends)
     attempts = []

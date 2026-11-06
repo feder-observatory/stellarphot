@@ -3,6 +3,7 @@ import shutil
 import warnings
 
 import numpy as np
+import pyarrow as pa
 import pytest
 import requests
 from astropy import units as u
@@ -39,8 +40,6 @@ from stellarphot.catalog_backends import (
 )
 from stellarphot.catalogs import apass_dr9, refcat2, vsx_vizier
 from stellarphot.conftest import SERVER_DOWN_ERRORS
-
-pytest.importorskip("pyarrow")
 
 _QUERY_REGION = "astroquery.vizier.core.VizierClass.query_region"
 
@@ -268,6 +267,17 @@ def test_default_backends_is_cached_per_environment(monkeypatch, tmp_path):
     with pytest.warns(AstropyUserWarning, match="no catalogs"):
         fourth = default_backends()
     assert fourth is not third
+
+
+def test_default_backends_is_an_immutable_tuple_rebuilt_after_cache_clear():
+    first = default_backends()
+    assert isinstance(first, tuple)
+    with pytest.raises(TypeError):
+        first[0] = AavsoVsxBackend()
+    catalog_backends._backends_for.cache_clear()
+    second = default_backends()
+    assert second is not first
+    assert [type(b) for b in second] == [type(b) for b in first]
 
 
 def test_default_backends_from_environment(monkeypatch, tmp_path):
@@ -766,12 +776,24 @@ def test_local_store_unknown_filter_column_is_a_value_error(refcat2_store):
     assert isinstance(exc.value.__cause__, ValueError)
 
 
-def test_local_store_warns_when_shallower_than_query(tmp_path):
+def _write_shallow_refcat2_store(root):
+    """Write the refcat2 fixture to a store cut at rmag 16 and open it."""
     write_local_store(
-        _raw_refcat2(), tmp_path, "refcat2", "J/ApJ/867/105/refcat2", "RA_ICRS",
+        _raw_refcat2(), root, "refcat2", "J/ApJ/867/105/refcat2", "RA_ICRS",
         "DE_ICRS", mag_limit={"rmag": 16.0},
     )  # fmt: skip
-    backend = LocalStoreBackend(tmp_path)
+    return LocalStoreBackend(root)
+
+
+def _faint_network_backend():
+    """A stand-in for a network source with one star fainter than the store."""
+    return _Fake(
+        "network", Table({"RA_ICRS": [10.0], "DE_ICRS": [-10.0], "rmag": [17.0]})
+    )
+
+
+def test_local_store_warns_when_shallower_than_query(tmp_path):
+    backend = _write_shallow_refcat2_store(tmp_path)
     center = _ey_uma_center()
     with pytest.warns(
         AstropyUserWarning, match="rmag <= 16.0; fainter sources are missing"
@@ -788,11 +810,7 @@ def test_local_store_warns_when_shallower_than_query(tmp_path):
 
 
 def test_local_store_is_complete_only_within_its_depth(tmp_path):
-    write_local_store(
-        _raw_refcat2(), tmp_path, "refcat2", "J/ApJ/867/105/refcat2", "RA_ICRS",
-        "DE_ICRS", mag_limit={"rmag": 16.0},
-    )  # fmt: skip
-    backend = LocalStoreBackend(tmp_path)
+    backend = _write_shallow_refcat2_store(tmp_path)
     center = _ey_uma_center()
     assert backend.is_complete(_query(center, 1.0, rmag="<=14"))
     assert backend.is_complete(_query(center, 1.0, rmag="<16"))
@@ -808,14 +826,9 @@ def test_local_store_is_complete_only_within_its_depth(tmp_path):
 
 
 def test_local_store_empty_answer_falls_through_only_when_shallow(tmp_path):
-    write_local_store(
-        _raw_refcat2(), tmp_path, "refcat2", "J/ApJ/867/105/refcat2", "RA_ICRS",
-        "DE_ICRS", mag_limit={"rmag": 16.0},
-    )  # fmt: skip
-    store = LocalStoreBackend(tmp_path)
+    store = _write_shallow_refcat2_store(tmp_path)
     nowhere = SkyCoord(10, -10, unit="deg")  # no fixture stars here
-    rows = Table({"RA_ICRS": [10.0], "DE_ICRS": [-10.0], "rmag": [17.0]})
-    network = _Fake("network", rows)
+    network = _faint_network_backend()
 
     with pytest.warns(AstropyUserWarning, match="fainter sources are missing"):
         table, source = query_backends(
@@ -827,6 +840,21 @@ def test_local_store_empty_answer_falls_through_only_when_shallow(tmp_path):
     with pytest.raises(RuntimeError, match="no sources"):
         query_backends(_query(nowhere, 0.1, rmag="<=15"), [store, network])
     assert network.calls == 1
+
+
+def test_shallow_local_store_rows_win_over_later_backends(tmp_path):
+    # A deliberate design choice: a store that has rows for the cone answers
+    # the query even when the query is deeper than the store, with a warning
+    # that fainter sources are missing. Only an *empty* answer from a shallow
+    # store falls through to the next backend (see the test above).
+    store = _write_shallow_refcat2_store(tmp_path)
+    network = _faint_network_backend()
+
+    with pytest.warns(AstropyUserWarning, match="fainter sources are missing"):
+        table, source = query_backends(_query(_ey_uma_center(), 1.0), [store, network])
+    assert source.startswith("local:")
+    assert len(table) > 0
+    assert network.calls == 0
 
 
 def test_local_store_unreadable_data_is_unavailable(refcat2_store):
@@ -874,7 +902,6 @@ def test_local_store_skips_bad_manifest(refcat2_store, manifest_text):
 
 
 def test_arrow_to_masked_table_keeps_integer_dtypes():
-    pa = pytest.importorskip("pyarrow")
     big = 2**60 + 1  # not representable as float64
     arrow_table = pa.table(
         {

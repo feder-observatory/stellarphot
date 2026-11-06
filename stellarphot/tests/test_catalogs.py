@@ -86,6 +86,18 @@ def test_core_shim_is_deprecated(name):
     assert obj is getattr(catalogs, name)
 
 
+@pytest.mark.parametrize("name", ["VIZIER_SERVERS", "VIZIER_TIMEOUT"])
+def test_core_vizier_settings_shim_is_deprecated(name):
+    """``stellarphot.core.VIZIER_*`` warns and returns the catalog_backends value."""
+    import stellarphot.catalog_backends as catalog_backends
+    import stellarphot.core as core
+
+    with pytest.warns(AstropyDeprecationWarning, match="catalog_backends"):
+        obj = getattr(core, name)
+
+    assert obj is getattr(catalog_backends, name)
+
+
 # ---------------------------------------------------------------------------
 # Behavioral tests for the catalog fetchers, moved here from test_core.py as
 # part of #194 (the fetchers themselves moved to stellarphot.catalogs). Most

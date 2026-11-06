@@ -29,6 +29,7 @@ dependencies = [
     "matplotlib",
     "pandas",
     "photutils >=2.3,<3",
+    "pyarrow",  # local catalog stores (stellarphot.catalog_backends) are Parquet
     "pydantic >=2",
     "pyyaml",
     "platformdirs",

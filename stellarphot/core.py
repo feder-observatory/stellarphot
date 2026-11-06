@@ -46,8 +46,14 @@ __all__ = [
 # from ``stellarphot.core`` (with a deprecation warning) for one or two releases.
 _MOVED_TO_CATALOGS = frozenset({"apass_dr9", "vsx_vizier", "refcat2"})
 
+# VizieR settings that moved to ``stellarphot.catalog_backends``. Reading them
+# from ``stellarphot.core`` still works (with a deprecation warning, see
+# ``__getattr__`` below); assigning to the old name has no effect.
+_MOVED_TO_CATALOG_BACKENDS = frozenset({"VIZIER_SERVERS", "VIZIER_TIMEOUT"})
+
 # Catalog lookups go through ``catalog_backends``; the VizieR server list and
-# timeout (``VIZIER_SERVERS``, ``VIZIER_TIMEOUT``) live there now.
+# timeout (``VIZIER_SERVERS``, ``VIZIER_TIMEOUT``) live there now, with a
+# read-only deprecated alias here.
 from .catalog_backends import ConeQuery, query_backends  # noqa: E402
 
 
@@ -117,6 +123,21 @@ def __getattr__(name):
             stacklevel=2,
         )
         return getattr(catalogs, name)
+    if name in _MOVED_TO_CATALOG_BACKENDS:
+        from astropy.utils.exceptions import AstropyDeprecationWarning
+
+        from . import catalog_backends
+
+        warnings.warn(
+            f"stellarphot.core.{name} has moved to "
+            f"stellarphot.catalog_backends.{name}. "
+            "Assigning to the old name has no effect; set the new one, or "
+            "STELLARPHOT_VIZIER_SERVERS for the server list. "
+            "This shim will be removed in stellarphot 3.0.0.",
+            AstropyDeprecationWarning,
+            stacklevel=2,
+        )
+        return getattr(catalog_backends, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
