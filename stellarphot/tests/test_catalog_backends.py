@@ -39,7 +39,6 @@ from stellarphot.catalog_backends import (
     write_local_store,
 )
 from stellarphot.catalogs import apass_dr9, refcat2, vsx_vizier
-from stellarphot.conftest import SERVER_DOWN_ERRORS
 
 _QUERY_REGION = "astroquery.vizier.core.VizierClass.query_region"
 
@@ -95,6 +94,58 @@ def _query(center, radius_deg, catalog_id="J/ApJ/867/105/refcat2", **filters):
         radius=radius_deg * u.deg,
         column_filters=filters,
     )
+
+
+def _xfail_if_server_down(err, service):
+    """
+    Turn a failure caused by an unreachable service into an xfail.
+
+    Parameters
+    ----------
+    err : Exception
+        The exception raised by the live query.
+    service : str
+        Name of the service, used in the xfail reason.
+
+    Raises
+    ------
+    Exception
+        ``err`` itself, if no exception in its ``__cause__`` chain is a
+        network error or a `CatalogUnavailableError`.
+    """
+    cause = err
+    while cause is not None:
+        if isinstance(
+            cause, (requests.exceptions.RequestException, CatalogUnavailableError)
+        ):
+            pytest.xfail(f"{service} unreachable: {err}")
+        cause = cause.__cause__
+    raise err
+
+
+def test_xfail_if_server_down_xfails_on_chained_network_error():
+    try:
+        try:
+            raise requests.exceptions.ConnectionError("down")
+        except requests.exceptions.ConnectionError as inner:
+            raise RuntimeError("no results from any source") from inner
+    except RuntimeError as err:
+        with pytest.raises(pytest.xfail.Exception, match="Some service unreachable"):
+            _xfail_if_server_down(err, "Some service")
+
+
+def test_xfail_if_server_down_reraises_unrelated_errors():
+    with pytest.raises(ValueError, match="a real bug"):
+        _xfail_if_server_down(ValueError("a real bug"), "Some service")
+
+
+def test_cone_query_normalizes_center_to_icrs():
+    galactic = SkyCoord(l=150 * u.deg, b=40 * u.deg, frame="galactic")
+    query = _query(galactic, 0.5)
+    assert query.center.frame.name == "icrs"
+    icrs = galactic.icrs
+    assert query.center.ra.deg == pytest.approx(icrs.ra.deg)
+    assert query.center.dec.deg == pytest.approx(icrs.dec.deg)
 
 
 # ---------------------------------------------------------------------------
@@ -1045,9 +1096,9 @@ def test_vsx_api_objects_to_table_schema_matches_vizier():
 
 
 class _FakeResponse:
-    def __init__(self, payload):
+    def __init__(self, payload, content=None):
         self._payload = payload
-        self.content = b"{}"
+        self.content = json.dumps(payload).encode() if content is None else content
 
     def raise_for_status(self):
         pass
@@ -1097,6 +1148,53 @@ def test_aavso_vsx_backend_network_failure_is_unavailable(mocker):
         AavsoVsxBackend().cone_search(
             _query(_ey_uma_center(), 0.5, catalog_id="B/vsx/vsx")
         )
+
+
+@pytest.mark.parametrize(
+    "payload, content, problem",
+    [
+        (None, b"", "empty response"),
+        ({}, None, "VSXObjects"),
+        ([], None, "VSXObjects"),
+        ({"VSXObjects": "nope"}, None, "VSXObjects"),
+    ],
+)
+def test_aavso_vsx_backend_malformed_answer_is_unavailable(
+    mocker, payload, content, problem
+):
+    mocker.patch(
+        "stellarphot.catalog_backends.requests.get",
+        return_value=_FakeResponse(payload, content=content),
+    )
+    with pytest.raises(CatalogUnavailableError, match=problem) as excinfo:
+        AavsoVsxBackend().cone_search(
+            _query(_ey_uma_center(), 0.5, catalog_id="B/vsx/vsx")
+        )
+    assert AavsoVsxBackend.url in str(excinfo.value)
+
+
+def test_aavso_vsx_backend_no_variables_is_an_empty_table(mocker):
+    # The live API answers a field with no variables with a list, not a dict.
+    mocker.patch(
+        "stellarphot.catalog_backends.requests.get",
+        return_value=_FakeResponse({"VSXObjects": []}),
+    )
+    table = AavsoVsxBackend().cone_search(
+        _query(_ey_uma_center(), 0.5, catalog_id="B/vsx/vsx")
+    )
+    assert len(table) == 0
+    assert table.colnames == vsx_api_objects_to_table([]).colnames
+
+
+def test_aavso_vsx_backend_single_object_is_one_row(mocker):
+    mocker.patch(
+        "stellarphot.catalog_backends.requests.get",
+        return_value=_FakeResponse({"VSXObjects": {"VSXObject": _VSX_API_OBJECTS[0]}}),
+    )
+    table = AavsoVsxBackend().cone_search(
+        _query(_ey_uma_center(), 0.5, catalog_id="B/vsx/vsx")
+    )
+    assert list(table["Name"]) == ["EY UMa"]
 
 
 # ---------------------------------------------------------------------------
@@ -1152,14 +1250,59 @@ def test_esa_apass_drops_rows_without_coordinates(mocker):
     assert table["RAJ2000"][0] == 135.5
 
 
-class _FakeHttp:
-    """requests.post / requests.get stand-in for a UWS job."""
+class _ChunkedBody:
+    """Raw body of a streamed response, read back a few bytes at a time."""
 
-    def __init__(self, phases, location="/tap/async/42", clock=None):
+    def __init__(self, content, chunk_bytes, clock=None, seconds_per_chunk=0):
+        self.content = content
+        self.chunk_bytes = chunk_bytes
+        self.clock = clock
+        self.seconds_per_chunk = seconds_per_chunk
+        self.position = 0
+        self.reads = 0
+
+    def read(self, size=-1, **_kwargs):
+        if self.position >= len(self.content):
+            return b""
+        size = self.chunk_bytes if size is None or size < 0 else size
+        size = min(size, self.chunk_bytes)
+        chunk = self.content[self.position : self.position + size]
+        self.position += len(chunk)
+        self.reads += 1
+        if self.clock is not None:
+            self.clock.advance(self.seconds_per_chunk)
+        return chunk
+
+    def close(self):
+        pass
+
+
+class _FakeHttp:
+    """
+    requests.post / requests.get stand-in for a UWS job.
+
+    The result is served as a streamed body of ``chunk_bytes`` per read, each
+    read advancing ``clock`` by ``seconds_per_chunk``.
+    """
+
+    def __init__(
+        self,
+        phases,
+        location="/tap/async/42",
+        clock=None,
+        result=None,
+        chunk_bytes=1 << 20,
+        seconds_per_chunk=0,
+    ):
         self.phases = list(phases)
         self.location = location
         self.calls = []
         self.clock = clock
+        self.result = Table({"a": [1, 2]}) if result is None else result
+        self.chunk_bytes = chunk_bytes
+        self.seconds_per_chunk = seconds_per_chunk
+        self.body = None
+        self.result_kwargs = None
 
     def _response(self, url, content=b"", status=200):
         response = requests.Response()
@@ -1176,20 +1319,32 @@ class _FakeHttp:
         response.headers["Location"] = self.location
         return response
 
-    def get(self, url, timeout=None, **_kwargs):
+    def get(self, url, timeout=None, **kwargs):
         self.calls.append(("GET", url, timeout, None))
         if self.clock is not None:
             self.clock.advance(10)
         if url.endswith("/phase"):
             phase = self.phases.pop(0) if len(self.phases) > 1 else self.phases[0]
             return self._response(url, phase.encode())
-        return self._response(url, _votable_bytes(Table({"a": [1, 2]})))
+        self.result_kwargs = kwargs
+        response = self._response(url, content=False)
+        self.body = _ChunkedBody(
+            _votable_bytes(self.result),
+            self.chunk_bytes,
+            clock=self.clock,
+            seconds_per_chunk=self.seconds_per_chunk,
+        )
+        response.raw = self.body
+        return response
+
+    def install(self, mocker):
+        mocker.patch("stellarphot.catalog_backends.requests.post", self.post)
+        mocker.patch("stellarphot.catalog_backends.requests.get", self.get)
 
 
 def test_tap_async_joins_relative_location(mocker):
     http = _FakeHttp(["EXECUTING", "COMPLETED"])
-    mocker.patch("stellarphot.catalog_backends.requests.post", http.post)
-    mocker.patch("stellarphot.catalog_backends.requests.get", http.get)
+    http.install(mocker)
     mocker.patch("stellarphot.catalog_backends.time.sleep")
     table = _tap_async("https://host.example/tap", "SELECT 1", timeout=60)
     assert len(table) == 2
@@ -1212,20 +1367,24 @@ class _Clock:
     def monotonic(self):
         return self.now
 
+    def install(self, mocker):
+        """Drive ``time`` in catalog_backends from this clock; return the sleeps."""
+        sleeps = []
+
+        def sleep(seconds):
+            sleeps.append(seconds)
+            self.advance(seconds)
+
+        mocker.patch("stellarphot.catalog_backends.time.monotonic", self.monotonic)
+        mocker.patch("stellarphot.catalog_backends.time.sleep", sleep)
+        return sleeps
+
 
 def test_tap_async_timeout_is_an_upper_bound(mocker):
     clock = _Clock()
     http = _FakeHttp(["EXECUTING"], clock=clock)
-    mocker.patch("stellarphot.catalog_backends.requests.post", http.post)
-    mocker.patch("stellarphot.catalog_backends.requests.get", http.get)
-    mocker.patch("stellarphot.catalog_backends.time.monotonic", clock.monotonic)
-    sleeps = []
-
-    def sleep(seconds):
-        sleeps.append(seconds)
-        clock.advance(seconds)
-
-    mocker.patch("stellarphot.catalog_backends.time.sleep", sleep)
+    http.install(mocker)
+    sleeps = clock.install(mocker)
     start = clock.now
     with pytest.raises(requests.exceptions.Timeout, match="did not finish"):
         _tap_async("https://host.example/tap", "SELECT 1", timeout=45)
@@ -1237,6 +1396,89 @@ def test_tap_async_timeout_is_an_upper_bound(mocker):
     # timeout, then the abort is posted: at most two requests over.
     assert clock.now - start <= 45 + 2 * 10
     assert sleeps and all(0 < seconds <= 3 for seconds in sleeps)
+
+
+def test_tap_async_streams_result_in_chunks(mocker):
+    expected = Table({"a": np.arange(500), "b": np.arange(500) * 0.5})
+    http = _FakeHttp(["COMPLETED"], result=expected, chunk_bytes=1000)
+    http.install(mocker)
+    table = _tap_async("https://host.example/tap", "SELECT 1", timeout=60)
+    assert http.result_kwargs.get("stream") is True
+    assert http.body.reads > 2
+    np.testing.assert_array_equal(table["a"], expected["a"])
+    np.testing.assert_array_equal(table["b"], expected["b"])
+
+
+def test_tap_async_deadline_applies_while_downloading(mocker):
+    # Each chunk arrives quickly enough to satisfy requests' inactivity
+    # timeout, but together they take longer than the overall timeout.
+    clock = _Clock()
+    http = _FakeHttp(
+        ["COMPLETED"],
+        clock=clock,
+        result=Table({"a": np.arange(500)}),
+        chunk_bytes=1000,
+        seconds_per_chunk=5,
+    )
+    http.install(mocker)
+    clock.install(mocker)
+    start = clock.now
+    with pytest.raises(requests.exceptions.Timeout, match="did not finish"):
+        _tap_async("https://host.example/tap", "SELECT 1", timeout=60)
+    # The download stopped at the deadline and the job was aborted.
+    assert clock.now - start <= 60 + 5 + 10
+    assert http.calls[-1][0] == "POST"
+    assert http.calls[-1][3] == {"PHASE": "ABORT"}
+
+
+@pytest.mark.parametrize(
+    "waiting", ["PENDING", "QUEUED", "EXECUTING", "HELD", "SUSPENDED", "UNKNOWN"]
+)
+def test_tap_async_keeps_polling_while_job_is_waiting(mocker, waiting):
+    http = _FakeHttp([waiting, waiting, "COMPLETED"])
+    http.install(mocker)
+    mocker.patch("stellarphot.catalog_backends.time.sleep")
+    table = _tap_async("https://host.example/tap", "SELECT 1", timeout=60)
+    assert len(table) == 2
+    assert sum(c[1].endswith("/phase") for c in http.calls) == 3
+
+
+@pytest.mark.parametrize(
+    "phase, message",
+    [
+        ("ERROR", "ended in phase ERROR"),
+        ("ABORTED", "ended in phase ABORTED"),
+        ("ARCHIVED", "ended in phase ARCHIVED"),
+        ("<html>Gateway error</html>", "unexpected phase"),
+    ],
+)
+def test_tap_async_failed_or_unknown_phase_raises(mocker, phase, message):
+    http = _FakeHttp([phase])
+    http.install(mocker)
+    mocker.patch("stellarphot.catalog_backends.time.sleep")
+    with pytest.raises(ValueError, match=message):
+        _tap_async("https://host.example/tap", "SELECT 1", timeout=60)
+    assert not any(c[1].endswith("/results/result") for c in http.calls)
+
+
+def test_esa_apass_backend_with_galactic_center(mocker):
+    center = _ey_uma_center()
+    raw = Table()
+    for src in catalog_backends._ESA_APASS_COLUMNS:
+        raw[src] = [12.0, 13.0]
+    raw["raj2000"] = [center.ra.deg, center.ra.deg]
+    raw["dej2000"] = [center.dec.deg, center.dec.deg + 0.1]
+    http = _FakeHttp(["COMPLETED"], result=raw)
+    http.install(mocker)
+    query = _query(center.galactic, 0.25, catalog_id="II/336/apass9")
+
+    adql = EsaApassDr9Backend().adql(query)
+    assert f"CIRCLE('ICRS', {center.ra.deg:.8f}, {center.dec.deg:.8f}," in adql
+
+    table = EsaApassDr9Backend().cone_search(query)
+    assert table.colnames[0] == "_r"
+    assert table["_r"].unit == u.deg
+    np.testing.assert_allclose(table["_r"], [0, 0.1], atol=1e-6)
 
 
 # ---------------------------------------------------------------------------
@@ -1251,8 +1493,8 @@ def test_aavso_vsx_backend_live():
         cat = vsx_vizier(
             _ey_uma_header(), radius=0.5 * u.deg, backends=[AavsoVsxBackend()]
         )
-    except SERVER_DOWN_ERRORS as e:
-        pytest.xfail(f"AAVSO VSX API unavailable: {e}")
+    except Exception as err:
+        _xfail_if_server_down(err, "AAVSO VSX API")
     # New variables may be added over time, so only require the known ones.
     assert set(expected["id"]) <= set(cat["id"])
 
@@ -1263,8 +1505,8 @@ def test_esa_apass_backend_live():
         cat = apass_dr9(
             _ey_uma_header(), radius=10 * u.arcmin, backends=[EsaApassDr9Backend()]
         )
-    except SERVER_DOWN_ERRORS as e:
-        pytest.xfail(f"ESA TAP unavailable: {e}")
+    except Exception as err:
+        _xfail_if_server_down(err, "ESA TAP")
     assert len(cat) > 0
     assert cat.catalog_source == "ESA APASS DR9"
     assert "V" in set(cat["passband"])

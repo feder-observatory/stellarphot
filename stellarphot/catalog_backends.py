@@ -43,7 +43,6 @@ __all__ = [
     "VizierBackend",
     "LocalStoreBackend",
     "AavsoVsxBackend",
-    "TapApassBackend",
     "EsaApassDr9Backend",
     "default_backends",
     "query_backends",
@@ -104,18 +103,27 @@ class ConeQuery:
         VizieR catalog identifier, e.g. ``"II/336/apass9"``. This is the key
         every backend uses, whatever its own source calls the catalog.
     center : `astropy.coordinates.SkyCoord`
-        Center of the cone.
+        Center of the cone, in any frame. It is stored in ICRS.
     radius : `astropy.units.Quantity`
         Angular radius of the cone.
     column_filters : dict, optional
         Filters in VizieR's ``column_filters`` syntax, keyed by native column
         name, e.g. ``{"rmag": "<=14"}``.
+
+    Notes
+    -----
+    Every backend compares the center with ICRS (J2000) catalog positions, so
+    the center is converted once here rather than in each backend.
     """
 
     catalog_id: str
     center: SkyCoord
     radius: u.Quantity
     column_filters: dict = field(default_factory=dict)
+
+    def __post_init__(self):
+        # The dataclass is frozen, so bypass its __setattr__.
+        object.__setattr__(self, "center", self.center.icrs)
 
     @property
     def radius_deg(self):
@@ -309,7 +317,25 @@ def _angular_separation_deg(ra1, dec1, ra2, dec2):
 
 
 def _add_distance_column(table, query, ra_col, dec_col):
-    """Prepend the ``_r`` column VizieR adds to cone searches, in degrees."""
+    """
+    Prepend the ``_r`` column VizieR adds to cone searches.
+
+    Parameters
+    ----------
+    table : `astropy.table.Table`
+        Rows returned for ``query``; modified in place.
+    query : `ConeQuery`
+        The cone search the rows answer.
+    ra_col, dec_col : str
+        Names of the columns holding ICRS right ascension and declination in
+        degrees.
+
+    Returns
+    -------
+    `astropy.table.Table`
+        ``table``, with a ``_r`` column first holding each row's distance from
+        the cone center in degrees.
+    """
     sep = _angular_separation_deg(
         table[ra_col], table[dec_col], query.center.ra.deg, query.center.dec.deg
     )
@@ -317,14 +343,49 @@ def _add_distance_column(table, query, ra_col, dec_col):
     return table
 
 
-# Row cap requested from TAP services. Their defaults are small (GAVO: 20,000)
+# Row cap requested from TAP services. A service's default cap can be small,
 # and a service that hits its cap truncates the table and only says so in a
-# VOTable INFO element, so the cap is raised and the INFO checked.
+# VOTable INFO element, so the cap is raised far above any cone stellarphot
+# asks for and the INFO is checked (see `_votable_to_table`).
 TAP_MAXREC = 2_000_000
+
+# UWS job phases (UWS 1.1). A job in a waiting phase is polled again; one in
+# a failed phase will never produce a result.
+_UWS_WAITING_PHASES = frozenset(
+    {"PENDING", "QUEUED", "EXECUTING", "HELD", "SUSPENDED", "UNKNOWN"}
+)
+_UWS_FAILED_PHASES = frozenset({"ERROR", "ABORTED", "ARCHIVED"})
+
+# Bytes read at a time from a TAP result; the deadline is checked between reads.
+_TAP_CHUNK_BYTES = 1 << 16
 
 
 def _votable_to_table(content):
-    """Parse a TAP VOTable response, raising on error or truncation."""
+    """
+    Parse a TAP VOTable response, raising on error or truncation.
+
+    Parameters
+    ----------
+    content : bytes
+        The VOTable document returned by the service.
+
+    Returns
+    -------
+    `astropy.table.Table`
+        The first table in the document.
+
+    Raises
+    ------
+    ValueError
+        If the document cannot be parsed, or a ``QUERY_STATUS`` INFO element
+        reports an error or a result truncated at the service's row limit.
+
+    Notes
+    -----
+    A TAP service reports a failed or truncated query with an INFO element,
+    which may sit at the top of the document, in the resource or in the
+    table, and the HTTP status is 200 either way, so all three are checked.
+    """
     with warnings.catch_warnings():
         # VOTable parsers are chatty about minor spec deviations.
         warnings.simplefilter("ignore")
@@ -345,32 +406,72 @@ def _votable_to_table(content):
 
 
 def _tap_payload(adql, maxrec):
+    """
+    Build the form fields of a TAP ADQL query.
+
+    Parameters
+    ----------
+    adql : str
+        The ADQL query.
+    maxrec : int
+        Maximum number of rows the service may return.
+
+    Returns
+    -------
+    dict
+        Form fields asking for a VOTable result.
+    """
     return dict(
         REQUEST="doQuery", LANG="ADQL", FORMAT="votable", MAXREC=maxrec, QUERY=adql
     )
 
 
-def _tap_sync(url, adql, timeout, maxrec=TAP_MAXREC):
-    """Run a synchronous TAP query and return the result as an astropy Table."""
-    response = requests.post(
-        url.rstrip("/") + "/sync",
-        data=_tap_payload(adql, maxrec),
-        headers={"User-Agent": _USER_AGENT},
-        timeout=timeout,
-    )
-    response.raise_for_status()
-    return _votable_to_table(response.content)
-
-
 def _tap_async(url, adql, timeout, maxrec=TAP_MAXREC, poll_interval=3.0):
     """
-    Run a TAP query as a queued (UWS) job and wait up to ``timeout`` seconds
-    for it. Some services, ESA's Gaia archive among them, answer queued jobs
-    when their synchronous endpoint is overloaded.
+    Run a TAP query as a queued (UWS) job and return its result.
 
-    ``timeout`` bounds the whole exchange: submitting the job, polling it
-    and fetching the result. No single request waits longer than the time
-    left, and a job still running at the deadline is aborted.
+    Parameters
+    ----------
+    url : str
+        Base URL of the TAP service, without the ``/async`` suffix.
+    adql : str
+        The ADQL query.
+    timeout : float
+        Seconds the whole exchange may take.
+    maxrec : int, optional
+        Maximum number of rows the service may return.
+    poll_interval : float, optional
+        Seconds to wait between checks of the job's phase.
+
+    Returns
+    -------
+    `astropy.table.Table`
+        The query result.
+
+    Raises
+    ------
+    requests.exceptions.Timeout
+        If the result is not in hand within ``timeout`` seconds. The job is
+        aborted on the service first.
+    requests.exceptions.RequestException
+        If a request to the service fails.
+    ValueError
+        If the service returns no job identifier, the job fails or reports a
+        phase UWS does not define, or the result reports an error (see
+        `_votable_to_table`).
+
+    Notes
+    -----
+    Some services, ESA's Gaia archive among them, answer queued jobs when
+    their synchronous endpoint is overloaded.
+
+    ``timeout`` bounds the whole exchange: submitting the job, polling it and
+    downloading the result. No single request waits longer than the time left,
+    and the deadline is also checked between chunks of the download, because
+    the ``timeout`` that ``requests`` applies only limits how long the socket
+    may sit idle, so a result trickling in slowly could otherwise take any
+    amount of time. A job still running, or a download still in progress, at
+    the deadline is aborted.
     """
     headers = {"User-Agent": _USER_AGENT}
     deadline = time.monotonic() + timeout
@@ -383,6 +484,9 @@ def _tap_async(url, adql, timeout, maxrec=TAP_MAXREC, poll_interval=3.0):
             )
         return left
 
+    # Submit the job and start it in one request. A UWS service answers with
+    # a redirect to the job; it is not followed, because only its URL is
+    # needed.
     response = requests.post(
         url.rstrip("/") + "/async",
         data=dict(_tap_payload(adql, maxrec), PHASE="RUN"),
@@ -396,6 +500,8 @@ def _tap_async(url, adql, timeout, maxrec=TAP_MAXREC, poll_interval=3.0):
         # UWS says Location is absolute, but some services send a path.
         job_url = urljoin(response.url, location)
     else:
+        # Without a redirect, the job identifier is in the job document in the
+        # body, and the job lives under the service's /async endpoint.
         match = re.search(r"<(?:uws:)?jobId>([^<]+)</", response.text)
         if match is None:
             raise ValueError("TAP service did not return a job identifier")
@@ -403,6 +509,9 @@ def _tap_async(url, adql, timeout, maxrec=TAP_MAXREC, poll_interval=3.0):
     job_url = job_url.rstrip("/")
 
     try:
+        # Poll the job's phase until it either completes or fails; a job that
+        # is queued, running or held by the service is checked again after a
+        # pause, which is itself cut short by the deadline.
         while True:
             phase_response = requests.get(
                 job_url + "/phase", headers=headers, timeout=remaining()
@@ -411,14 +520,29 @@ def _tap_async(url, adql, timeout, maxrec=TAP_MAXREC, poll_interval=3.0):
             phase = phase_response.text.strip()
             if phase == "COMPLETED":
                 break
-            if phase in ("ERROR", "ABORTED"):
+            if phase in _UWS_FAILED_PHASES:
                 raise ValueError(f"TAP job ended in phase {phase}")
+            if phase not in _UWS_WAITING_PHASES:
+                raise ValueError(f"TAP job reported unexpected phase {phase[:100]!r}")
             time.sleep(min(poll_interval, remaining()))
-        result = requests.get(
-            job_url + "/results/result", headers=headers, timeout=remaining()
-        )
+
+        # Download the result in chunks, checking the deadline after each
+        # one: the socket timeout alone would let a slow but steady download
+        # run past it.
+        with requests.get(
+            job_url + "/results/result",
+            headers=headers,
+            timeout=remaining(),
+            stream=True,
+        ) as result:
+            result.raise_for_status()
+            chunks = []
+            for chunk in result.iter_content(chunk_size=_TAP_CHUNK_BYTES):
+                remaining()
+                chunks.append(chunk)
     except requests.exceptions.Timeout:
-        # Do not leave the job running on the service.
+        # The deadline passed, either here or in requests: do not leave the
+        # job running on the service.
         try:
             requests.post(
                 job_url + "/phase",
@@ -429,8 +553,7 @@ def _tap_async(url, adql, timeout, maxrec=TAP_MAXREC, poll_interval=3.0):
         except requests.exceptions.RequestException:
             pass
         raise
-    result.raise_for_status()
-    return _votable_to_table(result.content)
+    return _votable_to_table(b"".join(chunks))
 
 
 # --------------------------------------------------------------------------
@@ -1295,17 +1418,64 @@ class AavsoVsxBackend(CatalogBackend):
         self.timeout = timeout
 
     def provides(self, catalog_id):
+        """
+        Report whether this backend serves a catalog.
+
+        Parameters
+        ----------
+        catalog_id : str
+            VizieR catalog identifier.
+
+        Returns
+        -------
+        bool
+            True only for VSX, ``B/vsx/vsx``.
+        """
         return catalog_id == VSX_VIZIER_ID
 
     def cone_search(self, query):
-        center = query.center.icrs
+        """
+        Fetch the VSX objects in a cone from the AAVSO API.
+
+        Parameters
+        ----------
+        query : `ConeQuery`
+            The cone search.
+
+        Returns
+        -------
+        `astropy.table.Table`
+            The objects, with VizieR's ``B/vsx/vsx`` column names, filtered by
+            ``query.column_filters``. Empty if the cone holds no variables.
+
+        Raises
+        ------
+        CatalogUnavailableError
+            If the request fails, or the answer is empty or is not the JSON
+            document the API sends.
+
+        Notes
+        -----
+        The API answers a cone with no variables with
+        ``{"VSXObjects": []}``, one with a single variable with
+        ``{"VSXObjects": {"VSXObject": {...}}}`` and one with several with
+        ``{"VSXObjects": {"VSXObject": [...]}}``. Any other answer, including
+        an empty body, means the service is not working, and is not taken to
+        mean that there are no variables.
+        """
         params = dict(
             view="api.list",
-            ra=f"{center.ra.deg:.6f}",
-            dec=f"{center.dec.deg:+.6f}",
+            ra=f"{query.center.ra.deg:.6f}",
+            dec=f"{query.center.dec.deg:+.6f}",
             radius=f"{query.radius_deg:.6f}",  # in degrees
             format="json",
         )
+
+        def unavailable(problem):
+            return CatalogUnavailableError(
+                f"AAVSO VSX API failed: {problem} (from {self.url})"
+            )
+
         try:
             response = requests.get(
                 self.url,
@@ -1314,12 +1484,20 @@ class AavsoVsxBackend(CatalogBackend):
                 timeout=self.timeout,
             )
             response.raise_for_status()
-            payload = response.json() if response.content else {}
+            if not response.content:
+                raise unavailable("empty response")
+            payload = response.json()
         except (requests.exceptions.RequestException, ValueError) as err:
-            raise CatalogUnavailableError(f"AAVSO VSX API failed: {err}") from err
-        objects = (payload.get("VSXObjects") or {}).get("VSXObject", [])
+            raise unavailable(err) from err
+        if not isinstance(payload, dict) or "VSXObjects" not in payload:
+            raise unavailable(f"no VSXObjects in answer {str(payload)[:100]!r}")
+        objects = payload["VSXObjects"]
+        if isinstance(objects, dict):
+            objects = objects.get("VSXObject", [])
         if isinstance(objects, dict):  # a single match comes back as an object
             objects = [objects]
+        if not isinstance(objects, list):
+            raise unavailable(f"unexpected VSXObjects {str(objects)[:100]!r}")
         table = vsx_api_objects_to_table(objects)
         return _apply_column_filters(table, query.column_filters)
 
@@ -1343,42 +1521,121 @@ _ESA_APASS_COLUMNS = {
 }  # fmt: skip
 
 
-class TapApassBackend(CatalogBackend):
+class EsaApassDr9Backend(CatalogBackend):
     """
-    Base class for APASS served by a TAP service. Subclasses supply the
-    service URL and the conversion of the service's table to VizieR's
-    ``II/336/apass9`` column names.
+    APASS DR9 from the ESA Gaia archive's copy (``external.apassdr9``).
+
+    Parameters
+    ----------
+    url : str, optional
+        Base URL of the TAP service.
+    timeout : float, optional
+        Seconds the whole query, including waiting in the service's queue, may
+        take.
+
+    Notes
+    -----
+    The ESA table is the VizieR ``II/336/apass9`` table with lower-cased
+    column names, so the content is identical to VizieR's. The service's
+    synchronous endpoint is often overloaded, so the query is run as a queued
+    job, which typically takes 10-20 s.
     """
 
-    name = "APASS TAP"
-    url = None
-    table_name = None
-    # "sync" posts to the service's /sync endpoint; "async" queues a job and
-    # polls it, which is slower to start but survives an overloaded service.
-    mode = "sync"
-    timeout = 120
+    name = "ESA APASS DR9"
+    url = "https://gea.esac.esa.int/tap-server/tap"
+    timeout = 180
 
-    def __init__(self, url=None, timeout=None, mode=None):
+    def __init__(self, url=None, timeout=None):
         if url is not None:
             self.url = url
         if timeout is not None:
             self.timeout = timeout
-        if mode is not None:
-            self.mode = mode
 
     def provides(self, catalog_id):
+        """
+        Report whether this backend serves a catalog.
+
+        Parameters
+        ----------
+        catalog_id : str
+            VizieR catalog identifier.
+
+        Returns
+        -------
+        bool
+            True only for APASS DR9, ``II/336/apass9``.
+        """
         return catalog_id == APASS_VIZIER_ID
 
     def adql(self, query):
-        raise NotImplementedError
+        """
+        Write the ADQL for a cone search of the ESA table.
 
-    def to_vizier(self, table):
-        raise NotImplementedError
+        Parameters
+        ----------
+        query : `ConeQuery`
+            The cone search.
+
+        Returns
+        -------
+        str
+            ADQL selecting every column VizieR's table has, for the stars in
+            the cone.
+        """
+        columns = ", ".join(_ESA_APASS_COLUMNS)
+        return (
+            f"SELECT {columns} FROM external.apassdr9 "
+            f"WHERE 1=CONTAINS(POINT('ICRS', raj2000, dej2000), "
+            f"CIRCLE('ICRS', {query.center.ra.deg:.8f}, "
+            f"{query.center.dec.deg:.8f}, {query.radius_deg:.8f}))"
+        )
+
+    def to_vizier(self, raw):
+        """
+        Rename and convert the ESA columns to VizieR's.
+
+        Parameters
+        ----------
+        raw : `astropy.table.Table`
+            Result of the query from `adql`.
+
+        Returns
+        -------
+        `astropy.table.Table`
+            Masked table with VizieR's ``II/336/apass9`` column names and
+            order, with the coordinates as float columns in degrees.
+        """
+        out = Table(masked=True)
+        for src, dst in _ESA_APASS_COLUMNS.items():
+            column = raw[src]
+            if dst in ("RAJ2000", "DEJ2000"):
+                out[dst] = MaskedColumn(np.ma.asarray(column, dtype=float), unit=u.deg)
+            else:
+                out[dst] = MaskedColumn(column, unit=column.unit)
+        return out
 
     def cone_search(self, query):
-        run = _tap_async if self.mode == "async" else _tap_sync
+        """
+        Fetch the APASS DR9 stars in a cone from the ESA TAP service.
+
+        Parameters
+        ----------
+        query : `ConeQuery`
+            The cone search.
+
+        Returns
+        -------
+        `astropy.table.Table`
+            The stars that have a position, with VizieR's column names and
+            ``_r`` column, filtered by ``query.column_filters``.
+
+        Raises
+        ------
+        CatalogUnavailableError
+            If the query fails or does not finish within ``timeout`` seconds.
+        """
         try:
-            raw = run(self.url, self.adql(query), self.timeout)
+            raw = _tap_async(self.url, self.adql(query), self.timeout)
         except (requests.exceptions.RequestException, ValueError) as err:
             raise CatalogUnavailableError(f"{self.name} failed: {err}") from err
         table = self.to_vizier(raw)
@@ -1389,41 +1646,6 @@ class TapApassBackend(CatalogBackend):
         table = table[has_position]
         table = _add_distance_column(table, query, "RAJ2000", "DEJ2000")
         return _apply_column_filters(table, query.column_filters)
-
-
-class EsaApassDr9Backend(TapApassBackend):
-    """
-    APASS DR9 from the ESA Gaia archive's copy (``external.apassdr9``), which
-    is the VizieR table with lower-cased column names. Identical content to
-    VizieR. The service's synchronous endpoint is often overloaded, so the
-    query is run as a queued job, which typically takes 10-20 s.
-    """
-
-    name = "ESA APASS DR9"
-    url = "https://gea.esac.esa.int/tap-server/tap"
-    table_name = "external.apassdr9"
-    mode = "async"
-    timeout = 180
-
-    def adql(self, query):
-        center = query.center.icrs
-        columns = ", ".join(_ESA_APASS_COLUMNS)
-        return (
-            f"SELECT {columns} FROM {self.table_name} "
-            f"WHERE 1=CONTAINS(POINT('ICRS', raj2000, dej2000), "
-            f"CIRCLE('ICRS', {center.ra.deg:.8f}, {center.dec.deg:.8f}, "
-            f"{query.radius_deg:.8f}))"
-        )
-
-    def to_vizier(self, raw):
-        out = Table(masked=True)
-        for src, dst in _ESA_APASS_COLUMNS.items():
-            column = raw[src]
-            if dst in ("RAJ2000", "DEJ2000"):
-                out[dst] = MaskedColumn(np.ma.asarray(column, dtype=float), unit=u.deg)
-            else:
-                out[dst] = MaskedColumn(column, unit=column.unit)
-        return out
 
 
 # --------------------------------------------------------------------------
