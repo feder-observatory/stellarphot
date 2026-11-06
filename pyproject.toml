@@ -29,12 +29,13 @@ dependencies = [
     "matplotlib",
     "pandas",
     "photutils >=2.3,<3",
+    "pyarrow",  # local catalog stores (stellarphot.catalog_backends) are Parquet
     "pydantic >=2",
     "pyyaml",
     "platformdirs",
-    "requests",  # imported directly in stellarphot.core to catch
-                 # RequestException in the VizieR-mirror fallback; only a
-                 # transitive dependency (via astroquery) otherwise
+    "requests",  # imported directly in stellarphot.catalog_backends for the
+                 # VizieR-mirror fallback and the non-VizieR catalog sources;
+                 # only a transitive dependency (via astroquery) otherwise
     "regions",  # stellarphot does not directly use regions, but
                 # astroquery.XMatch gripes on import if it is not installed
     "scipy",  # imported directly in stellarphot.photometry; arrives

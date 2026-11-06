@@ -9,7 +9,6 @@ with warnings.catch_warnings():
     import lightkurve as lk
 import numpy as np
 import pandas as pd
-import requests
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astropy.io.ascii import InconsistentTableError
@@ -18,7 +17,6 @@ from astropy.time import Time
 from astropy.utils.decorators import lazyproperty
 from astropy.utils.exceptions import AstropyUserWarning
 from astropy.wcs import WCS
-from astroquery.vizier import Vizier
 
 # Imported under a private alias so the module-level name does not collide with
 # the PhotometryData.write_aavso_extended method that delegates to it, and so it
@@ -48,21 +46,15 @@ __all__ = [
 # from ``stellarphot.core`` (with a deprecation warning) for one or two releases.
 _MOVED_TO_CATALOGS = frozenset({"apass_dr9", "vsx_vizier", "refcat2"})
 
-# VizieR servers to try, in order, when fetching a catalog. A server that is up
-# but whose database is broken answers with a VOTable containing only error
-# messages, which astroquery silently turns into an empty result -- so
-# ``CatalogData.from_vizier`` falls through this list whenever a query comes
-# back empty.
-VIZIER_SERVERS = (
-    "vizier.cds.unistra.fr",  # astroquery's default, at CDS
-    "vizier.cfa.harvard.edu",
-)
+# VizieR settings that moved to ``stellarphot.catalog_backends``. Reading them
+# from ``stellarphot.core`` still works (with a deprecation warning, see
+# ``__getattr__`` below); assigning to the old name has no effect.
+_MOVED_TO_CATALOG_BACKENDS = frozenset({"VIZIER_SERVERS", "VIZIER_TIMEOUT"})
 
-# Seconds to wait for a response from a VizieR server before moving on to the
-# next one. The largest healthy query we have timed (APASS DR9 over an M31
-# field, cold cache) took ~23 s; a broken server can hang far longer than any
-# healthy one takes, and each of these blocks the notebook kernel.
-VIZIER_TIMEOUT = 30
+# Catalog lookups go through ``catalog_backends``; the VizieR server list and
+# timeout (``VIZIER_SERVERS``, ``VIZIER_TIMEOUT``) live there now, with a
+# read-only deprecated alias here.
+from .catalog_backends import ConeQuery, query_backends  # noqa: E402
 
 
 def coords_in_frame(coords, wcs, shape, padding=0):
@@ -131,6 +123,21 @@ def __getattr__(name):
             stacklevel=2,
         )
         return getattr(catalogs, name)
+    if name in _MOVED_TO_CATALOG_BACKENDS:
+        from astropy.utils.exceptions import AstropyDeprecationWarning
+
+        from . import catalog_backends
+
+        warnings.warn(
+            f"stellarphot.core.{name} has moved to "
+            f"stellarphot.catalog_backends.{name}. "
+            "Assigning to the old name has no effect; set the new one, or "
+            "STELLARPHOT_VIZIER_SERVERS for the server list. "
+            "This shim will be removed in stellarphot 3.0.0.",
+            AstropyDeprecationWarning,
+            stacklevel=2,
+        )
+        return getattr(catalog_backends, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -1205,6 +1212,7 @@ class CatalogData(BaseEnhancedTable):
         prepare_catalog=None,
         no_catalog_error=False,
         tidy_catalog=True,
+        backends=None,
     ):
         """
         Return the items from catalog that are within the search radius and
@@ -1268,6 +1276,12 @@ class CatalogData(BaseEnhancedTable):
             row per passband *after* running the catalog through `prepare_catlog` if
             that is not ``None``. If ``False``, no tidying will be done. See Notes
             below for more information about tidy data format.
+
+        backends : list of `stellarphot.catalog_backends.CatalogBackend`, optional
+            Sources to query, in order, until one returns rows. Default is
+            `stellarphot.catalog_backends.default_backends`, which reads the
+            ``STELLARPHOT_CATALOG_SOURCES`` and ``STELLARPHOT_CATALOG_DIR``
+            environment variables and otherwise tries VizieR first.
 
         Returns
         -------
@@ -1334,40 +1348,16 @@ class CatalogData(BaseEnhancedTable):
             if magnitude_limit is not None
             else {}
         )
-        # When a VizieR server is unreachable it may still respond with a
-        # VOTable that contains only error messages, which astroquery turns
-        # into an empty result, so an empty result on one server is retried
-        # on the others. A server whose database is broken may instead hang
-        # until the request times out, so network-level errors also fall
-        # through to the next server.
-        network_error = None
-        for server in VIZIER_SERVERS:
-            vizier = Vizier(
-                columns=["all"],
-                row_limit=-1,
-                column_filters=column_filter,
-                timeout=VIZIER_TIMEOUT,
-                vizier_server=server,
-            )
-            try:
-                cat = vizier.query_region(
-                    center, radius=radius, catalog=desired_catalog
-                )
-            except requests.exceptions.RequestException as err:
-                network_error = err
-                continue
-            if len(cat) > 0:
-                break
-        else:
-            raise RuntimeError(
-                f"No results returned from Vizier for catalog {desired_catalog} "
-                f"around {center}. The region may contain no matching sources, "
-                "or the VizieR servers may be unavailable."
-            ) from network_error
-
-        # Vizier always returns list even if there is only one element. Grab that
-        # element.
-        cat = cat[0]
+        # The backends (VizieR mirrors, a local copy, other services) each
+        # return a table with the catalog's native column names, so all of the
+        # processing below is independent of where the rows came from.
+        query = ConeQuery(
+            catalog_id=desired_catalog,
+            center=center.icrs,
+            radius=u.Quantity(radius, u.deg),
+            column_filters=column_filter,
+        )
+        cat, catalog_source = query_backends(query, backends)
 
         final_cat = prepare_catalog(cat) if prepare_catalog is not None else cat
 
@@ -1390,7 +1380,7 @@ class CatalogData(BaseEnhancedTable):
             input_data=final_cat,
             colname_map=colname_map,
             catalog_name=desired_catalog,
-            catalog_source="Vizier",
+            catalog_source=catalog_source,
             no_catalog_error=no_catalog_error,
         )
 

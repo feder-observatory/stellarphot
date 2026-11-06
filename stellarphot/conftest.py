@@ -33,6 +33,18 @@ SERVER_DOWN_ERRORS = (
     ValueError,
 )
 
+
+@pytest.fixture(autouse=True)
+def _catalog_sources_vizier_only(monkeypatch):
+    # Catalog lookups in the tests must not depend on the developer's (or a
+    # JupyterHub's) environment, and the non-VizieR backends would reach for
+    # the network in tests that mock only VizieR. Tests that want another
+    # backend pass ``backends=`` explicitly.
+    monkeypatch.setenv("STELLARPHOT_CATALOG_SOURCES", "vizier")
+    monkeypatch.delenv("STELLARPHOT_CATALOG_DIR", raising=False)
+    monkeypatch.delenv("STELLARPHOT_VIZIER_SERVERS", raising=False)
+
+
 # astropy-specific-stuff
 
 
