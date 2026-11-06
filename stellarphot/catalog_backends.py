@@ -740,8 +740,7 @@ class LocalStoreBackend(CatalogBackend):
 
     The directory holds one sub-directory per catalog, each with a
     ``catalog.json`` manifest and the data partitioned into one-degree
-    declination zones; see `write_local_store` for the layout. Reading
-    requires ``pyarrow``.
+    declination zones; see `write_local_store` for the layout.
 
     Parameters
     ----------
@@ -840,13 +839,8 @@ class LocalStoreBackend(CatalogBackend):
         return f"<LocalStoreBackend {self.root} catalogs={sorted(self.stores)}>"
 
     def cone_search(self, query):
-        try:
-            import pyarrow.compute as pc
-            import pyarrow.dataset as ds
-        except ImportError as err:
-            raise CatalogUnavailableError(
-                "Reading a local catalog store requires pyarrow"
-            ) from err
+        import pyarrow.compute as pc
+        import pyarrow.dataset as ds
 
         info = self.stores[query.catalog_id]
         ra_col, dec_col = info["ra_col"], info["dec_col"]

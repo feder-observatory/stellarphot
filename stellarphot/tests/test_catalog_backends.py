@@ -4,6 +4,7 @@ import warnings
 
 import numpy as np
 import pyarrow as pa
+import pyarrow.compute as pc
 import pytest
 import requests
 from astropy import units as u
@@ -761,8 +762,6 @@ def test_local_store_honors_radius_and_filters(refcat2_store):
 def test_filter_expression_float32_limits_and_nulls(spec, expected):
     # 15.1 as float32 is not 15.1 as float64; a star exactly at the limit
     # must still pass, and a null (masked) value must never pass.
-    pa = pytest.importorskip("pyarrow")
-    pc = pytest.importorskip("pyarrow.compute")
     mags = pa.array([14.0, 15.1, 16.0, None], type=pa.float32())
     arrow_table = pa.table({"rmag": mags})
     expr = _filter_expression(pc.field("rmag"), spec, mags.type)
@@ -778,8 +777,6 @@ def test_filter_expression_float32_limits_and_nulls(spec, expected):
 
 
 def test_filter_expression_integer_and_string_columns():
-    pa = pytest.importorskip("pyarrow")
-    pc = pytest.importorskip("pyarrow.compute")
     flags = pa.array([14, 15, 16, None], type=pa.int16())
     expr = _filter_expression(pc.field("flag"), "<=15.5", flags.type)
     kept = pa.table({"flag": flags}).filter(expr)
