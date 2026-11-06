@@ -483,9 +483,30 @@ class LocalStoreBackend(CatalogBackend):
             )
             return
         for manifest in sorted(self.root.glob("*/catalog.json")):
-            info = json.loads(manifest.read_text())
-            info["path"] = manifest.parent / info.get("data_dir", "data")
-            self.stores[info["vizier_id"]] = info
+            # One bad manifest (half-written, hand-edited, not ours) must not
+            # take down the other catalogs or the backends after this one.
+            try:
+                info = json.loads(manifest.read_text())
+                if not isinstance(info, dict):
+                    raise TypeError(f"manifest is a {type(info).__name__}, not a dict")
+                if info.get("format") != STORE_FORMAT:
+                    raise ValueError(
+                        f"format is {info.get('format')!r}, not {STORE_FORMAT!r}"
+                    )
+                # The data lives in a sub-directory named by the manifest, so a
+                # rebuild can publish a new one by rewriting only the manifest.
+                info["path"] = manifest.parent / info.get("data_dir", "data")
+                vizier_id = info["vizier_id"]
+            except (OSError, ValueError, KeyError, TypeError) as err:
+                warnings.warn(
+                    f"Skipping local catalog with unreadable manifest {manifest}: "
+                    f"{err!r}",
+                    AstropyUserWarning,
+                    stacklevel=2,
+                )
+                continue
+            info["zones"], info["zones_recorded"] = _store_zones(info)
+            self.stores[vizier_id] = info
         if not self.stores:
             warnings.warn(
                 f"Local catalog store {self.root} contains no catalogs "
@@ -495,9 +516,43 @@ class LocalStoreBackend(CatalogBackend):
             )
 
     def provides(self, catalog_id):
+        """
+        Return ``True`` if the store holds a copy of the catalog.
+
+        Parameters
+        ----------
+        catalog_id : str
+            VizieR identifier of the catalog.
+
+        Returns
+        -------
+        bool
+            ``True`` if one of the store's manifests answers for
+            ``catalog_id``.
+        """
         return catalog_id in self.stores
 
     def is_complete(self, query):
+        """
+        Return ``True`` if the store holds every source ``query`` could return.
+
+        Parameters
+        ----------
+        query : `ConeQuery`
+            The query to check; its catalog must be one the store provides.
+
+        Returns
+        -------
+        bool
+            ``True`` if an empty answer from this store is final, ``False`` if
+            the query may reach fainter than the store goes.
+
+        Notes
+        -----
+        The store is complete for a query if its manifest records no
+        ``mag_limit`` or the query has an upper bound at or brighter than the
+        limit on one of the limited columns; see ``_covers``.
+        """
         return self._covers(self.stores[query.catalog_id], query)
 
     def __repr__(self):
@@ -519,9 +574,11 @@ class LocalStoreBackend(CatalogBackend):
         radius = query.radius_deg
 
         dec_min, dec_max = max(dec0 - radius, -90.0), min(dec0 + radius, 90.0)
+        zone_lo = int(np.floor((dec_min + 90) / zone_deg))
+        zone_hi = int(np.floor((dec_max + 90) / zone_deg))
         expr = (
-            (pc.field("zone") >= int(np.floor((dec_min + 90) / zone_deg)))
-            & (pc.field("zone") <= int(np.floor((dec_max + 90) / zone_deg)))
+            (pc.field("zone") >= zone_lo)
+            & (pc.field("zone") <= zone_hi)
             & (pc.field(dec_col) >= dec_min)
             & (pc.field(dec_col) <= dec_max)
         )
@@ -540,6 +597,13 @@ class LocalStoreBackend(CatalogBackend):
                     expr &= ra_between(lo, 360) | ra_between(0, hi - 360)
                 else:
                     expr &= ra_between(lo, hi)
+
+        missing = _missing_zones(info, zone_lo, zone_hi)
+        if missing:
+            raise CatalogUnavailableError(
+                f"Could not read local copy of {query.catalog_id} at "
+                f"{info['path']}: zone(s) {', '.join(map(str, missing))} missing"
+            )
 
         try:
             dataset = ds.dataset(info["path"], format="parquet", partitioning="hive")
@@ -569,7 +633,8 @@ class LocalStoreBackend(CatalogBackend):
             warnings.warn(
                 f"Local copy of {info['vizier_id']} at {info['path']} only "
                 f"contains sources with {described}; fainter sources are "
-                "missing.",
+                "missing. Put 'vizier' before 'local' in "
+                f"{ENV_CATALOG_SOURCES} to query the full catalog.",
                 AstropyUserWarning,
                 stacklevel=4,
             )
@@ -578,9 +643,32 @@ class LocalStoreBackend(CatalogBackend):
     @staticmethod
     def _covers(info, query):
         """
-        Return ``True`` if the store holds every source the query could
-        return: it has no recorded magnitude limit, or the query limits
-        itself to at most that depth.
+        Return ``True`` if the store holds every source ``query`` could return.
+
+        Parameters
+        ----------
+        info : dict
+            The catalog's manifest, as loaded in ``__init__``.
+        query : `ConeQuery`
+            The query to check.
+
+        Returns
+        -------
+        bool
+            ``True`` if the manifest records no ``mag_limit``, or if one of the
+            query's column filters is an upper bound (``<`` or ``<=``) on a
+            limited column at or brighter than the store's limit.
+
+        Notes
+        -----
+        A range filter (``a..b``) is never counted, even if ``b`` is within the
+        limit. That is conservative: the query still runs, with a warning, and
+        falls through to the next backend if it comes back empty.
+
+        With several limited columns a single qualifying filter is enough. That
+        matches a store cut on the brightest of the columns (``min(g, r, i)``
+        in the refcat2 tiles): a source fainter than the limit in one column is
+        still present if it is brighter in another.
         """
         limits = info.get("mag_limit") or {}
         if not limits:
@@ -591,6 +679,73 @@ class LocalStoreBackend(CatalogBackend):
                 if op in ("<=", "<") and a <= limits[col]:
                     return True
         return False
+
+
+def _store_zones(info):
+    """
+    Return the declination zones a store holds and whether its manifest says so.
+
+    Parameters
+    ----------
+    info : dict
+        The catalog's manifest, with ``path`` set to its data directory.
+
+    Returns
+    -------
+    zones : frozenset of int
+        Zone indices, from the manifest's ``zones`` if present, otherwise from
+        the ``zone=*`` directories on disk.
+    recorded : bool
+        ``True`` if ``zones`` came from the manifest.
+    """
+    if info.get("zones") is not None:
+        return frozenset(int(z) for z in info["zones"]), True
+    # Manifests written before zones were recorded: list the disk once.
+    path = Path(info["path"])
+    if not path.is_dir():
+        return frozenset(), False
+    zones = set()
+    for zone_dir in path.glob("zone=*"):
+        try:
+            zones.add(int(zone_dir.name.partition("=")[2]))
+        except ValueError:
+            continue
+    return frozenset(zones), False
+
+
+def _missing_zones(info, zone_lo, zone_hi):
+    """
+    Return the zones in ``zone_lo..zone_hi`` the store should have but lacks.
+
+    Parameters
+    ----------
+    info : dict
+        The catalog's manifest, as loaded in `LocalStoreBackend`.
+    zone_lo, zone_hi : int
+        First and last zone a query needs.
+
+    Returns
+    -------
+    list of int
+        Missing zones, in order; empty if nothing is missing.
+
+    Notes
+    -----
+    Zones outside the lowest..highest written zone are never missing: the
+    store was simply built for less of the sky. When the manifest records
+    its zones, a needed zone it lists must exist on disk, and a zone it does
+    not list had no rows. When the zones were found on disk (older
+    manifests), any gap inside the written range counts as missing: on a
+    full-sky store every zone has stars, so a gap means lost data.
+    """
+    zones = info["zones"]
+    if not zones:
+        return []
+    needed = range(max(zone_lo, min(zones)), min(zone_hi, max(zones)) + 1)
+    if info["zones_recorded"]:
+        path = info["path"]
+        return [z for z in needed if z in zones and not (path / f"zone={z}").is_dir()]
+    return [z for z in needed if z not in zones]
 
 
 def _arrow_to_masked_table(arrow_table, units):
@@ -647,7 +802,9 @@ def write_local_store(
         Free-form provenance string recorded in the manifest.
     mag_limit : dict, optional
         ``{column: limit}`` describing how deep the store is complete, e.g.
-        ``{"rmag": 16.0}``. Queries that go fainter get a warning.
+        ``{"rmag": 16.0}``: every source at or brighter than the limit in at
+        least one of the columns is present. Queries that go fainter get a
+        warning.
     zone_deg : float, optional
         Height of the declination zones the data is partitioned into.
 
@@ -661,62 +818,98 @@ def write_local_store(
     Layout, with ``zone = floor((dec + 90) / zone_deg)``::
 
         root/name/catalog.json
-        root/name/data/zone=NNN/part-0.parquet
+        root/name/data-<token>/zone=NNN/part-0.parquet
 
     Rows are sorted by right ascension within each zone so Parquet row-group
     statistics prune most of a zone for a small cone.
+
+    A rebuild writes into a new ``data-<token>`` directory and switches the
+    manifest's ``data_dir`` to it only once every chunk is written, so an
+    interrupted rebuild leaves the published store intact. Older data
+    directories are removed after the switch.
+
+    The manifest lists the zones written. `LocalStoreBackend` treats a zone
+    the manifest lists but that is missing on disk as an error (the data was
+    lost). Zones with no rows are never written, and zones outside the
+    lowest..highest written zone are taken to be outside the store's sky
+    coverage, so neither is an error. For manifests without the list, zones
+    are found on disk and any gap inside the written range is an error.
     """
     import shutil
+    import uuid
 
     import pyarrow as pa
     import pyarrow.dataset as ds
 
     cat_dir = Path(root) / name
-    data_dir = cat_dir / "data"
-    if data_dir.exists():
-        shutil.rmtree(data_dir)
-    data_dir.mkdir(parents=True)
+    cat_dir.mkdir(parents=True, exist_ok=True)
+    data_name = f"data-{time.strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:8]}"
+    data_dir = cat_dir / data_name
+    data_dir.mkdir()
 
     chunks = [table] if isinstance(table, Table) else table
     units = {}
+    zones = set()
     rows = 0
-    for chunk_number, chunk in enumerate(chunks):
-        columns = {}
-        for colname in chunk.colnames:
-            column = chunk[colname]
-            unit = column.unit
-            if unit is not None:
-                units[colname] = unit.to_string()
-            values = np.ma.asarray(column)
-            mask = np.ma.getmaskarray(values)
-            data = np.ma.getdata(values)
-            if data.dtype.kind in ("U", "S", "O"):
-                columns[colname] = pa.array(
-                    [None if m else str(v) for v, m in zip(data, mask, strict=True)],
-                    type=pa.string(),
-                )
-            else:
-                columns[colname] = pa.array(data, mask=mask)
-        dec = np.asarray(chunk[dec_col], dtype=float)
-        columns["zone"] = pa.array(
-            np.floor((dec + 90) / zone_deg).astype(np.int16), type=pa.int16()
-        )
-        arrow_table = pa.table(columns).sort_by(
-            [("zone", "ascending"), (ra_col, "ascending")]
-        )
-        ds.write_dataset(
-            arrow_table,
-            data_dir,
-            format="parquet",
-            partitioning=ds.partitioning(
-                pa.schema([("zone", pa.int16())]), flavor="hive"
-            ),
-            basename_template=f"part-{chunk_number}-{{i}}.parquet",
-            file_options=ds.ParquetFileFormat().make_write_options(compression="zstd"),
-            max_rows_per_group=20_000,
-            existing_data_behavior="overwrite_or_ignore",
-        )
-        rows += len(chunk)
+    try:
+        for chunk_number, chunk in enumerate(chunks):
+            columns = {}
+            for colname in chunk.colnames:
+                column = chunk[colname]
+                unit = column.unit
+                if unit is not None:
+                    units[colname] = unit.to_string()
+                # Masked values become Parquet nulls, which the reader turns
+                # back into masks, so VizieR's blanks survive the round trip.
+                values = np.ma.asarray(column)
+                mask = np.ma.getmaskarray(values)
+                data = np.ma.getdata(values)
+                if data.dtype.kind in ("U", "S", "O"):
+                    # Byte strings (FITS text columns) are decoded so they are
+                    # stored as text, not as their repr, "b'...'".
+                    texts = [
+                        v.decode() if isinstance(v, bytes) else str(v) for v in data
+                    ]
+                    columns[colname] = pa.array(
+                        [None if m else t for t, m in zip(texts, mask, strict=True)],
+                        type=pa.string(),
+                    )
+                else:
+                    # pyarrow only takes native byte order; FITS is big-endian.
+                    if not data.dtype.isnative:
+                        data = data.astype(data.dtype.newbyteorder("="), copy=False)
+                    columns[colname] = pa.array(data, mask=mask)
+            # The zone column only drives the partitioning; the reader drops it.
+            dec = np.asarray(chunk[dec_col], dtype=float)
+            zone = np.floor((dec + 90) / zone_deg).astype(np.int16)
+            zones.update(int(z) for z in np.unique(zone))
+            columns["zone"] = pa.array(zone, type=pa.int16())
+            # Hive partitioning (one zone=NNN directory per zone) lets a cone
+            # search skip every file outside its declination band without
+            # opening it. Sorting by RA inside a zone makes each row group
+            # cover a narrow RA range, so its statistics prune most of the zone.
+            arrow_table = pa.table(columns).sort_by(
+                [("zone", "ascending"), (ra_col, "ascending")]
+            )
+            ds.write_dataset(
+                arrow_table,
+                data_dir,
+                format="parquet",
+                partitioning=ds.partitioning(
+                    pa.schema([("zone", pa.int16())]), flavor="hive"
+                ),
+                basename_template=f"part-{chunk_number}-{{i}}.parquet",
+                file_options=ds.ParquetFileFormat().make_write_options(
+                    compression="zstd"
+                ),
+                max_rows_per_group=20_000,
+                existing_data_behavior="overwrite_or_ignore",
+            )
+            rows += len(chunk)
+    except BaseException:
+        # Leave the published store as it was.
+        shutil.rmtree(data_dir, ignore_errors=True)
+        raise
     manifest = dict(
         format=STORE_FORMAT,
         format_version=STORE_FORMAT_VERSION,
@@ -726,13 +919,20 @@ def write_local_store(
         zone_deg=zone_deg,
         ra_col=ra_col,
         dec_col=dec_col,
-        data_dir="data",
+        data_dir=data_name,
         rows=rows,
         version=version,
         mag_limit=mag_limit,
         units=units,
+        zones=sorted(zones),
     )
-    (cat_dir / "catalog.json").write_text(json.dumps(manifest, indent=1))
+    # Publish the new data by replacing the manifest in one step.
+    manifest_tmp = cat_dir / "catalog.json.tmp"
+    manifest_tmp.write_text(json.dumps(manifest, indent=1))
+    os.replace(manifest_tmp, cat_dir / "catalog.json")
+    for old in [cat_dir / "data", *cat_dir.glob("data-*")]:
+        if old != data_dir and old.is_dir():
+            shutil.rmtree(old, ignore_errors=True)
     return cat_dir
 
 

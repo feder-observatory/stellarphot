@@ -1,4 +1,5 @@
 import json
+import shutil
 import warnings
 
 import numpy as np
@@ -462,18 +463,141 @@ def refcat2_store(tmp_path):
     return tmp_path
 
 
+def _manifest(root, name):
+    return json.loads((root / name / "catalog.json").read_text())
+
+
+def _data_dir(root, name):
+    return root / name / _manifest(root, name)["data_dir"]
+
+
+def _stars(names, ras, decs):
+    return Table({"Name": names, "RAJ2000": ras, "DEJ2000": decs})
+
+
+def _write_stars(stars, root):
+    return write_local_store(stars, root, "stars", "test/stars", "RAJ2000", "DEJ2000")
+
+
+def _star_names(backend, ra, dec, radius):
+    table = backend.cone_search(
+        _query(SkyCoord(ra, dec, unit="deg"), radius, catalog_id="test/stars")
+    )
+    return set(table["Name"])
+
+
 def test_write_local_store_layout_and_manifest(refcat2_store):
-    manifest = json.loads((refcat2_store / "refcat2" / "catalog.json").read_text())
+    manifest = _manifest(refcat2_store, "refcat2")
     assert manifest["vizier_id"] == "J/ApJ/867/105/refcat2"
     assert manifest["rows"] == len(_raw_refcat2())
     assert manifest["units"]["pmRA"] == "mas / yr"
     assert manifest["units"]["RA_ICRS"] == "deg"
     parts = sorted(
         p.parent.name
-        for p in (refcat2_store / "refcat2" / "data").glob("zone=*/*.parquet")
+        for p in _data_dir(refcat2_store, "refcat2").glob("zone=*/*.parquet")
     )
     # The EY UMa field straddles Dec = +50, so the rows land in two zones.
     assert parts == ["zone=139", "zone=140"]
+    assert manifest["zones"] == [139, 140]
+
+
+# Three stars in zones 100, 101 and 102 (zone = floor(dec + 90)).
+_THREE_ZONES = _stars(["z100", "z101", "z102"], [30.0, 30.0, 30.0], [10.5, 11.5, 12.5])
+
+
+@pytest.mark.parametrize("zones_in_manifest", [True, False])
+def test_local_store_missing_zone_is_unavailable(tmp_path, zones_in_manifest):
+    _write_stars(_THREE_ZONES, tmp_path)
+    if not zones_in_manifest:
+        # Manifests written before zones were recorded; zones come from disk.
+        manifest = _manifest(tmp_path, "stars")
+        del manifest["zones"]
+        (tmp_path / "stars" / "catalog.json").write_text(json.dumps(manifest))
+    shutil.rmtree(_data_dir(tmp_path, "stars") / "zone=101")
+    backend = LocalStoreBackend(tmp_path)
+    expected_zones = {100, 101, 102} if zones_in_manifest else {100, 102}
+    assert backend.stores["test/stars"]["zones"] == expected_zones
+
+    with pytest.raises(CatalogUnavailableError, match=r"zone.*101"):
+        _star_names(backend, 30.0, 11.5, 0.2)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        # Zones that are all present still answer...
+        assert _star_names(backend, 30.0, 12.5, 0.2) == {"z102"}
+        # ...and so does a cone outside the zones the store was written for.
+        assert _star_names(backend, 30.0, -30.0, 0.2) == set()
+        assert _star_names(backend, 30.0, 60.0, 0.2) == set()
+
+
+def test_local_store_zone_deleted_after_opening_is_unavailable(tmp_path):
+    _write_stars(_THREE_ZONES, tmp_path)
+    backend = LocalStoreBackend(tmp_path)
+    assert _star_names(backend, 30.0, 11.5, 0.2) == {"z101"}
+    shutil.rmtree(_data_dir(tmp_path, "stars") / "zone=101")
+    with pytest.raises(CatalogUnavailableError, match=r"zone.*101"):
+        _star_names(backend, 30.0, 11.5, 0.2)
+
+
+def test_write_local_store_rebuild_replaces_data(tmp_path):
+    _write_stars(_stars(["old"], [30.0], [10.5]), tmp_path)
+    old_backend = LocalStoreBackend(tmp_path)
+    old_path = old_backend.stores["test/stars"]["path"]
+    assert old_path.is_dir()
+
+    _write_stars(_stars(["new"], [30.0], [10.5]), tmp_path)
+    assert _manifest(tmp_path, "stars")["data_dir"] != old_path.name
+    assert not old_path.exists()
+    assert [p.name for p in (tmp_path / "stars").glob("data*")] == [
+        _manifest(tmp_path, "stars")["data_dir"]
+    ]
+    assert _star_names(LocalStoreBackend(tmp_path), 30.0, 10.5, 0.2) == {"new"}
+
+
+def test_write_local_store_failed_rebuild_keeps_old_store(tmp_path):
+    _write_stars(_stars(["old"], [30.0], [10.5]), tmp_path)
+    manifest_before = (tmp_path / "stars" / "catalog.json").read_text()
+    backend = LocalStoreBackend(tmp_path)
+
+    def chunks():
+        yield _stars(["new"], [30.0], [10.5])
+        raise RuntimeError("source catalog went away")
+
+    with pytest.raises(RuntimeError, match="went away"):
+        _write_stars(chunks(), tmp_path)
+    assert (tmp_path / "stars" / "catalog.json").read_text() == manifest_before
+    # The partial new data directory is cleaned up.
+    assert [p.name for p in (tmp_path / "stars").glob("data*")] == [
+        backend.stores["test/stars"]["path"].name
+    ]
+    assert _star_names(backend, 30.0, 10.5, 0.2) == {"old"}
+
+
+def test_write_local_store_big_endian_and_bytes_columns(tmp_path):
+    # Tables read from FITS have big-endian numbers and byte-string text.
+    stars = Table(
+        [
+            Column(np.array([b"EY UMa", b"star 2"], dtype="S"), name="Name"),
+            Column(np.array([30.0, 30.1], dtype=">f8"), name="RAJ2000"),
+            Column(np.array([10.5, 10.6], dtype=">f8"), name="DEJ2000"),
+            MaskedColumn(
+                np.array([12.5, 13.5], dtype=">f4"), mask=[False, True], name="Vmag"
+            ),
+            Column(np.array([7, 2**40], dtype=">i8"), name="id"),
+        ]
+    )
+    _write_stars(stars, tmp_path)
+    table = LocalStoreBackend(tmp_path).cone_search(
+        _query(SkyCoord(30.0, 10.5, unit="deg"), 1.0, catalog_id="test/stars")
+    )
+    table.sort("RAJ2000")
+    assert list(table["Name"]) == ["EY UMa", "star 2"]
+    for colname in ["RAJ2000", "DEJ2000", "Vmag", "id"]:
+        np.testing.assert_array_equal(
+            np.ma.getmaskarray(table[colname]), np.ma.getmaskarray(stars[colname])
+        )
+        np.testing.assert_array_equal(
+            np.ma.filled(table[colname], 0), np.ma.filled(stars[colname], 0)
+        )
 
 
 class _UnitReadOnceColumn(Column):
@@ -507,9 +631,8 @@ def test_write_local_store_reads_each_unit_once(tmp_path):
         ]
     )
     stars["RAJ2000"].real_unit_reads = 1
-    write_local_store(stars, tmp_path, "stars", "test/stars", "RAJ2000", "DEJ2000")
-    manifest = json.loads((tmp_path / "stars" / "catalog.json").read_text())
-    assert manifest["units"] == {"RAJ2000": "deg", "DEJ2000": "deg"}
+    _write_stars(stars, tmp_path)
+    assert _manifest(tmp_path, "stars")["units"] == {"RAJ2000": "deg", "DEJ2000": "deg"}
 
 
 def test_local_store_roundtrip_matches_fixture(refcat2_store):
@@ -565,7 +688,10 @@ def test_local_store_warns_when_shallower_than_query(tmp_path):
         AstropyUserWarning, match="rmag <= 16.0; fainter sources are missing"
     ):
         backend.cone_search(_query(center, 1.0))
-    with pytest.warns(AstropyUserWarning, match="fainter sources are missing"):
+    with pytest.warns(
+        AstropyUserWarning,
+        match="Put 'vizier' before 'local' in STELLARPHOT_CATALOG_SOURCES",
+    ):
         backend.cone_search(_query(center, 1.0, rmag="<=17"))
     with warnings.catch_warnings():
         warnings.simplefilter("error")
@@ -619,13 +745,12 @@ def test_local_store_unreadable_data_is_unavailable(refcat2_store):
     query = _query(_ey_uma_center(), 0.5)
     assert len(backend.cone_search(query)) > 0
     # The store's data goes away (external disk unmounted) or a file is bad.
-    for parquet in (refcat2_store / "refcat2" / "data").rglob("*.parquet"):
+    data_dir = _data_dir(refcat2_store, "refcat2")
+    for parquet in data_dir.rglob("*.parquet"):
         parquet.write_bytes(b"not a parquet file")
     with pytest.raises(CatalogUnavailableError, match="Could not read"):
         backend.cone_search(query)
-    import shutil
-
-    shutil.rmtree(refcat2_store / "refcat2" / "data")
+    shutil.rmtree(data_dir)
     with pytest.raises(CatalogUnavailableError, match="Could not read"):
         backend.cone_search(query)
 
@@ -636,6 +761,27 @@ def test_local_store_warns_about_missing_or_empty_root(tmp_path):
     assert backend.stores == {}
     with pytest.warns(AstropyUserWarning, match="no catalogs"):
         LocalStoreBackend(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "manifest_text",
+    [
+        '{"format": "stellarphot-catalog-store", "vizier_id": "te',  # truncated
+        json.dumps({"format": "something-else", "vizier_id": "test/other"}),
+        json.dumps({"vizier_id": "test/other"}),  # no format
+        json.dumps({"format": "stellarphot-catalog-store"}),  # no vizier_id
+        json.dumps(["not", "a", "dict"]),
+    ],
+)
+def test_local_store_skips_bad_manifest(refcat2_store, manifest_text):
+    bad = refcat2_store / "other" / "catalog.json"
+    bad.parent.mkdir()
+    bad.write_text(manifest_text)
+    with pytest.warns(AstropyUserWarning, match="other.catalog.json") as record:
+        backend = LocalStoreBackend(refcat2_store)
+    assert len(record) == 1
+    assert set(backend.stores) == {"J/ApJ/867/105/refcat2"}
+    assert len(backend.cone_search(_query(_ey_uma_center(), 0.5))) > 0
 
 
 def test_arrow_to_masked_table_keeps_integer_dtypes():
@@ -672,22 +818,17 @@ def test_arrow_to_masked_table_keeps_integer_dtypes():
     ],
 )
 def test_local_store_cone_geometry(tmp_path, ra, dec, radius, expected_names):
-    stars = Table(
-        {
-            "Name": [
-                "wrap-west", "wrap-east", "antimeridian", "pole-a", "pole-b",
-                "south-pole", "far",
-            ],
-            "RAJ2000": [359.8, 0.2, 180.1, 100.0, 300.0, 200.0, 45.0],
-            "DEJ2000": [0.1, -0.1, 0.2, 89.95, 89.8, -89.95, 31.0],
-        }
+    stars = _stars(
+        [
+            "wrap-west", "wrap-east", "antimeridian", "pole-a", "pole-b",
+            "south-pole", "far",
+        ],
+        [359.8, 0.2, 180.1, 100.0, 300.0, 200.0, 45.0],
+        [0.1, -0.1, 0.2, 89.95, 89.8, -89.95, 31.0],
     )  # fmt: skip
-    write_local_store(stars, tmp_path, "stars", "test/stars", "RAJ2000", "DEJ2000")
+    _write_stars(stars, tmp_path)
     backend = LocalStoreBackend(tmp_path)
-    table = backend.cone_search(
-        _query(SkyCoord(ra, dec, unit="deg"), radius, catalog_id="test/stars")
-    )
-    assert set(table["Name"]) == expected_names
+    assert _star_names(backend, ra, dec, radius) == expected_names
 
 
 def test_local_store_end_to_end_refcat2(refcat2_store, mocker):
