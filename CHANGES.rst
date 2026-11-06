@@ -50,6 +50,8 @@ New Features
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
++ The "Calibrate magnitudes" notebook now picks the photometry file with a
+  file chooser instead of a file name typed into a cell. [#741]
 + A ``profile`` pixi environment (the default environment plus ``pyinstrument``,
   ``py-spy``, ``line_profiler`` and ``snakeviz``) is available for profiling
   photometry runs. [#733]
