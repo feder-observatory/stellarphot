@@ -28,6 +28,7 @@ from stellarphot.catalog_backends import (
     VizierBackend,
     _apply_column_filters,
     _arrow_to_masked_table,
+    _filter_expression,
     _parse_filter,
     _tap_async,
     default_backends,
@@ -486,6 +487,25 @@ def _star_names(backend, ra, dec, radius):
     return set(table["Name"])
 
 
+def _assert_tables_equal(expected_table, table):
+    """Assert same columns, rows in the same order, masks, values and units."""
+    assert table.colnames == expected_table.colnames
+    assert len(table) == len(expected_table)
+    for colname in expected_table.colnames:
+        expected = np.ma.asarray(expected_table[colname])
+        got = np.ma.asarray(table[colname])
+        np.testing.assert_array_equal(
+            np.ma.getmaskarray(expected), np.ma.getmaskarray(got), err_msg=colname
+        )
+        if expected.dtype.kind in "fiu":
+            np.testing.assert_array_equal(
+                expected.filled(0), got.filled(0), err_msg=colname
+            )
+        else:
+            assert list(expected.filled("")) == list(got.filled("")), colname
+        assert table[colname].unit == expected_table[colname].unit, colname
+
+
 def test_write_local_store_layout_and_manifest(refcat2_store):
     manifest = _manifest(refcat2_store, "refcat2")
     assert manifest["vizier_id"] == "J/ApJ/867/105/refcat2"
@@ -642,22 +662,9 @@ def test_local_store_roundtrip_matches_fixture(refcat2_store):
     assert not backend.provides("B/vsx/vsx")
 
     table = backend.cone_search(_query(_ey_uma_center(), 1.0))
-    assert len(table) == len(raw)
     table.sort("RA_ICRS")
     raw.sort("RA_ICRS")
-    for colname in raw.colnames:
-        expected = np.ma.asarray(raw[colname])
-        got = np.ma.asarray(table[colname])
-        np.testing.assert_array_equal(
-            np.ma.getmaskarray(expected), np.ma.getmaskarray(got), err_msg=colname
-        )
-        if expected.dtype.kind in "fiu":
-            np.testing.assert_array_equal(
-                expected.filled(0), got.filled(0), err_msg=colname
-            )
-        else:
-            assert list(expected.filled("")) == list(got.filled("")), colname
-        assert table[colname].unit == raw[colname].unit, colname
+    _assert_tables_equal(raw, table)
     # The masks are what refcat2()'s galaxy/non-Gaia filters key on.
     assert np.ma.getmaskarray(table["e_pmRA"]).sum() == 2
     assert np.ma.getmaskarray(table["e_Gmag"]).sum() == 2
@@ -675,6 +682,88 @@ def test_local_store_honors_radius_and_filters(refcat2_store):
 
     limited = backend.cone_search(_query(center, 1.0, rmag="<=14"))
     assert len(limited) == np.sum(np.ma.filled(raw["rmag"] <= 14, False))
+
+
+@pytest.mark.parametrize(
+    "spec, expected",
+    [
+        ("<=15.1", [14.0, 15.1]),
+        ("<15.1", [14.0]),
+        (">=15.1", [15.1, 16.0]),
+        (">15.1", [16.0]),
+        ("=15.1", [15.1]),
+        ("!=15.1", [14.0, 16.0]),
+        ("15.1..16", [15.1, 16.0]),
+        ("14..15.1", [14.0, 15.1]),
+    ],
+)
+def test_filter_expression_float32_limits_and_nulls(spec, expected):
+    # 15.1 as float32 is not 15.1 as float64; a star exactly at the limit
+    # must still pass, and a null (masked) value must never pass.
+    pa = pytest.importorskip("pyarrow")
+    pc = pytest.importorskip("pyarrow.compute")
+    mags = pa.array([14.0, 15.1, 16.0, None], type=pa.float32())
+    arrow_table = pa.table({"rmag": mags})
+    expr = _filter_expression(pc.field("rmag"), spec, mags.type)
+    kept = arrow_table.filter(expr)
+    np.testing.assert_array_equal(
+        kept["rmag"].to_numpy(), np.array(expected, dtype=np.float32)
+    )
+    # Same answer as the client-side filter that remains the authority.
+    reference = _apply_column_filters(
+        _arrow_to_masked_table(arrow_table, {}), {"rmag": spec}
+    )
+    np.testing.assert_array_equal(kept["rmag"].to_numpy(), reference["rmag"])
+
+
+def test_filter_expression_integer_and_string_columns():
+    pa = pytest.importorskip("pyarrow")
+    pc = pytest.importorskip("pyarrow.compute")
+    flags = pa.array([14, 15, 16, None], type=pa.int16())
+    expr = _filter_expression(pc.field("flag"), "<=15.5", flags.type)
+    kept = pa.table({"flag": flags}).filter(expr)
+    assert kept["flag"].to_pylist() == [14, 15]
+    # A string column has no numeric comparison; leave it to the post-filter.
+    assert _filter_expression(pc.field("name"), "<=1", pa.string()) is None
+
+
+@pytest.mark.parametrize(
+    "filters",
+    [{"rmag": "<=15"}, {"rmag": "13..15"}, {"gmag": ">14"}, {"pmRA": "!=0"}],
+)
+def test_local_store_filters_match_client_side_filtering(refcat2_store, filters):
+    backend = LocalStoreBackend(refcat2_store)
+    center = _ey_uma_center()
+    unfiltered = backend.cone_search(_query(center, 0.5))
+    expected = _apply_column_filters(unfiltered, filters)
+    got = backend.cone_search(_query(center, 0.5, **filters))
+    assert 0 < len(got) < len(unfiltered)
+    _assert_tables_equal(expected, got)
+
+
+def test_local_store_masked_value_never_passes_filter(refcat2_store):
+    # Some fixture rows have pmRA masked; a filter every real value passes
+    # must still drop them.
+    backend = LocalStoreBackend(refcat2_store)
+    center = _ey_uma_center()
+    everything = backend.cone_search(_query(center, 1.0))
+    n_masked = np.ma.getmaskarray(everything["pmRA"]).sum()
+    assert n_masked > 0
+    kept = backend.cone_search(_query(center, 1.0, pmRA=">-1e9"))
+    assert len(kept) == len(everything) - n_masked
+    assert not np.ma.getmaskarray(kept["pmRA"]).any()
+
+
+def test_local_store_unknown_filter_column_is_a_value_error(refcat2_store):
+    backend = LocalStoreBackend(refcat2_store)
+    query = _query(_ey_uma_center(), 0.5, nope="<1")
+    # Not CatalogUnavailableError: the query is wrong, not the store.
+    with pytest.raises(ValueError, match="Cannot filter on 'nope'") as exc:
+        backend.cone_search(query)
+    assert not isinstance(exc.value, CatalogUnavailableError)
+    with pytest.raises(RuntimeError, match="ValueError: Cannot filter") as exc:
+        query_backends(query, [backend])
+    assert isinstance(exc.value.__cause__, ValueError)
 
 
 def test_local_store_warns_when_shallower_than_query(tmp_path):

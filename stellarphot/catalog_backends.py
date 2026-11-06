@@ -186,6 +186,69 @@ def _parse_filter(spec):
     return op or "=", float(a), None
 
 
+def _filter_expression(field_expr, spec, arrow_type):
+    """
+    Translate one VizieR-style column filter into a pyarrow compute expression.
+
+    Parameters
+    ----------
+    field_expr : `pyarrow.compute.Expression`
+        The column to filter, e.g. ``pyarrow.compute.field("rmag")``.
+    spec : str
+        Filter in the syntax `_parse_filter` accepts, e.g. ``"<=15"`` or
+        ``"10..12"``.
+    arrow_type : `pyarrow.DataType`
+        Type of the column in the dataset.
+
+    Returns
+    -------
+    `pyarrow.compute.Expression` or None
+        Expression that is true for rows passing the filter, or `None` if the
+        filter cannot be expressed for a column of this type.
+
+    Raises
+    ------
+    ValueError
+        If ``spec`` is not a supported filter.
+
+    Notes
+    -----
+    The expression selects the same rows as `_apply_column_filters`, so it can
+    be pushed into a Parquet scan with that function still applied afterwards
+    as the authority on semantics:
+
+    * Floating-point limits are made scalars of the column's own type, so a
+      float32 value sitting exactly at a limit is kept, as it is client-side.
+    * Integer and boolean columns are compared as float64, matching the
+      client-side conversion to float.
+    * A comparison with a null is null, and ``filter`` drops null rows, so a
+      null (masked) value never passes, as with VizieR blanks.
+    * Other types (strings, for example) give `None`; the client-side filter
+      then decides what to do with them.
+    """
+    import pyarrow as pa
+
+    op, a, b = _parse_filter(spec)
+    if pa.types.is_floating(arrow_type):
+        scalar_type = arrow_type
+    elif pa.types.is_integer(arrow_type) or pa.types.is_boolean(arrow_type):
+        field_expr = field_expr.cast(pa.float64())
+        scalar_type = pa.float64()
+    else:
+        return None
+    a = pa.scalar(a, type=scalar_type)
+    if op == "..":
+        return (field_expr >= a) & (field_expr <= pa.scalar(b, type=scalar_type))
+    return {
+        "<=": field_expr <= a,
+        "<": field_expr < a,
+        ">=": field_expr >= a,
+        ">": field_expr > a,
+        "=": field_expr == a,
+        "!=": field_expr != a,
+    }[op]
+
+
 def _apply_column_filters(table, column_filters):
     """
     Apply VizieR-style ``column_filters`` to an astropy table, client-side.
@@ -605,15 +668,42 @@ class LocalStoreBackend(CatalogBackend):
                 f"{info['path']}: zone(s) {', '.join(map(str, missing))} missing"
             )
 
-        try:
-            dataset = ds.dataset(info["path"], format="parquet", partitioning="hive")
-            arrow_table = dataset.to_table(filter=expr)
-        except Exception as err:
+        def unavailable(err):
             # Missing directory (disk unmounted), corrupt file, schema trouble.
-            raise CatalogUnavailableError(
+            return CatalogUnavailableError(
                 f"Could not read local copy of {query.catalog_id} at "
                 f"{info['path']}: {err}"
-            ) from err
+            )
+
+        try:
+            dataset = ds.dataset(info["path"], format="parquet", partitioning="hive")
+        except Exception as err:
+            raise unavailable(err) from err
+
+        # A bad filter is a mistake in the query, not an unreadable store, so
+        # it is raised as is rather than as CatalogUnavailableError.
+        for col, spec in query.column_filters.items():
+            if col not in dataset.schema.names:
+                raise ValueError(f"Cannot filter on {col!r}: column not in catalog")
+            col_expr = _filter_expression(
+                pc.field(col), spec, dataset.schema.field(col).type
+            )
+            if col_expr is not None:
+                expr &= col_expr
+
+        try:
+            arrow_table = dataset.to_table(filter=expr)
+        except Exception as err:
+            raise unavailable(err) from err
+
+        # Exact cut on the sphere, before the (slower) conversion to astropy.
+        sep = _angular_separation_deg(
+            arrow_table[ra_col].to_numpy(zero_copy_only=False),
+            arrow_table[dec_col].to_numpy(zero_copy_only=False),
+            ra0,
+            dec0,
+        )
+        arrow_table = arrow_table.filter(sep <= radius)
         arrow_table = arrow_table.drop_columns(
             [c for c in arrow_table.column_names if c in _INDEX_COLS]
         )
@@ -621,9 +711,8 @@ class LocalStoreBackend(CatalogBackend):
         table.meta["local_store"] = str(info["path"])
         table.meta["local_store_version"] = info.get("version")
 
-        # Exact cut on the sphere, then the filters VizieR would have applied.
-        sep = _angular_separation_deg(table[ra_col], table[dec_col], ra0, dec0)
-        table = table[sep <= radius]
+        # The scan already applied the filters; this stays the authority on
+        # their semantics and is cheap on the rows that are left.
         table = _apply_column_filters(table, query.column_filters)
 
         if not self._covers(info, query):
@@ -749,7 +838,32 @@ def _missing_zones(info, zone_lo, zone_hi):
 
 
 def _arrow_to_masked_table(arrow_table, units):
-    """Convert a pyarrow table to a masked astropy table, nulls -> masks."""
+    """
+    Convert a pyarrow table to a masked astropy table.
+
+    Parameters
+    ----------
+    arrow_table : `pyarrow.Table`
+        Rows read from a local store.
+    units : dict
+        Unit string for each column that has one, keyed by column name.
+
+    Returns
+    -------
+    `astropy.table.Table`
+        Masked table with the same columns, in the same order.
+
+    Notes
+    -----
+    Every column becomes a `~astropy.table.MaskedColumn` whose mask is the
+    Arrow null mask. Values under the mask are filled before conversion, with
+    ``0`` (``False`` for booleans), because pyarrow would otherwise turn an
+    integer or boolean column with nulls into float64, changing the dtype and
+    rounding large integers.
+
+    String columns become fixed-width numpy unicode columns, with nulls filled
+    with the empty string under the mask.
+    """
     import pyarrow as pa
 
     table = Table(masked=True)
