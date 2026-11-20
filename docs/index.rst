@@ -10,8 +10,9 @@ non-programmers and programmers.
         :padding: 2
         :text-align: center
 
-        **Testing stellarphot?**
-        ^^^
+        .. card-header::
+
+            **Testing stellarphot?**
 
         Are you testing a pre-relase version of stellarphot?
         There are special installation instructions for you.
@@ -27,8 +28,9 @@ non-programmers and programmers.
         :padding: 2
         :text-align: center
 
-        **Getting Started?**
-        ^^^
+        .. card-header::
+
+            **Getting Started?**
 
         Installation instructions and a walk though of the process of doing photometry.
 
@@ -44,8 +46,9 @@ non-programmers and programmers.
         :padding: 2
         :text-align: center
 
-        **User guide**
-        ^^^
+        .. card-header::
+
+            **User guide**
 
         A guide to using stellarphot, including how to make settings and perform photometry.
 
@@ -60,8 +63,9 @@ non-programmers and programmers.
         :padding: 2
         :text-align: center
 
-        **Reference**
-        ^^^
+        .. card-header::
+
+            **Reference**
 
         Detailed descriptions of every class and function in stellarphot.
 
@@ -76,8 +80,9 @@ non-programmers and programmers.
         :padding: 2
         :text-align: center
 
-        **Contributing**
-        ^^^
+        .. card-header::
+
+            **Contributing**
 
         Thanks for your interest in contributing to stellarphot. Click here to learn how to get started.
 
