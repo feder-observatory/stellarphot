@@ -193,7 +193,7 @@ Bug Fixes
   now the target position, taking precedence over the position the image's
   object name resolves to; the name is used only when no list is loaded.
   The imported targets keep their star IDs, but the IDs of VSX and comparison
-  stars in a regenerated source list can differ from before. [#PRNUM]
+  stars in a regenerated source list can differ from before. [#743]
 + ``multi_image_photometry()`` now raises an informative ``RuntimeError`` when
   no image produced photometry, instead of failing with ``ValueError: no
   values provided to stack.`` [#670]
