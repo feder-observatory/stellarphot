@@ -47,6 +47,10 @@ New Features
   fraction of each image's fitted stars whose quoted uncertainty sat at or
   below ``min_fit_sigma``, so the floor set their weight instead of their
   errors. It is NaN for an unweighted fit. [#697]
++ The comparison star viewer can draw comparison stars from ATLAS refcat2 as
+  well as APASS DR9, and has on-screen controls for the catalog and the
+  bright and dim magnitude limits; "Update comparison stars" reloads the
+  markers. [#746]
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^

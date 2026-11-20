@@ -460,13 +460,34 @@ def test_comparison_properties(tmp_path, has_object, source_file_name):
     )
 
 
+def _write_ey_uma_file(tmp_path):
+    # Write the EY UMa test image to tmp_path. Returns the path of the image
+    # and the image.
+    ccd = make_ey_uma_image()
+    path = tmp_path / "test.fits"
+    ccd.write(path, overwrite=True)
+    return path, ccd
+
+
+def _choose_image(comparison_widget, path):
+    # Choose an image in the viewer's file chooser, which loads it and the
+    # catalogs.
+    with warnings.catch_warnings():
+        # Ignore the warning about the WCS having non-standard keywords (the SIP
+        # distortion parameters).
+        warnings.filterwarnings(
+            "ignore",
+            message="Some non-standard WCS keywords were excluded",
+            category=AstropyWarning,
+        )
+        comparison_widget._file_chooser.file_chooser.value = path
+
+
 def test_spinner_cleared_and_error_shown_when_catalog_load_fails(tmp_path, monkeypatch):
     # If fetching the VSX/APASS catalogs fails, the spinner should not keep
     # spinning forever -- the legend should come back and an error message
     # should be shown to the user.
-    ccd = make_ey_uma_image()
-    path = tmp_path / "test.fits"
-    ccd.write(path, overwrite=True)
+    path, _ = _write_ey_uma_file(tmp_path)
 
     comparison_widget = cf.ComparisonViewer()
     legend = comparison_widget._legend_spinner_box.children[0]
@@ -479,17 +500,9 @@ def test_spinner_cleared_and_error_shown_when_catalog_load_fails(tmp_path, monke
 
     monkeypatch.setattr(cf, "set_up", failing_set_up)
 
-    with warnings.catch_warnings():
-        # Ignore the warning about the WCS having non-standard keywords (the SIP
-        # distortion parameters).
-        warnings.filterwarnings(
-            "ignore",
-            message="Some non-standard WCS keywords were excluded",
-            category=AstropyWarning,
-        )
-        # The error should still propagate so it shows up in the log...
-        with pytest.raises(RuntimeError, match="catalog fetch failed"):
-            comparison_widget._file_chooser.file_chooser.value = path
+    # The error should still propagate so it shows up in the log...
+    with pytest.raises(RuntimeError, match="catalog fetch failed"):
+        _choose_image(comparison_widget, path)
 
     # ...but the spinner should be gone...
     children = comparison_widget._legend_spinner_box.children
@@ -509,6 +522,57 @@ def test_spinner_cleared_and_error_shown_when_catalog_load_fails(tmp_path, monke
     # The exception text must be HTML-escaped, not injected as markup.
     assert "server said &lt;b&gt;no&lt;/b&gt; &amp; quit" in error_widgets[0].value
     assert "<b>no</b>" not in error_widgets[0].value
+
+
+def test_update_button_refreshes_comparisons_with_new_settings(tmp_path, monkeypatch):
+    # Changing the catalog or magnitude limits and clicking the update button
+    # re-queries with the new settings and redraws the comparison markers.
+    path, ccd = _write_ey_uma_file(tmp_path)
+    candidates = Table(
+        {
+            "coords": ccd.wcs.pixel_to_world([1000.0, 1200.0, 1400.0], [1000.0] * 3),
+            "mag": [9.0, 12.0, 14.0],
+            "passband": ["SR"] * 3,
+        }
+    )
+    vsx_limits = []
+    crossmatch_calls = []
+
+    def fake_set_up(_ccd, magnitude_limit=None):
+        vsx_limits.append(magnitude_limit)
+        return []
+
+    def fake_crossmatch(_ccd, _rd, _vsx, catalog="APASS DR9", magnitude_limit=None):
+        crossmatch_calls.append((catalog, magnitude_limit))
+        return candidates.copy(), [], []
+
+    def from_name(name):
+        raise NameResolveError(f"Unable to find coordinates for name '{name}'")
+
+    monkeypatch.setattr(cf, "set_up", fake_set_up)
+    monkeypatch.setattr(cf, "crossmatch_APASS2VSX", fake_crossmatch)
+    monkeypatch.setattr(cf.SkyCoord, "from_name", from_name)
+
+    comparison_widget = cf.ComparisonViewer()
+    _choose_image(comparison_widget, path)
+
+    assert crossmatch_calls == [("APASS DR9", 15)]
+    comps = comparison_widget.iw.get_catalog(catalog_label="APASS comparison")
+    assert len(comps) == 3
+
+    comparison_widget._comparison_catalog_choice.value = "ATLAS refcat2"
+    comparison_widget._dim_mag_limit_input.value = 13
+    # Nothing is re-queried until the button is clicked.
+    assert len(crossmatch_calls) == 1
+
+    comparison_widget._update_comparisons_button.click()
+
+    assert crossmatch_calls[-1] == ("ATLAS refcat2", 13)
+    assert vsx_limits[-1] == 13
+    # The marker label stays "APASS comparison" whatever the catalog, since
+    # downstream code matches on it.
+    comps = comparison_widget.iw.get_catalog(catalog_label="APASS comparison")
+    assert len(comps) == 2
 
 
 @pytest.mark.remote_data

@@ -270,10 +270,10 @@ class ComparisonViewer:
         Magnitude of the target. Defaults to 10.
 
     bright_mag_limit : float, optional
-        Bright magnitude limit for APASS stars. Defaults to 8.
+        Bright magnitude limit for comparison stars. Defaults to 8.
 
     dim_mag_limit : float, optional
-        Dim magnitude limit for APASS stars.  Defaults to 15.
+        Dim magnitude limit for comparison stars.  Defaults to 15.
 
     targets_from_file : str, optional
         File with target information.  Defaults to None.
@@ -290,6 +290,10 @@ class ComparisonViewer:
     observatory : `stellarphot.settings.Observatory`, optional
         Observatory information.
 
+    comparison_catalog : str, optional
+        Catalog to draw comparison stars from, "APASS DR9" or "ATLAS refcat2".
+        Defaults to "APASS DR9".
+
     Attributes
     ----------
 
@@ -300,10 +304,13 @@ class ComparisonViewer:
         Box containing the widgets.
 
     bright_mag_limit : float
-        Bright magnitude limit for APASS stars.
+        Bright magnitude limit for comparison stars.
+
+    comparison_catalog : str
+        Catalog comparison stars are drawn from.
 
     dim_mag_limit : float
-        Dim magnitude limit for APASS stars.
+        Dim magnitude limit for comparison stars.
 
     iw : `astrowidgets.bqplot.ImageWidget`
         Image widget.
@@ -335,6 +342,7 @@ class ComparisonViewer:
         photom_apertures_file=None,
         overwrite_outputs=True,
         observatory=None,
+        comparison_catalog="APASS DR9",
     ):
         self._circle_name = "target circle"
         # Maps a catalog label to the bqplot Label mark holding the text
@@ -342,10 +350,36 @@ class ComparisonViewer:
         self._label_marks = {}
         self._file_chooser = FitsOpener()
 
+        # On-screen controls for the comparison star settings, copied to the
+        # attributes when the update button is clicked.
+        self._comparison_catalog_choice = ipw.Dropdown(
+            options=["APASS DR9", "ATLAS refcat2"],
+            value=comparison_catalog,
+            description="Comparison catalog",
+            style=DESC_STYLE,
+        )
+        self._bright_mag_limit_input = ipw.FloatText(
+            value=bright_mag_limit,
+            description="Bright mag limit",
+            style=DESC_STYLE,
+            layout={"width": "180px"},
+        )
+        self._dim_mag_limit_input = ipw.FloatText(
+            value=dim_mag_limit,
+            description="Dim mag limit",
+            style=DESC_STYLE,
+            layout={"width": "180px"},
+        )
+        self._update_comparisons_button = ipw.Button(
+            description="Update comparison stars",
+            tooltip="Re-query the catalog; resets any stars you removed",
+        )
+
         self._directory = directory
         self.target_mag = target_mag
         self.bright_mag_limit = bright_mag_limit
         self.dim_mag_limit = dim_mag_limit
+        self.comparison_catalog = comparison_catalog
         self.targets_from_file = targets_from_file
         self.target_coord = object_coordinate
         self.observatory = observatory
@@ -395,7 +429,11 @@ class ComparisonViewer:
             self.vsx = set_up(self.ccd, magnitude_limit=self.dim_mag_limit)
 
             apass, vsx_apass_angle, targets_apass_angle = crossmatch_APASS2VSX(
-                self.ccd, self.targets_from_file, self.vsx
+                self.ccd,
+                self.targets_from_file,
+                self.vsx,
+                catalog=self.comparison_catalog,
+                magnitude_limit=self.dim_mag_limit,
             )
 
             apass_good_coord, good_stars = mag_scale(
@@ -510,12 +548,22 @@ class ComparisonViewer:
         """
         input_source_list_name = change["new"]
         self.targets_from_file = SourceListData.read(input_source_list_name)
-        # Only call init if a file has been chosen
+        self._update_comparisons()
+
+    def _update_button_clicked(self, button):  # noqa: ARG002
+        self.comparison_catalog = self._comparison_catalog_choice.value
+        self.bright_mag_limit = self._bright_mag_limit_input.value
+        self.dim_mag_limit = self._dim_mag_limit_input.value
+        self._update_comparisons()
+
+    def _update_comparisons(self):
+        # Reload the stars, if an image has been chosen.
         if self._file_chooser.file_chooser.value != ".":
             self._init()
             self._save_source_location_file()
 
     def _make_observers(self):
+        self._update_comparisons_button.on_click(self._update_button_clicked)
         self._show_labels_button.observe(self._show_label_button_handler, names="value")
         self._save_var_info.on_click(self._save_variables_to_file)
         self._file_chooser.file_chooser.observe(self._set_file, names="_value")
@@ -627,7 +675,7 @@ class ComparisonViewer:
         legend = ipw.HTML(value="""
         <ul>
         <li>Green circles -- Gaia stars within 2.5 arcmin of target</li>
-        <li>Red diamonds -- Comparison stars from APASS</li>
+        <li>Red diamonds -- Comparison stars from the chosen catalog</li>
         <li>Blue squares -- VSX variables</li>
         <li>Red + -- Exclude as target or comp</li>
         </ul>
@@ -687,9 +735,19 @@ class ComparisonViewer:
         )
         self._choose_input_source_list.title = "OPTIONAL: Choose input source list"
 
+        comparison_settings = ipw.HBox(
+            children=[
+                self._comparison_catalog_choice,
+                self._bright_mag_limit_input,
+                self._dim_mag_limit_input,
+                self._update_comparisons_button,
+            ]
+        )
+
         box.children = [
             self._file_chooser.file_chooser,
             self._choose_input_source_list,
+            comparison_settings,
             inner_box,
             controls,
         ]
