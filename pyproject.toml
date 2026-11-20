@@ -210,7 +210,7 @@ skip = '*.svg,docs/diagrams-*.md,stellarphot/io/tests/data/tic-236158940-exofop.
 ignore-words = "ignore-words.txt"
 
 [tool.pytest.ini_options]
-minversion = "7.0"
+minversion = "8.0"
 testpaths = [
     "stellarphot",
     "docs",

@@ -1,4 +1,3 @@
-import os
 from copy import deepcopy
 
 import ipywidgets as ipw
@@ -28,6 +27,11 @@ from stellarphot.settings.constants import (
 from stellarphot.settings.models import VARIABLE_APERTURE_DEFAULTS
 
 TEST_CAMERA_VALUES = deepcopy(TEST_CAMERA_VALUES)
+
+
+# Every test in this module runs in a temporary directory because the widgets
+# tested here save settings and source lists to the working directory.
+pytestmark = pytest.mark.usefixtures("change_to_tmp_dir")
 
 
 def make_click_event(x, y):
@@ -196,8 +200,6 @@ def test_load_fits_logs_matched_exposure_keyword(caplog, tmp_path):
 
 def test_seeing_profile_save_apertures(tmp_path):
     # Make sure that saving partial photometery settings works
-    os.chdir(tmp_path)
-
     phot_settings = PhotometryWorkingDirSettings()
 
     # There should be no saved settings...
@@ -224,8 +226,6 @@ def test_seeing_profile_save_writes_widget_radius_to_settings_file(tmp_path):
     # directly, the way the aperture-radius UI control does) to check the
     # full GUI -> pipeline value flow: a value entered in the radius widget
     # ends up in the saved PhotometryWorkingDirSettings.
-    os.chdir(tmp_path)
-
     profile_widget = spf.SeeingProfileWidget(
         camera=Camera(**TEST_CAMERA_VALUES), _testing_path=tmp_path
     )
@@ -242,10 +242,6 @@ def test_seeing_profile_save_writes_widget_radius_to_settings_file(tmp_path):
 def test_seeing_profile_save_box_title(tmp_path):
     # Save box title ends with different characters depending on whether values
     # need to be saved.
-
-    # Change working directory since settings file is saved there.
-    os.chdir(tmp_path)
-
     profile_widget = spf.SeeingProfileWidget(
         camera=Camera(**TEST_CAMERA_VALUES), _testing_path=tmp_path
     )

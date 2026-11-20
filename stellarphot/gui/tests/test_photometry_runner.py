@@ -26,13 +26,9 @@ def fake_settings_dir(mocker, tmp_path):
     )
 
 
+# Every test in this class runs in a temporary directory.
+@pytest.mark.usefixtures("change_to_tmp_dir")
 class TestPhotometryRunner:
-    # Auto-use the shared change_to_tmp_dir fixture (defined in the top-level
-    # conftest) so every test in this class runs in a temporary directory.
-    @pytest.fixture(autouse=True)
-    def _change_to_tmp_dir(self, change_to_tmp_dir):
-        pass
-
     def test_photometry_runner_creation(self):
         # This test simply makes sure we can create the object
         photometry_runner = PhotometryRunner()

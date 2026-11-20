@@ -85,6 +85,57 @@ def pytest_unconfigure():
     iers_conf.reset("auto_download")
 
 
+# Guard against tests that change the working directory and do not change it
+# back. Every later test then runs, and saves its files, somewhere it did not
+# expect. These are hooks rather than a fixture so that the check happens
+# after *all* of a test's fixtures (including monkeypatch) have been torn down,
+# no matter what order the fixtures were set up in. The change has to be undone
+# by the end of each test, so a class- or module-scoped fixture that changes
+# the directory fails the guard too.
+
+_cwd_before_test = pytest.StashKey[str]()
+
+
+def _restore_cwd(item):
+    """
+    Change back to the directory the test started in. Returns the directory
+    the test left behind, or `None` if the test did not leave it changed.
+    """
+    original_dir = item.stash.get(_cwd_before_test, None)
+    if original_dir is None:
+        return None
+    current_dir = os.getcwd()
+    if current_dir == original_dir:
+        return None
+    os.chdir(original_dir)
+    return current_dir
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_setup(item):
+    item.stash[_cwd_before_test] = os.getcwd()
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_teardown(item):
+    try:
+        result = yield
+    except BaseException:
+        # A fixture's teardown failed. Still put the directory back, so later
+        # tests are not affected, but report the original error.
+        _restore_cwd(item)
+        raise
+    left_in = _restore_cwd(item)
+    if left_in is not None:
+        pytest.fail(
+            f"Test left the working directory changed to {left_in}. Use "
+            "the change_to_tmp_dir fixture (or monkeypatch.chdir) instead of "
+            "os.chdir so that the change is undone when the test ends.",
+            pytrace=False,
+        )
+    return result
+
+
 # stellarphot fixtures
 
 
@@ -98,19 +149,13 @@ def close_figures():
 
 
 @pytest.fixture
-def change_to_tmp_dir(tmp_path):
-    # Change the working directory to the temporary directory and then change
-    # back to the original directory after the test is done. This fixture is
-    # not autouse; tests (or a small autouse wrapper) that need it should
-    # request it explicitly.
-    original_dir = os.getcwd()
-    os.chdir(tmp_path)
-    # Yielding here is important. It means that when the test is done, the remainder
-    # of the function will be executed. This is important because the test is run in
-    # a temporary directory and we want to change back to the original directory
-    # when the test is done.
-    yield
-    os.chdir(original_dir)
+def change_to_tmp_dir(tmp_path, monkeypatch):
+    # Change the working directory to the temporary directory for the duration
+    # of the test; monkeypatch changes back to the original directory when the
+    # test is done. This fixture is not autouse; request it explicitly, or
+    # apply it to a whole class or module with
+    # pytest.mark.usefixtures("change_to_tmp_dir").
+    monkeypatch.chdir(tmp_path)
 
 
 @pytest.fixture
