@@ -267,6 +267,16 @@ def test_make_markers_shapes_and_colors():
     assert mark.default_size == apass_style["size"] ** 2
 
 
+def _viewer_with_target():
+    # A comparison viewer with an image loaded and the target at pixel
+    # (1500, 1000). Returns the viewer and the image.
+    comparison_widget = cf.ComparisonViewer()
+    ccd = make_ey_uma_image()
+    comparison_widget.iw.load_image(ccd)
+    comparison_widget.target_coord = ccd.wcs.pixel_to_world(1500.0, 1000.0)
+    return comparison_widget, ccd
+
+
 def test_show_circle_draws_bqplot_circle():
     # The target circle should be drawn as a bqplot Lines mark tracing the
     # circle, not as a catalog marker: astrowidgets 0.5.0 ignores the size in
@@ -274,10 +284,7 @@ def test_show_circle_draws_bqplot_circle():
     # "star" in the click handler and in generate_table.
     from bqplot import Lines
 
-    comparison_widget = cf.ComparisonViewer()
-    ccd = make_ey_uma_image()
-    comparison_widget.iw.load_image(ccd)
-    comparison_widget.target_coord = ccd.wcs.pixel_to_world(1500.0, 1000.0)
+    comparison_widget, _ = _viewer_with_target()
 
     comparison_widget.show_circle()
 
@@ -301,6 +308,35 @@ def test_show_circle_draws_bqplot_circle():
 
     # Removing when no circle is shown should not raise.
     comparison_widget.remove_circle()
+
+
+@pytest.mark.parametrize("n_targets", [0, 2])
+def test_generate_table_groups_targets_then_vsx_then_comparisons(n_targets):
+    # The source list should have the imported targets first, then the VSX
+    # stars, then the comparison stars, with or without imported targets.
+    comparison_widget, ccd = _viewer_with_target()
+
+    # Each group has a star nearer the target coordinate than a star of the
+    # group that should precede it, so that sorting by distance alone mixes
+    # the groups. No star is at the target coordinate itself.
+    targets = Table({"coords": ccd.wcs.pixel_to_world([900.0, 1400.0], [900.0, 900.0])})
+    targets = targets[:n_targets]
+    vsx = Table({"coords": ccd.wcs.pixel_to_world([800.0, 1450.0], [800.0, 950.0])})
+    apass = Table({"coords": ccd.wcs.pixel_to_world([1520.0, 700.0], [1020.0, 700.0])})
+
+    cf.make_markers(comparison_widget.iw, targets, vsx, apass, name_or_coord=None)
+
+    table = comparison_widget.generate_table()
+
+    expected_groups = (
+        ["TESS Targets"] * n_targets + ["VSX"] * 2 + ["APASS comparison"] * 2
+    )
+    assert list(table["marker name"]) == expected_groups
+
+    # The imported targets stay in the order they were given.
+    np.testing.assert_allclose(
+        table["x"][:n_targets], [900.0, 1400.0][:n_targets], atol=1e-3
+    )
 
 
 @pytest.mark.parametrize("source_file_name", [None, "sources.ecsv"])
