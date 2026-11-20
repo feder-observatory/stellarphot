@@ -50,7 +50,7 @@ New Features
 + The comparison star viewer can draw comparison stars from ATLAS refcat2 as
   well as APASS DR9, and has on-screen controls for the catalog and the
   bright and dim magnitude limits; "Update comparison stars" reloads the
-  markers. [#PRNUM]
+  markers. [#746]
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
