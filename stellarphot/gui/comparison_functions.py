@@ -741,8 +741,10 @@ class ComparisonViewer:
             # order is not changed.
             comp_table["sort"][tess_mark] = np.arange(tess_mark.sum())
 
-        comp_table["sort"][apass_mark] = 3 * tess_mark.sum()
-        comp_table["sort"][vsx_mark] = 2 * tess_mark.sum()
+        # Targets are 0 to n_targets - 1; VSX stars next, then comparisons.
+        n_targets = tess_mark.sum()
+        comp_table["sort"][apass_mark] = n_targets + 1
+        comp_table["sort"][vsx_mark] = n_targets
 
         # Sort the table
         comp_table.sort(["sort", "separation"])
