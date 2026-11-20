@@ -479,8 +479,9 @@ class ComparisonViewer:
         try:
             self.target_coord = SkyCoord.from_name(self._object)
         except NameResolveError:
+            # The shape is (rows, columns), i.e. (y, x)
             self.target_coord = self.ccd.wcs.pixel_to_world(
-                self.ccd.shape[0] / 2, self.ccd.shape[1] / 2
+                self.ccd.shape[1] / 2, self.ccd.shape[0] / 2
             )
 
     def _save_source_location_file(self):

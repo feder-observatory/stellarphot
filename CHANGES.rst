@@ -194,6 +194,10 @@ Bug Fixes
   object name resolves to; the name is used only when no list is loaded.
   The imported targets keep their star IDs, but the IDs of VSX and comparison
   stars in a regenerated source list can differ from before. [#743]
++ The comparison-star viewer's fallback target position, used when there is
+  no target list and the object name cannot be resolved, is now the center of
+  the image; x and y were swapped, which was wrong for non-square images.
+  [#743]
 + ``multi_image_photometry()`` now raises an informative ``RuntimeError`` when
   no image produced photometry, instead of failing with ``ValueError: no
   values provided to stack.`` [#670]

@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 from astropy import units as u
 from astropy.coordinates import SkyCoord
+from astropy.coordinates.name_resolve import NameResolveError
 from astropy.io import fits
 from astropy.nddata import CCDData
 from astropy.table import Table
@@ -340,6 +341,25 @@ def test_target_list_sets_target_coord_over_object_name(monkeypatch, has_target_
     assert comparison_widget.target_coord.separation(expected) < 1e-6 * u.arcsec
 
 
+def test_target_coord_is_image_center_without_list_or_resolvable_name(monkeypatch):
+    # With no target list and an object name that cannot be resolved the
+    # target is the center of the image. The image is not square, so this
+    # also checks that x and y are not swapped.
+    comparison_widget, ccd = _viewer_with_target()
+    comparison_widget.ccd = ccd
+
+    def from_name(name):
+        raise NameResolveError(f"Unable to find coordinates for name '{name}'")
+
+    monkeypatch.setattr(cf.SkyCoord, "from_name", from_name)
+
+    comparison_widget._set_object()
+
+    n_y, n_x = CCD_SHAPE
+    center = ccd.wcs.pixel_to_world(n_x / 2, n_y / 2)
+    assert comparison_widget.target_coord.separation(center) < 1e-6 * u.arcsec
+
+
 @pytest.mark.parametrize("n_targets", [0, 2])
 def test_generate_table_groups_targets_then_vsx_then_comparisons(n_targets):
     # The source list should have the imported targets first, then the VSX
@@ -496,13 +516,16 @@ def test_spinner_cleared_and_error_shown_when_catalog_load_fails(tmp_path, monke
 def test_loading_second_image_succeeds(tmp_path):
     # Regression test for #384
 
-    # Make a comparison viewer and load EY UMa
+    # Make a comparison viewer and load TIC 402828941
     comparison_widget = cf.ComparisonViewer()
     ccd = CCDData.read(
         get_pkg_data_filename(
             "tests/data/TIC-402828941-tiny.fit.bz2", package="stellarphot"
         )
     )
+    # The object name in the file, "TIC-402828941", cannot be resolved; this
+    # one can.
+    ccd.header["object"] = "TIC 402828941"
     file_name = "TIC.fits"
     path = tmp_path / file_name
     ccd.write(path, overwrite=True)
@@ -518,7 +541,7 @@ def test_loading_second_image_succeeds(tmp_path):
         comparison_widget._file_chooser.file_chooser.value = path
 
     TIC_coord = SkyCoord(305.45862498, 19.43593327, unit="deg")
-    # Make sure we have ey uma as the target coordinates
+    # Make sure we have the TIC star as the target coordinates
     assert comparison_widget.target_coord.separation(TIC_coord) < 10 * u.arcsec
 
     # Load a second image
@@ -566,6 +589,9 @@ def test_loading_input_source_list(tmp_path, tic_id):
             f"tests/data/TIC-{tic_id}-tiny.fit.bz2", package="stellarphot"
         )
     )
+    # Name the image for some other object, one whose name can be resolved, to
+    # check that the target comes from the input source list anyway.
+    ccd.header["object"] = "WASP-10"
     file_name = "TIC.fits"
     path = tmp_path / file_name
     ccd.write(path, overwrite=True)
@@ -580,6 +606,10 @@ def test_loading_input_source_list(tmp_path, tic_id):
         )
         comparison_widget._file_chooser.file_chooser.value = path
 
+    # Until there is a source list the object name sets the target...
+    wasp_coord = SkyCoord(348.99291924, 31.46286002, unit="deg")
+    assert comparison_widget.target_coord.separation(wasp_coord) < 1 * u.arcsec
+
     comparison_widget._choose_input_source_list.value = input_source_list
 
     # Check that the number of tess targets matches the number in the
@@ -587,6 +617,10 @@ def test_loading_input_source_list(tmp_path, tic_id):
 
     comp_viewer_sources = SourceListData.read("source_locations.ecsv")
     input_sources = SourceListData.read(input_source_list)
+
+    # ...and after that the first star in the source list does.
+    first_target = SkyCoord(input_sources["ra"][0], input_sources["dec"][0])
+    assert comparison_widget.target_coord.separation(first_target) < 0.01 * u.arcsec
 
     # The "separation" and "sort" columns are only used to order the table and
     # should not be written to the aperture file (issue #34).
