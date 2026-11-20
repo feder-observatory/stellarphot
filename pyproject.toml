@@ -84,7 +84,7 @@ docs = [
     "stellarphot[gui]",  # API docs autodoc the GUI modules
     "sphinx",
     "sphinx-astropy[confv2]",
-    "sphinx-design",
+    "sphinx-design>=0.8",
     "graphviz",
     "myst-parser",
     "sphinxcontrib-mermaid",
