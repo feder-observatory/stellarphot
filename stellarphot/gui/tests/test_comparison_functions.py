@@ -24,6 +24,11 @@ from stellarphot.settings import PhotometryWorkingDirSettings
 CCD_SHAPE = [2048, 3073]
 
 
+# Every test in this module runs in a temporary directory because the widgets
+# tested here save settings and source lists to the working directory.
+pytestmark = pytest.mark.usefixtures("change_to_tmp_dir")
+
+
 def make_ey_uma_image(with_object=False):
     wcs_file = get_pkg_data_filename("../../tests/data/sample_wcs_ey_uma.fits")
     with fits.open(wcs_file) as hdulist:
@@ -398,9 +403,6 @@ def test_comparison_properties(tmp_path, has_object, source_file_name):
 
     file_name = "test.fits"
     ccd.write(tmp_path / file_name, overwrite=True)
-    # Change working directory for remainder of test so that the save does not pollute
-    # the testing directory.
-    os.chdir(tmp_path)
 
     with warnings.catch_warnings():
         # Ignore the warning about the WCS having non-standard keywords (the SIP
@@ -465,9 +467,6 @@ def test_spinner_cleared_and_error_shown_when_catalog_load_fails(tmp_path, monke
     ccd = make_ey_uma_image()
     path = tmp_path / "test.fits"
     ccd.write(path, overwrite=True)
-    # Change working directory so files the viewer saves do not pollute the
-    # testing directory.
-    os.chdir(tmp_path)
 
     comparison_widget = cf.ComparisonViewer()
     legend = comparison_widget._legend_spinner_box.children[0]

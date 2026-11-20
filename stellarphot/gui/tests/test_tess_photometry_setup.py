@@ -10,13 +10,9 @@ from stellarphot.gui.custom_widgets import TessPhotometrySetup
 from stellarphot.io.tess import TOI
 
 
+# Every test in this class runs in a temporary directory.
+@pytest.mark.usefixtures("change_to_tmp_dir")
 class TestTessPhotometrySetup:
-    # Auto-use the shared change_to_tmp_dir fixture (defined in the top-level
-    # conftest) so every test in this class runs in a temporary directory.
-    @pytest.fixture(autouse=True)
-    def _change_to_tmp_dir(self, change_to_tmp_dir):
-        pass
-
     def test_creation(self):
         widget = TessPhotometrySetup()
         # Initial TIC ID should be 0

@@ -957,16 +957,12 @@ def _to_space(name: str) -> str:
     return name.replace("_", " ")
 
 
+# Every test in this class runs in a temporary directory.
+@pytest.mark.usefixtures("change_to_tmp_dir")
 class TestReviewSettings:
     """
     Test of the magical ReviewSettings widget.
     """
-
-    # Auto-use the shared change_to_tmp_dir fixture (defined in the top-level
-    # conftest) so every test in this class runs in a temporary directory.
-    @pytest.fixture(autouse=True)
-    def _change_to_tmp_dir(self, change_to_tmp_dir):
-        pass
 
     @pytest.mark.parametrize("container_type", ["tabs", "accordion"])
     def test_creation_no_saved_settings(self, container_type):

@@ -498,13 +498,9 @@ class TestTOI:
         assert transit_time.jd == pytest.approx(expected_midpoint.jd)
 
 
+# Every test in this class runs in a temporary directory.
+@pytest.mark.usefixtures("change_to_tmp_dir")
 class TestTessPhotometrySetup:
-    # Auto-use the shared change_to_tmp_dir fixture (defined in the top-level
-    # conftest) so every test in this class runs in a temporary directory.
-    @pytest.fixture(autouse=True)
-    def _change_to_tmp_dir(self, change_to_tmp_dir):
-        pass
-
     def test_creation_invalid_input_raises_error(self):
         with pytest.raises(
             ValueError, match="Must provide either TIC ID or TOI object"

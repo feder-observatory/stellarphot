@@ -6,6 +6,9 @@ from astropy.utils.data import get_pkg_data_filename
 from stellarphot.gui import ComparisonAndSeeing
 
 
+# Every test in this class runs in a temporary directory because the widgets
+# save their settings to the working directory.
+@pytest.mark.usefixtures("change_to_tmp_dir")
 class TestComparisonAndSeeing:
     def copy_fits_to_temp(self, tmp_path):
         # Copy a fits file to a temporary directory
