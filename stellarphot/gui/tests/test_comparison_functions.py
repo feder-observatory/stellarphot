@@ -310,6 +310,36 @@ def test_show_circle_draws_bqplot_circle():
     comparison_widget.remove_circle()
 
 
+@pytest.mark.parametrize("has_target_list", [True, False])
+def test_target_list_sets_target_coord_over_object_name(monkeypatch, has_target_list):
+    # The first star in an imported target list is the target, and the object
+    # name in the image header is not even looked up (e.g. the image is named
+    # for a galaxy and the target is a supernova in it). Without a target
+    # list the resolved name is the target.
+    comparison_widget, ccd = _viewer_with_target()
+
+    resolved_name = ccd.wcs.pixel_to_world(1000.0, 1000.0)
+    first_target = ccd.wcs.pixel_to_world(1100.0, 900.0)
+
+    def from_name(_name):
+        if has_target_list:
+            pytest.fail("The object name should not be looked up")
+        return resolved_name
+
+    monkeypatch.setattr(cf.SkyCoord, "from_name", from_name)
+
+    if has_target_list:
+        other_target = ccd.wcs.pixel_to_world(400.0, 300.0)
+        comparison_widget.targets_from_file = Table(
+            {"coords": SkyCoord([first_target, other_target])}
+        )
+
+    comparison_widget._set_object()
+
+    expected = first_target if has_target_list else resolved_name
+    assert comparison_widget.target_coord.separation(expected) < 1e-6 * u.arcsec
+
+
 @pytest.mark.parametrize("n_targets", [0, 2])
 def test_generate_table_groups_targets_then_vsx_then_comparisons(n_targets):
     # The source list should have the imported targets first, then the VSX

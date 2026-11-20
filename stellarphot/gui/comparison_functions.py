@@ -468,19 +468,17 @@ class ComparisonViewer:
             self.object_name.value = "<h2>Object unknown</h2>"
             self._object = ""
 
-        # We have a name, try to get coordinates from it
-        try:
-            self.target_coord = SkyCoord.from_name(self._object)
-            return
-        except NameResolveError:
-            pass
-
-        # If there are no coordinations so far then use the first object in the
-        # input source list aka target file, if there is one, otherwise use
-        # the center of the image.
+        # The first object in the input source list aka target file, if there
+        # is one, is the target, whatever the image header calls the object.
         if self.targets_from_file:
             self.target_coord = self.targets_from_file["coords"][0]
-        else:
+            return
+
+        # Otherwise try to get coordinates from the name, and use the center of
+        # the image if that fails.
+        try:
+            self.target_coord = SkyCoord.from_name(self._object)
+        except NameResolveError:
             self.target_coord = self.ccd.wcs.pixel_to_world(
                 self.ccd.shape[0] / 2, self.ccd.shape[1] / 2
             )

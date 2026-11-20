@@ -189,6 +189,11 @@ Bug Fixes
   stars in the source list when there are no imported targets and no catalog
   star at the target position; since 2.0.4 the two were interleaved by
   distance from the target. [#742]
++ In the comparison-star viewer the first star of an imported target list is
+  now the target position, taking precedence over the position the image's
+  object name resolves to; the name is used only when no list is loaded.
+  The imported targets keep their star IDs, but the IDs of VSX and comparison
+  stars in a regenerated source list can differ from before. [#PRNUM]
 + ``multi_image_photometry()`` now raises an informative ``RuntimeError`` when
   no image produced photometry, instead of failing with ``ValueError: no
   values provided to stack.`` [#670]
