@@ -188,7 +188,7 @@ Bug Fixes
 + The comparison-star viewer once again lists VSX stars before comparison
   stars in the source list when there are no imported targets and no catalog
   star at the target position; since 2.0.4 the two were interleaved by
-  distance from the target. [#PRNUM]
+  distance from the target. [#742]
 + ``multi_image_photometry()`` now raises an informative ``RuntimeError`` when
   no image produced photometry, instead of failing with ``ValueError: no
   values provided to stack.`` [#670]
