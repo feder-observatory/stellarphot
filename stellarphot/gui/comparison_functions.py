@@ -12,6 +12,7 @@ from astropy.utils.masked import Masked
 from astrowidgets.bqplot import ImageWidget
 from bqplot import Label, Lines
 from ipyautoui.custom import FileChooser
+from ipyautoui.custom.buttonbars import SaveButtonBar
 
 from stellarphot import SourceListData
 from stellarphot.gui.custom_widgets import SettingWithTitle, Spinner
@@ -351,7 +352,7 @@ class ComparisonViewer:
         self._file_chooser = FitsOpener()
 
         # On-screen controls for the comparison star settings, copied to the
-        # attributes when the update button is clicked.
+        # attributes when they are saved.
         self._comparison_catalog_choice = ipw.Dropdown(
             options=["APASS DR9", "ATLAS refcat2"],
             value=comparison_catalog,
@@ -360,19 +361,26 @@ class ComparisonViewer:
         )
         self._bright_mag_limit_input = ipw.FloatText(
             value=bright_mag_limit,
-            description="Bright mag limit",
+            description="Bright mag limit (SR)",
             style=DESC_STYLE,
-            layout={"width": "180px"},
+            layout={"width": "220px"},
         )
         self._dim_mag_limit_input = ipw.FloatText(
             value=dim_mag_limit,
-            description="Dim mag limit",
+            description="Dim mag limit (SR)",
             style=DESC_STYLE,
-            layout={"width": "180px"},
+            layout={"width": "220px"},
         )
-        self._update_comparisons_button = ipw.Button(
-            description="Update comparison stars",
-            tooltip="Re-query the catalog; resets any stars you removed",
+        self._mag_limit_message = ipw.HTML()
+        self._comparison_save_bar = SaveButtonBar()
+        self._comparison_save_bar.bn_save.tooltip = (
+            "Re-query the catalog; resets any stars you removed"
+        )
+        self._comparison_save_bar.bn_save.disabled = True
+        self._comparison_save_bar.bn_revert.disabled = True
+        self._comparison_save_bar.fns_onsave_add_action(self._save_comparison_settings)
+        self._comparison_save_bar.fns_onrevert_add_action(
+            self._revert_comparison_settings
         )
 
         self._directory = directory
@@ -539,8 +547,7 @@ class ComparisonViewer:
         """
         Widget callbacks need to accept a change argument, even if not used.
         """
-        self._init()
-        self._save_source_location_file()
+        self._update_comparisons()
 
     def _set_target_file(self, change):
         """
@@ -550,20 +557,58 @@ class ComparisonViewer:
         self.targets_from_file = SourceListData.read(input_source_list_name)
         self._update_comparisons()
 
-    def _update_button_clicked(self, button):  # noqa: ARG002
+    def _save_comparison_settings(self):
         self.comparison_catalog = self._comparison_catalog_choice.value
         self.bright_mag_limit = self._bright_mag_limit_input.value
         self.dim_mag_limit = self._dim_mag_limit_input.value
         self._update_comparisons()
+        self._comparison_settings_changed(None)
+
+    def _revert_comparison_settings(self):
+        self._comparison_catalog_choice.value = self.comparison_catalog
+        self._bright_mag_limit_input.value = self.bright_mag_limit
+        self._dim_mag_limit_input.value = self.dim_mag_limit
+
+    def _comparison_settings_changed(self, change):  # noqa: ARG002
+        # Mark the settings unsaved if the controls differ from the settings in
+        # use, and allow saving only if the magnitude range makes sense.
+        bright = self._bright_mag_limit_input.value
+        dim = self._dim_mag_limit_input.value
+        unsaved = (
+            self._comparison_catalog_choice.value,
+            bright,
+            dim,
+        ) != (self.comparison_catalog, self.bright_mag_limit, self.dim_mag_limit)
+        valid = bright < dim
+        self._mag_limit_message.value = (
+            ""
+            if valid
+            else "<p style='color: red'>Bright limit must be brighter "
+            "(smaller) than dim limit</p>"
+        )
+        self._comparison_save_bar.unsaved_changes = unsaved
+        self._comparison_save_bar.bn_save.disabled = not (unsaved and valid)
+        self._comparison_save_bar.bn_revert.disabled = not unsaved
 
     def _update_comparisons(self):
-        # Reload the stars, if an image has been chosen.
+        # Reload the stars, if an image has been chosen. Labels are for the old
+        # stars, so they are removed first and redrawn if they were on.
         if self._file_chooser.file_chooser.value != ".":
+            labels_on = self._show_labels_button.value
+            if labels_on:
+                self.remove_labels()
             self._init()
             self._save_source_location_file()
+            if labels_on:
+                self.show_labels()
 
     def _make_observers(self):
-        self._update_comparisons_button.on_click(self._update_button_clicked)
+        for control in (
+            self._comparison_catalog_choice,
+            self._bright_mag_limit_input,
+            self._dim_mag_limit_input,
+        ):
+            control.observe(self._comparison_settings_changed, names="value")
         self._show_labels_button.observe(self._show_label_button_handler, names="value")
         self._save_var_info.on_click(self._save_variables_to_file)
         self._file_chooser.file_chooser.observe(self._set_file, names="_value")
@@ -608,6 +653,9 @@ class ComparisonViewer:
 
         # Convert aperture table into a SourceList objects and output
         targets_table = self.generate_table()
+        if len(targets_table) == 0:
+            # No stars are marked, so there is no source list to write.
+            return
         # Assign units to columns
         targets_table["ra"] = targets_table["ra"] * u.deg
         targets_table["dec"] = targets_table["dec"] * u.deg
@@ -740,7 +788,8 @@ class ComparisonViewer:
                 self._comparison_catalog_choice,
                 self._bright_mag_limit_input,
                 self._dim_mag_limit_input,
-                self._update_comparisons_button,
+                self._comparison_save_bar,
+                self._mag_limit_message,
             ]
         )
 
@@ -764,6 +813,9 @@ class ComparisonViewer:
             Table of stars to use for the aperture file.
         """
         all_table = _all_catalog_entries(self.iw)
+        if len(all_table) == 0:
+            # No stars are marked, so there are none to list.
+            return all_table
 
         elims = np.array([name.startswith("elim") for name in all_table["marker name"]])
         elim_table = all_table[elims]

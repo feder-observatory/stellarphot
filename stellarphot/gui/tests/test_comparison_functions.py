@@ -524,9 +524,11 @@ def test_spinner_cleared_and_error_shown_when_catalog_load_fails(tmp_path, monke
     assert "<b>no</b>" not in error_widgets[0].value
 
 
-def test_update_button_refreshes_comparisons_with_new_settings(tmp_path, monkeypatch):
-    # Changing the catalog or magnitude limits and clicking the update button
-    # re-queries with the new settings and redraws the comparison markers.
+@pytest.fixture
+def viewer_with_fake_catalogs(tmp_path, mocker):
+    # A viewer showing the EY UMa image, with the catalog queries replaced by
+    # mocks that return no variables and three comparison candidates, of SR
+    # magnitude 9, 12 and 14.
     path, ccd = _write_ey_uma_file(tmp_path)
     candidates = Table(
         {
@@ -535,44 +537,125 @@ def test_update_button_refreshes_comparisons_with_new_settings(tmp_path, monkeyp
             "passband": ["SR"] * 3,
         }
     )
-    vsx_limits = []
-    crossmatch_calls = []
-
-    def fake_set_up(_ccd, magnitude_limit=None):
-        vsx_limits.append(magnitude_limit)
-        return []
-
-    def fake_crossmatch(_ccd, _rd, _vsx, catalog="APASS DR9", magnitude_limit=None):
-        crossmatch_calls.append((catalog, magnitude_limit))
-        return candidates.copy(), [], []
-
-    def from_name(name):
-        raise NameResolveError(f"Unable to find coordinates for name '{name}'")
-
-    monkeypatch.setattr(cf, "set_up", fake_set_up)
-    monkeypatch.setattr(cf, "crossmatch_APASS2VSX", fake_crossmatch)
-    monkeypatch.setattr(cf.SkyCoord, "from_name", from_name)
+    mocker.patch.object(cf, "set_up", return_value=[])
+    mocker.patch.object(
+        cf,
+        "crossmatch_APASS2VSX",
+        side_effect=lambda *_args, **_kwargs: (candidates.copy(), [], []),
+    )
+    mocker.patch.object(
+        cf.SkyCoord, "from_name", side_effect=NameResolveError("no such object")
+    )
 
     comparison_widget = cf.ComparisonViewer()
     _choose_image(comparison_widget, path)
+    return comparison_widget
 
-    assert crossmatch_calls == [("APASS DR9", 15)]
+
+def test_save_bar_refreshes_comparisons_with_new_settings(viewer_with_fake_catalogs):
+    # Changing the catalog or magnitude limits marks the settings unsaved, and
+    # saving re-queries with the new settings and redraws the comparison
+    # markers.
+    comparison_widget = viewer_with_fake_catalogs
+    save_bar = comparison_widget._comparison_save_bar
+
+    assert cf.crossmatch_APASS2VSX.call_count == 1
+    assert cf.crossmatch_APASS2VSX.call_args.kwargs == {
+        "catalog": "APASS DR9",
+        "magnitude_limit": 15,
+    }
     comps = comparison_widget.iw.get_catalog(catalog_label="APASS comparison")
     assert len(comps) == 3
+    assert not save_bar.unsaved_changes
+    assert save_bar.bn_save.disabled
+    assert save_bar.bn_revert.disabled
 
     comparison_widget._comparison_catalog_choice.value = "ATLAS refcat2"
     comparison_widget._dim_mag_limit_input.value = 13
-    # Nothing is re-queried until the button is clicked.
-    assert len(crossmatch_calls) == 1
 
-    comparison_widget._update_comparisons_button.click()
+    assert save_bar.unsaved_changes
+    assert not save_bar.bn_save.disabled
+    assert not save_bar.bn_revert.disabled
+    # Nothing is re-queried until the settings are saved.
+    assert cf.crossmatch_APASS2VSX.call_count == 1
 
-    assert crossmatch_calls[-1] == ("ATLAS refcat2", 13)
-    assert vsx_limits[-1] == 13
+    save_bar.bn_save.click()
+
+    assert cf.crossmatch_APASS2VSX.call_args.kwargs == {
+        "catalog": "ATLAS refcat2",
+        "magnitude_limit": 13,
+    }
+    assert cf.set_up.call_args.kwargs == {"magnitude_limit": 13}
     # The marker label stays "APASS comparison" whatever the catalog, since
     # downstream code matches on it.
     comps = comparison_widget.iw.get_catalog(catalog_label="APASS comparison")
     assert len(comps) == 2
+    assert not save_bar.unsaved_changes
+    assert save_bar.bn_save.disabled
+    assert save_bar.bn_revert.disabled
+
+
+def test_save_bar_revert_restores_settings(viewer_with_fake_catalogs):
+    comparison_widget = viewer_with_fake_catalogs
+    save_bar = comparison_widget._comparison_save_bar
+
+    comparison_widget._comparison_catalog_choice.value = "ATLAS refcat2"
+    comparison_widget._bright_mag_limit_input.value = 10
+    comparison_widget._dim_mag_limit_input.value = 13
+
+    save_bar.bn_revert.click()
+
+    assert comparison_widget._comparison_catalog_choice.value == "APASS DR9"
+    assert comparison_widget._bright_mag_limit_input.value == 8
+    assert comparison_widget._dim_mag_limit_input.value == 15
+    assert not save_bar.unsaved_changes
+    assert save_bar.bn_save.disabled
+    assert save_bar.bn_revert.disabled
+    assert cf.crossmatch_APASS2VSX.call_count == 1
+
+
+def test_inverted_mag_limits_block_save_and_show_message(viewer_with_fake_catalogs):
+    comparison_widget = viewer_with_fake_catalogs
+    save_bar = comparison_widget._comparison_save_bar
+    message = comparison_widget._mag_limit_message
+
+    comparison_widget._bright_mag_limit_input.value = 16
+
+    assert save_bar.unsaved_changes
+    assert save_bar.bn_save.disabled
+    assert not save_bar.bn_revert.disabled
+    assert "must be brighter" in message.value
+
+    comparison_widget._bright_mag_limit_input.value = 10
+
+    assert not save_bar.bn_save.disabled
+    assert message.value == ""
+
+
+def test_labels_match_comparisons_after_save(viewer_with_fake_catalogs):
+    # Labels shown before a reload are replaced by labels for the reloaded
+    # stars, not left on the image.
+    comparison_widget = viewer_with_fake_catalogs
+    comparison_widget._show_labels_button.value = True
+    label_key = "__label__APASS comparison"
+    marks = comparison_widget.iw._astro_im._scatter_marks
+    assert list(marks[label_key].text) == ["C1", "C2", "C3"]
+
+    comparison_widget._dim_mag_limit_input.value = 13
+    comparison_widget._comparison_save_bar.bn_save.click()
+
+    assert list(marks[label_key].text) == ["C1", "C2"]
+    assert comparison_widget._label_marks["APASS comparison"] is marks[label_key]
+
+
+def test_no_markers_does_not_raise():
+    # With no stars marked there is nothing to list, label or save.
+    comparison_widget, _ = _viewer_with_target()
+
+    assert len(comparison_widget.generate_table()) == 0
+    comparison_widget.show_labels()
+    comparison_widget._save_aperture_to_file(filename="sources.ecsv")
+    assert not os.path.exists("sources.ecsv")
 
 
 @pytest.mark.remote_data
