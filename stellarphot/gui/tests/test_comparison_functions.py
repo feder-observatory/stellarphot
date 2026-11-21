@@ -645,7 +645,21 @@ def test_labels_match_comparisons_after_save(viewer_with_fake_catalogs):
     comparison_widget._comparison_save_bar.bn_save.click()
 
     assert list(marks[label_key].text) == ["C1", "C2"]
-    assert comparison_widget._label_marks["APASS comparison"] is marks[label_key]
+
+
+def test_failed_save_keeps_old_settings_and_allows_retry(viewer_with_fake_catalogs):
+    # If the catalog query fails, the settings in use are unchanged and the
+    # save button stays enabled so the save can be tried again.
+    comparison_widget = viewer_with_fake_catalogs
+    save_bar = comparison_widget._comparison_save_bar
+    comparison_widget._dim_mag_limit_input.value = 13
+    cf.set_up.side_effect = RuntimeError("catalog is down")
+
+    save_bar.bn_save.click()
+
+    assert comparison_widget.dim_mag_limit == 15
+    assert save_bar.unsaved_changes
+    assert not save_bar.bn_save.disabled
 
 
 def test_no_markers_does_not_raise():

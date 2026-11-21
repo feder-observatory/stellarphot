@@ -376,8 +376,6 @@ class ComparisonViewer:
         self._comparison_save_bar.bn_save.tooltip = (
             "Re-query the catalog; resets any stars you removed"
         )
-        self._comparison_save_bar.bn_save.disabled = True
-        self._comparison_save_bar.bn_revert.disabled = True
         self._comparison_save_bar.fns_onsave_add_action(self._save_comparison_settings)
         self._comparison_save_bar.fns_onrevert_add_action(
             self._revert_comparison_settings
@@ -388,6 +386,7 @@ class ComparisonViewer:
         self.bright_mag_limit = bright_mag_limit
         self.dim_mag_limit = dim_mag_limit
         self.comparison_catalog = comparison_catalog
+        self._comparison_settings_changed(None)
         self.targets_from_file = targets_from_file
         self.target_coord = object_coordinate
         self.observatory = observatory
@@ -558,11 +557,20 @@ class ComparisonViewer:
         self._update_comparisons()
 
     def _save_comparison_settings(self):
+        previous = (self.comparison_catalog, self.bright_mag_limit, self.dim_mag_limit)
         self.comparison_catalog = self._comparison_catalog_choice.value
         self.bright_mag_limit = self._bright_mag_limit_input.value
         self.dim_mag_limit = self._dim_mag_limit_input.value
-        self._update_comparisons()
-        self._comparison_settings_changed(None)
+        try:
+            self._update_comparisons()
+        except Exception:
+            # Keep the settings that are in use so the save can be retried.
+            self.comparison_catalog, self.bright_mag_limit, self.dim_mag_limit = (
+                previous
+            )
+            raise
+        finally:
+            self._comparison_settings_changed(None)
 
     def _revert_comparison_settings(self):
         self._comparison_catalog_choice.value = self.comparison_catalog
@@ -594,12 +602,10 @@ class ComparisonViewer:
         # Reload the stars, if an image has been chosen. Labels are for the old
         # stars, so they are removed first and redrawn if they were on.
         if self._file_chooser.file_chooser.value != ".":
-            labels_on = self._show_labels_button.value
-            if labels_on:
-                self.remove_labels()
+            self.remove_labels()
             self._init()
             self._save_source_location_file()
-            if labels_on:
+            if self._show_labels_button.value:
                 self.show_labels()
 
     def _make_observers(self):
@@ -654,7 +660,6 @@ class ComparisonViewer:
         # Convert aperture table into a SourceList objects and output
         targets_table = self.generate_table()
         if len(targets_table) == 0:
-            # No stars are marked, so there is no source list to write.
             return
         # Assign units to columns
         targets_table["ra"] = targets_table["ra"] * u.deg
@@ -814,7 +819,6 @@ class ComparisonViewer:
         """
         all_table = _all_catalog_entries(self.iw)
         if len(all_table) == 0:
-            # No stars are marked, so there are none to list.
             return all_table
 
         elims = np.array([name.startswith("elim") for name in all_table["marker name"]])
