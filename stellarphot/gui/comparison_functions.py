@@ -385,7 +385,7 @@ class ComparisonViewer:
         self.bright_mag_limit = bright_mag_limit
         self.dim_mag_limit = dim_mag_limit
         self.comparison_catalog = comparison_catalog
-        self._comparison_settings_changed(None)
+        self._comparison_settings_changed()
         self.targets_from_file = targets_from_file
         self.target_coord = object_coordinate
         self.observatory = observatory
@@ -474,14 +474,15 @@ class ComparisonViewer:
             self._legend_spinner_box.children = [legend, error_message]
             raise
         else:
+            children = [legend]
             if len(apass_comps) == 0:
-                no_stars = ipw.HTML(
-                    value="<p style='color: red'>No comparison stars found within "
-                    "the magnitude limits</p>"
-                )
-                self._legend_spinner_box.children = [legend, no_stars]
-            else:
-                self._legend_spinner_box.children = [legend]
+                message = "No comparison stars found within the magnitude limits"
+                if len(self.generate_table()) == 0:
+                    # Nothing at all is marked, so no source list is written
+                    # and one from an earlier load would be left as it was.
+                    message += "; the source list was not updated"
+                children.append(ipw.HTML(value=f"<p style='color: red'>{message}</p>"))
+            self._legend_spinner_box.children = children
 
     @property
     def fits_file(self):
@@ -567,25 +568,35 @@ class ComparisonViewer:
         self.comparison_catalog = self._comparison_catalog_choice.value
         self.bright_mag_limit = self._bright_mag_limit_input.value
         self.dim_mag_limit = self._dim_mag_limit_input.value
-        try:
-            self._update_comparisons()
-        except Exception:
-            # Keep the settings that are in use so the save can be retried.
-            self.comparison_catalog, self.bright_mag_limit, self.dim_mag_limit = (
-                previous
-            )
-            raise
-        finally:
-            self._comparison_settings_changed(None)
+        image_chosen = self._image_chosen()
+        if image_chosen:
+            try:
+                self._reload_comparisons()
+            except Exception:
+                # The stars on screen are still the ones for the previous
+                # settings, so keep those settings; the save can be retried.
+                self.comparison_catalog, self.bright_mag_limit, self.dim_mag_limit = (
+                    previous
+                )
+                raise
+        self._comparison_settings_changed()
+        if image_chosen:
+            try:
+                self._save_source_location_file()
+            except Exception as err:
+                # The new stars are showing, so the new settings stay. Show the
+                # error, since the traceback only goes to the log.
+                self._comparison_save_bar.message.value = (
+                    f"<span style='color: red'>{html.escape(str(err))}</span>"
+                )
+                raise
 
     def _revert_comparison_settings(self):
         self._comparison_catalog_choice.value = self.comparison_catalog
         self._bright_mag_limit_input.value = self.bright_mag_limit
         self._dim_mag_limit_input.value = self.dim_mag_limit
 
-    def _comparison_settings_changed(self, change):  # noqa: ARG002
-        # Mark the settings unsaved if the controls differ from the settings in
-        # use, and allow saving only if the magnitude limits are usable.
+    def _comparison_settings_changed(self, change=None):  # noqa: ARG002
         bright = self._bright_mag_limit_input.value
         dim = self._dim_mag_limit_input.value
         unsaved = (
@@ -593,13 +604,9 @@ class ComparisonViewer:
             bright,
             dim,
         ) != (self.comparison_catalog, self.bright_mag_limit, self.dim_mag_limit)
-        # Limits that are too bright or too close together leave no stars.
-        if dim < 9:
-            problem = "Dim limit must be 9 or fainter"
-        elif not round(dim - bright, 3) >= 0.1:
-            problem = "Dim limit must be at least 0.1 mag fainter than bright limit"
-        else:
-            problem = ""
+        # Any other limits are usable; if no stars fall within them a message
+        # says so after the reload.
+        problem = "" if dim > bright else "Dim limit must be fainter than bright limit"
         self._comparison_save_bar.message.value = (
             f"<span style='color: red'>{problem}</span>" if problem else ""
         )
@@ -607,17 +614,24 @@ class ComparisonViewer:
         self._comparison_save_bar.bn_save.disabled = not unsaved or bool(problem)
         self._comparison_save_bar.bn_revert.disabled = not unsaved
 
+    def _image_chosen(self):
+        return self._file_chooser.file_chooser.value != "."
+
+    def _reload_comparisons(self):
+        # Labels are for the old stars, so they are removed first and redrawn
+        # if they were on.
+        self.remove_labels()
+        try:
+            self._init()
+        finally:
+            if self._show_labels_button.value:
+                self.show_labels()
+
     def _update_comparisons(self):
-        # Reload the stars, if an image has been chosen. Labels are for the old
-        # stars, so they are removed first and redrawn if they were on.
-        if self._file_chooser.file_chooser.value != ".":
-            self.remove_labels()
-            try:
-                self._init()
-                self._save_source_location_file()
-            finally:
-                if self._show_labels_button.value:
-                    self.show_labels()
+        # Reload the stars and save the source list, if an image has been chosen.
+        if self._image_chosen():
+            self._reload_comparisons()
+            self._save_source_location_file()
 
     def _make_observers(self):
         for control in (

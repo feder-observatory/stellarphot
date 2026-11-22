@@ -192,7 +192,7 @@ def test_mag_scale_excludes_stars_too_close_to_vsx_or_targets():
 ONE_STAR = Table({"ra": [10.0], "dec": [20.0]})
 
 
-@pytest.mark.parametrize("limit, query_limit", [(14, 14), (9.5, 12)])
+@pytest.mark.parametrize("limit, query_limit", [(14, 14), (9.5, 12), (None, None)])
 def test_crossmatch_refcat2_gets_magnitude_limit_in_sr(mocker, limit, query_limit):
     # refcat2 is deep, so its query is limited, in SR, the band mag_scale uses.
     # The query limit is never brighter than 12 so that the query always
