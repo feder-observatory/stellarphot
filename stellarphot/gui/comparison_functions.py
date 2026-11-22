@@ -371,7 +371,6 @@ class ComparisonViewer:
             style=DESC_STYLE,
             layout={"width": "220px"},
         )
-        self._mag_limit_message = ipw.HTML()
         self._comparison_save_bar = SaveButtonBar()
         self._comparison_save_bar.bn_save.tooltip = (
             "Re-query the catalog; resets any stars you removed"
@@ -579,7 +578,7 @@ class ComparisonViewer:
 
     def _comparison_settings_changed(self, change):  # noqa: ARG002
         # Mark the settings unsaved if the controls differ from the settings in
-        # use, and allow saving only if the magnitude range makes sense.
+        # use, and allow saving only if the magnitude limits are usable.
         bright = self._bright_mag_limit_input.value
         dim = self._dim_mag_limit_input.value
         unsaved = (
@@ -587,15 +586,18 @@ class ComparisonViewer:
             bright,
             dim,
         ) != (self.comparison_catalog, self.bright_mag_limit, self.dim_mag_limit)
-        valid = bright < dim
-        self._mag_limit_message.value = (
-            ""
-            if valid
-            else "<p style='color: red'>Bright limit must be brighter "
-            "(smaller) than dim limit</p>"
+        # Limits that are too bright or too close together leave no stars.
+        if dim < 9:
+            problem = "Dim limit must be 9 or fainter"
+        elif not round(dim - bright, 3) >= 0.1:
+            problem = "Dim limit must be at least 0.1 mag fainter than bright limit"
+        else:
+            problem = ""
+        self._comparison_save_bar.message.value = (
+            f"<span style='color: red'>{problem}</span>" if problem else ""
         )
         self._comparison_save_bar.unsaved_changes = unsaved
-        self._comparison_save_bar.bn_save.disabled = not (unsaved and valid)
+        self._comparison_save_bar.bn_save.disabled = not unsaved or bool(problem)
         self._comparison_save_bar.bn_revert.disabled = not unsaved
 
     def _update_comparisons(self):
@@ -603,10 +605,12 @@ class ComparisonViewer:
         # stars, so they are removed first and redrawn if they were on.
         if self._file_chooser.file_chooser.value != ".":
             self.remove_labels()
-            self._init()
-            self._save_source_location_file()
-            if self._show_labels_button.value:
-                self.show_labels()
+            try:
+                self._init()
+                self._save_source_location_file()
+            finally:
+                if self._show_labels_button.value:
+                    self.show_labels()
 
     def _make_observers(self):
         for control in (
@@ -794,7 +798,6 @@ class ComparisonViewer:
                 self._bright_mag_limit_input,
                 self._dim_mag_limit_input,
                 self._comparison_save_bar,
-                self._mag_limit_message,
             ]
         )
 

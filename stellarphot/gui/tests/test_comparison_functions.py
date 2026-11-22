@@ -614,22 +614,33 @@ def test_save_bar_revert_restores_settings(viewer_with_fake_catalogs):
     assert cf.crossmatch_APASS2VSX.call_count == 1
 
 
-def test_inverted_mag_limits_block_save_and_show_message(viewer_with_fake_catalogs):
+@pytest.mark.parametrize(
+    "bright, dim, expected_message",
+    [
+        (16, 15, "at least 0.1"),  # inverted
+        (12, 12.05, "at least 0.1"),  # too close together
+        (7, 8.5, "9 or fainter"),  # dim limit too bright
+    ],
+)
+def test_bad_mag_limits_block_save_and_show_message(
+    viewer_with_fake_catalogs, bright, dim, expected_message
+):
     comparison_widget = viewer_with_fake_catalogs
     save_bar = comparison_widget._comparison_save_bar
-    message = comparison_widget._mag_limit_message
 
-    comparison_widget._bright_mag_limit_input.value = 16
+    comparison_widget._bright_mag_limit_input.value = bright
+    comparison_widget._dim_mag_limit_input.value = dim
 
     assert save_bar.unsaved_changes
     assert save_bar.bn_save.disabled
     assert not save_bar.bn_revert.disabled
-    assert "must be brighter" in message.value
+    assert expected_message in save_bar.message.value
 
     comparison_widget._bright_mag_limit_input.value = 10
+    comparison_widget._dim_mag_limit_input.value = 13
 
     assert not save_bar.bn_save.disabled
-    assert message.value == ""
+    assert save_bar.message.value == ""
 
 
 def test_labels_match_comparisons_after_save(viewer_with_fake_catalogs):
@@ -650,8 +661,10 @@ def test_labels_match_comparisons_after_save(viewer_with_fake_catalogs):
 def test_failed_save_keeps_old_settings_and_allows_retry(viewer_with_fake_catalogs):
     # If the catalog query fails, the settings in use are unchanged and the
     # save button stays enabled so the save can be tried again.
+    # Labels that were showing are still showing.
     comparison_widget = viewer_with_fake_catalogs
     save_bar = comparison_widget._comparison_save_bar
+    comparison_widget._show_labels_button.value = True
     comparison_widget._dim_mag_limit_input.value = 13
     cf.set_up.side_effect = RuntimeError("catalog is down")
 
@@ -660,16 +673,18 @@ def test_failed_save_keeps_old_settings_and_allows_retry(viewer_with_fake_catalo
     assert comparison_widget.dim_mag_limit == 15
     assert save_bar.unsaved_changes
     assert not save_bar.bn_save.disabled
+    assert "APASS comparison" in comparison_widget._label_marks
 
 
-def test_no_markers_does_not_raise():
+def test_no_markers_does_not_raise(tmp_path):
     # With no stars marked there is nothing to list, label or save.
     comparison_widget, _ = _viewer_with_target()
 
     assert len(comparison_widget.generate_table()) == 0
     comparison_widget.show_labels()
-    comparison_widget._save_aperture_to_file(filename="sources.ecsv")
-    assert not os.path.exists("sources.ecsv")
+    source_file = tmp_path / "sources.ecsv"
+    comparison_widget._save_aperture_to_file(filename=source_file)
+    assert not source_file.exists()
 
 
 @pytest.mark.remote_data
