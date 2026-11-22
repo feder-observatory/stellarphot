@@ -119,10 +119,13 @@ def crossmatch_APASS2VSX(CCD, RD, vsx, catalog="APASS DR9", magnitude_limit=None
     Notes
     -----
     The magnitude limit applies only to refcat2, in SR, the passband
-    `mag_scale` selects comparison stars in.
+    `mag_scale` selects comparison stars in. A query that returns no stars is
+    an error, so the limit sent to refcat2 is never brighter than 12, which
+    always returns some; `mag_scale` applies the actual limits afterwards.
     """
     if catalog == "ATLAS refcat2":
-        # refcat2 applies a magnitude limit in SR unless told otherwise.
+        if magnitude_limit is not None:
+            magnitude_limit = max(magnitude_limit, 12)
         apass = refcat2(CCD.wcs, magnitude_limit=magnitude_limit)
     elif catalog == "APASS DR9":
         apass = apass_dr9(CCD.wcs)

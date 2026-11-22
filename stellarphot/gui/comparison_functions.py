@@ -474,7 +474,14 @@ class ComparisonViewer:
             self._legend_spinner_box.children = [legend, error_message]
             raise
         else:
-            self._legend_spinner_box.children = [legend]
+            if len(apass_comps) == 0:
+                no_stars = ipw.HTML(
+                    value="<p style='color: red'>No comparison stars found within "
+                    "the magnitude limits</p>"
+                )
+                self._legend_spinner_box.children = [legend, no_stars]
+            else:
+                self._legend_spinner_box.children = [legend]
 
     @property
     def fits_file(self):

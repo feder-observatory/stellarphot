@@ -192,16 +192,19 @@ def test_mag_scale_excludes_stars_too_close_to_vsx_or_targets():
 ONE_STAR = Table({"ra": [10.0], "dec": [20.0]})
 
 
-def test_crossmatch_refcat2_gets_magnitude_limit_in_sr(mocker):
+@pytest.mark.parametrize("limit, query_limit", [(14, 14), (9.5, 12)])
+def test_crossmatch_refcat2_gets_magnitude_limit_in_sr(mocker, limit, query_limit):
     # refcat2 is deep, so its query is limited, in SR, the band mag_scale uses.
+    # The query limit is never brighter than 12 so that the query always
+    # returns stars; an empty query result is an error.
     refcat2 = mocker.patch.object(comparison_utils, "refcat2", return_value=ONE_STAR)
     apass = mocker.patch.object(comparison_utils, "apass_dr9")
 
     comparison_utils.crossmatch_APASS2VSX(
-        _FakeCCD(), None, [], catalog="ATLAS refcat2", magnitude_limit=14
+        _FakeCCD(), None, [], catalog="ATLAS refcat2", magnitude_limit=limit
     )
 
-    refcat2.assert_called_once_with(_FakeCCD.wcs, magnitude_limit=14)
+    refcat2.assert_called_once_with(_FakeCCD.wcs, magnitude_limit=query_limit)
     apass.assert_not_called()
 
 
