@@ -4,7 +4,7 @@ from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astropy.table import Table
 
-from stellarphot.catalogs import apass_dr9, vsx_vizier
+from stellarphot.catalogs import apass_dr9, refcat2, vsx_vizier
 from stellarphot.core import coords_in_frame
 
 __all__ = ["read_file", "set_up", "crossmatch_APASS2VSX", "mag_scale", "in_field"]
@@ -80,9 +80,9 @@ def set_up(ccd, magnitude_limit=None):
     return vsx
 
 
-def crossmatch_APASS2VSX(CCD, RD, vsx):
+def crossmatch_APASS2VSX(CCD, RD, vsx, catalog="APASS DR9", magnitude_limit=None):
     """
-    Find APASS stars in FOV and matches APASS stars to VSX and APASS to input targets.
+    Find catalog stars in FOV and match them to VSX and to input targets.
 
     Parameters
     ----------
@@ -97,19 +97,40 @@ def crossmatch_APASS2VSX(CCD, RD, vsx):
     vsx : `astropy.table.Table`
         Table with known variables in the field of view.
 
+    catalog : str, optional
+        Catalog to get the stars from, "APASS DR9" or "ATLAS refcat2".
+        Defaults to "APASS DR9".
+
+    magnitude_limit : float, optional
+        Faintest SR magnitude to fetch from refcat2. Defaults to no limit.
+
     Returns
     -------
 
     apass : `stellarphot.CatalogData`
-        Table with APASS stars in the field of view.
+        Table with catalog stars in the field of view.
 
     v_angle : `astropy.units.Quantity`
-        Angular separation between APASS stars and VSX stars.
+        Angular separation between catalog stars and VSX stars.
 
     RD_angle : `astropy.units.Quantity`
-        Angular separation between APASS stars and input targets.
+        Angular separation between catalog stars and input targets.
+
+    Notes
+    -----
+    The magnitude limit applies only to refcat2, in SR, the passband
+    `mag_scale` selects comparison stars in. A query that returns no stars is
+    an error, so the limit sent to refcat2 is never brighter than 12, which
+    always returns some; `mag_scale` applies the actual limits afterwards.
     """
-    apass = apass_dr9(CCD.wcs)
+    if catalog == "ATLAS refcat2":
+        if magnitude_limit is not None:
+            magnitude_limit = max(magnitude_limit, 12)
+        apass = refcat2(CCD.wcs, magnitude_limit=magnitude_limit)
+    elif catalog == "APASS DR9":
+        apass = apass_dr9(CCD.wcs)
+    else:
+        raise ValueError(f"Unknown comparison catalog {catalog!r}.")
     # Use the standard names we have introduced for ra and dec
     ra = apass["ra"]
     dec = apass["dec"]

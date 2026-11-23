@@ -1,5 +1,6 @@
 import astropy.units as u
 import numpy as np
+import pytest
 from astropy.coordinates import SkyCoord
 from astropy.nddata import CCDData
 from astropy.table import Table
@@ -185,3 +186,41 @@ def test_mag_scale_excludes_stars_too_close_to_vsx_or_targets():
 
     np.testing.assert_array_equal(good_stars, [False, False, True])
     assert len(apass_good_coord) == 1
+
+
+# A one-star catalog, as a mocked catalog fetcher returns it.
+ONE_STAR = Table({"ra": [10.0], "dec": [20.0]})
+
+
+@pytest.mark.parametrize("limit, query_limit", [(14, 14), (9.5, 12), (None, None)])
+def test_crossmatch_refcat2_gets_magnitude_limit_in_sr(mocker, limit, query_limit):
+    # refcat2 is deep, so its query is limited, in SR, the band mag_scale uses.
+    # The query limit is never brighter than 12 so that the query always
+    # returns stars; an empty query result is an error.
+    refcat2 = mocker.patch.object(comparison_utils, "refcat2", return_value=ONE_STAR)
+    apass = mocker.patch.object(comparison_utils, "apass_dr9")
+
+    comparison_utils.crossmatch_APASS2VSX(
+        _FakeCCD(), None, [], catalog="ATLAS refcat2", magnitude_limit=limit
+    )
+
+    refcat2.assert_called_once_with(_FakeCCD.wcs, magnitude_limit=query_limit)
+    apass.assert_not_called()
+
+
+def test_crossmatch_apass_query_never_gets_magnitude_limit(mocker):
+    # APASS is queried with no limit, whether or not one is given, because a
+    # limited APASS query can come back empty and make the image load fail.
+    apass = mocker.patch.object(comparison_utils, "apass_dr9", return_value=ONE_STAR)
+
+    comparison_utils.crossmatch_APASS2VSX(_FakeCCD(), None, [])
+    comparison_utils.crossmatch_APASS2VSX(
+        _FakeCCD(), None, [], catalog="APASS DR9", magnitude_limit=14
+    )
+
+    assert apass.call_args_list == [mocker.call(_FakeCCD.wcs)] * 2
+
+
+def test_crossmatch_unknown_catalog_raises():
+    with pytest.raises(ValueError, match="2MASS"):
+        comparison_utils.crossmatch_APASS2VSX(_FakeCCD(), None, [], catalog="2MASS")

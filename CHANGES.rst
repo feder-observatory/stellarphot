@@ -47,6 +47,10 @@ New Features
   fraction of each image's fitted stars whose quoted uncertainty sat at or
   below ``min_fit_sigma``, so the floor set their weight instead of their
   errors. It is NaN for an unweighted fit. [#697]
++ The comparison star viewer can draw comparison stars from ATLAS refcat2 as
+  well as APASS DR9, and has on-screen controls for the catalog and the
+  bright and dim magnitude limits (in SR); saving them with the save bar
+  reloads the markers. [#746]
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -194,6 +198,8 @@ Bug Fixes
   comparison stars in a regenerated source list may change. [#743]
 + The comparison-star viewer's fallback target position is now the image
   center; x and y had been swapped. [#743]
++ Star labels in the comparison-star viewer are redrawn when the stars are
+  reloaded instead of keeping the old labels. [#746]
 + ``multi_image_photometry()`` now raises an informative ``RuntimeError`` when
   no image produced photometry, instead of failing with ``ValueError: no
   values provided to stack.`` [#670]
