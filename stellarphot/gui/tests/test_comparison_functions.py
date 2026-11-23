@@ -555,6 +555,9 @@ def test_comparison_properties(tmp_path, has_object, source_file_name):
             file=str(file_name),
             photom_apertures_file=source_file_name,
         )
+        # Nothing is loaded until the first question is answered.
+        comparison_widget._mode.value = "generate"
+    _click_save(comparison_widget)
 
     # Check that we have some variables in this field of view, which contains the
     # variable star EY UMa
@@ -621,13 +624,29 @@ def _choose_image(comparison_widget, path):
         comparison_widget._file_chooser.file_chooser.value = path
 
 
+def _viewer_in_mode(mode, **kwargs):
+    # A comparison viewer with the first question, use an existing source
+    # list or generate one, answered.
+    comparison_widget = cf.ComparisonViewer(**kwargs)
+    comparison_widget._mode.value = mode
+    return comparison_widget
+
+
+def _click_save(comparison_widget):
+    comparison_widget._comparison_save_bar.bn_save.click()
+
+
+def _confirm_is_shown(comparison_widget):
+    return comparison_widget._confirm_overwrite.layout.display == "flex"
+
+
 def test_spinner_cleared_and_error_shown_when_catalog_load_fails(tmp_path, monkeypatch):
     # If fetching the VSX/APASS catalogs fails, the spinner should not keep
     # spinning forever -- the legend should come back and an error message
     # should be shown to the user.
     path, _ = _write_ey_uma_file(tmp_path)
 
-    comparison_widget = cf.ComparisonViewer()
+    comparison_widget = _viewer_in_mode("generate")
     legend = comparison_widget._legend_spinner_box.children[0]
 
     def failing_set_up(*_args, **_kwargs):
@@ -689,8 +708,8 @@ def image_with_fake_catalogs(tmp_path, mocker):
 
 @pytest.fixture
 def viewer_with_fake_catalogs(image_with_fake_catalogs):
-    # A viewer showing the image with the fake catalogs.
-    comparison_widget = cf.ComparisonViewer()
+    # A viewer generating a source list for the image with the fake catalogs.
+    comparison_widget = _viewer_in_mode("generate")
     _choose_image(comparison_widget, image_with_fake_catalogs)
     return comparison_widget
 
@@ -701,6 +720,8 @@ def test_save_bar_refreshes_comparisons_with_new_settings(viewer_with_fake_catal
     # markers.
     comparison_widget = viewer_with_fake_catalogs
     save_bar = comparison_widget._comparison_save_bar
+    # Save the source list so that only the settings are left to save.
+    _click_save(comparison_widget)
 
     assert cf.crossmatch_APASS2VSX.call_count == 1
     assert cf.crossmatch_APASS2VSX.call_args.kwargs == {
@@ -745,6 +766,7 @@ def test_save_bar_refreshes_comparisons_with_new_settings(viewer_with_fake_catal
 def test_save_bar_revert_restores_settings(viewer_with_fake_catalogs):
     comparison_widget = viewer_with_fake_catalogs
     save_bar = comparison_widget._comparison_save_bar
+    _click_save(comparison_widget)
 
     comparison_widget._comparison_catalog_choice.value = "ATLAS refcat2"
     comparison_widget._bright_mag_limit_input.value = 10
@@ -762,7 +784,7 @@ def test_save_bar_revert_restores_settings(viewer_with_fake_catalogs):
 
 
 def test_constructor_catalog_is_used_for_query(image_with_fake_catalogs):
-    comparison_widget = cf.ComparisonViewer(comparison_catalog="ATLAS refcat2")
+    comparison_widget = _viewer_in_mode("generate", comparison_catalog="ATLAS refcat2")
     assert not comparison_widget._comparison_save_bar.unsaved_changes
 
     _choose_image(comparison_widget, image_with_fake_catalogs)
@@ -773,7 +795,7 @@ def test_constructor_catalog_is_used_for_query(image_with_fake_catalogs):
 def test_settings_can_be_saved_before_image_is_chosen():
     # Nothing to reload yet, but the settings are kept for when an image is
     # chosen.
-    comparison_widget = cf.ComparisonViewer()
+    comparison_widget = _viewer_in_mode("generate")
     save_bar = comparison_widget._comparison_save_bar
 
     comparison_widget._dim_mag_limit_input.value = 13
@@ -790,6 +812,7 @@ def test_dim_limit_not_fainter_than_bright_blocks_save(
 ):
     comparison_widget = viewer_with_fake_catalogs
     save_bar = comparison_widget._comparison_save_bar
+    _click_save(comparison_widget)
 
     comparison_widget._bright_mag_limit_input.value = bright
     comparison_widget._dim_mag_limit_input.value = dim
@@ -809,7 +832,9 @@ def test_dim_limit_not_fainter_than_bright_blocks_save(
 def test_bright_limits_can_be_saved():
     # Limits suited to a bright target are as usable on screen as they are in
     # the constructor.
-    comparison_widget = cf.ComparisonViewer(bright_mag_limit=6, dim_mag_limit=8.5)
+    comparison_widget = _viewer_in_mode(
+        "generate", bright_mag_limit=6, dim_mag_limit=8.5
+    )
     save_bar = comparison_widget._comparison_save_bar
     assert save_bar.message.value == ""
 
@@ -860,9 +885,10 @@ def test_message_shown_when_no_comparison_stars_found(viewer_with_fake_catalogs)
     messages = _legend_messages(comparison_widget)
     assert len(messages) == 1
     assert "No comparison stars" in messages[0]
-    # There are no variables or targets either, so there was nothing to put in
-    # a source list, and the one from the earlier settings is still on disk.
-    assert "source list was not updated" in messages[0]
+    # There are no variables or targets either, so there is nothing to put in
+    # a source list.
+    assert "no source list to save" in messages[0]
+    assert not comparison_widget._comparison_save_bar.unsaved_changes
 
     comparison_widget._dim_mag_limit_input.value = 13
     comparison_widget._comparison_save_bar.bn_save.click()
@@ -896,11 +922,13 @@ def test_failed_save_keeps_old_settings_and_allows_retry(viewer_with_fake_catalo
 def test_settings_kept_when_only_the_source_list_write_fails(image_with_fake_catalogs):
     # The stars were reloaded with the new settings, so those are the settings
     # in use even though the source list could not be written. The error is
-    # shown, since an exception in a widget callback only reaches the log.
-    comparison_widget = cf.ComparisonViewer(overwrite_outputs=False)
+    # shown, since an exception in a widget callback only reaches the log, and
+    # the source list is still waiting to be saved.
+    comparison_widget = _viewer_in_mode("generate", overwrite_outputs=False)
     save_bar = comparison_widget._comparison_save_bar
-    # Choosing the image writes the source list, so the next write fails.
     _choose_image(comparison_widget, image_with_fake_catalogs)
+    # The first save writes the source list, so the next write fails.
+    _click_save(comparison_widget)
 
     comparison_widget._dim_mag_limit_input.value = 13
     save_bar.bn_save.click()
@@ -908,8 +936,10 @@ def test_settings_kept_when_only_the_source_list_write_fails(image_with_fake_cat
     comps = comparison_widget.iw.get_catalog(catalog_label="APASS comparison")
     assert len(comps) == 2
     assert comparison_widget.dim_mag_limit == 13
-    assert not save_bar.unsaved_changes
+    assert save_bar.bn_revert.disabled
     assert "can not be overwritten" in save_bar.message.value
+    assert save_bar.unsaved_changes
+    assert not save_bar.bn_save.disabled
 
 
 def test_no_markers_does_not_raise(tmp_path):
@@ -936,10 +966,12 @@ SHARED_STARS = [
 ]
 
 
-def _source_list_table(stars=SHARED_STARS):
-    # A table of the given stars, given as in SHARED_STARS, with the columns
-    # of a source list made by the comparison viewer on another night.
-    ccd = make_ey_uma_image()
+def _source_list_table(stars=SHARED_STARS, ccd=None):
+    # A table of the given stars, given as in SHARED_STARS on the image ccd
+    # (default the EY UMa image), with the columns of a source list made by
+    # the comparison viewer on another night.
+    if ccd is None:
+        ccd = make_ey_uma_image()
     star_ids, marker_names, pixels = zip(*stars, strict=True)
     x, y = (np.array(p) for p in zip(*pixels, strict=True))
     # Source lists are ICRS; the image WCS is not.
@@ -1006,139 +1038,466 @@ def _saved_source_list_file():
     )
 
 
+def _existing_list_viewer_for(image, path):
+    # A viewer showing the source list at path on the image.
+    comparison_widget = _viewer_in_mode("existing")
+    comparison_widget._choose_source_list.value = path
+    _choose_image(comparison_widget, image)
+    return comparison_widget
+
+
+@pytest.fixture
+def existing_list_viewer(image_with_fake_catalogs, shared_source_list):
+    # A viewer showing the shared source list on the image with the fake
+    # catalogs.
+    return _existing_list_viewer_for(image_with_fake_catalogs, shared_source_list)
+
+
+def _shown(widget):
+    return widget.layout.display != "none"
+
+
+def test_mode_starts_unanswered_and_rest_of_widget_waits_for_it(
+    image_with_fake_catalogs,
+):
+    # The first question, use an existing source list or generate one, is
+    # unanswered even when there is a source list file already, and until it
+    # is answered nothing but the question is shown and no catalog is queried.
+    _write_source_list(Path("source_locations.ecsv"))
+    comparison_widget = cf.ComparisonViewer()
+    existing = comparison_widget._existing_list_controls
+    generate = comparison_widget._generate_list_controls
+    rest = comparison_widget._rest_of_viewer
+
+    assert comparison_widget._mode.value is None
+    assert comparison_widget.box.children[0] is comparison_widget._mode
+    assert not any(_shown(w) for w in (existing, generate, rest))
+
+    _choose_image(comparison_widget, image_with_fake_catalogs)
+    assert cf.crossmatch_APASS2VSX.call_count == 0
+
+    comparison_widget._mode.value = "existing"
+    assert _shown(existing) and _shown(rest) and not _shown(generate)
+    assert comparison_widget._comparison_save_bar in rest.children
+    assert comparison_widget._save_var_info.disabled
+    assert cf.crossmatch_APASS2VSX.call_count == 0
+
+    comparison_widget._mode.value = "generate"
+    assert _shown(generate) and _shown(rest) and not _shown(existing)
+    assert not comparison_widget._save_var_info.disabled
+    assert cf.crossmatch_APASS2VSX.call_count == 1
+
+
+def test_choosing_an_image_does_not_write_the_source_list(viewer_with_fake_catalogs):
+    # The source list is written only when the save bar is clicked, and saving
+    # it does not query the catalogs again.
+    comparison_widget = viewer_with_fake_catalogs
+    save_bar = comparison_widget._comparison_save_bar
+
+    assert not os.path.exists("source_locations.ecsv")
+    assert save_bar.unsaved_changes
+    assert not save_bar.bn_save.disabled
+    assert "not been saved" in save_bar.message.value
+
+    _click_save(comparison_widget)
+
+    assert len(SourceListData.read("source_locations.ecsv")) == 3
+    assert not save_bar.unsaved_changes
+    assert save_bar.bn_save.disabled
+    assert "not been saved" not in save_bar.message.value
+    assert cf.crossmatch_APASS2VSX.call_count == 1
+
+
+def test_switching_mode_shows_the_list_for_the_mode_and_writes_nothing(
+    viewer_with_fake_catalogs, shared_source_list
+):
+    comparison_widget = viewer_with_fake_catalogs
+    iw = comparison_widget.iw
+
+    comparison_widget._mode.value = "existing"
+    # No list is chosen yet, so no stars are shown.
+    assert len(iw.catalog_labels) == 0
+    assert not comparison_widget._comparison_save_bar.unsaved_changes
+
+    comparison_widget._choose_source_list.value = shared_source_list
+    _assert_shows_shared_list(comparison_widget)
+
+    comparison_widget._mode.value = "generate"
+    table = comparison_widget.generate_table()
+    assert list(table["marker name"]) == ["APASS comparison"] * 3
+    assert cf.crossmatch_APASS2VSX.call_count == 2
+
+    comparison_widget._mode.value = "existing"
+    _assert_shows_shared_list(comparison_widget)
+    assert cf.crossmatch_APASS2VSX.call_count == 2
+    assert not os.path.exists("source_locations.ecsv")
+
+
 @pytest.mark.parametrize("image_first", [True, False])
-def test_loaded_source_list_is_shown_and_not_written(
+def test_existing_source_list_is_shown_and_not_written(
     image_with_fake_catalogs, shared_source_list, image_first
 ):
-    # Loading a source list shows its stars with their ids, without querying
-    # the catalogs for new ones, and points the saved settings at it. Neither
-    # the loaded list nor a new one is written.
-    comparison_widget = cf.ComparisonViewer()
+    # An existing source list is shown with its own star ids, without querying
+    # the catalogs. Nothing is written and the settings are unchanged until
+    # the save bar is clicked.
+    comparison_widget = _viewer_in_mode("existing")
     original_contents = shared_source_list.read_bytes()
 
     if image_first:
         _choose_image(comparison_widget, image_with_fake_catalogs)
-        os.remove("source_locations.ecsv")
-        n_queries = 1
-    else:
-        n_queries = 0
-
     comparison_widget._choose_source_list.value = shared_source_list
     if not image_first:
         _choose_image(comparison_widget, image_with_fake_catalogs)
 
     _assert_shows_shared_list(comparison_widget)
-    assert cf.crossmatch_APASS2VSX.call_count == n_queries
-    assert cf.set_up.call_count == n_queries
+    assert cf.crossmatch_APASS2VSX.call_count == 0
+    assert cf.set_up.call_count == 0
     assert shared_source_list.read_bytes() == original_contents
     assert not os.path.exists("source_locations.ecsv")
-    assert comparison_widget.photom_apertures_file == str(shared_source_list)
-    assert _saved_source_list_file() == str(shared_source_list)
+    assert comparison_widget.photom_apertures_file == "source_locations.ecsv"
+    assert _saved_source_list_file() == "source_locations.ecsv"
+    save_bar = comparison_widget._comparison_save_bar
+    assert save_bar.unsaved_changes
+    assert "not been saved" in save_bar.message.value
     # The first target in the list is the target.
     target = comparison_widget.generate_table()["coord"][0]
     assert comparison_widget.target_coord.separation(target) < 1e-3 * u.arcsec
 
 
-def test_loaded_source_list_is_view_only(viewer_with_fake_catalogs, shared_source_list):
-    # Clicking a star does not exclude it, and saving the comparison settings
-    # neither queries the catalogs nor writes a source list.
-    comparison_widget = viewer_with_fake_catalogs
+@pytest.mark.parametrize("image_chosen", [True, False])
+def test_saving_copies_existing_source_list(
+    image_with_fake_catalogs, shared_source_list, image_chosen
+):
+    # Saving copies the chosen list to the source list file in the settings,
+    # which stays as it was.
+    comparison_widget = _viewer_in_mode("existing")
     comparison_widget._choose_source_list.value = shared_source_list
-    original_contents = shared_source_list.read_bytes()
-    os.remove("source_locations.ecsv")
+    if image_chosen:
+        _choose_image(comparison_widget, image_with_fake_catalogs)
+
+    _click_save(comparison_widget)
+
+    assert Path("source_locations.ecsv").read_bytes() == (
+        shared_source_list.read_bytes()
+    )
+    assert comparison_widget.photom_apertures_file == "source_locations.ecsv"
+    assert _saved_source_list_file() == "source_locations.ecsv"
+    save_bar = comparison_widget._comparison_save_bar
+    assert not save_bar.unsaved_changes
+    assert save_bar.bn_save.disabled
+
+
+def test_choosing_the_source_list_file_itself_leaves_nothing_to_save(
+    image_with_fake_catalogs,
+):
+    _write_source_list(Path("source_locations.ecsv"))
+    comparison_widget = _viewer_in_mode("existing")
+    comparison_widget._choose_source_list.value = Path(
+        "source_locations.ecsv"
+    ).absolute()
+    _choose_image(comparison_widget, image_with_fake_catalogs)
+
+    _assert_shows_shared_list(comparison_widget)
+    save_bar = comparison_widget._comparison_save_bar
+    assert not save_bar.unsaved_changes
+    assert save_bar.bn_save.disabled
+    assert not _confirm_is_shown(comparison_widget)
+
+
+def _write_other_list(path):
+    # A source list different from the shared one.
+    _write_source_list(path, SHARED_STARS[:2])
+
+
+@pytest.mark.parametrize("mode", ["existing", "generate"])
+def test_overwriting_a_source_list_needs_confirmation(
+    image_with_fake_catalogs, shared_source_list, mode
+):
+    # A source list file this session did not write is replaced only after
+    # the user says yes; once this session has written it, it is replaced
+    # without asking.
+    destination = Path("source_locations.ecsv")
+    _write_other_list(destination)
+    original_contents = destination.read_bytes()
+    comparison_widget = _viewer_in_mode(mode)
+    comparison_widget._choose_source_list.value = shared_source_list
+    _choose_image(comparison_widget, image_with_fake_catalogs)
+    save_bar = comparison_widget._comparison_save_bar
+    confirm = comparison_widget._confirm_overwrite
+
+    _click_save(comparison_widget)
+
+    assert _confirm_is_shown(comparison_widget)
+    assert "source_locations.ecsv" in confirm.message
+    assert destination.read_bytes() == original_contents
+
+    confirm._no.click()
+
+    assert not _confirm_is_shown(comparison_widget)
+    assert destination.read_bytes() == original_contents
+    assert save_bar.unsaved_changes
+    assert not save_bar.bn_save.disabled
+
+    _click_save(comparison_widget)
+    confirm._yes.click()
+
+    assert destination.read_bytes() != original_contents
+    assert not save_bar.unsaved_changes
+
+    # Make something new to save, and save it.
+    if mode == "existing":
+        other = Path("other.ecsv")
+        _write_other_list(other)
+        comparison_widget._choose_source_list.value = other.absolute()
+    else:
+        comparison_widget._dim_mag_limit_input.value = 13
+    _click_save(comparison_widget)
+
+    assert not _confirm_is_shown(comparison_widget)
+    assert len(SourceListData.read(destination)) == 2
+    assert not save_bar.unsaved_changes
+
+
+def _set_source_list_file(comparison_widget, name):
+    # Type a new source list file name into the source location settings.
+    settings = comparison_widget.source_locations.value.copy()
+    settings["source_list_file"] = name
+    comparison_widget.source_locations.value = settings
+
+
+def _switch_to_existing_with_no_list(comparison_widget):
+    comparison_widget._mode.value = "existing"
+
+
+def _choose_the_destination_itself(comparison_widget):
+    comparison_widget._mode.value = "existing"
+    comparison_widget._choose_source_list.value = Path(
+        "source_locations.ecsv"
+    ).absolute()
+
+
+@pytest.mark.parametrize(
+    "change_while_asking",
+    [_switch_to_existing_with_no_list, _choose_the_destination_itself],
+)
+def test_yes_does_nothing_if_there_is_nothing_left_to_save(
+    image_with_fake_catalogs, change_while_asking
+):
+    # Yes applies to what is on screen when it is clicked.
+    destination = Path("source_locations.ecsv")
+    _write_other_list(destination)
+    original_contents = destination.read_bytes()
+    comparison_widget = _viewer_in_mode("generate")
+    _choose_image(comparison_widget, image_with_fake_catalogs)
+    _click_save(comparison_widget)
+    assert _confirm_is_shown(comparison_widget)
+
+    change_while_asking(comparison_widget)
+    comparison_widget._confirm_overwrite._yes.click()
+
+    assert destination.read_bytes() == original_contents
+    save_bar = comparison_widget._comparison_save_bar
+    assert not save_bar.unsaved_changes
+    assert save_bar.message.value == ""
+
+
+def test_yes_does_not_replace_a_file_it_was_not_asked_about(image_with_fake_catalogs):
+    _write_other_list(Path("source_locations.ecsv"))
+    other = Path("precious.ecsv")
+    _write_other_list(other)
+    original_contents = other.read_bytes()
+    comparison_widget = _viewer_in_mode("generate")
+    _choose_image(comparison_widget, image_with_fake_catalogs)
+    _click_save(comparison_widget)
+
+    _set_source_list_file(comparison_widget, "precious.ecsv")
+    comparison_widget._confirm_overwrite._yes.click()
+
+    assert other.read_bytes() == original_contents
+    assert _confirm_is_shown(comparison_widget)
+    assert "precious.ecsv" in comparison_widget._confirm_overwrite.message
+
+    comparison_widget._confirm_overwrite._yes.click()
+
+    assert len(SourceListData.read(other)) == 3
+
+
+def test_clicks_do_not_change_the_saved_source_list(viewer_with_fake_catalogs):
+    # The saved list has every star the catalog query marked, whether or not
+    # it was clicked, and a click does not make anything unsaved.
+    comparison_widget = viewer_with_fake_catalogs
+    save_bar = comparison_widget._comparison_save_bar
+    _click(comparison_widget, 1000.0, 1000.0)
+    assert len(comparison_widget.generate_table()) == 2
+
+    _click_save(comparison_widget)
+
+    assert len(SourceListData.read("source_locations.ecsv")) == 3
+
+    _click(comparison_widget, 1200.0, 1000.0)
+
+    assert not save_bar.unsaved_changes
+    assert save_bar.bn_save.disabled
+
+
+@pytest.mark.parametrize("file_exists", [True, False])
+def test_no_source_list_to_save_when_no_stars_are_marked(
+    viewer_with_fake_catalogs, file_exists
+):
+    # Limits that match no stars leave nothing to save: no question, no write.
+    destination = Path("source_locations.ecsv")
+    if file_exists:
+        _write_other_list(destination)
+        original_contents = destination.read_bytes()
+    comparison_widget = viewer_with_fake_catalogs
+    save_bar = comparison_widget._comparison_save_bar
+    comparison_widget._bright_mag_limit_input.value = 10
+    comparison_widget._dim_mag_limit_input.value = 11
+
+    _click_save(comparison_widget)
+
+    assert not _confirm_is_shown(comparison_widget)
+    if file_exists:
+        assert destination.read_bytes() == original_contents
+    else:
+        assert not destination.exists()
+    assert comparison_widget._written_source_list is None
+    assert not save_bar.unsaved_changes
+    assert save_bar.bn_save.disabled
+    assert "no source list to save" in save_bar.message.value
+
+
+def test_new_source_list_file_name_needs_saving(viewer_with_fake_catalogs):
+    # The list has been saved, but not to the file now named in the settings.
+    comparison_widget = viewer_with_fake_catalogs
+    save_bar = comparison_widget._comparison_save_bar
+    _click_save(comparison_widget)
+
+    _set_source_list_file(comparison_widget, "new-name.ecsv")
+
+    assert save_bar.unsaved_changes
+    _click_save(comparison_widget)
+    assert len(SourceListData.read("new-name.ecsv")) == 3
+    assert cf.crossmatch_APASS2VSX.call_count == 1
+
+
+def test_copied_list_stays_saved_after_image_change_and_mode_round_trip(
+    existing_list_viewer, tmp_path
+):
+    comparison_widget = existing_list_viewer
+    save_bar = comparison_widget._comparison_save_bar
+    _click_save(comparison_widget)
+    second_image = tmp_path / "second.fits"
+    second_image.write_bytes(Path(comparison_widget.fits_file.path).read_bytes())
+
+    _choose_image(comparison_widget, second_image)
+    assert not save_bar.unsaved_changes
+
+    comparison_widget._mode.value = "generate"
+    comparison_widget._mode.value = "existing"
+    assert not save_bar.unsaved_changes
+
+
+def test_failed_query_for_new_image_leaves_no_markers(
+    viewer_with_fake_catalogs, tmp_path
+):
+    # The stars marked on the previous image are not left on the new one.
+    comparison_widget = viewer_with_fake_catalogs
+    comparison_widget._show_labels_button.value = True
+    second_image = tmp_path / "second.fits"
+    second_image.write_bytes(Path(comparison_widget.fits_file.path).read_bytes())
+    cf.set_up.side_effect = RuntimeError("catalog is down")
+
+    with pytest.raises(RuntimeError, match="catalog is down"):
+        _choose_image(comparison_widget, second_image)
+
+    assert len(comparison_widget.iw.catalog_labels) == 0
+    marks = comparison_widget.iw._astro_im._scatter_marks
+    assert not any(key.startswith("__label__") for key in marks)
+    assert not comparison_widget._comparison_save_bar.unsaved_changes
+
+
+def test_catalog_error_cleared_when_switching_to_existing(image_with_fake_catalogs):
+    comparison_widget = _viewer_in_mode("generate")
+    cf.set_up.side_effect = RuntimeError("catalog is down")
+    with pytest.raises(RuntimeError, match="catalog is down"):
+        _choose_image(comparison_widget, image_with_fake_catalogs)
+    assert _legend_messages(comparison_widget)
+
+    comparison_widget._mode.value = "existing"
+
+    assert _legend_messages(comparison_widget) == []
+
+
+def test_image_given_to_constructor_loads_when_mode_is_answered(
+    image_with_fake_catalogs,
+):
+    comparison_widget = cf.ComparisonViewer(
+        file=image_with_fake_catalogs.name, directory=image_with_fake_catalogs.parent
+    )
+    assert cf.crossmatch_APASS2VSX.call_count == 0
+
+    comparison_widget._mode.value = "generate"
+
+    assert len(comparison_widget.generate_table()) == 3
+
+
+def test_existing_list_stars_are_placed_in_the_image_frame(tmp_path):
+    # The image WCS is FK4 (B1950), far from the ICRS positions of the list,
+    # so the stars are on the image only if their positions are transformed
+    # to the image frame.
+    ccd = make_ey_uma_image()
+    ccd.wcs.wcs.radesys = "FK4"
+    ccd.wcs.wcs.equinox = 1950
+    image = tmp_path / "fk4.fits"
+    ccd.write(image)
+    path = tmp_path / "fk4-sources.ecsv"
+    SourceListData(input_data=_source_list_table(ccd=ccd)).write(path)
+
+    comparison_widget = _existing_list_viewer_for(image, path)
+
+    assert list(comparison_widget.generate_table()["star_id"]) == [3, 8, 12, 15]
+
+
+def test_existing_source_list_is_view_only(existing_list_viewer):
+    # Clicking a star does not exclude it, and there are no variables to save
+    # since the catalogs are not queried.
+    comparison_widget = existing_list_viewer
     iw = comparison_widget.iw
 
     _click(comparison_widget, *SHARED_STARS[2][2])
 
     assert not any(label.startswith("elim") for label in iw.catalog_labels)
     assert "view only" in comparison_widget._status_message.value
-
-    comparison_widget._dim_mag_limit_input.value = 13
-    comparison_widget._comparison_save_bar.bn_save.click()
-
-    assert cf.crossmatch_APASS2VSX.call_count == 1
     _assert_shows_shared_list(comparison_widget)
-    assert shared_source_list.read_bytes() == original_contents
-    assert not os.path.exists("source_locations.ecsv")
     assert comparison_widget._save_var_info.disabled
 
-
-def test_clearing_loaded_source_list_goes_back_to_the_catalog(
-    viewer_with_fake_catalogs, shared_source_list
-):
-    comparison_widget = viewer_with_fake_catalogs
-    comparison_widget._choose_source_list.value = shared_source_list
-    os.remove("source_locations.ecsv")
-    assert not comparison_widget._clear_source_list_button.disabled
-
-    comparison_widget._clear_source_list_button.click()
-
-    assert cf.crossmatch_APASS2VSX.call_count == 2
-    table = comparison_widget.generate_table()
-    assert list(table["marker name"]) == ["APASS comparison"] * 3
-    assert list(table["star_id"]) == [1, 2, 3]
-    assert os.path.exists("source_locations.ecsv")
-    assert comparison_widget.photom_apertures_file == "source_locations.ecsv"
-    assert _saved_source_list_file() == "source_locations.ecsv"
-    assert comparison_widget._clear_source_list_button.disabled
+    # Clicking excludes stars when generating a source list.
+    comparison_widget._mode.value = "generate"
+    _click(comparison_widget, 1000.0, 1000.0)
+    assert any(label.startswith("elim") for label in iw.catalog_labels)
     assert not comparison_widget._save_var_info.disabled
 
-    # Clicking excludes stars again.
-    _click(comparison_widget, 1000.0, 1000.0)
-    iw = comparison_widget.iw
-    assert any(label.startswith("elim") for label in iw.catalog_labels)
 
-
-def test_clear_does_not_overwrite_a_loaded_list_saved_to_by_the_viewer(
-    image_with_fake_catalogs,
+def test_switching_to_generate_with_failing_query_leaves_no_markers(
+    existing_list_viewer,
 ):
-    # A shared list with the name new source lists are saved to stays loaded
-    # and unchanged when cleared, until the settings name another file.
-    shared = Path("source_locations.ecsv")
-    _write_source_list(shared)
-    original_contents = shared.read_bytes()
-    comparison_widget = cf.ComparisonViewer()
-    comparison_widget._choose_source_list.value = shared.absolute()
-    _choose_image(comparison_widget, image_with_fake_catalogs)
-
-    comparison_widget._clear_source_list_button.click()
-
-    assert shared.read_bytes() == original_contents
-    assert comparison_widget._loaded_source_list is not None
-    _assert_shows_shared_list(comparison_widget)
-    assert "new source lists are saved to" in (
-        comparison_widget._source_list_message.value
-    )
-
-    settings = comparison_widget.source_locations.value.copy()
-    settings["source_list_file"] = "new-sources.ecsv"
-    comparison_widget.source_locations.value = settings
-    comparison_widget._clear_source_list_button.click()
-
-    assert shared.read_bytes() == original_contents
-    assert comparison_widget._loaded_source_list is None
-    assert os.path.exists("new-sources.ecsv")
-    assert _saved_source_list_file() == "new-sources.ecsv"
-
-
-def test_clear_with_failing_catalog_query_leaves_no_markers(
-    viewer_with_fake_catalogs, shared_source_list
-):
-    # The loaded list's stars are not left on the image as if they were a new
-    # source list.
-    comparison_widget = viewer_with_fake_catalogs
+    # The existing list's stars are not left on the image as if they were a
+    # generated source list.
+    comparison_widget = existing_list_viewer
     comparison_widget._show_labels_button.value = True
-    comparison_widget._choose_source_list.value = shared_source_list
     cf.crossmatch_APASS2VSX.side_effect = RuntimeError("catalog is down")
 
-    comparison_widget._clear_source_list_button.click()
+    # The error is also raised, so that the log gets the traceback.
+    with pytest.raises(RuntimeError, match="catalog is down"):
+        comparison_widget._mode.value = "generate"
 
-    assert comparison_widget._loaded_source_list is None
     assert len(comparison_widget.iw.catalog_labels) == 0
     assert len(comparison_widget.generate_table()) == 0
     marks = comparison_widget.iw._astro_im._scatter_marks
     assert not any(key.startswith("__label__") for key in marks)
     assert any("catalog is down" in m for m in _legend_messages(comparison_widget))
+    assert not comparison_widget._comparison_save_bar.unsaved_changes
 
 
 def test_loaded_stars_in_the_same_place_keep_their_ids(
@@ -1153,9 +1512,7 @@ def test_loaded_stars_in_the_same_place_keep_their_ids(
             (2, "APASS comparison", (1500.0, 1500.0)),
         ],
     )
-    comparison_widget = cf.ComparisonViewer()
-    comparison_widget._choose_source_list.value = path
-    _choose_image(comparison_widget, image_with_fake_catalogs)
+    comparison_widget = _existing_list_viewer_for(image_with_fake_catalogs, path)
 
     table = comparison_widget.generate_table()
 
@@ -1169,32 +1526,12 @@ def test_masked_position_is_reported_off_the_image(image_with_fake_catalogs, tmp
     table["ra"] = MaskedColumn(table["ra"].value, mask=mask, unit=u.deg)
     path = tmp_path / "masked.ecsv"
     SourceListData(input_data=table).write(path)
-    comparison_widget = cf.ComparisonViewer()
-    comparison_widget._choose_source_list.value = path
-    _choose_image(comparison_widget, image_with_fake_catalogs)
+    comparison_widget = _existing_list_viewer_for(image_with_fake_catalogs, path)
 
     assert list(comparison_widget.generate_table()["star_id"]) == [3, 8, 15]
     messages = _legend_messages(comparison_widget)
     assert "3 stars" in messages[0]
     assert "12, 21, 22" in messages[0]
-
-
-def test_off_image_star_ids_are_escaped(image_with_fake_catalogs, tmp_path):
-    path = tmp_path / "html-ids.ecsv"
-    _write_source_list(
-        path,
-        [
-            ("<b>x</b>", "APASS comparison", (-500.0, 900.0)),
-            ("ok", "APASS comparison", (900.0, 900.0)),
-        ],
-    )
-    comparison_widget = cf.ComparisonViewer()
-    comparison_widget._choose_source_list.value = path
-    _choose_image(comparison_widget, image_with_fake_catalogs)
-
-    message = _legend_messages(comparison_widget)[0]
-    assert "&lt;b&gt;x&lt;/b&gt;" in message
-    assert "<b>" not in message
 
 
 def _write_text_file(path):
@@ -1216,28 +1553,11 @@ def _write_table_without_source_list_meta(path):
     _source_list_table().write(path)
 
 
-def _write_with_source_list_meta(path, table):
-    table.meta.update(has_ra_dec=True, has_x_y=True)
-    table.write(path)
-
-
-def _write_table_without_position_units(path):
-    table = _source_list_table()
-    table["ra"] = table["ra"].value
-    table["dec"] = table["dec"].value
-    _write_with_source_list_meta(path, table)
-
-
 def _write_table_with_text_ra(path):
     table = _source_list_table()
     table["ra"] = [str(ra) for ra in table["ra"].value]
-    _write_with_source_list_meta(path, table)
-
-
-def _write_table_with_impossible_dec(path):
-    table = _source_list_table()
-    table["dec"][0] = 100
-    _write_with_source_list_meta(path, table)
+    table.meta.update(has_ra_dec=True, has_x_y=True)
+    table.write(path)
 
 
 @pytest.mark.parametrize(
@@ -1247,17 +1567,16 @@ def _write_table_with_impossible_dec(path):
         _write_table_without_marker_names,
         _write_table_without_sky_positions,
         _write_table_without_source_list_meta,
-        _write_table_without_position_units,
         _write_table_with_text_ra,
-        _write_table_with_impossible_dec,
     ],
 )
 def test_choosing_an_invalid_source_list_shows_a_message(
-    viewer_with_fake_catalogs, tmp_path, write_bad_file
+    image_with_fake_catalogs, tmp_path, write_bad_file
 ):
     # A file that is not a usable source list leaves the viewer as it was and
     # says why.
-    comparison_widget = viewer_with_fake_catalogs
+    comparison_widget = _viewer_in_mode("existing")
+    _choose_image(comparison_widget, image_with_fake_catalogs)
     settings_file = tmp_path / "partial_photometry_settings.json"
     saved_settings = settings_file.read_bytes()
     bad_file = tmp_path / "bad.ecsv"
@@ -1267,26 +1586,27 @@ def test_choosing_an_invalid_source_list_shows_a_message(
 
     message = comparison_widget._source_list_message.value
     assert "bad.ecsv is not a usable source list" in message
-    assert cf.crossmatch_APASS2VSX.call_count == 1
     assert comparison_widget._loaded_source_list is None
-    assert comparison_widget.photom_apertures_file == "source_locations.ecsv"
     assert settings_file.read_bytes() == saved_settings
-    assert len(comparison_widget.generate_table()) == 3
-    assert comparison_widget._clear_source_list_button.disabled
-    assert not comparison_widget._save_var_info.disabled
+    assert len(comparison_widget.generate_table()) == 0
+    assert not comparison_widget._comparison_save_bar.unsaved_changes
+    assert not os.path.exists("source_locations.ecsv")
 
 
-def test_fixed_file_can_be_chosen_again(viewer_with_fake_catalogs, tmp_path):
-    comparison_widget = viewer_with_fake_catalogs
+def test_fixed_file_can_be_chosen_again(existing_list_viewer, tmp_path):
+    comparison_widget = existing_list_viewer
     path = tmp_path / "fixed.ecsv"
     _write_text_file(path)
     comparison_widget._choose_source_list.value = path
-    assert "not a usable source list" in comparison_widget._source_list_message.value
+    message = comparison_widget._source_list_message.value
+    assert "not a usable source list" in message
+    assert "Still showing shared-sources.ecsv" in message
+    _assert_shows_shared_list(comparison_widget)
 
     _write_source_list(path)
     comparison_widget._choose_source_list.value = path
 
-    assert comparison_widget._loaded_source_list is not None
+    assert comparison_widget._loaded_source_list_path == str(path)
     _assert_shows_shared_list(comparison_widget)
 
 
@@ -1295,7 +1615,7 @@ def test_loading_second_image_succeeds(tmp_path):
     # Regression test for #384
 
     # Make a comparison viewer and load TIC 402828941
-    comparison_widget = cf.ComparisonViewer()
+    comparison_widget = _viewer_in_mode("generate")
     ccd = CCDData.read(
         get_pkg_data_filename(
             "tests/data/TIC-402828941-tiny.fit.bz2", package="stellarphot"
@@ -1338,7 +1658,7 @@ def test_loading_second_image_succeeds(tmp_path):
 @pytest.mark.parametrize("tic_id", [402828941, 367710318])
 def test_loading_input_source_list(tmp_path, tic_id):
     # Test that we can load a source list from a file
-    comparison_widget = cf.ComparisonViewer()
+    comparison_widget = _viewer_in_mode("generate")
     compressed_input_source_list = get_pkg_data_filename(
         f"tests/data/TIC-{tic_id}-source-list-input.ecsv.gz", package="stellarphot"
     )
@@ -1365,6 +1685,7 @@ def test_loading_input_source_list(tmp_path, tic_id):
     assert comparison_widget.target_coord.separation(wasp_coord) < 1 * u.arcsec
 
     comparison_widget._choose_input_source_list.value = input_source_list
+    _click_save(comparison_widget)
 
     # Check that the number of tess targets matches the number in the
     # input source list

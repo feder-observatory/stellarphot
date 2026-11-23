@@ -704,7 +704,7 @@ flowchart LR
     cv_setup["_init()"]:::cls
     cv_viewer["_viewer()"]:::cls
     cv_table["generate_table()"]:::cls
-    cv_saveloc["_save_source_location_file()"]:::cls
+    cv_saveloc["_write_source_list()"]:::cls
     cv_saveap["_save_aperture_to_file()"]:::cls
     cv_tess["tess_field_view() /<br/>tess_field_zoom_view()"]:::cls
     markers["make_markers()"]:::fn
@@ -727,8 +727,8 @@ flowchart LR
     cv_setup --> markers
     cv_viewer --> keybind
     cv_viewer --> wrapfn
-    cv_saveloc --> cv_table
-    cv_saveloc --> sld
+    cv_saveloc --> cv_saveap
+    cv_saveap --> sld
     cv_saveloc -.->|"writes"| locfile
     cv_saveap --> cv_table
     cv_tess --> markers
