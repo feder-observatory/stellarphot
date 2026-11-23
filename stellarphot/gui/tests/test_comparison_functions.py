@@ -241,12 +241,13 @@ def test_make_markers_shapes_and_colors():
     iw = ImageWidget()
     iw.load_image(ccd)
 
+    targets = Table({"coords": ccd.wcs.pixel_to_world([300.0], [400.0])})
     vsx = Table({"coords": ccd.wcs.pixel_to_world([500.0, 600.0], [700.0, 800.0])})
     apass = Table(
         {"coords": ccd.wcs.pixel_to_world([1000.0, 1100.0], [1200.0, 1300.0])}
     )
 
-    cf.make_markers(iw, [], vsx, apass, name_or_coord=None)
+    cf.make_markers(iw, targets, vsx, apass, name_or_coord=None)
 
     # "diamond" is one of the shapes that only the SVG Scatter mark
     # astrowidgets now uses can draw (the ScatterGL shader it used before
@@ -263,6 +264,15 @@ def test_make_markers_shapes_and_colors():
     # much above 10 dwarfs the stars it is supposed to mark.
     assert apass_style["size"] == 10
     assert vsx_style["size"] == 10
+
+    # A target that is also a known variable has a circle and a square in the
+    # same place. The circle is large enough to go around the square (whose
+    # diagonal is sqrt(2) times its size) so that both can be seen.
+    target_style = iw.get_catalog_style(catalog_label="TESS Targets")
+    assert target_style["shape"] == "circle"
+    assert target_style["color"] == "green"
+    circle_diameter = 2 * target_style["size"] / np.sqrt(np.pi)
+    assert circle_diameter > np.sqrt(2) * vsx_style["size"]
 
     # Guard against a regression to marks that cannot draw these shapes or
     # that ignore the style's size, as astrowidgets' bqplot backend once did.
@@ -392,6 +402,132 @@ def test_generate_table_groups_targets_then_vsx_then_comparisons(n_targets):
     np.testing.assert_allclose(
         table["x"][:n_targets], [900.0, 1400.0][:n_targets], atol=1e-3
     )
+
+
+def _viewer_with_targets_also_in_catalogs():
+    # A comparison viewer showing two targets, three variables and three
+    # comparison stars. Each target has a variable 0.3 arcsec away (the size
+    # of the offset between a Gaia position and a VSX one) and a comparison
+    # star 1 arcsec away, all of which are the target itself. The first target
+    # also has a variable 3 arcsec away, which is a different star.
+    comparison_widget, ccd = _viewer_with_target()
+    target_coords = ccd.wcs.pixel_to_world([900.0, 1400.0], [900.0, 900.0])
+
+    def offset_from_targets(arcsec):
+        return target_coords.spherical_offsets_by(arcsec * u.arcsec, 0 * u.arcsec)
+
+    targets = Table({"coords": target_coords})
+    vsx = Table(
+        {
+            "coords": SkyCoord([*offset_from_targets(0.3), offset_from_targets(3)[0]]),
+            "Name": ["first target", "second target", "neighbor"],
+        }
+    )
+    apass = Table(
+        {
+            "coords": SkyCoord(
+                [*offset_from_targets(-1), ccd.wcs.pixel_to_world(700.0, 700.0)]
+            )
+        }
+    )
+    comparison_widget.vsx = vsx
+    cf.make_markers(comparison_widget.iw, targets, vsx, apass, name_or_coord=None)
+    return comparison_widget
+
+
+def test_generate_table_has_one_row_for_a_target_also_in_a_catalog():
+    # A target that is also a known variable, or also in the comparison
+    # catalog, is one star, so it should be in the source list once, as the
+    # target.
+    comparison_widget = _viewer_with_targets_also_in_catalogs()
+
+    table = comparison_widget.generate_table()
+
+    assert list(table["marker name"]) == [
+        "TESS Targets",
+        "TESS Targets",
+        "VSX",
+        "APASS comparison",
+    ]
+    assert list(table["star_id"]) == [1, 2, 3, 4]
+
+
+def test_variables_gives_a_target_that_is_a_variable_the_target_star_id():
+    # The variable table keeps a variable that is also a target, with the
+    # star_id the target has in the source list.
+    comparison_widget = _viewer_with_targets_also_in_catalogs()
+
+    variables = comparison_widget.variables
+
+    star_ids = dict(zip(variables["Name"], variables["star_id"], strict=True))
+    assert star_ids == {"first target": 1, "second target": 2, "neighbor": 3}
+
+
+def _viewer_with_variables_near_target(arcsec_from_target):
+    # A comparison viewer showing one target, a variable at each of the given
+    # distances from it, named for the distance, and a comparison star.
+    # Returns the viewer and the pixel position of the target.
+    comparison_widget, ccd = _viewer_with_target()
+    target_xy = (900.0, 900.0)
+    target_coord = ccd.wcs.pixel_to_world(*target_xy)
+    targets = Table({"coords": SkyCoord([target_coord])})
+    vsx = Table(
+        {
+            "coords": SkyCoord(
+                [
+                    target_coord.spherical_offsets_by(d * u.arcsec, 0 * u.arcsec)
+                    for d in arcsec_from_target
+                ]
+            ),
+            "Name": arcsec_from_target,
+        }
+    )
+    apass = Table({"coords": SkyCoord([ccd.wcs.pixel_to_world(700.0, 700.0)])})
+    comparison_widget.vsx = vsx
+    cf.make_markers(comparison_widget.iw, targets, vsx, apass, name_or_coord=None)
+    return comparison_widget, target_xy
+
+
+def test_variable_that_is_a_target_gets_target_star_id_not_a_nearer_variables():
+    # The variable 1.9 arcsec from the target is the target. It is nearer to
+    # the variable at 2.1 arcsec, a different star, than it is to the target.
+    comparison_widget, _ = _viewer_with_variables_near_target([1.9, 2.1])
+
+    variables = comparison_widget.variables
+
+    star_ids = dict(zip(variables["Name"], variables["star_id"], strict=True))
+    assert star_ids == {1.9: 1, 2.1: 2}
+
+
+def test_clicking_a_target_excludes_the_variable_that_is_the_target():
+    # Excluding a target excludes the star, so the variable that is the same
+    # star must not come back as a row of its own.
+    comparison_widget, (x, y) = _viewer_with_variables_near_target([1.5, 3])
+    iw = comparison_widget.iw
+
+    click = {"event": "click", "domain": {"x": x, "y": y}}
+    cf.wrap(iw, ipw.HTML())(iw._astro_im.interaction, click, [])
+
+    table = comparison_widget.generate_table()
+    assert list(table["marker name"]) == ["VSX", "APASS comparison"]
+    assert list(comparison_widget.variables["Name"]) == [3]
+
+
+def test_variables_is_empty_when_every_variable_is_excluded():
+    comparison_widget, ccd = _viewer_with_target()
+    vsx = Table({"coords": ccd.wcs.pixel_to_world([800.0], [800.0])})
+    apass = Table({"coords": ccd.wcs.pixel_to_world([700.0], [700.0])})
+    comparison_widget.vsx = vsx
+    iw = comparison_widget.iw
+    cf.make_markers(iw, [], vsx, apass, name_or_coord=None)
+    iw.load_catalog(
+        iw.get_catalog(catalog_label="VSX"), use_skycoord=True, catalog_label="elim1"
+    )
+
+    variables = comparison_widget.variables
+
+    assert len(variables) == 0
+    assert "star_id" in variables.colnames
 
 
 @pytest.mark.parametrize("source_file_name", [None, "sources.ecsv"])

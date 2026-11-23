@@ -298,6 +298,12 @@ Bug Fixes
   within which a star is calibrated from its nearest catalog entry. The
   default is 2.0 arcsec, up from a fixed 1.5; the fit itself still uses only
   stars within 1.0 arcsec. [#707]
++ In the comparison viewer a target that is also a VSX variable or a
+  comparison-catalog star (within 2 arcsec) now gets one source-list row
+  instead of two. The variable is still saved to ``variables.csv``, with the
+  target's ``star_id``. Clicking a star now excludes every marker within 2
+  arcsec of it, up from 1. Target circles are larger so that a variable's
+  square shows inside them. [#750]
 
 2.1.2 (2026-07-19)
 -------------------
