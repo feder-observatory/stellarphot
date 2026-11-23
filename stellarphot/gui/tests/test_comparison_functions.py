@@ -840,6 +840,11 @@ def test_labels_match_comparisons_after_save(viewer_with_fake_catalogs):
     assert label_key not in marks
 
 
+def _legend_messages(comparison_widget):
+    # The text of the messages shown below the legend.
+    return [w.value for w in comparison_widget._legend_spinner_box.children[1:]]
+
+
 def test_message_shown_when_no_comparison_stars_found(viewer_with_fake_catalogs):
     # Limits that match no candidates are not an error; a message says that no
     # comparison stars were found, and goes away when some are found.
@@ -847,7 +852,7 @@ def test_message_shown_when_no_comparison_stars_found(viewer_with_fake_catalogs)
     legend = comparison_widget._legend_spinner_box.children[0]
 
     def messages():
-        return [w.value for w in comparison_widget._legend_spinner_box.children[1:]]
+        return _legend_messages(comparison_widget)
 
     comparison_widget._bright_mag_limit_input.value = 10
     comparison_widget._dim_mag_limit_input.value = 11
@@ -919,6 +924,211 @@ def test_no_markers_does_not_raise(tmp_path):
     assert not source_file.exists()
 
 
+# Stars in the shared source list used in the tests of loading a source list:
+# star_id, marker name and pixel position on the EY UMa image. The ids are not
+# 1..N, to check that the viewer keeps them. The last two are off the image.
+SHARED_STARS = [
+    (3, "TESS Targets", (900.0, 900.0)),
+    (8, "VSX", (800.0, 800.0)),
+    (12, "APASS comparison", (1500.0, 1500.0)),
+    (15, "APASS comparison", (1700.0, 1200.0)),
+    (21, "APASS comparison", (-400.0, 1000.0)),
+    (22, "APASS comparison", (3500.0, 1000.0)),
+]
+
+
+@pytest.fixture
+def shared_source_list(tmp_path):
+    # A source list, as made by the comparison viewer on another night, in a
+    # directory of its own. Returns its path.
+    ccd = make_ey_uma_image()
+    star_ids, marker_names, pixels = zip(*SHARED_STARS, strict=True)
+    x, y = (np.array(p) for p in zip(*pixels, strict=True))
+    # Source lists are ICRS; the image WCS is not.
+    coords = ccd.wcs.pixel_to_world(x, y).icrs
+    table = Table(
+        {
+            "star_id": star_ids,
+            "marker name": marker_names,
+            "ra": coords.ra.deg * u.deg,
+            "dec": coords.dec.deg * u.deg,
+            # Pixel positions on the other night's image, which are not those
+            # on this image.
+            "xcenter": (x + 50) * u.pixel,
+            "ycenter": (y + 50) * u.pixel,
+        }
+    )
+    path = tmp_path / "shared" / "shared-sources.ecsv"
+    path.parent.mkdir()
+    SourceListData(input_data=table).write(path)
+    return path
+
+
+def _assert_shows_shared_list(comparison_widget):
+    # The viewer marks the stars of the shared source list that are on the
+    # image, with the star ids they have in the list.
+    table = comparison_widget.generate_table()
+    on_image = SHARED_STARS[:4]
+    assert list(table["star_id"]) == [star[0] for star in on_image]
+    assert list(table["marker name"]) == [star[1] for star in on_image]
+    np.testing.assert_allclose(table["x"], [star[2][0] for star in on_image], atol=1e-3)
+
+    comparison_widget.show_labels()
+    marks = comparison_widget.iw._astro_im._scatter_marks
+    assert list(marks["__label__TESS Targets"].text) == ["T3"]
+    assert list(marks["__label__VSX"].text) == ["V8"]
+    assert list(marks["__label__APASS comparison"].text) == ["C12", "C15"]
+
+
+def _saved_source_list_file():
+    return (
+        PhotometryWorkingDirSettings().load().source_location_settings.source_list_file
+    )
+
+
+@pytest.mark.parametrize("image_first", [True, False])
+def test_loaded_source_list_is_shown_and_not_written(
+    image_with_fake_catalogs, shared_source_list, image_first
+):
+    # Loading a source list shows its stars with their ids, without querying
+    # the catalogs for new ones, and points the saved settings at it. Neither
+    # the loaded list nor a new one is written.
+    comparison_widget = cf.ComparisonViewer()
+    original_contents = shared_source_list.read_bytes()
+
+    if image_first:
+        _choose_image(comparison_widget, image_with_fake_catalogs)
+        os.remove("source_locations.ecsv")
+        n_queries = 1
+    else:
+        n_queries = 0
+
+    comparison_widget._choose_source_list.value = shared_source_list
+    if not image_first:
+        _choose_image(comparison_widget, image_with_fake_catalogs)
+
+    _assert_shows_shared_list(comparison_widget)
+    assert cf.crossmatch_APASS2VSX.call_count == n_queries
+    assert cf.set_up.call_count == n_queries
+    assert shared_source_list.read_bytes() == original_contents
+    assert not os.path.exists("source_locations.ecsv")
+    assert comparison_widget.photom_apertures_file == str(shared_source_list)
+    assert _saved_source_list_file() == str(shared_source_list)
+    # The first target in the list is the target.
+    target = comparison_widget.generate_table()["coord"][0]
+    assert comparison_widget.target_coord.separation(target) < 1e-3 * u.arcsec
+
+
+def test_loaded_source_list_reports_stars_off_the_image(
+    image_with_fake_catalogs, shared_source_list
+):
+    comparison_widget = cf.ComparisonViewer()
+    comparison_widget._choose_source_list.value = shared_source_list
+    _choose_image(comparison_widget, image_with_fake_catalogs)
+
+    messages = _legend_messages(comparison_widget)
+    assert len(messages) == 1
+    assert "2 stars" in messages[0]
+    assert "21, 22" in messages[0]
+
+
+def test_loaded_source_list_is_view_only(viewer_with_fake_catalogs, shared_source_list):
+    # Clicking a star does not exclude it, and saving the comparison settings
+    # neither queries the catalogs nor writes a source list.
+    comparison_widget = viewer_with_fake_catalogs
+    comparison_widget._choose_source_list.value = shared_source_list
+    original_contents = shared_source_list.read_bytes()
+    os.remove("source_locations.ecsv")
+    iw = comparison_widget.iw
+
+    x, y = SHARED_STARS[2][2]
+    click = {"event": "click", "domain": {"x": x, "y": y}}
+    comparison_widget._click_handler(iw._astro_im.interaction, click, [])
+
+    assert not any(label.startswith("elim") for label in iw.catalog_labels)
+    assert "view only" in comparison_widget._status_message.value
+
+    comparison_widget._dim_mag_limit_input.value = 13
+    comparison_widget._comparison_save_bar.bn_save.click()
+
+    assert cf.crossmatch_APASS2VSX.call_count == 1
+    _assert_shows_shared_list(comparison_widget)
+    assert shared_source_list.read_bytes() == original_contents
+    assert not os.path.exists("source_locations.ecsv")
+    assert comparison_widget._save_var_info.disabled
+
+
+def test_clearing_loaded_source_list_goes_back_to_the_catalog(
+    viewer_with_fake_catalogs, shared_source_list
+):
+    comparison_widget = viewer_with_fake_catalogs
+    comparison_widget._choose_source_list.value = shared_source_list
+    original_contents = shared_source_list.read_bytes()
+    os.remove("source_locations.ecsv")
+    assert not comparison_widget._clear_source_list_button.disabled
+
+    comparison_widget._clear_source_list_button.click()
+
+    assert cf.crossmatch_APASS2VSX.call_count == 2
+    table = comparison_widget.generate_table()
+    assert list(table["marker name"]) == ["APASS comparison"] * 3
+    assert list(table["star_id"]) == [1, 2, 3]
+    assert os.path.exists("source_locations.ecsv")
+    assert shared_source_list.read_bytes() == original_contents
+    assert comparison_widget.photom_apertures_file == "source_locations.ecsv"
+    assert _saved_source_list_file() == "source_locations.ecsv"
+    assert comparison_widget._clear_source_list_button.disabled
+    assert not comparison_widget._save_var_info.disabled
+
+    # Clicking excludes stars again.
+    x, y = 1000.0, 1000.0
+    click = {"event": "click", "domain": {"x": x, "y": y}}
+    iw = comparison_widget.iw
+    comparison_widget._click_handler(iw._astro_im.interaction, click, [])
+    assert any(label.startswith("elim") for label in iw.catalog_labels)
+
+
+def _write_text_file(path):
+    path.write_text("this is not a table\n")
+
+
+def _write_table_without_marker_names(path):
+    Table({"star_id": [1], "ra": [135.5] * u.deg, "dec": [49.8] * u.deg}).write(path)
+
+
+def _write_table_without_sky_positions(path):
+    Table(
+        {"star_id": [1], "marker name": ["VSX"], "xcenter": [1.0], "ycenter": [2.0]}
+    ).write(path)
+
+
+@pytest.mark.parametrize(
+    "write_bad_file",
+    [
+        _write_text_file,
+        _write_table_without_marker_names,
+        _write_table_without_sky_positions,
+    ],
+)
+def test_choosing_an_invalid_source_list_shows_a_message(
+    viewer_with_fake_catalogs, tmp_path, write_bad_file
+):
+    # A file that is not a usable source list leaves the viewer as it was and
+    # says why.
+    comparison_widget = viewer_with_fake_catalogs
+    bad_file = tmp_path / "bad.ecsv"
+    write_bad_file(bad_file)
+
+    comparison_widget._choose_source_list.value = bad_file
+
+    message = comparison_widget._source_list_message.value
+    assert "bad.ecsv is not a usable source list" in message
+    assert cf.crossmatch_APASS2VSX.call_count == 1
+    assert comparison_widget.photom_apertures_file == "source_locations.ecsv"
+    assert len(comparison_widget.generate_table()) == 3
+    assert comparison_widget._clear_source_list_button.disabled
+
+
 @pytest.mark.remote_data
 def test_loading_second_image_succeeds(tmp_path):
     # Regression test for #384
@@ -937,15 +1147,7 @@ def test_loading_second_image_succeeds(tmp_path):
     path = tmp_path / file_name
     ccd.write(path, overwrite=True)
 
-    with warnings.catch_warnings():
-        # Ignore the warning about the WCS having non-standard keywords (the SIP
-        # distortion parameters).
-        warnings.filterwarnings(
-            "ignore",
-            message="Some non-standard WCS keywords were excluded",
-            category=AstropyWarning,
-        )
-        comparison_widget._file_chooser.file_chooser.value = path
+    _choose_image(comparison_widget, path)
 
     TIC_coord = SkyCoord(305.45862498, 19.43593327, unit="deg")
     # Make sure we have the TIC star as the target coordinates
@@ -958,15 +1160,7 @@ def test_loading_second_image_succeeds(tmp_path):
     ccd2.write(wasp_file, overwrite=True)
     wasp_coord = SkyCoord(348.99291924, 31.46286002, unit="deg")
 
-    with warnings.catch_warnings():
-        # Ignore the warning about the WCS having non-standard keywords (the SIP
-        # distortion parameters).
-        warnings.filterwarnings(
-            "ignore",
-            message="Some non-standard WCS keywords were excluded",
-            category=AstropyWarning,
-        )
-        comparison_widget._file_chooser.file_chooser.value = wasp_file
+    _choose_image(comparison_widget, wasp_file)
     # Make sure we have WASP-10 as the target coordinates
     assert comparison_widget.target_coord.separation(wasp_coord) < 1 * u.arcsec
 
@@ -1003,15 +1197,7 @@ def test_loading_input_source_list(tmp_path, tic_id):
     path = tmp_path / file_name
     ccd.write(path, overwrite=True)
 
-    with warnings.catch_warnings():
-        # Ignore the warning about the WCS having non-standard keywords (the SIP
-        # distortion parameters).
-        warnings.filterwarnings(
-            "ignore",
-            message="Some non-standard WCS keywords were excluded",
-            category=AstropyWarning,
-        )
-        comparison_widget._file_chooser.file_chooser.value = path
+    _choose_image(comparison_widget, path)
 
     # Until there is a source list the object name sets the target...
     wasp_coord = SkyCoord(348.99291924, 31.46286002, unit="deg")

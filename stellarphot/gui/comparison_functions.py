@@ -1,5 +1,6 @@
 import html
 import logging
+from pathlib import Path
 
 import ipyautoui
 import ipywidgets as ipw
@@ -126,6 +127,51 @@ def _all_catalog_entries(iw):
     # which typically conflicts between catalogs (e.g. the Vizier catalog
     # name). The metadata is not used here, so drop it silently.
     return vstack(tables, metadata_conflicts="silent")
+
+
+def _read_source_list(path):
+    """
+    Read a source list made by the comparison viewer.
+
+    Parameters
+    ----------
+
+    path : str
+        Path of the source list.
+
+    Returns
+    -------
+
+    `stellarphot.SourceListData`
+        The source list.
+
+    Raises
+    ------
+
+    ValueError
+        If the file cannot be read as a table, or the table is not a source
+        list the viewer can show; the message says why.
+    """
+    try:
+        sources = SourceListData.read(path)
+    except Exception as err:
+        raise ValueError(f"it could not be read as a table ({err})") from err
+
+    missing = [
+        name for name in ("star_id", "marker name") if name not in sources.colnames
+    ]
+    if missing:
+        raise ValueError(f"it has no {' or '.join(missing)} column")
+    if (
+        "ra" not in sources.colnames
+        or "dec" not in sources.colnames
+        or not np.isfinite(sources["ra"]).any()
+    ):
+        raise ValueError("it has no sky positions (ra, dec)")
+    unknown = set(sources["marker name"]) - {"TESS Targets", "VSX", "APASS comparison"}
+    if unknown:
+        raise ValueError(f"it has unknown marker names {', '.join(sorted(unknown))}")
+    return sources
 
 
 def make_markers(iw, RD, vsx, ent, name_or_coord=None):
@@ -396,6 +442,11 @@ class ComparisonViewer:
         self.target_coord = object_coordinate
         self.observatory = observatory
 
+        # A source list chosen to be shown instead of one made from the
+        # catalogs, and the source list file name in use before it was chosen.
+        self._loaded_source_list = None
+        self._generated_source_list_file = None
+
         # This function defines several attributes in addition to returning the box and
         # image viewer. You should take a look at it to see what it does.
         self.box, self.iw = self._viewer()
@@ -427,6 +478,11 @@ class ComparisonViewer:
         # it behind the scenes in set_up and make_markers
         self.ccd = self.fits_file.ccd
         self.fits_file.load_in_image_widget(self.iw)
+
+        if self._loaded_source_list is not None:
+            self._set_object()
+            self._show_loaded_source_list()
+            return
 
         spinner = Spinner(message="Loading variable/comparison stars")
         legend = self._legend_spinner_box.children[0]
@@ -545,8 +601,16 @@ class ComparisonViewer:
             self.object_name.value = "<h2>Object unknown</h2>"
             self._object = ""
 
-        # The first object in the input source list aka target file, if there
-        # is one, is the target, whatever the image header calls the object.
+        # The first target in a loaded source list, or else the first object
+        # in the input source list aka target file, if there is one, is the
+        # target, whatever the image header calls the object.
+        if self._loaded_source_list is not None:
+            sources = self._loaded_source_list
+            targets = sources[sources["marker name"] == "TESS Targets"]
+            if len(targets) > 0:
+                self.target_coord = SkyCoord(targets["ra"][0], targets["dec"][0])
+                return
+
         if self.targets_from_file:
             self.target_coord = self.targets_from_file["coords"][0]
             return
@@ -567,9 +631,10 @@ class ComparisonViewer:
         """
         # Save the initial source list if there is a file name for it and if the target
         # coordinates are known. The target coordinates are needed to generate the
-        # source list table.
+        # source list table. A loaded source list is never written.
         if (
-            self.source_locations.value["source_list_file"] is not None
+            self._loaded_source_list is None
+            and self.source_locations.value["source_list_file"] is not None
             and self.target_coord is not None
         ):
             self._save_aperture_to_file(None)
@@ -587,6 +652,131 @@ class ComparisonViewer:
         input_source_list_name = change["new"]
         self.targets_from_file = SourceListData.read(input_source_list_name)
         self._update_comparisons()
+
+    def _source_list_chosen(self, change):
+        """
+        Load the source list chosen to be shown, or go back to making one
+        from the catalogs if the choice was cleared.
+        """
+        if change["new"] == ".":
+            self._clear_loaded_source_list()
+        else:
+            self._load_source_list(change["new"])
+
+    def _clear_source_list_choice(self, button=None):  # noqa: ARG002
+        # Clearing the chooser's value unloads the list via _source_list_chosen.
+        self._choose_source_list.reset()
+        self._choose_source_list._value = "."
+
+    def _set_source_list_file(self, file_name):
+        """
+        Set the source list file in the source location settings and save them.
+        """
+        settings = self.source_locations.value.copy()
+        settings["source_list_file"] = file_name
+        self.source_locations.value = settings
+        self.source_locations.savebuttonbar.bn_save.click()
+
+    def _load_source_list(self, path):
+        """
+        Show the source list at ``path`` instead of one made from the catalogs.
+
+        Parameters
+        ----------
+
+        path : str
+            Path of the source list.
+
+        Notes
+        -----
+        The list is view only: it is never written, no source list is made
+        from the catalogs while it is loaded, and clicking does not exclude
+        stars. The source location settings point at it so that photometry
+        uses it. A file that is not a usable source list leaves the viewer as
+        it was, with a message saying why.
+        """
+        name = Path(path).name
+        try:
+            sources = _read_source_list(path)
+        except ValueError as err:
+            message = f"{name} is not a usable source list: {err}."
+            if self._loaded_source_list is not None:
+                message += f" Still showing {Path(self.photom_apertures_file).name}."
+            self._source_list_message.value = (
+                f"<span style='color: red'>{html.escape(message)}</span>"
+            )
+            return
+
+        if self._loaded_source_list is None:
+            self._generated_source_list_file = self.photom_apertures_file
+        self._loaded_source_list = sources
+        self._set_source_list_file(str(path))
+        self._clear_source_list_button.disabled = False
+        # The variables come from the catalog query, which is not made.
+        self._save_var_info.disabled = True
+        self._status_message.value = ""
+        self._source_list_message.value = html.escape(
+            f"Showing {name}, view only. Clear it to make a new source list "
+            "from the catalogs."
+        )
+        self._update_comparisons()
+
+    def _clear_loaded_source_list(self):
+        """
+        Go back to making the source list from the catalogs.
+        """
+        if self._loaded_source_list is None:
+            return
+        self._loaded_source_list = None
+        self._set_source_list_file(self._generated_source_list_file)
+        self._clear_source_list_button.disabled = True
+        self._save_var_info.disabled = False
+        self._status_message.value = ""
+        self._source_list_message.value = ""
+        self._update_comparisons()
+
+    def _show_loaded_source_list(self):
+        """
+        Mark the stars of the loaded source list that are on the image, and
+        list the ``star_id`` of those that are not.
+        """
+        sources = self._loaded_source_list
+        coords = SkyCoord(sources["ra"], sources["dec"])
+        x, y = self.ccd.wcs.world_to_pixel(coords)
+        n_y, n_x = self.ccd.shape
+        on_image = (
+            np.isfinite(x)
+            & np.isfinite(y)
+            & (x > -0.5)
+            & (x < n_x - 0.5)
+            & (y > -0.5)
+            & (y < n_y - 0.5)
+        )
+
+        def stars(marker_name):
+            keep = on_image & (sources["marker name"] == marker_name)
+            return Table({"coords": coords[keep]})
+
+        make_markers(
+            self.iw,
+            stars("TESS Targets"),
+            stars("VSX"),
+            stars("APASS comparison"),
+            name_or_coord=self.target_coord,
+        )
+
+        children = [self._legend_spinner_box.children[0]]
+        off_ids = [str(star_id) for star_id in sources["star_id"][~on_image]]
+        if off_ids:
+            stars_are = "star is" if len(off_ids) == 1 else "stars are"
+            children.append(
+                ipw.HTML(
+                    value=f"<p>{len(off_ids)} {stars_are} off this image and "
+                    f"not marked: star_id {', '.join(off_ids)}</p>"
+                )
+            )
+        self._legend_spinner_box.children = children
+        self.help_stuff.selected_index = 1
 
     def _save_comparison_settings(self):
         previous = (self.comparison_catalog, self.bright_mag_limit, self.dim_mag_limit)
@@ -669,6 +859,8 @@ class ComparisonViewer:
         self._save_var_info.on_click(self._save_variables_to_file)
         self._file_chooser.file_chooser.observe(self._set_file, names="_value")
         self._choose_input_source_list.observe(self._set_target_file, names="_value")
+        self._choose_source_list.observe(self._source_list_chosen, names="_value")
+        self._clear_source_list_button.on_click(self._clear_source_list_choice)
 
     def _save_variables_to_file(self, button=None, filename=""):  # noqa: ARG002
         """
@@ -788,7 +980,19 @@ class ComparisonViewer:
 
         # Messages for the user (e.g. "Click closer to a star") show up here.
         self._status_message = ipw.HTML()
-        iw._astro_im.interaction.on_msg(wrap(iw, self._status_message))
+        select_stars = wrap(iw, self._status_message)
+
+        def click_handler(interaction, event_data, buffers):
+            # A loaded source list is view only, so clicks do not exclude stars.
+            if self._loaded_source_list is None:
+                select_stars(interaction, event_data, buffers)
+            elif event_data.get("event") == "click":
+                self._status_message.value = (
+                    "The loaded source list is view only; clear it to choose stars"
+                )
+
+        self._click_handler = click_handler
+        iw._astro_im.interaction.on_msg(click_handler)
 
         self.object_name = ipw.HTML(value="<h2>Object: </h2>")
         self._object = None
@@ -838,6 +1042,25 @@ class ComparisonViewer:
         )
         self._choose_input_source_list.title = "OPTIONAL: Choose input source list"
 
+        # Add a file chooser for an existing source list to show, view only,
+        # instead of making one from the catalogs.
+        self._choose_source_list = FileChooser(filter_pattern="*.ecsv")
+        self._choose_source_list.title = (
+            "OPTIONAL: Use an existing source list (view only)"
+        )
+        self._clear_source_list_button = ipw.Button(
+            description="Clear source list", disabled=True
+        )
+        self._source_list_message = ipw.HTML()
+        load_source_list = ipw.VBox(
+            children=[
+                ipw.HBox(
+                    children=[self._choose_source_list, self._clear_source_list_button]
+                ),
+                self._source_list_message,
+            ]
+        )
+
         comparison_settings = ipw.HBox(
             children=[
                 self._comparison_catalog_choice,
@@ -850,6 +1073,7 @@ class ComparisonViewer:
         box.children = [
             self._file_chooser.file_chooser,
             self._choose_input_source_list,
+            load_source_list,
             comparison_settings,
             inner_box,
             controls,
@@ -884,6 +1108,8 @@ class ComparisonViewer:
 
         A variable or comparison star within ``TARGET_MATCH_RADIUS`` of a
         target is the target, and is left out so that each star has one row.
+        While a source list is loaded, the table holds the stars of that list
+        that are on the image, with the ``star_id`` they have in the list.
 
         Returns
         -------
@@ -892,6 +1118,24 @@ class ComparisonViewer:
         """
         comp_table = self._marked_stars()
         if len(comp_table) == 0:
+            return comp_table
+
+        if self._loaded_source_list is not None:
+            sources = self._loaded_source_list
+            star_id = np.zeros(len(comp_table), dtype=sources["star_id"].dtype)
+            # Match within each marker name, so that a target and a variable
+            # in the same place keep their own ids.
+            for marker_name in set(comp_table["marker name"]):
+                rows = comp_table["marker name"] == marker_name
+                listed = sources[sources["marker name"] == marker_name]
+                idx, _, _ = comp_table["coord"][rows].match_to_catalog_sky(
+                    SkyCoord(listed["ra"], listed["dec"])
+                )
+                star_id[rows] = listed["star_id"][idx]
+            comp_table["ra"] = comp_table["coord"].ra.degree
+            comp_table["dec"] = comp_table["coord"].dec.degree
+            comp_table["star_id"] = star_id
+            comp_table.sort("star_id")
             return comp_table
 
         tess_mark = comp_table["marker name"] == "TESS Targets"

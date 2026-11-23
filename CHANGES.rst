@@ -51,6 +51,10 @@ New Features
   well as APASS DR9, and has on-screen controls for the catalog and the
   bright and dim magnitude limits (in SR); saving them with the save bar
   reloads the markers. [#746]
++ The comparison star viewer can show an existing source list, view only,
+  instead of making one from the catalogs, so that several nights of the same
+  object share star ids and comparison stars. Photometry settings point at the
+  chosen list; stars off the image are listed by ``star_id``. [#747]
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
