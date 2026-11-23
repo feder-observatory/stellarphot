@@ -223,3 +223,9 @@ arcsec by default -- from its catalog entry, which a VSX position need not
 agree with that closely. Pass a larger ``match_radius`` to
 :func:`~stellarphot.utils.magnitude_transforms.transform_to_catalog`; its
 Notes explain why the fit's own, tighter limit is not a keyword.
+
+A target the catalog does not hold at all -- a supernova, say -- is NaN for
+the same reason, and no ``match_radius`` will find it. Pass
+``calibrate_unmatched=True`` to give it a ``mag_cal`` anyway. That works only
+when no color term (``c`` or ``d``) is being fit, because with one the
+calibrated magnitude needs a color the catalog cannot supply.

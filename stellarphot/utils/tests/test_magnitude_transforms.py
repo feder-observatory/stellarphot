@@ -526,31 +526,80 @@ def _run_transform_to_catalog(
 _CATALOG_DERIVED_COLUMNS = ("mag_cal", "mag_cal_error", "mag_cat", "color_cat")
 
 
+def _observations_with_an_unmatched_star(n_good=20, **catalog_kwargs):
+    """
+    A field of well-matched stars plus one star the catalog does not have.
+
+    The extra star is the last row of the observations. It sits a degree away
+    from every catalog star, so its nearest catalog match is bogus, and its
+    instrumental magnitude is chosen so that the bogus match is 0.5 magnitude
+    off the true zero point -- close enough to survive the median-based
+    outlier cut, so only the distance cut can keep it out of the fit.
+
+    Parameters
+    ----------
+
+    n_good : int, optional
+        Number of stars that sit exactly on top of their catalog counterparts.
+
+    **catalog_kwargs
+        Passed on to `_generate_fake_catalog`.
+
+    Returns
+    -------
+    catalog : `_FakeCatalogTable`
+        Catalog of the well-matched stars.
+
+    observed : `astropy.table.Table`
+        Observations of the well-matched stars followed by the unmatched one.
+
+    good_mags : `numpy.ndarray`
+        Instrumental magnitudes of the well-matched stars.
+
+    unmatched_mag : float
+        Instrumental magnitude of the unmatched star.
+    """
+    catalog, ra, dec, good_mags = _generate_fake_catalog(n_good, **catalog_kwargs)
+
+    unmatched_mag = good_mags[0] - 0.5
+
+    observed = _generate_observed_table(
+        u.Quantity([*ra, ra[0]]),
+        u.Quantity([*dec, dec[0] - 1 * u.degree]),
+        np.append(good_mags, unmatched_mag),
+    )
+
+    return catalog, observed, good_mags, unmatched_mag
+
+
+def _assert_good_stars_fit_exactly(result, good_mags):
+    """
+    Check that the well-matched stars alone decided the fit.
+
+    With the unmatched star left out of the fit the good stars are an exact
+    fit, so their calibrated magnitudes are the instrumental ones plus the
+    zero point. Had the unmatched star leaked in, it would have dragged the
+    coefficients away from the true values.
+    """
+    n_good = len(good_mags)
+    np.testing.assert_allclose(
+        result["mag_cal"][:n_good],
+        good_mags + _FAKE_CATALOG_ZERO_POINT,
+        rtol=0,
+        atol=1e-6,
+    )
+    np.testing.assert_allclose(
+        result["z"][:n_good], _FAKE_CATALOG_ZERO_POINT, rtol=0, atol=1e-6
+    )
+
+
 def test_transform_to_catalog_excludes_distant_matches(mocker):
     # A star whose nearest catalog match is far away (much more than
     # 1 arcsec) should be excluded from the fit for the transform
     # coefficients. See issue #588 -- an operator precedence error
     # disabled the distance cut, so badly-matched stars polluted
     # the fit.
-    n_good = 20
-
-    # Good stars sit exactly on top of their catalog counterparts.
-    catalog, ra, dec, good_mags = _generate_fake_catalog(n_good)
-
-    # One more observed star, a degree away from every catalog star, so
-    # its nearest catalog match is bogus. Its instrumental magnitude is
-    # chosen so that the bogus match is 0.5 magnitude off the true zero
-    # point -- close enough to survive the median-based outlier cut, so
-    # only the distance cut can remove it from the fit.
-    bad_ra = ra[0]
-    bad_dec = dec[0] - 1 * u.degree
-    bad_mag = good_mags[0] - 0.5
-
-    observed = _generate_observed_table(
-        u.Quantity([*ra, bad_ra]),
-        u.Quantity([*dec, bad_dec]),
-        np.append(good_mags, bad_mag),
-    )
+    catalog, observed, good_mags, _ = _observations_with_an_unmatched_star()
 
     result = _run_transform_to_catalog(mocker, catalog, observed)
 
@@ -561,19 +610,88 @@ def test_transform_to_catalog_excludes_distant_matches(mocker):
     for column in _CATALOG_DERIVED_COLUMNS:
         assert np.isnan(result[column][-1]), column
 
-    # With the distant star excluded from the fit, the good stars are
-    # an exact fit, so their calibrated magnitudes should match the
-    # catalog. If the bad match leaks into the fit it drags the
-    # coefficients away from the true values.
-    np.testing.assert_allclose(
-        result["mag_cal"][:n_good],
-        good_mags + _FAKE_CATALOG_ZERO_POINT,
-        rtol=0,
-        atol=1e-6,
+    _assert_good_stars_fit_exactly(result, good_mags)
+
+
+def test_transform_to_catalog_calibrates_an_unmatched_star_on_request(mocker):
+    # A supernova has no catalog entry at all, but with no color term in the
+    # fit its calibrated magnitude needs nothing from the catalog: it is the
+    # instrumental magnitude run through the image's transform. With
+    # calibrate_unmatched=True it gets one.
+    catalog, observed, good_mags, unmatched_mag = _observations_with_an_unmatched_star()
+
+    result = _run_transform_to_catalog(
+        mocker, catalog, observed, vary=("a", "z"), calibrate_unmatched=True
     )
-    np.testing.assert_allclose(
-        result["z"][:n_good], _FAKE_CATALOG_ZERO_POINT, rtol=0, atol=1e-6
+
+    assert result["mag_cal"][-1] == pytest.approx(
+        unmatched_mag + _FAKE_CATALOG_ZERO_POINT, abs=1e-6
     )
+    # At least the star's own measurement error, and never smaller.
+    assert result["mag_cal_error"][-1] >= observed["mag_error"][-1]
+
+    # What the catalog says about the nearest entry is still about an
+    # unrelated star, so those columns stay empty.
+    assert np.isnan(result["mag_cat"][-1])
+    assert np.isnan(result["color_cat"][-1])
+
+    # Which stars receive a magnitude changed; which stars define the
+    # transform did not.
+    _assert_good_stars_fit_exactly(result, good_mags)
+
+
+def test_transform_to_catalog_unmatched_star_stays_nan_by_default(mocker):
+    # The same fit as above without the keyword: an unmatched star is not
+    # calibrated unless the caller asks, so nobody's output changes under
+    # them.
+    catalog, observed, good_mags, _ = _observations_with_an_unmatched_star()
+
+    result = _run_transform_to_catalog(mocker, catalog, observed, vary=("a", "z"))
+
+    for column in _CATALOG_DERIVED_COLUMNS:
+        assert np.isnan(result[column][-1]), column
+
+    _assert_good_stars_fit_exactly(result, good_mags)
+
+
+def test_transform_to_catalog_unmatched_star_needs_a_color_for_a_color_term(mocker):
+    # calibrate_unmatched lifts the requirement for a match, not the
+    # requirement for a color. With a color term in the fit the unmatched
+    # star's magnitude depends on a color nobody knows, so it stays NaN
+    # rather than borrowing the color of whichever catalog star is nearest.
+    catalog, observed, good_mags, _ = _observations_with_an_unmatched_star(c=0.1)
+
+    result = _run_transform_to_catalog(
+        mocker, catalog, observed, calibrate_unmatched=True
+    )
+
+    assert np.isfinite(result["c"][0])
+    for column in _CATALOG_DERIVED_COLUMNS:
+        assert np.isnan(result[column][-1]), column
+
+    assert np.isfinite(result["mag_cal"][: len(good_mags)]).all()
+
+
+def test_transform_to_catalog_calibrate_unmatched_leaves_matched_stars_alone(mocker):
+    # The keyword only ever fills in rows that would otherwise be NaN.
+    catalog, observed, good_mags, _ = _observations_with_an_unmatched_star()
+
+    without = _run_transform_to_catalog(
+        mocker, catalog, observed, vary=("a", "z"), in_place=False
+    )
+    with_keyword = _run_transform_to_catalog(
+        mocker,
+        catalog,
+        observed,
+        vary=("a", "z"),
+        in_place=False,
+        calibrate_unmatched=True,
+    )
+
+    for column in _TRANSFORM_OUTPUT_COLUMNS:
+        np.testing.assert_array_equal(
+            with_keyword[column][:-1], without[column][:-1], err_msg=column
+        )
 
 
 @pytest.mark.parametrize(

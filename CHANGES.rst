@@ -57,6 +57,10 @@ New Features
   no longer written when an image is chosen: the save bar writes it, or
   copies the existing list to the source list file, and asks before
   replacing a file that is already there. [#751]
++ ``transform_to_catalog()`` has a new ``calibrate_unmatched`` keyword. When
+  ``True`` and no color term is being fit, an object with no catalog entry
+  within ``match_radius``, such as a supernova, still gets a ``mag_cal``.
+  [#PRNUM]
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
