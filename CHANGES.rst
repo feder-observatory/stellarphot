@@ -66,7 +66,7 @@ New Features
   bands. Passing its ``color_est`` column to ``transform_to_catalog()`` as
   the new ``color_fallback_column`` calibrates stars the catalog has no color
   for when a color term is fit. The "Calibrate magnitudes" notebook now does
-  this. [#PRNUM2]
+  this. [#754]
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
