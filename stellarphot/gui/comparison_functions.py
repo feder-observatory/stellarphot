@@ -34,6 +34,10 @@ __all__ = ["make_markers", "wrap", "ComparisonViewer"]
 
 DESC_STYLE = {"description_width": "initial"}
 
+# Markers this close together are one star; catalog positions of a star can
+# differ by tenths of an arcsecond.
+TARGET_MATCH_RADIUS = 2 * u.arcsec
+
 
 def _coord_catalog_table(table):
     """
@@ -163,7 +167,9 @@ def make_markers(iw, RD, vsx, ent, name_or_coord=None):
             _coord_catalog_table(RD),
             use_skycoord=True,
             catalog_label="TESS Targets",
-            catalog_style={"shape": "circle", "color": "green", "size": 10},
+            # Larger than the VSX squares so that the circle goes around the
+            # square when a target is also a known variable.
+            catalog_style={"shape": "circle", "color": "green", "size": 14},
         )
 
     if name_or_coord is not None:
@@ -232,7 +238,7 @@ def wrap(imagewidget, status_widget):
             # no longer applies.
             status_widget.value = ""
             mouse = all_table["coord"][index].separation(all_table["coord"])
-            rat = mouse < 1 * u.arcsec
+            rat = mouse <= TARGET_MATCH_RADIUS
             elims = [
                 name
                 for name in all_table["marker name"][rat]
@@ -496,14 +502,33 @@ class ComparisonViewer:
     def variables(self):
         """
         An `astropy.table.Table` of the variables in the class.
+
+        The ``star_id`` column is the star's ID in the source list. A variable
+        that is also a target has the ``star_id`` of the target.
         """
         comp_table = self.generate_table()
-        new_vsx_mark = comp_table["marker name"] == "VSX"
-        idx, _, _ = comp_table["coord"][new_vsx_mark].match_to_catalog_sky(
-            self.vsx["coords"]
-        )
+        marked = self._marked_stars()
+        vsx_coord = marked["coord"][marked["marker name"] == "VSX"]
+        idx, _, _ = vsx_coord.match_to_catalog_sky(self.vsx["coords"])
         our_vsx = self.vsx[idx]
-        our_vsx["star_id"] = comp_table["star_id"][new_vsx_mark]
+        star_id = np.zeros(len(our_vsx), dtype=int)
+
+        # A variable that generate_table left out for being a target gets the
+        # ID of that target; the rest are rows of the source list themselves.
+        # Matching to no rows is an error, hence the checks.
+        is_target = np.zeros(len(our_vsx), dtype=bool)
+        targets = comp_table[comp_table["marker name"] == "TESS Targets"]
+        if len(targets) > 0 and len(our_vsx) > 0:
+            idx, distance, _ = vsx_coord.match_to_catalog_sky(targets["coord"])
+            is_target = distance <= TARGET_MATCH_RADIUS
+            star_id[is_target] = targets["star_id"][idx[is_target]]
+        if not is_target.all():
+            vsx_rows = comp_table[comp_table["marker name"] == "VSX"]
+            idx, _, _ = vsx_coord[~is_target].match_to_catalog_sky(vsx_rows["coord"])
+            star_id[~is_target] = vsx_rows["star_id"][idx]
+
+        our_vsx["star_id"] = star_id
+        our_vsx.sort("star_id")
         return our_vsx
 
     def _set_object(self):
@@ -832,14 +857,14 @@ class ComparisonViewer:
 
         return box, iw
 
-    def generate_table(self):
+    def _marked_stars(self):
         """
-        Generate the table of stars to use for the aperture file.
+        The stars marked in the viewer that the user has not excluded.
 
         Returns
         -------
-        comp_table : `astropy.table.Table`
-            Table of stars to use for the aperture file.
+        `astropy.table.Table`
+            Table with "x", "y", "coord" and "marker name" columns.
         """
         all_table = _all_catalog_entries(self.iw)
         if len(all_table) == 0:
@@ -847,10 +872,34 @@ class ComparisonViewer:
 
         elims = np.array([name.startswith("elim") for name in all_table["marker name"]])
         elim_table = all_table[elims]
-        comp_table = all_table[~elims]
+        marked = all_table[~elims]
 
-        index, d2d, d3d = elim_table["coord"].match_to_catalog_sky(comp_table["coord"])
-        comp_table.remove_rows(index)
+        index, d2d, d3d = elim_table["coord"].match_to_catalog_sky(marked["coord"])
+        marked.remove_rows(index)
+        return marked
+
+    def generate_table(self):
+        """
+        Generate the table of stars to use for the aperture file.
+
+        A variable or comparison star within ``TARGET_MATCH_RADIUS`` of a
+        target is the target, and is left out so that each star has one row.
+
+        Returns
+        -------
+        comp_table : `astropy.table.Table`
+            Table of stars to use for the aperture file.
+        """
+        comp_table = self._marked_stars()
+        if len(comp_table) == 0:
+            return comp_table
+
+        tess_mark = comp_table["marker name"] == "TESS Targets"
+        if tess_mark.any():
+            _, target_distance, _ = comp_table["coord"].match_to_catalog_sky(
+                comp_table["coord"][tess_mark]
+            )
+            comp_table = comp_table[tess_mark | (target_distance > TARGET_MATCH_RADIUS)]
 
         # Add separate RA and Dec columns for ease in processing later
         comp_table["ra"] = comp_table["coord"].ra.degree
@@ -865,9 +914,7 @@ class ComparisonViewer:
         # Set sort order
         apass_mark = comp_table["marker name"] == "APASS comparison"
         vsx_mark = comp_table["marker name"] == "VSX"
-        tess_mark = (comp_table["marker name"] == "TESS Targets") | (
-            comp_table["separation"] < 0.3 * u.arcsec
-        )
+        tess_mark = comp_table["marker name"] == "TESS Targets"
 
         # Although the radec input sources lists generated for TESS are supposed to be
         # sorted by distance from the TESS target, they are not always. To ensure that
