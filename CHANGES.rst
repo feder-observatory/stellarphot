@@ -54,7 +54,7 @@ New Features
 + The comparison star viewer can show an existing source list, view only,
   instead of making one from the catalogs, so that several nights of the same
   object share star ids and comparison stars. Photometry settings point at the
-  chosen list; stars off the image are listed by ``star_id``. [#747]
+  chosen list; stars off the image are listed by ``star_id``. [#751]
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
