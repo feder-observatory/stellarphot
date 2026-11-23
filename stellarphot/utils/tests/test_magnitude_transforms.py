@@ -28,9 +28,11 @@ from ..magnitude_transforms import (
     _MIN_FIT_SIGMA,
     _WIDE_FIELD_RADIUS,
     UnsupportedPassbandError,
+    _night_means,
     _observed_field,
     _to_float_array,
     calibrated_from_instrumental,
+    estimate_catalog_colors,
     filter_transform,
     transform_to_catalog,
 )
@@ -606,11 +608,8 @@ def test_transform_to_catalog_calibrates_an_unmatched_star_on_request(mocker):
     # calibrate_unmatched=True it gets one.
     catalog, observed, good_mags, unmatched_mag = _observations_with_an_offset_star()
 
-    without, with_keyword = (
-        _run_transform_to_catalog(
-            mocker, catalog, observed, vary=("a", "z"), in_place=False, **kwargs
-        )
-        for kwargs in ({}, {"calibrate_unmatched": True})
+    without, with_keyword = _run_with_and_without(
+        mocker, catalog, observed, {"calibrate_unmatched": True}, vary=("a", "z")
     )
 
     # It is opt-in: without the keyword the unmatched star is not calibrated
@@ -631,10 +630,9 @@ def test_transform_to_catalog_calibrates_an_unmatched_star_on_request(mocker):
 
     # Which stars receive a magnitude changed; nothing else did, including
     # which stars define the transform.
-    for column in _TRANSFORM_OUTPUT_COLUMNS:
-        np.testing.assert_array_equal(
-            with_keyword[column][:-1], without[column][:-1], err_msg=column
-        )
+    _assert_columns_equal(
+        with_keyword, without, _TRANSFORM_OUTPUT_COLUMNS, rows=slice(None, -1)
+    )
     _assert_good_stars_fit_exactly(with_keyword, good_mags)
 
 
@@ -664,6 +662,52 @@ def test_transform_to_catalog_unmatched_star_needs_a_color_for_a_color_term(
         assert np.isnan(result[column][-1]), column
 
     assert np.isfinite(result["mag_cal"][: len(good_mags)]).all()
+
+
+def _run_with_and_without(mocker, catalog, observed, extra_kwargs, **base_kwargs):
+    """
+    Transform the same observations twice, without and with some keywords.
+
+    Parameters
+    ----------
+
+    mocker : `pytest_mock.MockerFixture`
+        Fixture used to patch the catalog fetch.
+
+    catalog : `_FakeCatalogTable`
+        Catalog to use in place of the fetched one.
+
+    observed : `astropy.table.Table`
+        Observations to transform. Left unmodified.
+
+    extra_kwargs : dict
+        Keywords passed to the second call only.
+
+    **base_kwargs
+        Keywords passed to both calls.
+
+    Returns
+    -------
+    without, with_extra : `astropy.table.Table`
+        Result of each call.
+    """
+    without = _run_transform_to_catalog(
+        mocker, catalog, observed, in_place=False, **base_kwargs
+    )
+    with_extra = _run_transform_to_catalog(
+        mocker, catalog, observed, in_place=False, **base_kwargs, **extra_kwargs
+    )
+    return without, with_extra
+
+
+def _assert_columns_equal(first, second, columns, rows=slice(None)):
+    """
+    Check that two results agree exactly in some columns, NaN for NaN.
+    """
+    for column in columns:
+        np.testing.assert_array_equal(
+            first[column][rows], second[column][rows], err_msg=column
+        )
 
 
 @pytest.mark.parametrize(
@@ -4554,3 +4598,721 @@ def test_transform_to_catalog_against_a_real_catalog(cat_name):
         assert np.isnan(missing).all(), column
         for fill_value in (-999, 1e20, 0.0):
             assert not (missing == fill_value).any(), (column, fill_value)
+
+
+def _unmatched_star_with_a_fallback_color(c=0.1, unmatched_color=0.7, color_error=None):
+    """
+    The unmatched-star field, with a ``color_est`` column to fall back on.
+
+    The well-matched stars are given a fallback color that is badly wrong, so
+    a test can tell that the catalog color was preferred wherever there was
+    one; only the unmatched star's fallback is its true color.
+
+    Parameters
+    ----------
+
+    c : float, optional
+        Color coefficient the catalog is built with.
+
+    unmatched_color : float, optional
+        True color of the star the catalog does not hold.
+
+    color_error : float, optional
+        If given, a ``color_est_error`` column is added holding this value
+        for every star.
+
+    Returns
+    -------
+    catalog : `_FakeCatalogTable`
+        Catalog of the well-matched stars.
+
+    observed : `astropy.table.Table`
+        Observations with ``color_est``, the unmatched star last.
+
+    expected_unmatched : float
+        Calibrated magnitude the unmatched star should come out with.
+    """
+    catalog, observed, _, unmatched_mag = _observations_with_an_offset_star(c=c)
+
+    fallback = np.full(len(observed), 99.0)
+    fallback[-1] = unmatched_color
+    observed["color_est"] = fallback
+    if color_error is not None:
+        observed["color_est_error"] = color_error
+
+    expected_unmatched = unmatched_mag + c * unmatched_color + _FAKE_CATALOG_ZERO_POINT
+
+    return catalog, observed, expected_unmatched
+
+
+def test_transform_to_catalog_uses_a_fallback_color_for_an_unmatched_star(mocker):
+    # With a color term in the fit, a star the catalog does not hold needs a
+    # color from somewhere else. Given one, and calibrate_unmatched, it is
+    # calibrated with it -- while every star that does have a catalog color
+    # keeps using that, however different its fallback is.
+    catalog, observed, expected_unmatched = _unmatched_star_with_a_fallback_color()
+
+    result = _run_transform_to_catalog(
+        mocker,
+        catalog,
+        observed,
+        calibrate_unmatched=True,
+        color_fallback_column="color_est",
+    )
+
+    assert result["mag_cal"][-1] == pytest.approx(expected_unmatched, abs=1e-6)
+    assert np.isfinite(result["mag_cal_error"][-1])
+    # The catalog still has nothing to say about this star.
+    assert np.isnan(result["mag_cat"][-1])
+    assert np.isnan(result["color_cat"][-1])
+
+    # The matched stars' fallback of 99 was never used.
+    np.testing.assert_allclose(
+        result["mag_cal"][:-1], catalog["mag_R"], rtol=0, atol=1e-6
+    )
+
+
+def test_transform_to_catalog_fallback_color_does_not_lift_the_match_gate(mocker):
+    # The fallback supplies a color; whether an unmatched star is calibrated
+    # at all is still calibrate_unmatched's decision.
+    catalog, observed, _ = _unmatched_star_with_a_fallback_color()
+
+    result = _run_transform_to_catalog(
+        mocker, catalog, observed, color_fallback_column="color_est"
+    )
+
+    for column in _CATALOG_DERIVED_COLUMNS:
+        assert np.isnan(result[column][-1]), column
+
+
+def test_transform_to_catalog_fallback_color_fills_in_a_matched_star(mocker):
+    # A star the catalog holds in one band only is matched but has no color.
+    # The fallback gives it one, with no need for calibrate_unmatched.
+    n_stars = 20
+    no_color = np.zeros(n_stars, dtype=bool)
+    no_color[3] = True
+    c = 0.1
+
+    # The true colors, taken before the one star's is masked away.
+    full_catalog, *_ = _generate_fake_catalog(n_stars, c=c)
+    true_color = np.asarray(full_catalog["mag_R"] - full_catalog["mag_I"])
+
+    catalog, ra, dec, instrumental = _catalog_without_color(n_stars, no_color, c=c)
+    observed = _generate_observed_table(ra, dec, instrumental)
+    observed["color_est"] = true_color
+
+    without, result = _run_with_and_without(
+        mocker, catalog, observed, {"color_fallback_column": "color_est"}
+    )
+
+    assert np.isnan(without["mag_cal"][3])
+    np.testing.assert_allclose(result["mag_cal"], catalog["mag_R"], rtol=0, atol=1e-6)
+    # color_cat reports the catalog's color, and the catalog has none.
+    assert np.isnan(result["color_cat"][3])
+    assert np.isfinite(result["mag_cat"][3])
+
+
+def test_transform_to_catalog_fallback_color_never_reaches_the_fit(mocker):
+    # Estimated colors are only ever applied, never fit to, so everything
+    # that describes the fit is identical with and without them.
+    catalog, observed, _ = _unmatched_star_with_a_fallback_color()
+
+    without, with_fallback = _run_with_and_without(
+        mocker,
+        catalog,
+        observed,
+        {"calibrate_unmatched": True, "color_fallback_column": "color_est"},
+    )
+
+    _assert_columns_equal(with_fallback, without, _FIT_COLUMNS)
+    _assert_columns_equal(
+        with_fallback, without, _CATALOG_DERIVED_COLUMNS, rows=slice(None, -1)
+    )
+
+
+def test_transform_to_catalog_fallback_color_is_ignored_without_a_color_term(mocker):
+    # No color term, no color in the model, so nothing to fall back to. The
+    # column named does not even exist, which shows it is never looked at.
+    catalog, observed, _, _ = _observations_with_an_offset_star()
+
+    without, with_fallback = _run_with_and_without(
+        mocker,
+        catalog,
+        observed,
+        {"color_fallback_column": "no_such_column"},
+        vary=("a", "z"),
+    )
+
+    _assert_columns_equal(with_fallback, without, _TRANSFORM_OUTPUT_COLUMNS)
+
+
+def test_transform_to_catalog_propagates_the_fallback_color_error(mocker):
+    # An estimated color is uncertain, and that uncertainty reaches the
+    # calibrated magnitude through the color coefficient: c * sigma_color,
+    # in quadrature with everything else.
+    c = 0.1
+    color_error = 0.2
+    kwargs = {"calibrate_unmatched": True, "color_fallback_column": "color_est"}
+
+    catalog, exact, _ = _unmatched_star_with_a_fallback_color(c=c, color_error=0.0)
+    _, uncertain, _ = _unmatched_star_with_a_fallback_color(
+        c=c, color_error=color_error
+    )
+
+    exact = _run_transform_to_catalog(mocker, catalog, exact, **kwargs)
+    uncertain = _run_transform_to_catalog(mocker, catalog, uncertain, **kwargs)
+
+    added = np.sqrt(
+        uncertain["mag_cal_error"][-1] ** 2 - exact["mag_cal_error"][-1] ** 2
+    )
+    assert added == pytest.approx(c * color_error, rel=1e-4)
+
+    # A star calibrated with its catalog color is not affected.
+    np.testing.assert_array_equal(
+        uncertain["mag_cal_error"][:-1], exact["mag_cal_error"][:-1]
+    )
+
+
+@pytest.mark.parametrize("bad_error", [np.nan, -0.1])
+def test_transform_to_catalog_unknown_fallback_color_error_gives_nan_error(
+    mocker, bad_error
+):
+    # A color whose uncertainty is not a non-negative number has an unknown
+    # uncertainty, and so does the magnitude calibrated with it -- but the
+    # magnitude itself is still good.
+    catalog, observed, expected_unmatched = _unmatched_star_with_a_fallback_color(
+        color_error=bad_error
+    )
+
+    result = _run_transform_to_catalog(
+        mocker,
+        catalog,
+        observed,
+        calibrate_unmatched=True,
+        color_fallback_column="color_est",
+    )
+
+    assert result["mag_cal"][-1] == pytest.approx(expected_unmatched, abs=1e-6)
+    assert np.isnan(result["mag_cal_error"][-1])
+    assert np.isfinite(result["mag_cal_error"][:-1]).all()
+
+
+def test_transform_to_catalog_rejects_a_missing_fallback_color_column(mocker):
+    catalog, observed, _, _ = _observations_with_an_offset_star()
+
+    with pytest.raises(ValueError, match="color_fallback_column"):
+        _run_transform_to_catalog(
+            mocker, catalog, observed, color_fallback_column="no_such_column"
+        )
+
+
+def test_transform_to_catalog_rejects_a_fallback_color_in_other_bands(mocker):
+    # estimate_catalog_colors records which color each passband's estimate
+    # is. Applying an R-I estimate through a transform fit against B-V would
+    # be silently wrong, so it is refused.
+    catalog, observed, _ = _unmatched_star_with_a_fallback_color()
+    observed.meta["color_est_bands"] = {"R": "B-V"}
+
+    with pytest.raises(ValueError, match="color_est"):
+        _run_transform_to_catalog(
+            mocker, catalog, observed, color_fallback_column="color_est"
+        )
+
+
+# Zero points of the two bands of the synthetic night below, for its first
+# image in each band.
+_NIGHT_ZERO_POINTS = {"R": 20.0, "I": 19.5}
+
+# Error quoted for the instrumental magnitudes of a noise-free synthetic
+# night. The color estimate corrects for the noise its errors say the
+# instrumental colors have, so a noise-free night has to quote (almost) none
+# to be recovered exactly.
+_NOISE_FREE_ERROR = 1e-5
+
+
+def _two_band_night(
+    n_stars=30,
+    n_images=3,
+    a=0.0,
+    c_r=0.1,
+    c_i=-0.05,
+    drift=0.03,
+    night=60000,
+    target_color=0.8,
+    target_r=13.0,
+    noise_sigma=0.0,
+    color_range=(0.2, 1.2),
+    seed=_SEED,
+):
+    """
+    One night of R and I images of a field holding an uncatalogued target.
+
+    Every image's instrumental magnitudes follow the transform model exactly,
+    with a color term that differs between the two bands and a zero point
+    that drifts from image to image, differently in each band, the way
+    extinction does through a night.
+
+    Parameters
+    ----------
+
+    n_stars : int, optional
+        Number of catalogued stars.
+
+    n_images : int, optional
+        Number of images in each band.
+
+    a : float or tuple of float, optional
+        Magnitude coefficient, either shared by the bands or one for R and
+        one for I.
+
+    c_r, c_i : float, optional
+        Color coefficient of each band.
+
+    drift : float, optional
+        Change in zero point from one image to the next, in magnitudes. The
+        I band drifts by half as much in the opposite direction.
+
+    night : int, optional
+        Value of the ``night`` column.
+
+    target_color, target_r : float, optional
+        True R-I color and R magnitude of the uncatalogued target.
+
+    noise_sigma : float, optional
+        Standard deviation of Gaussian noise added to every instrumental
+        magnitude, which is also the error quoted for them. A noise-free
+        night quotes `_NOISE_FREE_ERROR`.
+
+    color_range : tuple of float, optional
+        Bluest and reddest color of the catalogued stars.
+
+    seed : int, optional
+        Seed for the noise.
+
+    Returns
+    -------
+    `types.SimpleNamespace`
+        With attributes ``catalog``, the `_FakeCatalogTable`; ``observed``,
+        the ungrouped observations, with ``star_id`` and ``night`` columns;
+        ``target_id``, the ``star_id`` of the target; ``true_color`` and
+        ``true_mag``, the latter a dict of arrays keyed by passband, both
+        indexed by ``star_id - 1``; ``mag_error``, the error quoted for
+        every instrumental magnitude; and ``color_slope``, what the catalog
+        color changes by per unit of zero-pointed instrumental color when
+        the bands share ``a``.
+    """
+    a_r, a_i = np.broadcast_to(a, (2,))
+    mag_error = noise_sigma if noise_sigma else _NOISE_FREE_ERROR
+
+    ra, dec = _generate_star_coordinates(n_stars)
+    cat_r = np.linspace(11.0, 15.0, n_stars)
+    # Not seeded by ``seed``: the stars are the same from one realization
+    # of the noise to the next.
+    cat_color = np.random.default_rng(_SEED).uniform(*color_range, size=n_stars)
+
+    errors = np.full(n_stars, _FAKE_CATALOG_ERROR)
+    catalog = _FakeCatalogTable(
+        {
+            "ra": ra,
+            "dec": dec,
+            # The scatter keeps a fit from being exact to the last bit; see
+            # _FAKE_CATALOG_SCATTER.
+            "mag_R": cat_r
+            + np.random.default_rng(9021).normal(
+                0.0, _FAKE_CATALOG_SCATTER, size=n_stars
+            ),
+            "mag_error_R": errors,
+            "mag_error_I": errors.copy(),
+        }
+    )
+    # From the scattered R, so that each star's color is exactly what was
+    # asked for.
+    catalog["mag_I"] = catalog["mag_R"] - cat_color
+
+    # The target sits between grid positions, several arcsec from every
+    # catalogued star, so nothing in the catalog matches it.
+    all_ra = u.Quantity([*ra, ra[0] + 5 * u.arcsec])
+    all_dec = u.Quantity([*dec, dec[0] + 5 * u.arcsec])
+    true_color = np.append(cat_color, target_color)
+    true_r = np.append(cat_r, target_r)
+    true_mag = {"R": true_r, "I": true_r - true_color}
+    star_id = np.arange(1, n_stars + 2)
+
+    images = []
+    for band_number, (band, band_a, c, band_drift) in enumerate(
+        (("R", a_r, c_r, drift), ("I", a_i, c_i, -0.5 * drift))
+    ):
+        for image in range(n_images):
+            zero_point = _NIGHT_ZERO_POINTS[band] + band_drift * image
+            # The model, inverted: catalog - instrumental is
+            # a * instrumental + c * color + z.
+            instrumental = (true_mag[band] - c * true_color - zero_point) / (1 + band_a)
+            one_image = _generate_observed_table(
+                all_ra,
+                all_dec,
+                instrumental,
+                file_name=f"{band}_{night}_{image}.fit",
+                passband=band,
+                mag_error=mag_error,
+                noise_sigma=noise_sigma,
+                seed=seed + night + 100 * band_number + image,
+            )
+            one_image["star_id"] = star_id
+            one_image["night"] = night
+            images.append(Table(one_image))
+
+    return SimpleNamespace(
+        catalog=catalog,
+        observed=vstack(images),
+        target_id=star_id[-1],
+        true_color=true_color,
+        true_mag=true_mag,
+        mag_error=mag_error,
+        color_slope=1 / (1 - c_r + c_i),
+    )
+
+
+def _target_rows(table, night, passband=None):
+    """
+    Mask of the rows of the synthetic night's target, optionally in one band.
+    """
+    rows = table["star_id"] == night.target_id
+    if passband is not None:
+        rows = rows & (table["passband"] == passband)
+    return np.asarray(rows)
+
+
+def _assert_colors_recovered(result, night, atol=1e-6):
+    """
+    Check that every star's estimated color is its true color.
+    """
+    np.testing.assert_allclose(
+        result["color_est"],
+        night.true_color[result["star_id"] - 1],
+        rtol=0,
+        atol=atol,
+    )
+
+
+def _estimate_colors(mocker, catalog, observed, **kwargs):
+    """
+    Run `estimate_catalog_colors` against a synthetic catalog.
+    """
+    _patch_catalog_fetch(mocker, catalog)
+    return estimate_catalog_colors(observed, **kwargs)
+
+
+@pytest.mark.parametrize("a", [0.0, 0.02, (0.03, -0.02)])
+def test_estimate_catalog_colors_recovers_every_color(mocker, a):
+    # Noise-free data that follows the model exactly, so the estimate is the
+    # true color for every star -- the catalogued ones and the target the
+    # catalog does not hold. A magnitude coefficient that differs between
+    # the bands is what the magnitude term of the color relation is for.
+    night = _two_band_night(a=a)
+
+    result = _estimate_colors(mocker, night.catalog, night.observed)
+
+    _assert_colors_recovered(result, night)
+
+
+def test_estimate_catalog_colors_removes_zero_point_drift(mocker):
+    # The target is seen in only the last R image and the first I image of
+    # a night whose zero point moves by 0.2 mag per image. Its raw
+    # instrumental color is off by the drift between those two images,
+    # which no relation fit to stars seen in every image can absorb; only
+    # zero-pointing each image first gets its color right.
+    n_images = 3
+    night = _two_band_night(n_images=n_images, drift=0.2)
+    files = night.observed["file"]
+    keep = (files == f"R_60000_{n_images - 1}.fit") | (files == "I_60000_0.fit")
+    observed = night.observed[~_target_rows(night.observed, night) | keep]
+
+    result = _estimate_colors(mocker, night.catalog, observed)
+
+    assert _target_rows(result, night).sum() == 2
+    _assert_colors_recovered(result, night)
+
+
+def test_estimate_catalog_colors_ignores_a_star_with_a_wrong_catalog_color(mocker):
+    # One catalogued star whose catalog color is off by a magnitude -- a
+    # variable, a blend, a bad catalog entry -- must not bend the relation
+    # every other star's color comes from.
+    night = _two_band_night()
+    night.catalog["mag_I"][7] += 1.0
+
+    result = _estimate_colors(mocker, night.catalog, night.observed)
+
+    _assert_colors_recovered(result, night)
+
+
+def test_estimate_catalog_colors_pools_two_spellings_of_a_band(mocker):
+    # "R" and "Rc" are one band, so images labelled either way are averaged
+    # together, and both spellings are given the estimate.
+    night = _two_band_night()
+    night.observed["passband"] = night.observed["passband"].astype("U2")
+    night.observed["passband"][night.observed["file"] == "R_60000_0.fit"] = "Rc"
+
+    result = _estimate_colors(mocker, night.catalog, night.observed)
+
+    _assert_colors_recovered(result, night)
+    assert result.meta["color_est_bands"] == {"R": "R-I", "Rc": "R-I", "I": "R-I"}
+
+
+def test_night_means_weights_by_inverse_variance():
+    values = np.array([1.0, 3.0, 10.0, np.nan, 5.0])
+    errors = np.array([0.1, 0.2, 0.5, 0.1, -1.0])
+    group = np.array([0, 0, 2, 2, 2])
+
+    mean, error = _night_means(values, errors, group, 3)
+
+    # Group 0 is a weighted mean, group 1 is empty, and group 2 keeps only
+    # the one value that is finite and has a usable error.
+    weights = 1 / errors[:2] ** 2
+    assert mean[0] == pytest.approx(np.sum(weights * values[:2]) / weights.sum())
+    assert error[0] == pytest.approx(1 / np.sqrt(weights.sum()))
+    assert np.isnan(mean[1]) and np.isnan(error[1])
+    assert mean[2] == pytest.approx(10.0)
+    assert error[2] == pytest.approx(0.5)
+
+
+def test_estimate_catalog_colors_reports_the_measurement_error(mocker):
+    # With noise-free data the relation fits exactly, so all that is left in
+    # the reported error is the star's own: the error of the mean in each
+    # band, combined, and scaled by the slope of the relation.
+    n_images = 4
+    night = _two_band_night(n_images=n_images)
+
+    result = _estimate_colors(mocker, night.catalog, night.observed)
+
+    band_error = night.mag_error / np.sqrt(n_images)
+    expected = abs(night.color_slope) * np.hypot(band_error, band_error)
+    np.testing.assert_allclose(result["color_est_error"], expected, rtol=1e-3)
+
+
+def test_estimate_catalog_colors_error_includes_the_scatter_of_the_relation(mocker):
+    # Catalog colors that scatter about the relation by far more than the
+    # instrumental errors: the reported error has to own up to that scatter
+    # rather than quote the tiny measurement error alone.
+    scatter = 0.05
+    night = _two_band_night(n_stars=60)
+    night.catalog["mag_I"] += np.random.default_rng(_SEED).normal(
+        0.0, scatter, size=len(night.catalog)
+    )
+
+    result = _estimate_colors(mocker, night.catalog, night.observed)
+
+    target_error = result["color_est_error"][_target_rows(result, night)][0]
+    assert target_error == pytest.approx(scatter, rel=0.3)
+
+
+def test_estimate_catalog_colors_error_grows_away_from_the_fitted_stars(mocker):
+    # The relation is known best where the stars that define it are. A
+    # target far redder than all of them is an extrapolation, and its error
+    # says so.
+    kwargs = {"noise_sigma": 0.02, "color_range": (0.4, 0.8)}
+    inside = _two_band_night(target_color=0.6, **kwargs)
+    outside = _two_band_night(target_color=2.5, **kwargs)
+
+    errors = []
+    for night in (inside, outside):
+        result = _estimate_colors(mocker, night.catalog, night.observed)
+        errors.append(result["color_est_error"][_target_rows(result, night)][0])
+
+    assert errors[1] > 1.5 * errors[0]
+
+
+def test_estimate_catalog_colors_is_not_biased_by_noisy_instrumental_colors(mocker):
+    # Noise in the instrumental colors flattens an ordinary least-squares
+    # slope, which biases the estimate for any star outside the color range
+    # of the stars that define the relation -- and a supernova usually is.
+    # Here the comparison stars span 0.2 mag of color with 0.02 mag noise
+    # per image and the target is 0.9 mag redder than their middle; fit
+    # naively, its color comes out about 0.09 mag low on average.
+    target_color = 1.5
+    pulls = []
+    for seed in range(40):
+        night = _two_band_night(
+            n_stars=60,
+            noise_sigma=0.02,
+            color_range=(0.5, 0.7),
+            target_color=target_color,
+            seed=seed,
+        )
+        result = _estimate_colors(mocker, night.catalog, night.observed)
+        rows = _target_rows(result, night)
+        pulls.append(
+            (result["color_est"][rows][0] - target_color)
+            / result["color_est_error"][rows][0]
+        )
+
+    pulls = np.array(pulls)
+    # Unbiased to within the scatter of the mean of 40 trials, and an error
+    # that neither badly understates nor badly overstates the spread.
+    assert abs(pulls.mean()) < 0.5
+    assert 0.5 < pulls.std() < 1.5
+
+
+def test_estimate_catalog_colors_needs_a_spread_of_colors(mocker, caplog):
+    # Stars that all have the same color say nothing about how catalog
+    # color changes with instrumental color, so there is no relation to
+    # apply and no estimate -- rather than whatever a degenerate fit
+    # returns.
+    night = _two_band_night(color_range=(0.6, 0.6))
+
+    with caplog.at_level(logging.WARNING, logger=_MAGNITUDE_TRANSFORMS_LOGGER):
+        result = _estimate_colors(mocker, night.catalog, night.observed)
+
+    assert np.isnan(result["color_est"]).all()
+    assert any("cannot be estimated" in r.message for r in caplog.records)
+    assert result.meta["color_est_bands"] == {}
+
+
+def test_estimate_catalog_colors_needs_enough_stars(mocker, caplog):
+    # Three terms -- the default relation has a magnitude term -- cannot be
+    # trusted from five stars.
+    night = _two_band_night(n_stars=5)
+
+    with caplog.at_level(logging.WARNING, logger=_MAGNITUDE_TRANSFORMS_LOGGER):
+        result = _estimate_colors(mocker, night.catalog, night.observed)
+
+    assert np.isnan(result["color_est"]).all()
+    assert any("too few stars" in r.message for r in caplog.records)
+
+
+def test_estimate_catalog_colors_estimates_each_night_separately(mocker):
+    # A supernova changes color from night to night, so each night gets its
+    # own estimate rather than one for the whole table.
+    first = _two_band_night(night=60000, target_color=0.3)
+    second = _two_band_night(night=60001, target_color=1.1, drift=-0.02)
+    observed = vstack([first.observed, second.observed])
+
+    result = _estimate_colors(mocker, first.catalog, observed)
+
+    for night, color in ((60000, 0.3), (60001, 1.1)):
+        rows = _target_rows(result, first) & (result["night"] == night)
+        np.testing.assert_allclose(result["color_est"][rows], color, rtol=0, atol=1e-6)
+
+
+def test_estimate_catalog_colors_needs_both_bands_of_a_star(mocker):
+    # An instrumental color takes two bands. A star seen in only one of them
+    # that night has none, and gets no estimate.
+    night = _two_band_night()
+    observed = night.observed[~_target_rows(night.observed, night, "I")]
+
+    result = _estimate_colors(mocker, night.catalog, observed)
+
+    is_target = _target_rows(result, night)
+    assert np.isnan(result["color_est"][is_target]).all()
+    assert np.isnan(result["color_est_error"][is_target]).all()
+    assert np.isfinite(result["color_est"][~is_target]).all()
+
+
+def test_estimate_catalog_colors_needs_both_bands_of_the_color(mocker, caplog):
+    # The R transform uses R-I. With no I observations at all there is no
+    # instrumental R-I, and no other color is substituted for it.
+    night = _two_band_night()
+    observed = night.observed[night.observed["passband"] == "R"]
+
+    with caplog.at_level(logging.WARNING, logger=_MAGNITUDE_TRANSFORMS_LOGGER):
+        result = _estimate_colors(mocker, night.catalog, observed)
+
+    assert np.isnan(result["color_est"]).all()
+    assert any("no observations in" in r.message for r in caplog.records)
+    assert result.meta["color_est_bands"] == {}
+
+
+def test_estimate_catalog_colors_records_which_color_was_estimated(mocker, tmp_path):
+    night = _two_band_night()
+
+    result = _estimate_colors(mocker, night.catalog, night.observed)
+
+    expected = {"R": "R-I", "I": "R-I"}
+    assert result.meta["color_est_bands"] == expected
+    # Plain strings, which is what lets the record be written to a file.
+    assert all(type(key) is str for key in result.meta["color_est_bands"])
+
+    path = tmp_path / "estimated.ecsv"
+    result.write(path)
+    assert Table.read(path).meta["color_est_bands"] == expected
+
+
+@pytest.mark.parametrize("missing", ["night", "star_id", "mag_error"])
+def test_estimate_catalog_colors_rejects_a_table_without_a_needed_column(
+    mocker, missing
+):
+    night = _two_band_night()
+    night.observed.remove_column(missing)
+
+    with pytest.raises(ValueError, match=missing):
+        _estimate_colors(mocker, night.catalog, night.observed)
+
+
+def test_estimate_catalog_colors_not_in_place_leaves_input_alone(mocker):
+    night = _two_band_night()
+    columns_before = list(night.observed.colnames)
+
+    result = _estimate_colors(mocker, night.catalog, night.observed, in_place=False)
+
+    assert night.observed.colnames == columns_before
+    assert "color_est_bands" not in night.observed.meta
+    assert "color_est" in result.colnames
+
+
+def test_estimated_colors_calibrate_an_uncatalogued_target(mocker):
+    # The whole point, end to end: estimate the colors for the night, then
+    # transform each band with the estimate as the fallback. The target the
+    # catalog does not hold comes out at its true magnitude in every image of
+    # both bands.
+    night = _two_band_night()
+
+    observed = _estimate_colors(mocker, night.catalog, night.observed)
+    observed = observed.group_by("file")
+    for band in ("R", "I"):
+        _run_transform_to_catalog(
+            mocker,
+            night.catalog,
+            observed,
+            obs_filter=band,
+            calibrate_unmatched=True,
+            color_fallback_column="color_est",
+        )
+
+    for band in ("R", "I"):
+        rows = _target_rows(observed, night, band)
+        np.testing.assert_allclose(
+            observed["mag_cal"][rows], night.true_mag[band][-1], rtol=0, atol=1e-5
+        )
+        assert np.isfinite(observed["mag_cal_error"][rows]).all()
+    assert np.isnan(observed["color_cat"][_target_rows(observed, night)]).all()
+
+
+def test_estimated_colors_survive_the_notebooks_split_and_stack(mocker):
+    # The notebook splits the table by passband, transforms each piece and
+    # stacks the pieces again. Each piece carries the whole record of which
+    # color was estimated, and stacking must leave that record as it was --
+    # so that the stacked table, or the file written from it, can be
+    # transformed again.
+    night = _two_band_night()
+    kwargs = {"calibrate_unmatched": True, "color_fallback_column": "color_est"}
+
+    observed = _estimate_colors(mocker, night.catalog, night.observed)
+    recorded = dict(observed.meta["color_est_bands"])
+
+    pieces = []
+    for band in ("R", "I"):
+        piece = observed[observed["passband"] == band].group_by("file")
+        _run_transform_to_catalog(
+            mocker, night.catalog, piece, obs_filter=band, **kwargs
+        )
+        pieces.append(piece)
+    stacked = vstack(pieces, join_type="outer")
+
+    assert stacked.meta["color_est_bands"] == recorded
+
+    again = _run_transform_to_catalog(
+        mocker, night.catalog, stacked.group_by("file"), obs_filter="R", **kwargs
+    )
+    rows = _target_rows(again, night, "R")
+    np.testing.assert_allclose(
+        again["mag_cal"][rows], night.true_mag["R"][-1], rtol=0, atol=1e-5
+    )

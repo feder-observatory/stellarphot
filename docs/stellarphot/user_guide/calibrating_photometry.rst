@@ -226,8 +226,22 @@ Notes explain why the fit's own, tighter limit is not a keyword.
 
 A target the catalog does not hold at all -- a supernova, say -- is NaN for
 the same reason, and no ``match_radius`` will find it. Pass
-``calibrate_unmatched=True`` to give it a ``mag_cal`` anyway. That works only
-when no color term (``c`` or ``d``) is being fit, and the default ``vary``
-fits ``c``, so the color term has to be turned off in the same call::
+``calibrate_unmatched=True`` to give it a ``mag_cal`` anyway. On its own
+that works only when no color term (``c`` or ``d``) is being fit, and the
+default ``vary`` fits ``c``, so the color term has to be turned off in the
+same call::
 
     transform_to_catalog(..., vary=("a", "z"), calibrate_unmatched=True)
+
+To keep the color term, the color can be estimated from the observations
+instead. Before transforming any passband, call
+:func:`~stellarphot.utils.magnitude_transforms.estimate_catalog_colors` on
+the table holding all of them. It adds a ``color_est`` column: for each
+star, each night, the catalog-system color implied by the star's own
+instrumental magnitudes in the two bands of the color. Then pass
+``color_fallback_column="color_est"`` to each
+:func:`~stellarphot.utils.magnitude_transforms.transform_to_catalog` call.
+The estimate is used only for stars the catalog has no color for and never
+enters the fit, and its uncertainty is carried into ``mag_cal_error``. A star
+needs observations in both bands of the color on the same night to get one;
+the bundled notebook does all of this when a color term is in ``vary``.
