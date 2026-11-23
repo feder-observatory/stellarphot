@@ -491,12 +491,13 @@ def _viewer_with_variables_near_target(arcsec_from_target):
 def test_variable_that_is_a_target_gets_target_star_id_not_a_nearer_variables():
     # The variable 1.9 arcsec from the target is the target. It is nearer to
     # the variable at 2.1 arcsec, a different star, than it is to the target.
-    comparison_widget, _ = _viewer_with_variables_near_target([1.9, 2.1])
+    comparison_widget, _ = _viewer_with_variables_near_target([2.1, 1.9])
 
     variables = comparison_widget.variables
 
-    star_ids = dict(zip(variables["Name"], variables["star_id"], strict=True))
-    assert star_ids == {1.9: 1, 2.1: 2}
+    # The rows are in star_id order, whatever order the variables were in.
+    assert list(variables["Name"]) == [1.9, 2.1]
+    assert list(variables["star_id"]) == [1, 2]
 
 
 def test_clicking_a_target_excludes_the_variable_that_is_the_target():

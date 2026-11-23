@@ -528,6 +528,7 @@ class ComparisonViewer:
             star_id[~is_target] = vsx_rows["star_id"][idx]
 
         our_vsx["star_id"] = star_id
+        our_vsx.sort("star_id")
         return our_vsx
 
     def _set_object(self):
