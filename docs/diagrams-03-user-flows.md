@@ -49,7 +49,7 @@ flowchart LR
         direction TB
         a_open["Open a FITS image,<br/>click on target star"]:::action
         w_seeing["SeeingProfileWidget:<br/>pick aperture radius from<br/>radial profile and SNR"]:::widget
-        w_comp["ComparisonViewer:<br/>select comparison stars<br/>(APASS, VSX overlays)"]:::widget
+        w_comp["ComparisonViewer:<br/>use an existing source list,<br/>or generate one<br/>(catalog and VSX overlays)"]:::widget
     end
 
     subgraph sg_nb3["3 - Review settings"]
@@ -76,7 +76,7 @@ flowchart LR
     a_open --> w_seeing
     w_seeing --> w_comp
     w_seeing -.->|"aperture settings"| partial
-    w_comp -.->|"writes"| srclist
+    w_comp -.->|"writes, or copies an<br/>existing list, on save"| srclist
     w_comp -.->|"source list path"| partial
     w_review3 -.->|"reads"| partial
     saved -.->|"choose camera /<br/>observatory"| w_review3

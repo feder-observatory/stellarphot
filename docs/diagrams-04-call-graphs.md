@@ -704,11 +704,15 @@ flowchart LR
     cv_setup["_init()"]:::cls
     cv_viewer["_viewer()"]:::cls
     cv_table["generate_table()"]:::cls
+    cv_regen["_regenerate()"]:::cls
+    cv_load["_load_source_list()"]:::cls
+    cv_save["_save_source_list()"]:::cls
     cv_saveloc["_write_source_list()"]:::cls
     cv_saveap["_save_aperture_to_file()"]:::cls
     cv_tess["tess_field_view() /<br/>tess_field_zoom_view()"]:::cls
     markers["make_markers()"]:::fn
     wrapfn["wrap()"]:::fn
+    readlist["_read_source_list()"]:::fn
 
     fo["FitsOpener"]:::external
     setup_ext["comparison_utils.set_up()"]:::external
@@ -727,9 +731,13 @@ flowchart LR
     cv_setup --> markers
     cv_viewer --> keybind
     cv_viewer --> wrapfn
+    cv_regen --> cv_setup
+    cv_load --> readlist
+    readlist --> sld
+    cv_save --> cv_saveloc
     cv_saveloc --> cv_saveap
     cv_saveap --> sld
-    cv_saveloc -.->|"writes"| locfile
+    cv_saveloc -.->|"writes, or copies<br/>an existing list"| locfile
     cv_saveap --> cv_table
     cv_tess --> markers
 
@@ -737,6 +745,10 @@ flowchart LR
     click cv_setup href "../stellarphot/gui/comparison_functions.py" "comparison_functions.py"
     click cv_viewer href "../stellarphot/gui/comparison_functions.py" "comparison_functions.py"
     click cv_table href "../stellarphot/gui/comparison_functions.py" "comparison_functions.py"
+    click cv_regen href "../stellarphot/gui/comparison_functions.py" "comparison_functions.py"
+    click cv_load href "../stellarphot/gui/comparison_functions.py" "comparison_functions.py"
+    click cv_save href "../stellarphot/gui/comparison_functions.py" "comparison_functions.py"
+    click readlist href "../stellarphot/gui/comparison_functions.py" "comparison_functions.py"
     click cv_saveloc href "../stellarphot/gui/comparison_functions.py" "comparison_functions.py"
     click cv_saveap href "../stellarphot/gui/comparison_functions.py" "comparison_functions.py"
     click cv_tess href "../stellarphot/gui/comparison_functions.py" "comparison_functions.py"

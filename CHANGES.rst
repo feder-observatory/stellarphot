@@ -49,14 +49,14 @@ New Features
   errors. It is NaN for an unweighted fit. [#697]
 + The comparison star viewer can draw comparison stars from ATLAS refcat2 as
   well as APASS DR9, and has on-screen controls for the catalog and the
-  bright and dim magnitude limits (in SR); saving them with the save bar
-  reloads the markers. [#746]
-+ The comparison star viewer first asks whether to use an existing source
-  list (view only, so several nights share star ids and comparison stars) or
-  to generate one from the catalogs. The source list is no longer written
-  when an image is chosen: the save bar writes it, or copies the existing
-  list to the source list file, and asks before replacing a file it did not
-  write. [#751]
+  bright and dim magnitude limits (in SR); a Regenerate button reloads the
+  markers with them. [#746, #751]
++ The comparison star viewer first asks whether to generate a source list
+  from the catalogs or to use an existing one, shown view only, so that
+  several nights can share star ids and comparison stars. The source list is
+  no longer written when an image is chosen: the save bar writes it, or
+  copies the existing list to the source list file, and asks before
+  replacing a file that is already there. [#751]
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
