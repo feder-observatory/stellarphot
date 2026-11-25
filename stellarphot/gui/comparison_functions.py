@@ -1,5 +1,7 @@
 import html
 import logging
+import shutil
+from pathlib import Path
 
 import ipyautoui
 import ipywidgets as ipw
@@ -15,7 +17,7 @@ from ipyautoui.custom import FileChooser
 from ipyautoui.custom.buttonbars import SaveButtonBar
 
 from stellarphot import SourceListData
-from stellarphot.gui.custom_widgets import SettingWithTitle, Spinner
+from stellarphot.gui.custom_widgets import Confirm, SettingWithTitle, Spinner
 from stellarphot.gui.fits_opener import FitsOpener
 from stellarphot.gui.views import ui_generator
 from stellarphot.settings import (
@@ -37,6 +39,52 @@ DESC_STYLE = {"description_width": "initial"}
 # Markers this close together are one star; catalog positions of a star can
 # differ by tenths of an arcsecond.
 TARGET_MATCH_RADIUS = 2 * u.arcsec
+
+# At most this many star_ids are listed in a message.
+MAX_IDS_LISTED = 10
+
+# What the help and the legend say depends on whether an existing source
+# list is shown or one is generated.
+_PAN_ZOOM_HELP = "<h3>Click and drag to pan, use the scroll wheel to zoom.</h3>"
+_HELP = {
+    "existing": _PAN_ZOOM_HELP
+    + """
+        <h3>An existing source list is view only: clicking a star does not
+        change the list. To choose stars, generate a source list.</h3>
+        """,
+    "generate": _PAN_ZOOM_HELP
+    + """
+        <h3>Click on a star to mark it with a red +; click again to unmark
+        it. Marked stars are still saved in the source list. Once a star is
+        marked the labels are renumbered without it, so they no longer match
+        the star_id values in the saved source list.</h3>
+        """,
+}
+_LEGEND = {
+    "existing": """
+        <ul>
+        <li>Green circles -- Targets in the source list</li>
+        <li>Red diamonds -- Comparison stars in the source list</li>
+        <li>Blue squares -- Variables in the source list</li>
+        </ul>
+        """,
+    "generate": """
+        <ul>
+        <li>Green circles -- Gaia stars within 2.5 arcmin of target</li>
+        <li>Red diamonds -- Comparison stars from the chosen catalog</li>
+        <li>Blue squares -- VSX variables</li>
+        <li>Red + -- Marked by clicking (still saved in the source list)</li>
+        </ul>
+        """,
+}
+_SAVE_TOOLTIP = (
+    "Write the source list shown to the source list file named in the "
+    "source location settings"
+)
+_NO_VARIABLES_TOOLTIP = (
+    "Not available for an existing source list: the variable star catalog "
+    "is not queried"
+)
 
 
 def _coord_catalog_table(table):
@@ -126,6 +174,57 @@ def _all_catalog_entries(iw):
     # which typically conflicts between catalogs (e.g. the Vizier catalog
     # name). The metadata is not used here, so drop it silently.
     return vstack(tables, metadata_conflicts="silent")
+
+
+def _read_source_list(path):
+    """
+    Read a source list made by the comparison viewer, adding a "coord" column
+    of star positions (NaN where masked). Raise `ValueError`, saying why, if
+    the file is not a source list the viewer can show and photometry can use.
+    """
+    try:
+        sources = SourceListData.read(path)
+    except Exception as err:
+        raise ValueError(f"it could not be read as a source list ({err})") from err
+
+    # SourceListData.read does not check the columns (issue #756). Photometry
+    # reads the pixel columns and has_x_y even when it uses sky positions.
+    missing = [
+        name
+        for name in ("star_id", "marker name", "ra", "dec", "xcenter", "ycenter")
+        if name not in sources.colnames
+    ]
+    if missing:
+        raise ValueError(f"it has no {' or '.join(missing)} column")
+    if not sources.meta.get("has_ra_dec"):
+        raise ValueError(
+            "it was not saved as a stellarphot source list with sky "
+            "positions (has_ra_dec is not true in its metadata)"
+        )
+    if "has_x_y" not in sources.meta:
+        raise ValueError(
+            "it was not saved as a stellarphot source list (there is no "
+            "has_x_y in its metadata)"
+        )
+    # Names read from a file may be numbers, or masked (shown as --) where
+    # the file has a blank.
+    unknown = {str(name) for name in sources["marker name"]} - {
+        "TESS Targets",
+        "VSX",
+        "APASS comparison",
+    }
+    if unknown:
+        raise ValueError(f"it has unknown marker names {', '.join(sorted(unknown))}")
+
+    try:
+        # A masked position is NaN, so the star counts as off the image.
+        ra, dec = sources["ra"], sources["dec"]
+        if isinstance(ra, Masked) or isinstance(dec, Masked):
+            ra, dec = Masked(ra).filled(np.nan), Masked(dec).filled(np.nan)
+        sources["coord"] = SkyCoord(ra, dec)
+    except Exception as err:
+        raise ValueError(f"its star positions could not be read ({err})") from err
+    return sources
 
 
 def make_markers(iw, RD, vsx, ent, name_or_coord=None):
@@ -358,7 +457,7 @@ class ComparisonViewer:
         self._file_chooser = FitsOpener()
 
         # On-screen controls for the comparison star settings, copied to the
-        # attributes when they are saved.
+        # attributes when the catalogs are queried with them.
         self._comparison_catalog_choice = ipw.Dropdown(
             options=["APASS DR9", "ATLAS refcat2"],
             value=comparison_catalog,
@@ -377,24 +476,63 @@ class ComparisonViewer:
             style=DESC_STYLE,
             layout={"width": "220px"},
         )
+        self._regenerate_button = ipw.Button(
+            description="Regenerate",
+            tooltip=(
+                "Query the catalogs with these settings and show the stars "
+                "found. Nothing is saved."
+            ),
+            disabled=True,
+        )
+        # The first question: use an existing source list, or generate one.
+        self._mode = ipw.ToggleButtons(
+            options=[
+                ("Use an existing source list", "existing"),
+                ("Generate a source list", "generate"),
+            ],
+            value=None,
+            description="Source list:",
+            # The default button width cuts both labels short.
+            style={**DESC_STYLE, "button_width": "auto"},
+        )
+
+        # Saves the source list. The bar's own handlers would mark it saved
+        # even while it is waiting for confirmation, so they are replaced.
         self._comparison_save_bar = SaveButtonBar()
-        self._comparison_save_bar.bn_save.tooltip = (
-            "Re-query the catalog; resets any stars you removed"
-        )
-        self._comparison_save_bar.fns_onsave_add_action(self._save_comparison_settings)
-        self._comparison_save_bar.fns_onrevert_add_action(
-            self._revert_comparison_settings
-        )
+        save_bar = self._comparison_save_bar
+        save_bar.bn_save.tooltip = _SAVE_TOOLTIP
+        save_bar.bn_save.on_click(save_bar._save, remove=True)
+        save_bar.bn_save.on_click(self._save_clicked)
+        save_bar.bn_revert.on_click(save_bar._revert, remove=True)
+        save_bar.bn_revert.on_click(self._revert_comparison_settings)
+        self._confirm_overwrite = Confirm(widget_to_hide=save_bar)
 
         self._directory = directory
         self.target_mag = target_mag
         self.bright_mag_limit = bright_mag_limit
         self.dim_mag_limit = dim_mag_limit
         self.comparison_catalog = comparison_catalog
-        self._comparison_settings_changed()
         self.targets_from_file = targets_from_file
         self.target_coord = object_coordinate
         self.observatory = observatory
+
+        # An existing source list chosen to be shown, its path, and its stars
+        # on the current image.
+        self._loaded_source_list = None
+        self._loaded_source_list_path = None
+        self._loaded_stars = None
+        # The stars the catalog queries found, and the image they were found
+        # for, kept so that coming back to generating a list does not query
+        # again: (image path, targets, variables, comparison stars).
+        self._generated = None
+        # Counts the catalog queries, to tell one generated list from the next.
+        self._generation = 0
+        # What the last save wrote and where: (the path of the existing list
+        # copied, or the generation of the generated list; the file written).
+        # Saving to that file again replaces it without asking.
+        self._saved = (None, None)
+        # The file the user was last asked about replacing.
+        self._asked_about = None
 
         # This function defines several attributes in addition to returning the box and
         # image viewer. You should take a look at it to see what it does.
@@ -411,11 +549,11 @@ class ComparisonViewer:
 
         if file:
             self._file_chooser.set_file(file, directory=directory)
-            self._set_file(None)
 
         # Save the source location settings
         self.source_locations.savebuttonbar.bn_save.click()
 
+        self._update_save_bar()
         self._make_observers()
 
     def _init(self):
@@ -428,8 +566,26 @@ class ComparisonViewer:
         self.ccd = self.fits_file.ccd
         self.fits_file.load_in_image_widget(self.iw)
 
+        legend = self._legend
+        if self._mode.value == "existing":
+            self._set_object()
+            # Drop any message from an earlier catalog query.
+            self._legend_spinner_box.children = [legend]
+            if self._loaded_source_list is not None:
+                self._show_loaded_source_list()
+            return
+
+        if self._have_generated_stars():
+            self._show_generated_stars()
+            return
+
+        # A new query uses the settings on screen.
+        if self._dim_mag_limit_input.value > self._bright_mag_limit_input.value:
+            self.comparison_catalog = self._comparison_catalog_choice.value
+            self.bright_mag_limit = self._bright_mag_limit_input.value
+            self.dim_mag_limit = self._dim_mag_limit_input.value
+
         spinner = Spinner(message="Loading variable/comparison stars")
-        legend = self._legend_spinner_box.children[0]
         spinner.start()
         self._legend_spinner_box.children = [spinner]
         self.help_stuff.selected_index = 1
@@ -459,20 +615,18 @@ class ComparisonViewer:
 
             apass_comps = in_field(apass_good_coord, self.ccd, apass, good_stars)
 
-            # Set the object here so that the viewer is properly centered
-            self._set_object()
-
-            make_markers(
-                self.iw,
+            self._generated = (
+                self.fits_file.path,
                 self.targets_from_file,
                 self.vsx,
                 apass_comps,
-                name_or_coord=self.target_coord,
             )
+            self._show_generated_stars()
         except Exception as err:
             # An exception raised here is invisible to the user -- this runs in
             # a widget callback, whose traceback only goes to the log -- so put
             # the error on screen, then re-raise so the log gets the traceback.
+            self._generated = None
             error_message = ipw.HTML(
                 value="<p style='color: red'>Loading variable/comparison stars "
                 f"failed: {html.escape(str(err))}</p>"
@@ -480,15 +634,35 @@ class ComparisonViewer:
             self._legend_spinner_box.children = [legend, error_message]
             raise
         else:
-            children = [legend]
-            if len(apass_comps) == 0:
-                message = "No comparison stars found within the magnitude limits"
-                if len(self.generate_table()) == 0:
-                    # Nothing at all is marked, so no source list is written
-                    # and one from an earlier load would be left as it was.
-                    message += "; the source list was not updated"
-                children.append(ipw.HTML(value=f"<p style='color: red'>{message}</p>"))
-            self._legend_spinner_box.children = children
+            self._generation += 1
+
+    def _have_generated_stars(self):
+        """
+        Whether the catalogs have been queried for the image chosen.
+        """
+        return self._generated is not None and (
+            self._generated[0] == self.fits_file.path
+        )
+
+    def _show_generated_stars(self):
+        """
+        Mark the stars the catalog queries found.
+        """
+        _, targets, vsx, comparisons = self._generated
+        # Set the object here so that the viewer is properly centered
+        self._set_object()
+        make_markers(
+            self.iw, targets, vsx, comparisons, name_or_coord=self.target_coord
+        )
+        children = [self._legend]
+        if len(comparisons) == 0:
+            children.append(
+                ipw.HTML(
+                    value="<p style='color: red'>No comparison stars found "
+                    "within the magnitude limits</p>"
+                )
+            )
+        self._legend_spinner_box.children = children
 
     @property
     def fits_file(self):
@@ -545,8 +719,19 @@ class ComparisonViewer:
             self.object_name.value = "<h2>Object unknown</h2>"
             self._object = ""
 
-        # The first object in the input source list aka target file, if there
-        # is one, is the target, whatever the image header calls the object.
+        # The first target in an existing source list that is on the image,
+        # or else the first object in the input source list aka target file,
+        # if there is one, is the target, whatever the image header calls the
+        # object.
+        if self._mode.value == "existing" and self._loaded_source_list is not None:
+            sources = self._loaded_source_list
+            targets = sources["coord"][sources["marker name"] == "TESS Targets"]
+            if len(targets) > 0:
+                targets = targets[self._on_image(targets)[2]]
+            if len(targets) > 0:
+                self.target_coord = targets[0]
+                return
+
         if self.targets_from_file:
             self.target_coord = self.targets_from_file["coords"][0]
             return
@@ -560,19 +745,6 @@ class ComparisonViewer:
             self.target_coord = self.ccd.wcs.pixel_to_world(
                 self.ccd.shape[1] / 2, self.ccd.shape[0] / 2
             )
-
-    def _save_source_location_file(self):
-        """
-        Save the source location file.
-        """
-        # Save the initial source list if there is a file name for it and if the target
-        # coordinates are known. The target coordinates are needed to generate the
-        # source list table.
-        if (
-            self.source_locations.value["source_list_file"] is not None
-            and self.target_coord is not None
-        ):
-            self._save_aperture_to_file(None)
 
     def _set_file(self, change):  # noqa: ARG002
         """
@@ -588,56 +760,347 @@ class ComparisonViewer:
         self.targets_from_file = SourceListData.read(input_source_list_name)
         self._update_comparisons()
 
-    def _save_comparison_settings(self):
-        previous = (self.comparison_catalog, self.bright_mag_limit, self.dim_mag_limit)
-        self.comparison_catalog = self._comparison_catalog_choice.value
-        self.bright_mag_limit = self._bright_mag_limit_input.value
-        self.dim_mag_limit = self._dim_mag_limit_input.value
-        image_chosen = self._image_chosen()
-        if image_chosen:
-            try:
-                self._reload_comparisons()
-            except Exception:
-                # The stars on screen are still the ones for the previous
-                # settings, so keep those settings; the save can be retried.
-                self.comparison_catalog, self.bright_mag_limit, self.dim_mag_limit = (
-                    previous
-                )
-                raise
-        self._comparison_settings_changed()
-        if image_chosen:
-            try:
-                self._save_source_location_file()
-            except Exception as err:
-                # The new stars are showing, so the new settings stay. Show the
-                # error, since the traceback only goes to the log.
-                self._comparison_save_bar.message.value = (
-                    f"<span style='color: red'>{html.escape(str(err))}</span>"
-                )
-                raise
+    def _mode_changed(self, change):
+        """
+        Show the controls for the mode chosen and the stars for it.
+        """
+        mode = change["new"]
+        existing = mode == "existing"
+        self._existing_list_controls.layout.display = "flex" if existing else "none"
+        self._generate_list_controls.layout.display = "none" if existing else "flex"
+        self._rest_of_viewer.layout.display = "flex"
+        self._help.value = _HELP[mode]
+        self._legend.value = _LEGEND[mode]
+        # The variables come from the catalog query, which is not made for an
+        # existing source list.
+        self._save_var_info.disabled = existing
+        self._save_var_info.tooltip = _NO_VARIABLES_TOOLTIP if existing else ""
+        self._status_message.value = ""
+        self._update_comparisons(requery=False)
 
-    def _revert_comparison_settings(self):
+    def _source_list_chosen(self, change):
+        """
+        Load the existing source list chosen to be shown.
+        """
+        # "." is the value the chooser is reset to, not a choice.
+        if change["new"] != ".":
+            self._load_source_list(change["new"])
+
+    def _load_source_list(self, path):
+        """
+        Show the existing source list at ``path``.
+
+        Parameters
+        ----------
+
+        path : str
+            Path of the source list.
+
+        Notes
+        -----
+        The list is view only: clicking does not exclude stars. Saving copies
+        it to the source list file. A file that is not a usable source list
+        leaves the viewer as it was, with a message saying why.
+        """
+        name = Path(path).name
+        try:
+            sources = _read_source_list(path)
+        except ValueError as err:
+            message = f"{name} is not a usable source list: {err}."
+            if self._loaded_source_list is not None:
+                message += f" Still showing {Path(self._loaded_source_list_path).name}."
+            self._source_list_message.value = (
+                f"<span style='color: red'>{html.escape(message)}</span>"
+            )
+            self._reset_source_list_chooser()
+            return
+
+        self._loaded_source_list = sources
+        self._loaded_source_list_path = str(path)
+        self._loaded_stars = None
+        self._status_message.value = ""
+        self._source_list_message.value = html.escape(
+            f"Showing {name}, view only. The save button below the image "
+            "chooser copies it to the source list file."
+        )
+        self._update_comparisons()
+
+    def _reset_source_list_chooser(self):
+        # After this, choosing any file, even the last one again, is a change.
+        self._choose_source_list.reset()
+        self._choose_source_list._value = "."
+
+    def _on_image(self, coords):
+        """
+        The pixel positions of ``coords`` on the image, and whether each is
+        on the image.
+        """
+        x, y = self.ccd.wcs.world_to_pixel(coords)
+        n_y, n_x = self.ccd.shape
+        # Stars on the edge count as on the image. NaN positions are off it.
+        return x, y, (x >= 0) & (x <= n_x) & (y >= 0) & (y <= n_y)
+
+    def _show_loaded_source_list(self):
+        """
+        Mark the stars of the loaded source list that are on the image, and
+        list the ``star_id`` of those that are not.
+        """
+        sources = self._loaded_source_list
+        x, y, on_image = self._on_image(sources["coord"])
+        on = sources[on_image]
+        self._loaded_stars = Table(
+            {
+                "x": x[on_image],
+                "y": y[on_image],
+                "coord": on["coord"],
+                "marker name": on["marker name"],
+                "star_id": on["star_id"],
+            }
+        )
+
+        def stars(marker_name):
+            return Table({"coords": on["coord"][on["marker name"] == marker_name]})
+
+        make_markers(
+            self.iw,
+            stars("TESS Targets"),
+            stars("VSX"),
+            stars("APASS comparison"),
+            name_or_coord=self.target_coord,
+        )
+
+        children = [self._legend]
+        off_ids = [str(star_id) for star_id in sources["star_id"][~on_image]]
+        if off_ids:
+            listed = ", ".join(off_ids[:MAX_IDS_LISTED])
+            if len(off_ids) > MAX_IDS_LISTED:
+                listed += f" and {len(off_ids) - MAX_IDS_LISTED} more"
+            if len(on) == 0:
+                # Most likely a source list for another field.
+                name = Path(self._loaded_source_list_path).name
+                style = " style='color: red'"
+                message = (
+                    f"None of the {len(off_ids)} stars in {name} are on this "
+                    f"image. Is it the source list for this field? (star_id "
+                    f"{listed})"
+                )
+            else:
+                style = ""
+                stars_are = "star is" if len(off_ids) == 1 else "stars are"
+                message = (
+                    f"{len(off_ids)} {stars_are} off this image and not "
+                    f"marked: star_id {listed}"
+                )
+            children.append(ipw.HTML(value=f"<p{style}>{html.escape(message)}</p>"))
+        self._legend_spinner_box.children = children
+        self.help_stuff.selected_index = 1
+
+    def _regenerate(self, button=None):  # noqa: ARG002
+        """
+        Query the catalogs with the settings on screen and show the stars
+        found. Nothing is written.
+        """
+        previous = (
+            self.comparison_catalog,
+            self.bright_mag_limit,
+            self.dim_mag_limit,
+            self._generated,
+        )
+        self._generated = None
+        try:
+            self._reload_comparisons()
+        except Exception:
+            # The stars on screen are still the ones for the previous
+            # settings, so keep those settings; it can be tried again.
+            (
+                self.comparison_catalog,
+                self.bright_mag_limit,
+                self.dim_mag_limit,
+                self._generated,
+            ) = previous
+            raise
+        finally:
+            self._update_save_bar()
+
+    def _save_clicked(self, button=None):  # noqa: ARG002
+        # Clear any message from the last save.
+        self._update_save_bar()
+        self._save_source_list()
+
+    def _save_source_list(self, confirmed=None):
+        """
+        Write the source list if it needs saving, first asking before
+        replacing a file, unless it is the file this session wrote last.
+
+        Parameters
+        ----------
+
+        confirmed : `pathlib.Path`, optional
+            Resolved path of a file the user has agreed to replace.
+        """
+        if self._settings_not_applied() or not self._source_list_needs_saving():
+            return
+        destination = Path(self.photom_apertures_file).resolve()
+        # Without overwrite_outputs the write is refused, with a message, so
+        # there is nothing to ask.
+        if (
+            destination.exists()
+            and self.overwrite_outputs
+            and destination not in (self._saved[1], confirmed)
+        ):
+            self._asked_about = destination
+            self._confirm_overwrite.message = (
+                f"{html.escape(self.photom_apertures_file)} already exists. "
+                "Replace it with the source list shown? No keeps the old "
+                "file, which photometry will use."
+            )
+            # Reset so that the answer is a change even if it is the same as
+            # the last one.
+            self._confirm_overwrite.value = None
+            self._confirm_overwrite.show()
+            return
+        self._write_source_list()
+
+    def _overwrite_answered(self, change):
+        # What is on screen may have changed while the question was showing,
+        # so go through the checks again.
+        if change["new"]:
+            self._save_source_list(confirmed=self._asked_about)
+
+    def _write_source_list(self):
+        """
+        Write the source list to the source list file, or copy the existing
+        source list there.
+        """
+        destination = self.photom_apertures_file
+        resolved = Path(destination).resolve()
+        loaded = self._loaded_source_list_path
+        try:
+            if self._mode.value == "existing":
+                if resolved.exists() and not self.overwrite_outputs:
+                    raise OSError(
+                        f"Existing file ({destination}) can not be overwritten. "
+                        "Set overwrite_outputs=True to address this."
+                    )
+                shutil.copyfile(loaded, destination)
+                self._saved = (Path(loaded).resolve(), resolved)
+                done = f"Copied {Path(loaded).name} to {destination}"
+            else:
+                self._save_aperture_to_file(None)
+                self._saved = (self._generation, resolved)
+                done = f"Source list saved to {destination}"
+        except Exception as err:
+            # Show the error, since the traceback only goes to the log.
+            self._comparison_save_bar.message.value = (
+                f"<span style='color: red'>{html.escape(str(err))}</span>"
+            )
+            raise
+        if (
+            self._mode.value == "generate"
+            and loaded is not None
+            and Path(loaded).resolve() == resolved
+        ):
+            # The existing list that was chosen is no longer what is in its
+            # file, so it is not shown again as if it were.
+            self._loaded_source_list = None
+            self._loaded_source_list_path = None
+            self._loaded_stars = None
+            self._reset_source_list_chooser()
+            self._source_list_message.value = html.escape(
+                f"{Path(loaded).name} was replaced by the generated source "
+                "list, so it is no longer shown. Choose a source list."
+            )
+        self._update_save_bar()
+        self._comparison_save_bar.message.value = f"<i>{html.escape(done)}</i>"
+
+    def _revert_comparison_settings(self, button=None):  # noqa: ARG002
         self._comparison_catalog_choice.value = self.comparison_catalog
         self._bright_mag_limit_input.value = self.bright_mag_limit
         self._dim_mag_limit_input.value = self.dim_mag_limit
 
-    def _comparison_settings_changed(self, change=None):  # noqa: ARG002
-        bright = self._bright_mag_limit_input.value
-        dim = self._dim_mag_limit_input.value
-        unsaved = (
-            self._comparison_catalog_choice.value,
-            bright,
-            dim,
-        ) != (self.comparison_catalog, self.bright_mag_limit, self.dim_mag_limit)
-        # Any other limits are usable; if no stars fall within them a message
-        # says so after the reload.
-        problem = "" if dim > bright else "Dim limit must be fainter than bright limit"
-        self._comparison_save_bar.message.value = (
-            f"<span style='color: red'>{problem}</span>" if problem else ""
+    def _settings_not_applied(self):
+        """
+        Whether the stars shown were found with settings other than those on
+        screen.
+        """
+        # The settings are only used, and only shown, when generating a
+        # source list, and with no image there are no stars.
+        return (
+            self._mode.value == "generate"
+            and self._image_chosen()
+            and (
+                self._comparison_catalog_choice.value,
+                self._bright_mag_limit_input.value,
+                self._dim_mag_limit_input.value,
+            )
+            != (self.comparison_catalog, self.bright_mag_limit, self.dim_mag_limit)
         )
-        self._comparison_save_bar.unsaved_changes = unsaved
-        self._comparison_save_bar.bn_save.disabled = not unsaved or bool(problem)
-        self._comparison_save_bar.bn_revert.disabled = not unsaved
+
+    def _source_list_needs_saving(self):
+        """
+        Whether there is a source list on screen that is not yet in the
+        source list file.
+        """
+        destination = Path(self.photom_apertures_file).resolve()
+        if self._mode.value == "existing":
+            if self._loaded_source_list_path is None:
+                return False
+            chosen = Path(self._loaded_source_list_path).resolve()
+            return chosen != destination and (chosen, destination) != self._saved
+        if self._mode.value == "generate":
+            return (
+                len(self._marked_stars(include_excluded=True)) > 0
+                and (self._generation, destination) != self._saved
+            )
+        return False
+
+    def _update_save_bar(self, change=None):  # noqa: ARG002
+        """
+        Enable the save and regenerate buttons if there is anything for them
+        to do, and say what there is to do.
+        """
+        generate = self._mode.value == "generate"
+        not_applied = self._settings_not_applied()
+        list_unsaved = self._source_list_needs_saving()
+        # Any other limits are usable; if no stars fall within them a message
+        # says so after the query.
+        bad_limits = not_applied and (
+            self._dim_mag_limit_input.value <= self._bright_mag_limit_input.value
+        )
+        destination = self.photom_apertures_file
+        if bad_limits:
+            message = "Dim limit must be fainter than bright limit"
+        elif not_applied:
+            message = (
+                "Click Regenerate to show the stars for these settings before saving"
+            )
+        elif list_unsaved and generate:
+            message = f"The source list has not been saved to {destination} yet"
+        elif list_unsaved:
+            name = Path(self._loaded_source_list_path).name
+            message = f"{name} has not been copied to {destination} yet"
+        elif (
+            generate
+            and self._image_chosen()
+            and len(self._marked_stars(include_excluded=True)) == 0
+        ):
+            message = "There is no source list to save"
+        else:
+            message = ""
+        save_bar = self._comparison_save_bar
+        save_bar.message.value = (
+            f"<span style='color: red'>{html.escape(message)}</span>" if message else ""
+        )
+        save_bar.unsaved_changes = not_applied or list_unsaved
+        # The file always holds the stars for the settings on screen.
+        save_bar.bn_save.disabled = not_applied or not list_unsaved
+        save_bar.bn_revert.disabled = not not_applied
+        # Also enabled to try again after a query that failed.
+        self._regenerate_button.disabled = (
+            not (generate and self._image_chosen())
+            or bad_limits
+            or not (not_applied or not self._have_generated_stars())
+        )
 
     def _image_chosen(self):
         return self._file_chooser.file_chooser.value != "."
@@ -652,11 +1115,29 @@ class ComparisonViewer:
             if self._show_labels_button.value:
                 self.show_labels()
 
-    def _update_comparisons(self):
-        # Reload the stars and save the source list, if an image has been chosen.
-        if self._image_chosen():
-            self._reload_comparisons()
-            self._save_source_location_file()
+    def _update_comparisons(self, requery=True):
+        """
+        Show the stars for the mode chosen, if an image has been chosen.
+        Nothing is written until the save bar is clicked.
+
+        Parameters
+        ----------
+        requery : bool, optional
+            Whether to query the catalogs even if the stars for this image
+            have already been found.
+        """
+        try:
+            if self._mode.value is not None and self._image_chosen():
+                # Take the stars shown before off the image, so that they are
+                # not left on it if the catalog query fails. A failed
+                # Regenerate keeps them, since they are still the stars for
+                # the settings in use.
+                self.iw.remove_catalog(catalog_label="*")
+                if requery and self._mode.value == "generate":
+                    self._generated = None
+                self._reload_comparisons()
+        finally:
+            self._update_save_bar()
 
     def _make_observers(self):
         for control in (
@@ -664,11 +1145,16 @@ class ComparisonViewer:
             self._bright_mag_limit_input,
             self._dim_mag_limit_input,
         ):
-            control.observe(self._comparison_settings_changed, names="value")
+            control.observe(self._update_save_bar, names="value")
+        self.source_locations.observe(self._update_save_bar, names="_value")
+        self._mode.observe(self._mode_changed, names="value")
+        self._confirm_overwrite.observe(self._overwrite_answered, names="value")
+        self._regenerate_button.on_click(self._regenerate)
         self._show_labels_button.observe(self._show_label_button_handler, names="value")
         self._save_var_info.on_click(self._save_variables_to_file)
         self._file_chooser.file_chooser.observe(self._set_file, names="_value")
         self._choose_input_source_list.observe(self._set_target_file, names="_value")
+        self._choose_source_list.observe(self._source_list_chosen, names="_value")
 
     def _save_variables_to_file(self, button=None, filename=""):  # noqa: ARG002
         """
@@ -707,8 +1193,9 @@ class ComparisonViewer:
         if not filename:
             filename = self.photom_apertures_file
 
-        # Convert aperture table into a SourceList objects and output
-        targets_table = self.generate_table()
+        # Convert aperture table into a SourceList objects and output. Stars
+        # excluded by clicking are kept, for now (issue #752).
+        targets_table = self.generate_table(include_excluded=True)
         if len(targets_table) == 0:
             return
         # Assign units to columns
@@ -769,26 +1256,27 @@ class ComparisonViewer:
         self.source_and_title.decorate_title()
 
     def _viewer(self):
-        header = ipw.HTML(value="""
-        <h3>Click and drag to pan, use the scroll wheel to zoom.</h3>
-        <h3>Click on a star to exclude it as target or comp.
-        Click again to include it.</h3>
-        """)
-
-        legend = ipw.HTML(value="""
-        <ul>
-        <li>Green circles -- Gaia stars within 2.5 arcmin of target</li>
-        <li>Red diamonds -- Comparison stars from the chosen catalog</li>
-        <li>Blue squares -- VSX variables</li>
-        <li>Red + -- Exclude as target or comp</li>
-        </ul>
-        """)
+        self._help = ipw.HTML(value=_HELP["generate"])
+        self._legend = ipw.HTML(value=_LEGEND["generate"])
 
         iw = ImageWidget()
 
         # Messages for the user (e.g. "Click closer to a star") show up here.
         self._status_message = ipw.HTML()
-        iw._astro_im.interaction.on_msg(wrap(iw, self._status_message))
+        select_stars = wrap(iw, self._status_message)
+
+        def click_handler(interaction, event_data, buffers):
+            # An existing source list is view only, so clicks do not exclude
+            # stars.
+            if self._mode.value != "existing":
+                select_stars(interaction, event_data, buffers)
+            elif event_data.get("event") == "click":
+                self._status_message.value = (
+                    "An existing source list is view only; generate a source "
+                    "list to choose stars"
+                )
+
+        iw._astro_im.interaction.on_msg(click_handler)
 
         self.object_name = ipw.HTML(value="<h2>Object: </h2>")
         self._object = None
@@ -814,9 +1302,9 @@ class ComparisonViewer:
         # Put the legend in a box whose children can be changed to a
         # spinner while loading.
         self._legend_spinner_box = ipw.VBox()
-        self._legend_spinner_box.children = [legend]
+        self._legend_spinner_box.children = [self._legend]
 
-        self.help_stuff = ipw.Accordion(children=[header, self._legend_spinner_box])
+        self.help_stuff = ipw.Accordion(children=[self._help, self._legend_spinner_box])
         self.help_stuff.titles = ["Help", "Legend"]
         box = ipw.VBox()
         inner_box = ipw.HBox()
@@ -838,28 +1326,61 @@ class ComparisonViewer:
         )
         self._choose_input_source_list.title = "OPTIONAL: Choose input source list"
 
+        # Add a file chooser for an existing source list to show, view only.
+        self._choose_source_list = FileChooser(filter_pattern="*.ecsv")
+        self._choose_source_list.title = "Choose an existing source list"
+        self._source_list_message = ipw.HTML()
+        self._existing_list_controls = ipw.VBox(
+            children=[self._choose_source_list, self._source_list_message]
+        )
+
         comparison_settings = ipw.HBox(
             children=[
                 self._comparison_catalog_choice,
                 self._bright_mag_limit_input,
                 self._dim_mag_limit_input,
+                self._regenerate_button,
+            ]
+        )
+        self._generate_list_controls = ipw.VBox(
+            children=[comparison_settings, self._choose_input_source_list]
+        )
+
+        self._rest_of_viewer = ipw.VBox(
+            children=[
+                self._file_chooser.file_chooser,
                 self._comparison_save_bar,
+                self._confirm_overwrite,
+                inner_box,
+                controls,
             ]
         )
 
+        # Only the first question shows until it is answered.
+        for widget in (
+            self._existing_list_controls,
+            self._generate_list_controls,
+            self._rest_of_viewer,
+        ):
+            widget.layout.display = "none"
+
         box.children = [
-            self._file_chooser.file_chooser,
-            self._choose_input_source_list,
-            comparison_settings,
-            inner_box,
-            controls,
+            self._mode,
+            self._existing_list_controls,
+            self._generate_list_controls,
+            self._rest_of_viewer,
         ]
 
         return box, iw
 
-    def _marked_stars(self):
+    def _marked_stars(self, include_excluded=False):
         """
-        The stars marked in the viewer that the user has not excluded.
+        The stars marked in the viewer.
+
+        Parameters
+        ----------
+        include_excluded : bool, optional
+            Whether to include the stars the user has excluded by clicking.
 
         Returns
         -------
@@ -873,24 +1394,37 @@ class ComparisonViewer:
         elims = np.array([name.startswith("elim") for name in all_table["marker name"]])
         elim_table = all_table[elims]
         marked = all_table[~elims]
+        if include_excluded:
+            return marked
 
         index, d2d, d3d = elim_table["coord"].match_to_catalog_sky(marked["coord"])
         marked.remove_rows(index)
         return marked
 
-    def generate_table(self):
+    def generate_table(self, include_excluded=False):
         """
         Generate the table of stars to use for the aperture file.
 
         A variable or comparison star within ``TARGET_MATCH_RADIUS`` of a
         target is the target, and is left out so that each star has one row.
+        When showing an existing source list, the table holds the stars of
+        that list that are on the image, with the ``star_id`` they have in the
+        list.
+
+        Parameters
+        ----------
+        include_excluded : bool, optional
+            Whether to include the stars the user has excluded by clicking.
 
         Returns
         -------
         comp_table : `astropy.table.Table`
             Table of stars to use for the aperture file.
         """
-        comp_table = self._marked_stars()
+        if self._mode.value == "existing" and self._loaded_stars is not None:
+            return self._loaded_stars.copy()
+
+        comp_table = self._marked_stars(include_excluded=include_excluded)
         if len(comp_table) == 0:
             return comp_table
 
