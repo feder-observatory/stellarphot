@@ -227,5 +227,7 @@ Notes explain why the fit's own, tighter limit is not a keyword.
 A target the catalog does not hold at all -- a supernova, say -- is NaN for
 the same reason, and no ``match_radius`` will find it. Pass
 ``calibrate_unmatched=True`` to give it a ``mag_cal`` anyway. That works only
-when no color term (``c`` or ``d``) is being fit, because with one the
-calibrated magnitude needs a color the catalog cannot supply.
+when no color term (``c`` or ``d``) is being fit, and the default ``vary``
+fits ``c``, so the color term has to be turned off in the same call::
+
+    transform_to_catalog(..., vary=("a", "z"), calibrate_unmatched=True)

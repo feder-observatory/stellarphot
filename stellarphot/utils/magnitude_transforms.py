@@ -1201,9 +1201,10 @@ def transform_to_catalog(
 
     calibrate_unmatched : bool, optional
         If ``True``, a star with no catalog entry within ``match_radius`` is
-        still given a ``mag_cal``, as long as no color term (``"c"`` or
-        ``"d"``) is being fit. Its ``mag_cat`` and ``color_cat`` stay NaN.
-        See Notes.
+        still given a ``mag_cal`` and ``mag_cal_error``, as long as no color
+        term (``"c"`` or ``"d"``) is being fit. The default ``vary`` fits
+        ``"c"``, so this has no effect unless ``vary`` is changed too. The
+        star's ``mag_cat`` and ``color_cat`` stay NaN. See Notes.
 
     Returns
     -------
@@ -1885,17 +1886,10 @@ def transform_to_catalog(
         # star a finite mag_cat: the fit cut above is strict, this one is not.
         matched = d2d <= match_radius
 
-        # The calibrated magnitude itself takes nothing from the match
-        # unless a color term is being fit -- it is the instrumental
-        # magnitude run through the image's transform -- so a caller who
-        # asks can have one for a star the catalog does not hold. With a
-        # color term the color would be that of whichever unrelated star
-        # happens to be nearest, so the match is still required.
-        if calibrate_unmatched and not fitting_color:
-            calibrated = np.ones_like(matched)
-        else:
-            calibrated = matched
-        cal_mag[~calibrated] = np.nan
+        # An unmatched star can keep its mag_cal only when no color term
+        # would need a color from the match; see Notes.
+        if not calibrate_unmatched or fitting_color:
+            cal_mag[~matched] = np.nan
 
         for name in _COEFF_NAMES:
             coefficients[name][rows] = values[name]
