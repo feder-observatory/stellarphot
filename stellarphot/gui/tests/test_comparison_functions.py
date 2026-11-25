@@ -1634,7 +1634,9 @@ def test_help_legend_and_tooltips_describe_the_mode():
     assert "to mark it" not in help_text.value
     assert "Red +" not in legend.value
     assert "catalog" not in legend.value
-    assert "Copy" in save.tooltip
+    # One tooltip covers both modes.
+    assert "source list shown" in save.tooltip
+    existing_tooltip = save.tooltip
     assert "existing source list" in comparison_widget._save_var_info.tooltip
 
     comparison_widget._mode.value = "generate"
@@ -1643,7 +1645,7 @@ def test_help_legend_and_tooltips_describe_the_mode():
     # After a click the labels no longer match the saved star ids (#752).
     assert "renumbered" in help_text.value
     assert "Red +" in legend.value
-    assert "Copy" not in save.tooltip
+    assert save.tooltip == existing_tooltip
     assert comparison_widget._save_var_info.tooltip == ""
 
 
@@ -1737,11 +1739,30 @@ def _write_table_with_unknown_marker_name(path):
     SourceListData(input_data=table).write(path)
 
 
+def _write_with_source_list_meta(table, path):
+    # A plain table with the metadata of a source list, for columns that
+    # SourceListData would refuse to write.
+    table.meta.update(has_ra_dec=True, has_x_y=True)
+    table.write(path)
+
+
+def _write_table_with_numeric_marker_names(path):
+    table = _source_list_table()
+    table.replace_column("marker name", [1] * len(table))
+    _write_with_source_list_meta(table, path)
+
+
+def _write_table_with_blank_marker_name(path):
+    table = _source_list_table()
+    mask = np.arange(len(table)) == 0
+    table.replace_column("marker name", MaskedColumn(table["marker name"], mask=mask))
+    _write_with_source_list_meta(table, path)
+
+
 def _write_table_with_text_ra(path):
     table = _source_list_table()
     table["ra"] = [str(ra) for ra in table["ra"].value]
-    table.meta.update(has_ra_dec=True, has_x_y=True)
-    table.write(path)
+    _write_with_source_list_meta(table, path)
 
 
 @pytest.mark.parametrize(
@@ -1753,6 +1774,8 @@ def _write_table_with_text_ra(path):
         (_write_table_without_source_list_meta, "has_ra_dec"),
         (_write_table_without_has_x_y, "has_x_y"),
         (_write_table_with_unknown_marker_name, "unknown marker names Mystery"),
+        (_write_table_with_numeric_marker_names, "unknown marker names 1"),
+        (_write_table_with_blank_marker_name, "unknown marker names --"),
         (_write_table_with_text_ra, "could not be read"),
     ],
 )

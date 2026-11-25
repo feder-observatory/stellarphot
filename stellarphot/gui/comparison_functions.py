@@ -43,8 +43,8 @@ TARGET_MATCH_RADIUS = 2 * u.arcsec
 # At most this many star_ids are listed in a message.
 MAX_IDS_LISTED = 10
 
-# What the help, the legend and the tooltips say depends on whether an
-# existing source list is shown or one is generated.
+# What the help and the legend say depends on whether an existing source
+# list is shown or one is generated.
 _PAN_ZOOM_HELP = "<h3>Click and drag to pan, use the scroll wheel to zoom.</h3>"
 _HELP = {
     "existing": _PAN_ZOOM_HELP
@@ -77,16 +77,10 @@ _LEGEND = {
         </ul>
         """,
 }
-_SAVE_TOOLTIP = {
-    "existing": (
-        "Copy the chosen source list to the source list file named in the "
-        "source location settings"
-    ),
-    "generate": (
-        "Save the source list shown to the source list file named in the "
-        "source location settings"
-    ),
-}
+_SAVE_TOOLTIP = (
+    "Write the source list shown to the source list file named in the "
+    "source location settings"
+)
 _NO_VARIABLES_TOOLTIP = (
     "Not available for an existing source list: the variable star catalog "
     "is not queried"
@@ -212,7 +206,9 @@ def _read_source_list(path):
             "it was not saved as a stellarphot source list (there is no "
             "has_x_y in its metadata)"
         )
-    unknown = set(sources["marker name"]) - {
+    # Names read from a file may be numbers, or masked (shown as --) where
+    # the file has a blank.
+    unknown = {str(name) for name in sources["marker name"]} - {
         "TESS Targets",
         "VSX",
         "APASS comparison",
@@ -504,7 +500,7 @@ class ComparisonViewer:
         # even while it is waiting for confirmation, so they are replaced.
         self._comparison_save_bar = SaveButtonBar()
         save_bar = self._comparison_save_bar
-        save_bar.bn_save.tooltip = _SAVE_TOOLTIP["generate"]
+        save_bar.bn_save.tooltip = _SAVE_TOOLTIP
         save_bar.bn_save.on_click(save_bar._save, remove=True)
         save_bar.bn_save.on_click(self._save_clicked)
         save_bar.bn_revert.on_click(save_bar._revert, remove=True)
@@ -775,7 +771,6 @@ class ComparisonViewer:
         self._rest_of_viewer.layout.display = "flex"
         self._help.value = _HELP[mode]
         self._legend.value = _LEGEND[mode]
-        self._comparison_save_bar.bn_save.tooltip = _SAVE_TOOLTIP[mode]
         # The variables come from the catalog query, which is not made for an
         # existing source list.
         self._save_var_info.disabled = existing
