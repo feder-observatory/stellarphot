@@ -1077,6 +1077,7 @@ def transform_to_catalog(
     min_fit_sigma=_MIN_FIT_SIGMA,
     search_radius=None,
     match_radius=_CAL_MATCH_RADIUS,
+    calibrate_unmatched=False,
 ):
     """
     Transform a set of instrumental magnitudes to a standard system using either
@@ -1198,6 +1199,13 @@ def transform_to_catalog(
         margin of the catalog cone. Defaults to 2.0 arcsec; ``None`` means
         the default. See Notes.
 
+    calibrate_unmatched : bool, optional
+        If ``True``, a star with no catalog entry within ``match_radius`` is
+        still given a ``mag_cal`` and ``mag_cal_error``, as long as no color
+        term (``"c"`` or ``"d"``) is being fit. The default ``vary`` fits
+        ``"c"``, so this has no effect unless ``vary`` is changed too. The
+        star's ``mag_cat`` and ``color_cat`` stay NaN. See Notes.
+
     Returns
     -------
 
@@ -1217,7 +1225,9 @@ def transform_to_catalog(
         Every column that comes from the catalog match -- ``mag_cal``,
         ``mag_cal_error``, ``mag_cat`` and ``color_cat`` -- is NaN for a star
         whose nearest catalog entry is more than ``match_radius`` away, so
-        none of them can hold the values of an unrelated star.
+        none of them can hold the values of an unrelated star. With
+        ``calibrate_unmatched=True`` that holds for ``mag_cat`` and
+        ``color_cat`` only; see Notes.
         ``mag_cal_error`` is NaN wherever ``mag_cal`` is, for whatever
         reason, so a finite calibrated error always has a calibrated
         magnitude to go with it.
@@ -1326,6 +1336,17 @@ def transform_to_catalog(
     raising ``match_radius`` is the remedy. The fit limit is not a keyword:
     widening it changes which stars the coefficients come from, which is a
     different decision.
+
+    Some objects have no catalog entry to match at all -- a supernova, a
+    nova, an asteroid. With no color term in the fit, a star's calibrated
+    magnitude is its instrumental magnitude run through the image's
+    transform and uses nothing from its own catalog entry, so
+    ``calibrate_unmatched=True`` gives such an object a ``mag_cal`` and
+    ``mag_cal_error`` like any other star in the image. It is opt-in
+    because an unmatched detection is far more often a mismatched or
+    spurious source than a real object the catalog lacks. When a color term
+    is being fit the calibrated magnitude does need the star's color, which
+    an unmatched star does not have, so it stays NaN.
 
     How the fit is weighted, what the floor does and does not reach, how to
     read the diagnostics and the coefficient uncertainties, and what the
@@ -1864,7 +1885,11 @@ def transform_to_catalog(
         # that a match_radius equal to the fit limit still gives every fitted
         # star a finite mag_cat: the fit cut above is strict, this one is not.
         matched = d2d <= match_radius
-        cal_mag[~matched] = np.nan
+
+        # An unmatched star can keep its mag_cal only when no color term
+        # would need a color from the match; see Notes.
+        if not calibrate_unmatched or fitting_color:
+            cal_mag[~matched] = np.nan
 
         for name in _COEFF_NAMES:
             coefficients[name][rows] = values[name]
