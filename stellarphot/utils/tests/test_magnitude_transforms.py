@@ -5058,21 +5058,236 @@ def test_estimate_catalog_colors_pools_two_spellings_of_a_band(mocker):
     assert result.meta["color_est_bands"] == {"R": "R-I", "Rc": "R-I", "I": "R-I"}
 
 
-def test_night_means_weights_by_inverse_variance():
-    values = np.array([1.0, 3.0, 10.0, np.nan, 5.0])
-    errors = np.array([0.1, 0.2, 0.5, 0.1, -1.0])
-    group = np.array([0, 0, 2, 2, 2])
+# A magnitude error is this divided by the signal-to-noise ratio.
+_MAG_ERROR_TIMES_SNR = 2.5 / np.log(10)
 
-    mean, error = _night_means(values, errors, group, 3)
 
-    # Group 0 is a weighted mean, group 1 is empty, and group 2 keeps only
-    # the one value that is finite and has a usable error.
-    weights = 1 / errors[:2] ** 2
-    assert mean[0] == pytest.approx(np.sum(weights * values[:2]) / weights.sum())
-    assert error[0] == pytest.approx(1 / np.sqrt(weights.sum()))
-    assert np.isnan(mean[1]) and np.isnan(error[1])
-    assert mean[2] == pytest.approx(10.0)
-    assert error[2] == pytest.approx(0.5)
+def _flux_mean_and_error(mags, errors):
+    """
+    The nightly mean of one star in one band, and its error, worked out
+    the way `estimate_catalog_colors` documents.
+
+    Parameters
+    ----------
+
+    mags, errors : array-like
+        Zero-pointed magnitudes of the star's images and their errors.
+
+    Returns
+    -------
+    mean, error : float
+        Magnitude of the mean flux and its error.
+
+    propagated, scatter : float
+        The two candidate errors of the mean -- from the quoted errors and
+        from the scatter of the images -- of which ``error`` is the larger.
+    """
+    flux = 10 ** (-0.4 * np.asarray(mags, dtype=float))
+    errors = np.asarray(errors, dtype=float)
+    n = len(flux)
+    mean = flux.mean()
+    propagated = np.sqrt(np.sum((flux * errors / _MAG_ERROR_TIMES_SNR) ** 2)) / n
+    scatter = flux.std(ddof=1) / np.sqrt(n) if n > 1 else 0.0
+    propagated, scatter = (
+        _MAG_ERROR_TIMES_SNR * value / mean for value in (propagated, scatter)
+    )
+    return -2.5 * np.log10(mean), max(propagated, scatter), propagated, scatter
+
+
+def _change_target(night, band, offsets=0.0, errors=None):
+    """
+    Shift the target's instrumental magnitudes in one band of a synthetic
+    night, image by image, and optionally replace their quoted errors.
+    """
+    rows = np.flatnonzero(_target_rows(night.observed, night, band))
+    night.observed["mag_inst"][rows] += offsets
+    if errors is not None:
+        night.observed["mag_error"][rows] = errors
+
+
+def test_night_means_averages_fluxes_and_takes_the_larger_error():
+    # Group 0's images scatter far more than their errors say, so its error
+    # comes from the scatter; group 1's agree better than their errors say,
+    # so its error comes from the errors. Group 2 has one image, group 3
+    # nothing usable -- a NaN magnitude and errors that are not positive --
+    # and group 4 nothing at all.
+    values = np.array([10.0, 10.5, 9.8, 12.0, 12.001, 12.002, 14.0, np.nan, 11.0, 13.0])
+    errors = np.array([0.001, 0.001, 0.002, 0.05, 0.04, 0.05, 0.03, 0.01, -1.0, 0])
+    group = np.array([0, 0, 0, 1, 1, 1, 2, 3, 3, 3])
+
+    mean, error = _night_means(values, errors, group, 5)
+
+    for number, branch in ((0, "scatter"), (1, "propagated")):
+        rows = group == number
+        expected_mean, expected_error, propagated, scatter = _flux_mean_and_error(
+            values[rows], errors[rows]
+        )
+        assert mean[number] == pytest.approx(expected_mean, rel=1e-12)
+        assert error[number] == pytest.approx(expected_error, rel=1e-12)
+        # The case covers the branch it is meant to.
+        assert expected_error == {"scatter": scatter, "propagated": propagated}[branch]
+        assert propagated != pytest.approx(scatter, rel=0.5)
+
+    # Not the error-weighted mean of the magnitudes.
+    weights = 1 / errors[:3] ** 2
+    assert abs(mean[0] - np.sum(weights * values[:3]) / weights.sum()) > 0.05
+
+    assert mean[2] == pytest.approx(14.0, rel=1e-12)
+    assert error[2] == pytest.approx(0.03, rel=1e-12)
+    assert np.isnan(mean[3:]).all() and np.isnan(error[3:]).all()
+
+
+def test_night_means_is_not_biased_for_a_faint_star():
+    # A faint star measured on many images, at a signal-to-noise of 5 in
+    # each, with its error worked out from the measured flux the way
+    # stellarphot does it. An error-weighted mean of its magnitudes favours
+    # the images that noise made brighter; the mean of its fluxes does not.
+    snr = 5.0
+    n_images = 2000
+    flux = 1.0 + np.random.default_rng(_SEED).normal(0.0, 1 / snr, size=n_images)
+    assert (flux > 0).all()
+    mags = -2.5 * np.log10(flux)
+    errors = _MAG_ERROR_TIMES_SNR * (1 / snr) / flux
+
+    mean, error = _night_means(mags, errors, np.zeros(n_images, dtype=int), 1)
+
+    # The true magnitude is zero.
+    assert abs(mean[0]) < 3 * error[0]
+    weights = 1 / errors**2
+    weighted_mean = np.sum(weights * mags) / weights.sum()
+    assert weighted_mean < -10 * error[0]
+
+
+def test_estimate_catalog_colors_averages_fluxes(mocker):
+    # The target's R images differ by 0.3 mag and the first claims a much
+    # smaller error. Its R magnitude for the night is that of its mean flux,
+    # not the error-weighted mean magnitude -- which would be very close to
+    # the first image's.
+    night = _two_band_night(n_images=3)
+    offsets = np.array([0.0, 0.3, -0.3])
+    errors = np.array([0.001, 0.01, 0.01])
+    _change_target(night, "R", offsets, errors)
+
+    result = _estimate_colors(mocker, night.catalog, night.observed)
+
+    shift, *_ = _flux_mean_and_error(offsets, errors)
+    assert abs(shift) > 0.02
+    rows = _target_rows(result, night)
+    np.testing.assert_allclose(
+        result["color_est"][rows],
+        night.true_color[-1] + night.color_slope * shift,
+        rtol=0,
+        atol=1e-5,
+    )
+
+
+@pytest.mark.parametrize(
+    "snrs, min_snr, estimated",
+    [
+        ((4.0, 4.0, 4.0), 5.0, False),
+        ((6.0, 6.0, 6.0), 5.0, True),
+        # At the limit counts as passing.
+        ((5.0, 5.0, 5.0), 5.0, True),
+        # The median of the images, not the mean.
+        ((6.0, 6.0, 1.0), 5.0, True),
+        ((6.0, 1.0, 1.0), 5.0, False),
+        # Zero turns the rule off.
+        ((0.5, 0.5, 0.5), 0.0, True),
+    ],
+)
+def test_estimate_catalog_colors_needs_enough_signal_to_noise(
+    mocker, snrs, min_snr, estimated
+):
+    # The target is faint in I only; one band below the limit is enough to
+    # cost it the estimate.
+    night = _two_band_night(n_images=3)
+    _change_target(night, "I", errors=_MAG_ERROR_TIMES_SNR / np.array(snrs))
+
+    result = _estimate_colors(mocker, night.catalog, night.observed, min_snr=min_snr)
+
+    is_target = _target_rows(result, night)
+    for column in ("color_est", "color_est_error"):
+        assert np.isfinite(result[column][is_target]).all() == estimated
+        assert np.isnan(result[column][is_target]).all() == (not estimated)
+    assert np.isfinite(result["color_est"][~is_target]).all()
+    if estimated:
+        _assert_colors_recovered(result, night)
+
+
+@pytest.mark.parametrize(
+    "spoil, n_spoiled, min_image_fraction, estimated",
+    [
+        # Four of five images is 0.8 of them.
+        ("mag", 1, 0.8, True),
+        ("mag", 2, 0.8, False),
+        ("error", 2, 0.8, False),
+        ("mag", 2, 0.6, True),
+        ("error", 1, 1.0, False),
+    ],
+)
+def test_estimate_catalog_colors_needs_enough_usable_images(
+    mocker, spoil, n_spoiled, min_image_fraction, estimated
+):
+    # stellarphot writes NaN for the magnitude of a star whose net counts
+    # are negative; leaving those images out of the mean biases it bright,
+    # so a star that has too many of them gets no estimate.
+    night = _two_band_night(n_images=5)
+    rows = np.flatnonzero(_target_rows(night.observed, night, "R"))[:n_spoiled]
+    column = {"mag": "mag_inst", "error": "mag_error"}[spoil]
+    night.observed[column][rows] = np.nan
+
+    result = _estimate_colors(
+        mocker,
+        night.catalog,
+        night.observed,
+        min_image_fraction=min_image_fraction,
+    )
+
+    is_target = _target_rows(result, night)
+    assert np.isfinite(result["color_est"][is_target]).all() == estimated
+    assert np.isnan(result["color_est_error"][is_target]).all() == (not estimated)
+    assert np.isfinite(result["color_est"][~is_target]).all()
+    if estimated:
+        _assert_colors_recovered(result, night)
+
+
+@pytest.mark.parametrize("min_snr, left_out", [(5.0, True), (3.0, False)])
+def test_estimate_catalog_colors_leaves_failing_stars_out_of_the_relation(
+    mocker, min_snr, left_out
+):
+    # A catalogued star at a signal-to-noise of 4 in I. When that is below
+    # the limit it gets no estimate and is no part of the relation every
+    # other star's estimate comes from.
+    night = _two_band_night(noise_sigma=0.02)
+    faint = 7
+    rows = (night.observed["star_id"] == faint + 1) & (
+        night.observed["passband"] == "I"
+    )
+    night.observed["mag_error"][rows] = _MAG_ERROR_TIMES_SNR / 4.0
+    spy = mocker.spy(magnitude_transforms, "_fit_color_relation")
+
+    result = _estimate_colors(mocker, night.catalog, night.observed, min_snr=min_snr)
+
+    color_inst, color_inst_error, mag, color_cat, magnitude_term = spy.call_args.args
+    fitted, _ = spy.spy_return
+    # It has a catalog color, so only the rule can keep it out.
+    assert np.isfinite(color_cat[faint])
+    assert np.isnan(color_inst[faint]) == left_out
+    assert np.isnan(mag[faint]) == left_out
+    is_faint = np.asarray(result["star_id"] == faint + 1)
+    assert np.isnan(result["color_est"][is_faint]).all() == left_out
+
+    if left_out:
+        # The relation is the one fit to the other stars alone.
+        others = np.arange(len(color_inst)) != faint
+        alone, _ = magnitude_transforms._fit_color_relation(
+            color_inst[others],
+            color_inst_error[others],
+            mag[others],
+            color_cat[others],
+            magnitude_term,
+        )
+        np.testing.assert_allclose(fitted[others], alone, rtol=1e-12)
 
 
 def test_estimate_catalog_colors_reports_the_measurement_error(mocker):
@@ -5089,20 +5304,124 @@ def test_estimate_catalog_colors_reports_the_measurement_error(mocker):
     np.testing.assert_allclose(result["color_est_error"], expected, rtol=1e-3)
 
 
-def test_estimate_catalog_colors_error_includes_the_scatter_of_the_relation(mocker):
-    # Catalog colors that scatter about the relation by far more than the
-    # instrumental errors: the reported error has to own up to that scatter
-    # rather than quote the tiny measurement error alone.
-    scatter = 0.05
-    night = _two_band_night(n_stars=60)
-    night.catalog["mag_I"] += np.random.default_rng(_SEED).normal(
-        0.0, scatter, size=len(night.catalog)
-    )
+def test_estimate_catalog_colors_error_follows_its_formula(mocker):
+    # Noise-free, so the relation is exact and adds nothing to the error;
+    # what is left is the target's own. Its R images scatter by more than
+    # their errors say and its I images by less, so the error of the mean
+    # comes from the scatter in one band and from the errors in the other.
+    night = _two_band_night(n_images=4)
+    bands = {
+        "R": (np.array([0.0, 0.02, -0.02, 0.01]), np.full(4, 0.001)),
+        "I": (np.array([0.0, 1e-4, -1e-4, 0.0]), np.array([0.01, 0.02, 0.01, 0.015])),
+    }
+    band_errors = {}
+    for band, (offsets, errors) in bands.items():
+        _change_target(night, band, offsets, errors)
+        _, band_errors[band], propagated, scatter = _flux_mean_and_error(
+            offsets, errors
+        )
+        assert band_errors[band] == (scatter if band == "R" else propagated)
 
     result = _estimate_colors(mocker, night.catalog, night.observed)
 
-    target_error = result["color_est_error"][_target_rows(result, night)][0]
-    assert target_error == pytest.approx(scatter, rel=0.3)
+    expected = abs(night.color_slope) * np.hypot(band_errors["R"], band_errors["I"])
+    rows = _target_rows(result, night)
+    np.testing.assert_allclose(result["color_est_error"][rows], expected, rtol=1e-3)
+
+
+def test_estimate_catalog_colors_error_from_one_image_is_the_quoted_one(mocker):
+    # With one image in each band there is no scatter to measure, and the
+    # error of the mean is the error of that image.
+    night = _two_band_night(n_images=3)
+    _change_target(night, "R", errors=0.01)
+    _change_target(night, "I", errors=0.02)
+    files = night.observed["file"]
+    keep = (files == "R_60000_1.fit") | (files == "I_60000_2.fit")
+    observed = night.observed[~_target_rows(night.observed, night) | keep]
+
+    result = _estimate_colors(mocker, night.catalog, observed)
+
+    rows = _target_rows(result, night)
+    assert rows.sum() == 2
+    np.testing.assert_allclose(
+        result["color_est_error"][rows],
+        abs(night.color_slope) * np.hypot(0.01, 0.02),
+        rtol=1e-3,
+    )
+
+
+def test_estimate_catalog_colors_adds_the_error_floor_in_quadrature(mocker):
+    night = _two_band_night(noise_sigma=0.02)
+    floor = 0.01
+
+    without = _estimate_colors(mocker, night.catalog, night.observed, in_place=False)
+    with_floor = _estimate_colors(
+        mocker, night.catalog, night.observed, error_floor=floor, in_place=False
+    )
+
+    np.testing.assert_array_equal(with_floor["color_est"], without["color_est"])
+    np.testing.assert_allclose(
+        with_floor["color_est_error"],
+        np.hypot(without["color_est_error"], floor),
+        rtol=1e-12,
+    )
+
+
+def test_fit_color_relation_error_leaves_out_the_scatter_of_the_fit_stars():
+    # Catalog colors that scatter about the relation by far more than the
+    # instrumental errors. That scatter reaches the error of an estimate
+    # only through the uncertainty of the relation it makes -- which is
+    # the ordinary least-squares one, since the tiny instrumental errors
+    # make the weights equal -- not by being added whole.
+    scatter = 0.05
+    n_stars = 60
+    color_inst = np.linspace(0.2, 1.2, n_stars)
+    noise = np.random.default_rng(_SEED).normal(0.0, scatter, size=n_stars)
+    # Clipped so that the fit drops none of them as outliers.
+    color_cat = 0.1 + 1.2 * color_inst + np.clip(noise, -2 * scatter, 2 * scatter)
+    # And a star with no catalog color, redder than all of them.
+    color_inst = np.append(color_inst, 2.0)
+    color_cat = np.append(color_cat, np.nan)
+    color_inst_error = np.full(n_stars + 1, 1e-5)
+
+    estimate, error = magnitude_transforms._fit_color_relation(
+        color_inst, color_inst_error, np.zeros(n_stars + 1), color_cat, False
+    )
+
+    design = np.column_stack([np.ones_like(color_inst), color_inst])
+    fit = np.isfinite(color_cat)
+    coefficients, rss, *_ = np.linalg.lstsq(design[fit], color_cat[fit])
+    covariance = rss[0] / (n_stars - 2) * np.linalg.inv(design[fit].T @ design[fit])
+    variance = np.einsum("ij,jk,ik->i", design, covariance, design)
+    # Not to the last bit: the fit takes out the little noise the tiny
+    # instrumental errors quote.
+    np.testing.assert_allclose(estimate, design @ coefficients, rtol=1e-7)
+    np.testing.assert_allclose(
+        error,
+        np.sqrt((coefficients[1] * color_inst_error) ** 2 + variance),
+        rtol=1e-6,
+    )
+    assert error[fit].max() < 0.3 * scatter
+
+
+@pytest.mark.parametrize(
+    "keyword, bad",
+    [
+        ("min_snr", -1.0),
+        ("min_snr", np.nan),
+        ("min_image_fraction", 0.0),
+        ("min_image_fraction", 1.01),
+        ("min_image_fraction", np.nan),
+        ("error_floor", -0.001),
+        ("error_floor", np.nan),
+        ("error_floor", np.inf),
+    ],
+)
+def test_estimate_catalog_colors_rejects_a_bad_limit(mocker, keyword, bad):
+    night = _two_band_night(n_images=1)
+
+    with pytest.raises(ValueError, match=keyword):
+        _estimate_colors(mocker, night.catalog, night.observed, **{keyword: bad})
 
 
 def test_estimate_catalog_colors_error_grows_away_from_the_fitted_stars(mocker):
