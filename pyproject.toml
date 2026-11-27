@@ -287,11 +287,15 @@ channels = ["conda-forge"]
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
 
 [tool.pixi.dependencies]
-# Several dependencies (astroscrappy, pandas 2, photutils 2, scikit-image,
-# numcodecs) have no Python 3.15 wheels yet, so the environments that do not
-# pin a Python version would have to compile them from source. Compiling
-# from source failed on the Windows CI runner (see #737). Remove this cap
-# once those packages ship Python 3.15 wheels.
+# On Python 3.15 five dependencies have no wheel, so the environments that
+# do not pin a Python version would compile them from source. Compiling from
+# source failed on the Windows CI runner (see #737). The cap can come off
+# when all of these are true:
+#   - the "photutils <3" pin above is lifted (#638); photutils 2.3.0 has no
+#     3.15 wheel, photutils 3 does
+#   - lightkurve allows pandas 3; lightkurve 2.6.0 requires pandas <3, and
+#     pandas 2.3.3 has no 3.15 wheel
+#   - astroscrappy, scikit-image and numcodecs release 3.15 wheels
 python = "<3.15"
 
 [tool.pixi.pypi-dependencies]
