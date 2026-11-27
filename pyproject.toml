@@ -286,6 +286,14 @@ filterwarnings = [
 channels = ["conda-forge"]
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
 
+[tool.pixi.dependencies]
+# Several dependencies (astroscrappy, pandas 2, photutils 2, scikit-image,
+# numcodecs) have no Python 3.15 wheels yet, so the environments that do not
+# pin a Python version would have to compile them from source. Compiling
+# from source failed on the Windows CI runner (see #737). Remove this cap
+# once those packages ship Python 3.15 wheels.
+python = "<3.15"
+
 [tool.pixi.pypi-dependencies]
 stellarphot = { path = ".", editable = true }
 
