@@ -252,7 +252,10 @@ not biased bright for faint stars. A star gets no estimate if, in either
 band, the median signal-to-noise ratio of its usable images is below
 ``min_snr`` (default 5) or fewer than ``min_image_fraction`` (default 0.8) of
 the images it appears in are usable; with 2 to 4 images in a band, one bad
-image is enough. ``color_est_error`` comes from the scatter of the star's own
+image is enough. A whole night gets no estimates, with a warning, when too
+few of its stars have catalog colors, when those stars are too alike in color,
+or when their colors are too noisy for how much they differ.
+``color_est_error`` comes from the scatter of the star's own
 images, or their quoted errors when larger, and the uncertainty of the fitted
 relation. It leaves out errors that are the same on every image, such as
 flat-field errors and light from neighbours; ``error_floor`` adds a value in

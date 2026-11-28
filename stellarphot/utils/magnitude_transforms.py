@@ -92,7 +92,12 @@ _COLOR_RELATION_CLIP = 4.0
 # for everyone. The yardstick is other stars, not the quoted errors: those
 # can understate the scatter of every bright star several times over. With
 # two images in each band an ordinary star's variance estimate has a long
-# tail, and at 20 about one star in a thousand is left out by chance.
+# tail: at 20, about 0.04 percent of stars are left out by chance when both
+# bands are equally noisy, and up to 1.6 percent when one band is ten times
+# quieter than the other, which leaves the estimate from little more than
+# one image's scatter. With three images it is at most 0.04 percent. Leaving
+# those stars out with two images moves a red target's estimate by at most
+# about 0.01 mag.
 _SCATTER_OUTLIER_FACTOR = 20.0
 
 # Number of stars, nearest in magnitude and counting the star itself, whose
@@ -1704,9 +1709,9 @@ def estimate_catalog_colors(
     mean of the magnitudes of a faint star comes out too bright -- by about
     0.05 mag over many images that each have an error of 0.2 mag. An image
     on which a star's net counts were negative has no magnitude and cannot
-    enter the mean, which biases it the same way; ``min_image_fraction`` is what keeps
-    such stars from getting an estimate, and ``min_snr`` keeps out stars
-    faint enough for that to happen often. The signal-to-noise ratio is
+    enter the mean, which biases it the same way; ``min_image_fraction`` is
+    what keeps such stars from getting an estimate, and ``min_snr`` keeps
+    out stars faint enough for that to happen often. The signal-to-noise ratio is
     judged from the star's own measured flux, so a faint star whose
     aperture holds light from a bright neighbour can pass the cut and get
     a wrong color.

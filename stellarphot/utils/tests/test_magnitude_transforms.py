@@ -10,6 +10,7 @@ from astropy.table import MaskedColumn, QTable, Table, vstack
 from astropy.utils.data import get_pkg_data_filename
 from astropy.utils.exceptions import AstropyUserWarning
 from astropy.utils.metadata import MergeConflictWarning
+from scipy import stats
 
 from stellarphot.conftest import SERVER_DOWN_ERRORS
 
@@ -4845,6 +4846,7 @@ def _two_band_night(
     noise_sigma=0.0,
     color_range=(0.2, 1.2),
     seed=_SEED,
+    colors=None,
 ):
     """
     One night of R and I images of a field holding an uncatalogued target.
@@ -4891,6 +4893,10 @@ def _two_band_night(
     seed : int, optional
         Seed for the noise.
 
+    colors : array-like, optional
+        Colors of the catalogued stars, in place of random ones drawn from
+        ``color_range``.
+
     Returns
     -------
     `types.SimpleNamespace`
@@ -4911,6 +4917,8 @@ def _two_band_night(
     # Not seeded by ``seed``: the stars are the same from one realization
     # of the noise to the next.
     cat_color = np.random.default_rng(_SEED).uniform(*color_range, size=n_stars)
+    if colors is not None:
+        cat_color = np.asarray(colors, dtype=float)
 
     errors = np.full(n_stars, _FAKE_CATALOG_ERROR)
     catalog = _FakeCatalogTable(
@@ -5375,27 +5383,30 @@ def test_estimate_catalog_colors_adds_the_error_floor_in_quadrature(mocker):
     )
 
 
-def _color_relation_inputs(n_stars=30, sigma=0.02, seed=_SEED):
+def _color_relation_inputs(n_stars=30, sigma=0.02, catalog_scatter=0.03, seed=_SEED):
     """
     Keyword arguments for `_fit_color_relation`: fit stars with noisy
     instrumental colors from 0.2 to 1.2 on the relation 0.1 + 1.2 times
-    color, catalog colors that scatter by 0.03, magnitudes from 11 to 15 in
-    no particular order, and, last, a target at color 2.0 that the catalog
-    does not hold.
+    color, catalog colors that scatter by ``catalog_scatter``, magnitudes
+    from 11 to 15 in a fixed shuffled order, and, last, a target at color
+    2.0 that the catalog does not hold. Every star's noise variance is
+    exactly ``sigma`` squared.
     """
     rng = np.random.default_rng(seed)
     true_color = np.append(np.linspace(0.2, 1.2, n_stars), 2.0)
-    color_cat = 0.1 + 1.2 * true_color[:-1] + rng.normal(0.0, 0.03, n_stars)
+    color_cat = 0.1 + 1.2 * true_color[:-1]
+    color_cat += rng.normal(0.0, catalog_scatter, n_stars)
     error = np.full(n_stars + 1, sigma)
     return {
         "color_inst": true_color + rng.normal(0.0, sigma, n_stars + 1),
         "color_inst_error": error,
-        "mag": rng.permutation(np.linspace(11.0, 15.0, n_stars + 1)),
+        "mag": np.random.default_rng(0).permutation(
+            np.linspace(11.0, 15.0, n_stars + 1)
+        ),
         "color_cat": np.append(color_cat, np.nan),
         "magnitude_term": False,
         "weight_error": error.copy(),
-        # Estimates of the variance scatter about the true one.
-        "noise_variance": sigma**2 * rng.uniform(0.5, 1.5, n_stars + 1),
+        "noise_variance": np.full(n_stars + 1, sigma**2),
     }
 
 
@@ -5407,9 +5418,10 @@ def test_fit_color_relation_leaves_out_a_star_whose_images_scatter_wildly(
     # wildly but whose mean color lands near the relation, so the clip on
     # catalog color never drops it: a variable, or a cosmic ray. Corrected
     # for all that noise at full weight, the slope for everyone else would
-    # be far too steep.
+    # be far too steep. The smallest excess makes its variance 26 times
+    # that of every other star. It is left out: the fit is the one made
+    # without it.
     inputs = _color_relation_inputs()
-    clean, _ = magnitude_transforms._fit_color_relation(**inputs)
     inputs["weight_error"][0] = 0.002
     inputs["noise_variance"][0] += extra_variance
 
@@ -5417,43 +5429,47 @@ def test_fit_color_relation_leaves_out_a_star_whose_images_scatter_wildly(
 
     inputs["color_cat"][0] = np.nan
     without, _ = magnitude_transforms._fit_color_relation(**inputs)
-    assert abs(wild[-1] - clean[-1]) < 0.01
     np.testing.assert_allclose(wild, without, rtol=1e-12)
 
 
-def _realistic_noise_variance(mag, n_images, rng):
+def _realistic_noise_variance(mag, n_images):
     """
-    Variance of the instrumental color of stars of magnitude ``mag`` as the
-    scatter of ``n_images`` images in each band estimates it, for images
-    whose noise is photon noise plus 0.02 mag that the quoted errors leave
-    out -- ten times the quoted error for the brightest stars.
+    Variances of the instrumental color of stars of magnitude ``mag`` as the
+    scatter of ``n_images`` images in each band might estimate them, for
+    images whose noise is photon noise plus 0.02 mag that the quoted errors
+    leave out -- ten times the quoted error for the brightest stars.
+
+    The estimates are the true variance times evenly spaced quantiles of the
+    distribution such an estimate follows, from the 0.5th to the 99.5th
+    percentile, in a fixed shuffled order: what a night might give, but the
+    same every time.
     """
     quoted = 0.002 * 10 ** (0.2 * (mag - 11))
     variance = 2 * (quoted**2 + 0.02**2) / n_images
     # Two bands of n_images - 1 degrees of freedom each.
     dof = 2 * (n_images - 1)
-    return quoted, variance * rng.chisquare(dof, size=len(mag)) / dof
+    quantiles = np.linspace(0.005, 0.995, len(mag))
+    spread = stats.chi2.ppf(quantiles, dof) / dof
+    return quoted, variance * np.random.default_rng(0).permutation(spread)
 
 
 @pytest.mark.parametrize("n_images", [2, 3, 5])
 def test_scatter_outliers_spares_stars_that_all_scatter_more_than_quoted(n_images):
-    rng = np.random.default_rng(_SEED)
-    mag = rng.uniform(11.0, 17.0, 300)
-    quoted, noise_variance = _realistic_noise_variance(mag, n_images, rng)
+    mag = np.linspace(11.0, 17.0, 300)
+    quoted, noise_variance = _realistic_noise_variance(mag, n_images)
     # The brightest really are ten times their quoted error.
-    assert np.sqrt(noise_variance[mag < 11.5] * n_images / 2).mean() > 5 * 0.002
+    assert np.sqrt(2 * (quoted[0] ** 2 + 0.02**2)) > 10 * np.sqrt(2) * quoted[0]
     candidates = np.ones(len(mag), dtype=bool)
 
     wild = magnitude_transforms._scatter_outliers(noise_variance, mag, candidates)
 
-    # Of 300 stars, at most one by chance with two images and none with more.
-    assert wild.sum() <= (1 if n_images == 2 else 0)
+    assert not wild.any()
 
     # A bright star whose images scatter by 0.1 mag more is caught.
-    brightest = np.argmin(mag)
-    noise_variance[brightest] += 0.01
+    noise_variance[0] += 0.01
     wild = magnitude_transforms._scatter_outliers(noise_variance, mag, candidates)
-    assert wild[brightest]
+    assert wild[0]
+    assert wild.sum() == 1
 
 
 def test_scatter_outliers_needs_enough_stars():
@@ -5476,9 +5492,11 @@ def test_fit_color_relation_refuses_when_noise_swamps_the_spread(
     # The noise said to be in the fit stars' colors is a set fraction of
     # their spread in color -- what is left of it once the magnitude term,
     # if any, has taken its share. Past half, what remains after the
-    # correction is too little to define a slope.
+    # correction is too little to define a slope. Catalog colors exactly on
+    # the relation, so that the clip, which a slope steepened by the
+    # correction can set off, drops none of them.
     n_stars = 10
-    inputs = _color_relation_inputs(n_stars=n_stars, sigma=1e-4)
+    inputs = _color_relation_inputs(n_stars=n_stars, sigma=1e-4, catalog_scatter=0)
     inputs["magnitude_term"] = magnitude_term
     x = inputs["color_inst"][:n_stars]
     columns = [np.ones(n_stars)]
@@ -5494,16 +5512,58 @@ def test_fit_color_relation_refuses_when_noise_swamps_the_spread(
     assert (error is not None) == defined
 
 
+def _night_with_scatter_in_its_images(fraction):
+    """
+    A noise-free synthetic night whose comparison stars' images are made to
+    scatter, so that the noise variance of their instrumental colors is
+    ``fraction`` of their spread in color left after the constant and the
+    magnitude term.
+
+    Each comparison star's three images in each band are moved by +d, -d
+    and 0 mag, or -d, +d and 0 for every other star, so that the zero point
+    of each image, and every star's color, is unchanged.
+    """
+    n_stars = 16
+    # Evenly spread over 0.3 mag, in a fixed order unrelated to magnitude.
+    colors = np.random.default_rng(0).permutation(np.linspace(0.55, 0.85, n_stars))
+    night = _two_band_night(n_stars=n_stars, n_images=3, colors=colors)
+    true_color = night.true_color[:n_stars]
+    # The instrumental color, and the first band's zero-pointed magnitude,
+    # up to constants that do not change the spread.
+    color_inst = true_color / night.color_slope
+    mag = night.true_mag["R"][:n_stars] - 0.1 * true_color
+    others = np.column_stack([np.ones(n_stars), mag])
+    residual = color_inst - others @ np.linalg.lstsq(others, color_inst)[0]
+    spread = np.mean(residual**2)
+
+    def noise_variance(d):
+        # Both bands move alike, so the color's variance is twice a band's.
+        pattern = np.array([d, -d, 0.0])
+        *_, variance = _night_means(pattern, np.full(3, 1e-5), np.zeros(3, int), 1)
+        return 2 * variance[0]
+
+    # The variance goes very nearly as the square of d.
+    d = 0.1 * np.sqrt(fraction * spread / noise_variance(0.1))
+    assert noise_variance(d) == pytest.approx(fraction * spread, rel=0.01)
+
+    for star in range(n_stars):
+        sign = 1 if star % 2 else -1
+        for band in ("R", "I"):
+            rows = np.flatnonzero(
+                (night.observed["star_id"] == star + 1)
+                & (night.observed["passband"] == band)
+            )
+            night.observed["mag_inst"][rows] += sign * np.array([d, -d, 0.0])
+    return night
+
+
 def test_estimate_catalog_colors_refuses_a_night_too_noisy_for_its_colors(
     mocker, monkeypatch, caplog
 ):
-    # Fifteen stars spanning 0.3 mag in color, measured on three images at
-    # 0.15 mag each: the noise in their instrumental colors is larger than
-    # their real spread, and the night gets no relation rather than a slope
-    # resting on the difference of the two.
-    night = _two_band_night(
-        n_stars=15, n_images=3, noise_sigma=0.15, color_range=(0.55, 0.85)
-    )
+    # The noise in the comparison stars' instrumental colors is three
+    # quarters of their spread in color, and the night gets no relation
+    # rather than a slope resting on the difference of the two.
+    night = _night_with_scatter_in_its_images(0.75)
 
     with caplog.at_level(logging.WARNING, logger=_MAGNITUDE_TRANSFORMS_LOGGER):
         result = _estimate_colors(mocker, night.catalog, night.observed)
@@ -5518,16 +5578,26 @@ def test_estimate_catalog_colors_refuses_a_night_too_noisy_for_its_colors(
     assert np.isfinite(result["color_est"]).all()
 
 
-def test_estimate_catalog_colors_does_not_refuse_an_ordinary_night(mocker):
-    # Thirty stars spanning a magnitude in color with the same noise as
-    # above get a relation, the same one with or without the limit.
-    night = _two_band_night(n_images=3, noise_sigma=0.15)
-    spy = mocker.spy(magnitude_transforms, "_fit_color_relation")
+def test_estimate_catalog_colors_does_not_refuse_an_ordinary_night(mocker, monkeypatch):
+    # Noise a quarter of the spread in color, and a night of thirty stars
+    # spanning a magnitude in color at 0.15 mag per image, both get the
+    # relation they would without the limit.
+    for night in (
+        _night_with_scatter_in_its_images(0.25),
+        _two_band_night(n_images=3, noise_sigma=0.15),
+    ):
+        with_limit = _estimate_colors(
+            mocker, night.catalog, night.observed, in_place=False
+        )
+        with monkeypatch.context() as patch:
+            patch.setattr(magnitude_transforms, "_MAX_NOISE_FRACTION", np.inf)
+            without_limit = _estimate_colors(
+                mocker, night.catalog, night.observed, in_place=False
+            )
 
-    result = _estimate_colors(mocker, night.catalog, night.observed)
-
-    assert np.isfinite(result["color_est"]).all()
-    assert spy.spy_return[0] is not None
+        assert np.isfinite(with_limit["color_est"]).all()
+        for column in ("color_est", "color_est_error"):
+            np.testing.assert_array_equal(with_limit[column], without_limit[column])
 
 
 def test_fit_color_relation_error_leaves_out_the_scatter_of_the_fit_stars():
@@ -5652,7 +5722,9 @@ def test_color_relation_is_not_biased_with_few_images(quoted_factor):
     # errors is a fair error to report but is biased high, and correcting
     # the slope for that much noise steepens it. The correction uses the
     # scatter alone, so it is right whether or not the quoted errors are.
-    offsets, errors = _simulated_target_offsets(3, 0.1, quoted_factor)
+    # Enough nights that the bounds below sit about five standard deviations
+    # of their statistic from its typical value.
+    offsets, errors = _simulated_target_offsets(3, 0.1, quoted_factor, n_trials=1000)
 
     # A slope corrected for noise keeps a small bias when the noise is not
     # much smaller than the spread of colors, about +0.02 mag here even with
