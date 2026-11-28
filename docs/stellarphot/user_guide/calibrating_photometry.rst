@@ -259,7 +259,9 @@ or when their colors are too noisy for how much they differ.
 images, or their quoted errors when larger, and the uncertainty of the fitted
 relation. It leaves out errors that are the same on every image, such as
 flat-field errors and light from neighbours; ``error_floor`` adds a value in
-quadrature for those. On the Feder camera, B-V errors came out about right
-with ``error_floor=0.010`` for stars without close neighbours, and still 1.5
-to 2.4 times too small for stars with bright neighbours. The error says
+quadrature for those. On the Feder camera, in one field on one night, bright
+stars (V < 15) without close neighbours needed a B-V floor of at most about
+0.008 if the catalog had a color for them, but about 0.020 if it did not --
+and those are the stars an estimate is for. Fainter stars without a catalog
+color needed 0.035 to 0.040 at V 15 to 16. The error says
 nothing about how far a supernova sits from the relation stars follow.

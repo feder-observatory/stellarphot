@@ -1755,14 +1755,19 @@ def estimate_catalog_colors(
     on the Feder Observatory camera in the field of NGC 7790, with
     ``error_floor=0`` the reported error was about 1.5 to 2.4 times too
     small, worst for bright stars, whose images scatter by only a few
-    mmag. With ``error_floor=0.010`` it was about right (0.8 to 1.05 times
-    the actual error) for stars without close neighbours; for stars with
-    bright neighbours within about 25 arcsec it stayed about 1.5 to 2.4
-    times too small. The default of zero builds no camera's value into the
-    result. The error does not include any real scatter of objects about
-    the relation, so it is too small for an object whose spectrum is not
-    like a star's, such as a supernova, by an amount this function cannot
-    know.
+    mmag. The floor that made the error match the differences from an
+    independent reference, on one night, depended on the star. Bright stars
+    (V < 15) without close neighbours that the catalog had a color for
+    needed about 0.007, or less if the reference's own errors are larger
+    than it quotes. Stars like them that the catalog had no color for --
+    the stars an estimate is for -- needed about 0.020, and stars at V 15
+    to 16 about 0.035 to 0.040. Those stars have brighter neighbours within
+    about 25 arcsec, which accounts for part of the difference but not all
+    of it. No single value suits every star. The default of zero builds no
+    camera's value into the result. The error does not include any real
+    scatter of objects about the relation, so it is too small for an object
+    whose spectrum is not like a star's, such as a supernova, by an amount
+    this function cannot know.
 
     When `transform_to_catalog` propagates ``color_est_error`` into
     ``mag_cal_error`` it treats the color as independent of the star's own
