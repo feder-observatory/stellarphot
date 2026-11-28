@@ -1600,8 +1600,9 @@ def estimate_catalog_colors(
     magnitude errors are computed from the measured flux: weighting by them
     favours the images on which noise made a star brighter, and a weighted
     mean of the magnitudes of a faint star comes out too bright -- by about
-    0.05 mag when each image has an error of 0.2 mag. An image on which a
-    star's net counts were negative has no magnitude and cannot enter the
+    0.05 mag over many images that each have an error of 0.2 mag. An image
+    on which a star's net counts were negative has no magnitude and cannot
+    enter the
     mean, which biases it the same way; ``min_image_fraction`` is what keeps
     such stars from getting an estimate, and ``min_snr`` keeps out stars
     faint enough for that to happen often. The signal-to-noise ratio is

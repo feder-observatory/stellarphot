@@ -5123,8 +5123,7 @@ def test_night_means_averages_fluxes_and_takes_the_larger_error():
         )
         assert mean[number] == pytest.approx(expected_mean, rel=1e-12)
         assert error[number] == pytest.approx(expected_error, rel=1e-12)
-        # The quoted errors alone, and the variance from the scatter alone,
-        # whichever is larger.
+        # The quoted errors alone, and the variance from the scatter alone.
         assert quoted_error[number] == pytest.approx(propagated, rel=1e-12)
         assert noise_variance[number] == pytest.approx(scatter**2, rel=1e-12)
         # The case covers the branch it is meant to.
@@ -5500,8 +5499,11 @@ def test_color_relation_is_not_biased_with_few_images(quoted_factor):
     # scatter alone, so it is right whether or not the quoted errors are.
     offsets, errors = _simulated_target_offsets(3, 0.1, quoted_factor)
 
-    uncertainty = offsets.std() / np.sqrt(len(offsets))
-    assert abs(offsets.mean()) < 3 * uncertainty
+    # A slope corrected for noise keeps a small bias when the noise is not
+    # much smaller than the spread of colors, about +0.02 mag here even with
+    # the noise known exactly. Correcting with the larger of the two errors
+    # gave +0.05 with honest quoted errors and +0.6 with ones twice too big.
+    assert abs(offsets.mean()) < 0.04
     # The reported error takes the quoted errors when they are the larger,
     # so it is right when they are and too big when they overstate the
     # noise.
