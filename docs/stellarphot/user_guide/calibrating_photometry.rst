@@ -249,11 +249,14 @@ the bundled notebook does all of this when a color term is in ``vary``.
 Each band's magnitude for the night is that of the star's mean flux over
 the night's images, which, unlike an error-weighted mean of magnitudes, is
 not biased bright for faint stars. A star gets no estimate if, in either
-band, the median signal-to-noise ratio of its images is below ``min_snr``
-(default 5) or fewer than ``min_image_fraction`` (default 0.8) of its images
-have a usable magnitude. ``color_est_error`` comes from the scatter of the
-star's own images, or their quoted errors when larger, and the uncertainty of
-the fitted relation. It leaves out errors that are the same on every image,
-such as flat-field errors and light from neighbours; ``error_floor`` adds a
-value in quadrature for those (about 0.01 mag for B-V on the Feder camera),
-and even then the error is too small for faint or crowded stars.
+band, the median signal-to-noise ratio of its usable images is below
+``min_snr`` (default 5) or fewer than ``min_image_fraction`` (default 0.8) of
+the images it appears in are usable; with 3 or 4 images in a band, one bad
+image is enough. ``color_est_error`` comes from the scatter of the star's own
+images, or their quoted errors when larger, and the uncertainty of the fitted
+relation. It leaves out errors that are the same on every image, such as
+flat-field errors and light from neighbours; ``error_floor`` adds a value in
+quadrature for those. On the Feder camera, B-V errors came out about right
+with ``error_floor=0.010`` for stars without close neighbours, and still 1.5
+to 2.4 times too small for stars with bright neighbours. The error says
+nothing about how far a supernova sits from the relation stars follow.

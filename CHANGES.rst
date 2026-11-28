@@ -63,10 +63,10 @@ New Features
   [#753]
 + New function ``estimate_catalog_colors()`` estimates each star's
   catalog-system color, per night, from its mean flux in two bands, skipping
-  stars below ``min_snr`` or ``min_image_fraction``. Pass its ``color_est``
-  column to ``transform_to_catalog()`` as the new ``color_fallback_column`` to
-  calibrate stars the catalog has no color for when a color term is fit; the
-  "Calibrate magnitudes" notebook does this. [#754]
+  stars below ``min_snr`` or ``min_image_fraction``; ``error_floor`` adds a
+  floor to its error. Pass its ``color_est`` column to ``transform_to_catalog()``
+  as the new ``color_fallback_column`` to calibrate stars the catalog has no
+  color for; the "Calibrate magnitudes" notebook does this. [#754]
 
 Other Changes and Additions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
