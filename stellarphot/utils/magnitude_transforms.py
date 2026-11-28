@@ -6,7 +6,9 @@ import lmfit
 import numpy as np
 from astropy import units as u
 from astropy.coordinates import SkyCoord, UnitSphericalRepresentation
+from astropy.table import Table
 from astropy.utils.exceptions import AstropyUserWarning
+from numpy.lib.stride_tricks import sliding_window_view
 from numpy.linalg import LinAlgError
 from uncertainties import correlated_values, unumpy
 
@@ -20,6 +22,7 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "UnsupportedPassbandError",
     "calibrated_from_instrumental",
+    "estimate_catalog_colors",
     "filter_transform",
     "transform_to_catalog",
 ]
@@ -60,6 +63,61 @@ _DEFAULT_EXPECTED = {"z": (18.0, 22.0)}
 # adds to the table it is given.
 _CAL_MAG_COLUMN = "mag_cal"
 _CAL_MAG_ERROR_COLUMN = "mag_cal_error"
+
+# Name of the column of estimated colors that `estimate_catalog_colors` adds,
+# and of the entry in the table's meta recording which two passbands each
+# passband's estimate is the color of. The uncertainty of the estimate goes in
+# the column of the same name with `_COEFF_ERROR_SUFFIX` added.
+_COLOR_EST_COLUMN = "color_est"
+_COLOR_EST_META_KEY = "color_est_bands"
+
+# What joins the two passband names of a color in that record, and in
+# messages: R-I. No AAVSO passband name contains it.
+_COLOR_BAND_SEPARATOR = "-"
+
+# Fewest stars, beyond the number of terms being fit, that the relation
+# between instrumental and catalog color is fit to. With fewer there is no
+# telling a good relation from one drawn through its own points.
+_MIN_EXTRA_COLOR_STARS = 3
+
+# How far, in robust standard deviations, a star may sit from the color
+# relation and still help define it.
+_COLOR_RELATION_CLIP = 4.0
+
+# A fit star is left out of the color relation when the variance of its
+# instrumental color, judged from the scatter of its own images, is more than
+# this many times the median for the stars nearest it in magnitude. Such a
+# star -- a variable, or one hit by a cosmic ray -- would otherwise be
+# corrected for all of that noise at its full weight and steepen the slope
+# for everyone. The yardstick is other stars, not the quoted errors: those
+# can understate the scatter of every bright star several times over. With
+# two images in each band an ordinary star's variance estimate has a long
+# tail: at 20, about 0.04 percent of stars are left out by chance when both
+# bands are equally noisy, and up to 1.6 percent when one band is ten times
+# quieter than the other, which leaves the estimate from little more than
+# one image's scatter. With three images it is at most 0.04 percent. Leaving
+# those stars out with two images moves a red target's estimate by at most
+# about 0.01 mag.
+_SCATTER_OUTLIER_FACTOR = 20.0
+
+# Number of stars, nearest in magnitude and counting the star itself, whose
+# median variance is the yardstick above.
+_SCATTER_NEIGHBOURS = 9
+
+# Fewest fit stars for which any is left out as above. With fewer, what is
+# ordinary for the night cannot be told.
+_MIN_SCATTER_STARS = 8
+
+# Largest fraction of the fit stars' weighted spread in instrumental color --
+# what is left after the constant and any magnitude term -- that the
+# correction for their noise may remove. Past this the slope rests on the
+# small difference of two noisy sums and swings wildly from night to night;
+# the night gets no relation instead.
+_MAX_NOISE_FRACTION = 0.5
+
+# A fractional flux error times this is a magnitude error, and a magnitude
+# error is this divided by the signal-to-noise ratio.
+_MAG_PER_FRACTIONAL_FLUX = 2.5 / np.log(10)
 
 # Suffix of the column reporting the uncertainty of a fit coefficient, so that
 # ``a`` is reported alongside ``a_error``. Matches the mag/mag_error and
@@ -701,7 +759,14 @@ def _nan_is_an_expected_input():
 
 
 def _calibrated_with_uncertainty(
-    fit_result, covar, mag_inst, color, errors, fit_diff, excess_scatter=0.0
+    fit_result,
+    covar,
+    mag_inst,
+    color,
+    errors,
+    fit_diff,
+    excess_scatter=0.0,
+    color_errors=None,
 ):
     """
     Calibrated magnitude of every star, and how uncertain each one is.
@@ -741,6 +806,11 @@ def _calibrated_with_uncertainty(
     excess_scatter : float, optional
         The image's ``fit_excess_scatter``, added in quadrature to every
         star's uncertainty. Non-positive or NaN values add nothing.
+
+    color_errors : `numpy.ndarray`, optional
+        Uncertainty of each color, propagated through the color terms. Must
+        be non-negative or NaN, for the same reason ``errors`` must. Leave
+        out for colors taken as exact.
 
     Returns
     -------
@@ -792,6 +862,8 @@ def _calibrated_with_uncertainty(
         # Building the uncertain values is itself elementwise over the array,
         # so a NaN error complains here rather than in the model below.
         star_mag = unumpy.uarray(mag_inst, errors)
+        if color_errors is not None:
+            color = unumpy.uarray(color, color_errors)
 
         calibrated = calibrated_from_instrumental(
             (star_mag, color), *(uvars[name] for name in _COEFF_NAMES)
@@ -1062,6 +1134,869 @@ def filter_transform(mag_data, output_filter, g=None, r=None, i=None, transform=
     return out_mag
 
 
+def _group_means(values, group, n_groups):
+    """
+    Plain mean of the finite values in each group.
+
+    Parameters
+    ----------
+
+    values : `numpy.ndarray`
+        Values to average.
+
+    group : `numpy.ndarray`
+        Integer index, for each value, of the group it belongs to.
+
+    n_groups : int
+        Number of groups.
+
+    Returns
+    -------
+    mean : `numpy.ndarray`
+        Mean of each group, NaN for a group with no finite value in it.
+
+    count : `numpy.ndarray`
+        Number of finite values in each group.
+    """
+    finite = np.isfinite(values)
+    count = np.bincount(group[finite], minlength=n_groups)
+    total = np.bincount(group[finite], weights=values[finite], minlength=n_groups)
+    mean = np.full(n_groups, np.nan)
+    populated = count > 0
+    mean[populated] = total[populated] / count[populated]
+    return mean, count
+
+
+def _group_medians(values, group, n_groups):
+    """
+    Median of the values in each group.
+
+    Parameters
+    ----------
+
+    values : `numpy.ndarray`
+        Values, all finite.
+
+    group : `numpy.ndarray`
+        Integer index, for each value, of the group it belongs to.
+
+    n_groups : int
+        Number of groups.
+
+    Returns
+    -------
+    `numpy.ndarray`
+        Median of each group, NaN for an empty group.
+    """
+    # Sorted by group and, within a group, by value, so that each group's
+    # median sits in the middle of its own run of the sorted values.
+    ordered = values[np.lexsort((values, group))]
+    count = np.bincount(group, minlength=n_groups)
+    start = np.cumsum(count) - count
+    populated = count > 0
+    low = start[populated] + (count[populated] - 1) // 2
+    high = start[populated] + count[populated] // 2
+    median = np.full(n_groups, np.nan)
+    median[populated] = (ordered[low] + ordered[high]) / 2
+    return median
+
+
+def _night_means(mags, errors, group, n_groups):
+    """
+    Magnitude of the mean flux in each group, and its uncertainty.
+
+    Parameters
+    ----------
+
+    mags, errors : `numpy.ndarray`
+        Magnitudes to average and their uncertainties. A magnitude takes
+        part only if it is finite and its uncertainty is a positive, finite
+        number.
+
+    group : `numpy.ndarray`
+        Integer index, for each magnitude, of the group it belongs to.
+
+    n_groups : int
+        Number of groups.
+
+    Returns
+    -------
+    mean, error : `numpy.ndarray`
+        Magnitude of the unweighted mean flux of each group, and the
+        uncertainty of that magnitude.
+
+    quoted_error : `numpy.ndarray`
+        Uncertainty of that magnitude propagated from the quoted errors
+        alone.
+
+    noise_variance : `numpy.ndarray`
+        Unbiased estimate of the variance of that magnitude, from the
+        scatter of the fluxes alone; for a group with one value, the square
+        of ``quoted_error``.
+
+    Notes
+    -----
+
+    All four returned arrays are NaN for a group with nothing usable in it.
+
+    Each uncertainty is that of the mean flux, converted to magnitudes.
+    ``error`` is the larger of two estimates of it: the sample standard
+    deviation of the fluxes divided by the square root of their number, and
+    ``quoted_error``. A few images can agree better than their noise by
+    chance, and the second keeps the uncertainty from following them down;
+    with one image it is the only estimate there is.
+
+    The larger of two estimates is biased high, which is harmless in a
+    reported error but not in the correction `_fit_color_relation` makes
+    for noise in the instrumental colors. That correction uses
+    ``noise_variance``, which does not trust the quoted errors either: the
+    read noise they assume can be wrong for the night.
+    """
+    usable = np.isfinite(mags) & np.isfinite(errors) & (errors > 0)
+    members = group[usable]
+    flux = 10 ** (-0.4 * mags[usable])
+    flux_error = flux * errors[usable] / _MAG_PER_FRACTIONAL_FLUX
+
+    mean_flux, count = _group_means(flux, members, n_groups)
+    populated = count > 0
+    count = count[populated]
+
+    propagated = np.sqrt(
+        np.bincount(members, weights=flux_error**2, minlength=n_groups)[populated]
+    )
+    propagated /= count
+    squared_deviations = np.bincount(
+        members, weights=(flux - mean_flux[members]) ** 2, minlength=n_groups
+    )[populated]
+    scatter = np.zeros_like(propagated)
+    several = count > 1
+    scatter[several] = np.sqrt(
+        squared_deviations[several] / (count[several] - 1) / count[several]
+    )
+
+    def magnitudes(flux_error):
+        # Error of the mean flux, as an error of its magnitude.
+        result = np.full(n_groups, np.nan)
+        result[populated] = _MAG_PER_FRACTIONAL_FLUX * flux_error / mean_flux[populated]
+        return result
+
+    mean = np.full(n_groups, np.nan)
+    mean[populated] = -2.5 * np.log10(mean_flux[populated])
+    error = magnitudes(np.maximum(propagated, scatter))
+    quoted_error = magnitudes(propagated)
+    noise_variance = magnitudes(np.where(several, scatter, propagated)) ** 2
+
+    return mean, error, quoted_error, noise_variance
+
+
+def _instrumental_color(first, second):
+    """
+    Instrumental color from the nightly means of its two bands.
+
+    Parameters
+    ----------
+
+    first, second : tuple of `numpy.ndarray`
+        What `_night_means` returns for each band of the color.
+
+    Returns
+    -------
+    color, error : `numpy.ndarray`
+        Instrumental color of each group and its uncertainty.
+
+    weighting : dict
+        The ``weight_error`` and ``noise_variance`` keyword arguments of
+        `_fit_color_relation`: the uncertainty of the color from the quoted
+        errors, and the variance of the color from the scatter of the
+        images.
+    """
+    first_mean, first_error, first_quoted, first_variance = first
+    second_mean, second_error, second_quoted, second_variance = second
+    weighting = {
+        "weight_error": np.hypot(first_quoted, second_quoted),
+        "noise_variance": first_variance + second_variance,
+    }
+    return first_mean - second_mean, np.hypot(first_error, second_error), weighting
+
+
+def _well_measured(in_band, mags, errors, group, n_groups, min_snr, min_fraction):
+    """
+    Whether each group is measured well enough in one band to be used.
+
+    Parameters
+    ----------
+
+    in_band : `numpy.ndarray`
+        Whether each row is in the band.
+
+    mags, errors : `numpy.ndarray`
+        Instrumental magnitude of each row and its uncertainty.
+
+    group : `numpy.ndarray`
+        Integer index, for each row, of the group it belongs to.
+
+    n_groups : int
+        Number of groups.
+
+    min_snr : float
+        Smallest median signal-to-noise ratio of a group's usable rows in
+        the band.
+
+    min_fraction : float
+        Smallest fraction of a group's rows in the band that must be
+        usable.
+
+    Returns
+    -------
+    `numpy.ndarray`
+        For each group, ``True`` if it meets both limits.
+
+    Notes
+    -----
+
+    A row is usable if its magnitude is finite and its uncertainty is a
+    positive, finite number. Its signal-to-noise ratio is
+    ``2.5 / ln(10)`` divided by its uncertainty.
+    """
+    usable = in_band & np.isfinite(mags) & np.isfinite(errors) & (errors > 0)
+    n_rows = np.bincount(group[in_band], minlength=n_groups)
+    n_usable = np.bincount(group[usable], minlength=n_groups)
+    snr = _group_medians(
+        _MAG_PER_FRACTIONAL_FLUX / errors[usable], group[usable], n_groups
+    )
+    fraction = np.zeros(n_groups)
+    seen = n_rows > 0
+    fraction[seen] = n_usable[seen] / n_rows[seen]
+    # A NaN median, for a group with nothing usable, compares as False.
+    return (n_usable > 0) & (fraction >= min_fraction) & (snr >= min_snr)
+
+
+def _scatter_outliers(noise_variance, mag, candidates):
+    """
+    Which stars' images scatter far more than those of stars as bright.
+
+    Parameters
+    ----------
+
+    noise_variance : `numpy.ndarray`
+        Variance of each star's instrumental color, from the scatter of its
+        images.
+
+    mag : `numpy.ndarray`
+        Magnitude of each star.
+
+    candidates : `numpy.ndarray`
+        Whether each star is to be judged; the rest are neither judged nor
+        part of the yardstick.
+
+    Returns
+    -------
+    `numpy.ndarray`
+        ``True`` for each candidate whose ``noise_variance`` is more than
+        `_SCATTER_OUTLIER_FACTOR` times the median of the
+        `_SCATTER_NEIGHBOURS` candidates nearest it in magnitude. All
+        ``False`` when there are fewer than `_MIN_SCATTER_STARS` candidates
+        with a magnitude.
+    """
+    wild = np.zeros(len(noise_variance), dtype=bool)
+    judged = np.flatnonzero(candidates & np.isfinite(mag))
+    if len(judged) < _MIN_SCATTER_STARS:
+        return wild
+
+    order = judged[np.argsort(mag[judged], kind="stable")]
+    variance = noise_variance[order]
+    width = min(_SCATTER_NEIGHBOURS, len(order))
+    medians = np.median(sliding_window_view(variance, width), axis=1)
+    # Each star's window is centred on it where the ends allow.
+    start = np.clip(np.arange(len(order)) - width // 2, 0, len(order) - width)
+    wild[order] = variance > _SCATTER_OUTLIER_FACTOR * medians[start]
+    return wild
+
+
+def _fit_color_relation(
+    color_inst,
+    color_inst_error,
+    mag,
+    color_cat,
+    magnitude_term,
+    *,
+    weight_error,
+    noise_variance,
+):
+    """
+    Fit catalog color as a linear function of instrumental color.
+
+    Parameters
+    ----------
+
+    color_inst, color_inst_error : `numpy.ndarray`
+        Instrumental color of each star and the uncertainty to report for
+        it.
+
+    mag : `numpy.ndarray`
+        Zero-pointed instrumental magnitude of each star in the first band
+        of the color.
+
+    color_cat : `numpy.ndarray`
+        Catalog color of each star, NaN where the catalog has none.
+
+    magnitude_term : bool
+        Whether the relation also has a term linear in ``mag``.
+
+    weight_error : `numpy.ndarray`
+        Uncertainty of each instrumental color that the fit is weighted by.
+
+    noise_variance : `numpy.ndarray`
+        Estimate of the variance of each instrumental color, which the fit
+        corrects its slope for.
+
+    Returns
+    -------
+    estimate : `numpy.ndarray` or None
+        Color the relation gives for every star, whether or not it was
+        fit. `None` if no relation could be fit: too few stars, stars
+        whose colors or magnitudes do not differ enough to define one, or
+        stars whose colors differ by too little next to their noise.
+
+    error : `numpy.ndarray` or None
+        Uncertainty of each estimate.
+
+    Notes
+    -----
+
+    The fit is weighted by ``weight_error``, floored at `_MIN_FIT_SIGMA`
+    for the reason the transform fit floors its own, and is repeated after
+    dropping stars more than `_COLOR_RELATION_CLIP` robust standard
+    deviations away -- a variable, or a star whose catalog color is wrong
+    -- until none are dropped. On each pass a star whose ``noise_variance``
+    is far above that of the stars nearest it in magnitude is left out
+    (see `_scatter_outliers`): its mean color may sit on the relation, so
+    the clip keeps it, but the correction below would remove its noise at
+    its full weight and steepen the slope for every star.
+
+    Noise in the instrumental colors, which are the independent variable
+    here, flattens an ordinary least-squares slope, and a flattened slope
+    biases the estimate for a star whose color is outside the range of the
+    fitted stars -- which a supernova's often is. The weighted sum of
+    ``noise_variance`` is therefore subtracted from the color term of the
+    normal equations, the standard moment correction for a regressor
+    measured with known error. It has to be an unbiased estimate of the
+    variance: one biased high over-corrects and steepens the slope. The
+    noise's covariance with the magnitude term, whose regressor shares the
+    first band's noise, is left alone: it is small next to the spread of
+    the stars in magnitude.
+
+    When the correction would remove more than `_MAX_NOISE_FRACTION` of
+    the weighted spread in color that the other terms leave -- the colors
+    differ by little more than their noise -- the slope is the small
+    difference of two noisy sums and can be wildly wrong, so no relation
+    is returned.
+
+    The uncertainty has two parts, added in quadrature: the star's own
+    ``color_inst_error`` scaled by the slope, and the uncertainty of
+    the fitted relation evaluated at the star, which grows away from the
+    stars that define it. The scatter of the fitted stars about the
+    relation enters only through the second, not by being added whole:
+    much of it is the catalog's own color errors, which the estimate for
+    another star does not suffer.
+    """
+    columns = [np.ones_like(color_inst), color_inst]
+    if magnitude_term:
+        # About its median, so that the constant and the magnitude term can
+        # be told apart numerically.
+        columns.append(mag - np.nanmedian(mag))
+    design = np.column_stack(columns)
+    n_terms = design.shape[1]
+
+    fit = (
+        np.isfinite(design).all(axis=1)
+        & np.isfinite(color_cat)
+        & np.isfinite(color_inst_error)
+        & np.isfinite(weight_error)
+        & np.isfinite(noise_variance)
+    )
+    weights = 1 / np.maximum(weight_error, _MIN_FIT_SIGMA)
+
+    # The columns other than the color.
+    others = [0, *range(2, n_terms)]
+
+    # Each pass either drops at least one star or ends the loop, so this
+    # cannot run for longer than there are stars.
+    while True:
+        # Judged afresh on each pass, against the stars still in the fit.
+        used = fit & ~_scatter_outliers(noise_variance, mag, fit)
+        if used.sum() < n_terms + _MIN_EXTRA_COLOR_STARS:
+            return None, None
+
+        weighted_design = design[used] * weights[used, np.newaxis]
+        normal = weighted_design.T @ weighted_design
+        # The noise in each color adds its variance, times the square of
+        # its weight, to this element of the weighted normal matrix.
+        correction = np.sum(weights[used] ** 2 * noise_variance[used])
+
+        # The weighted spread in color that the other terms do not account
+        # for: the color element of the normal matrix less what the other
+        # columns explain of it.
+        try:
+            explained = normal[1, others] @ np.linalg.solve(
+                normal[np.ix_(others, others)], normal[others, 1]
+            )
+        except LinAlgError:
+            return None, None
+        if correction > _MAX_NOISE_FRACTION * (normal[1, 1] - explained):
+            return None, None
+
+        normal[1, 1] -= correction
+
+        # Stars whose colors differ by no more than their noise, or whose
+        # magnitudes are all the same, leave a matrix that is not positive
+        # definite or is nearly singular. Either way there is no relation
+        # in the data to find.
+        try:
+            np.linalg.cholesky(normal)
+        except LinAlgError:
+            return None, None
+        if np.linalg.cond(normal) > _MAX_DESIGN_CONDITION**2:
+            return None, None
+
+        inverse = np.linalg.inv(normal)
+        coefficients = inverse @ (weighted_design.T @ (color_cat[used] * weights[used]))
+
+        residuals = color_cat - design @ coefficients
+        center = np.median(residuals[used])
+        # Scaled so that it estimates the standard deviation of a Gaussian,
+        # and floored so that stars following the relation almost exactly
+        # are not dropped over rounding error.
+        spread = max(
+            1.4826 * np.median(np.abs(residuals[used] - center)), _MIN_FIT_SIGMA
+        )
+        keep = fit & (np.abs(residuals - center) <= _COLOR_RELATION_CLIP * spread)
+        if keep.sum() == fit.sum():
+            break
+        fit = keep
+
+    degrees_of_freedom = used.sum() - n_terms
+
+    # The weights are not the true uncertainties of the residuals -- they
+    # know nothing of the catalog's errors -- so the covariance is scaled
+    # by the reduced chi-square to the scatter actually seen.
+    redchi = np.sum((residuals[used] * weights[used]) ** 2) / degrees_of_freedom
+    relation_variance = np.einsum("ij,jk,ik->i", design, inverse * redchi, design)
+
+    estimate = design @ coefficients
+    error = np.sqrt((coefficients[1] * color_inst_error) ** 2 + relation_variance)
+
+    return estimate, error
+
+
+def estimate_catalog_colors(
+    observed_mags,
+    obs_mag_col="mag_inst",
+    obs_error_column="mag_error",
+    cat_name="apass_dr9",
+    vary=_DEFAULT_VARY,
+    search_radius=None,
+    in_place=True,
+    min_snr=5.0,
+    min_image_fraction=0.8,
+    error_floor=0.0,
+):
+    """
+    Estimate a catalog-system color for every star from its instrumental
+    magnitudes in two passbands, one estimate per night.
+
+    The estimate is for stars a catalog has no color for -- a supernova is
+    the usual case -- so that `transform_to_catalog` can still apply a color
+    term to them: pass the ``color_est`` column this adds as its
+    ``color_fallback_column``. Call this once, on a table holding every
+    passband, before transforming each passband.
+
+    Parameters
+    ----------
+
+    observed_mags : `astropy.table.Table`
+        Observations in every passband. Must have ``file``, ``passband``,
+        ``ra``, ``dec``, ``star_id`` and ``night`` columns in addition to the
+        magnitude and error columns named below. Need not be grouped.
+
+    obs_mag_col : str, optional
+        Name of the column of instrumental magnitudes.
+
+    obs_error_column : str, optional
+        Name of the column of errors in the instrumental magnitudes.
+
+    cat_name : str, optional
+        Name of the catalog whose colors are being estimated, either
+        ``"apass_dr9"`` or ``"refcat2"``. Use the catalog the transform will
+        be fit against.
+
+    vary : sequence of str, optional
+        The terms the transform will be fit with; see `transform_to_catalog`.
+        Only whether a magnitude term (``"a"`` or ``"b"``) is among them is
+        used here.
+
+    search_radius : `astropy.units.Quantity`, optional
+        Radius of the cone the catalog is fetched from; see
+        `transform_to_catalog`.
+
+    in_place : bool, optional
+        If ``True``, add the columns to the input table, otherwise return a
+        copy.
+
+    min_snr : float, optional
+        Smallest median signal-to-noise ratio for which a star gets an
+        estimate, in each of the two bands that night. The median is over
+        the images on which the star has a usable measurement: a finite
+        magnitude and a positive, finite error. Zero turns the limit off.
+
+    min_image_fraction : float, optional
+        Smallest fraction of a star's images in each of the two bands that
+        night that must have a usable measurement for it to get an
+        estimate. Greater than zero and at most one. The fraction is of the
+        images in which the star has a row, so a star with rows in only a
+        few of a night's images is judged on those. On a night with 2 to 4
+        images in a band, one unusable image drops the star at the default.
+
+    error_floor : float, optional
+        Uncertainty, in magnitudes, added in quadrature to every
+        ``color_est_error``.
+
+    Returns
+    -------
+
+    `astropy.table.Table`
+        The table with two columns added. ``color_est`` is the estimated
+        color and ``color_est_error`` its uncertainty. Each row holds the
+        color conventionally used to transform that row's own passband --
+        R-I on R and I rows, B-V on B and V rows -- and the same value on
+        every row of one star, one night and one color. Both are NaN for a
+        star not observed in both passbands of the color that night, for a
+        star that misses ``min_snr`` or ``min_image_fraction`` in either
+        passband that night, and for a passband whose color could not be
+        estimated at all.
+
+        They are also NaN for a night on which too few stars had both an
+        instrumental and a catalog color to relate the two, or those stars
+        were too alike in color to define the relation, or the noise in
+        their instrumental colors was too large next to their spread in
+        color.
+
+        ``result.meta["color_est_bands"]`` records, for each passband that
+        got an estimate, the color the estimate is, as a string such as
+        ``"R-I"``.
+
+    Notes
+    -----
+
+    For each color, say R-I, the steps are:
+
+    1. Each R and each I image is put on a common scale by fitting its zero
+       point alone against the catalog, which takes out the changes in
+       extinction and transparency through a night.
+    2. Each star's zero-pointed magnitudes are turned into fluxes, the
+       fluxes are averaged, without weights, over the night in each band,
+       and the magnitudes of the two means are differenced to give an
+       instrumental color. Only stars that meet ``min_snr`` and
+       ``min_image_fraction`` in both bands get one.
+    3. Each night, the catalog color of the stars that have one is fit as a
+       linear function of instrumental color -- and of magnitude, when
+       ``vary`` has a magnitude term -- and the fit is evaluated for every
+       star.
+
+    The fluxes are averaged rather than the magnitudes because the quoted
+    magnitude errors are computed from the measured flux: weighting by them
+    favours the images on which noise made a star brighter, and a weighted
+    mean of the magnitudes of a faint star comes out too bright -- by about
+    0.05 mag over many images that each have an error of 0.2 mag. An image
+    on which a star's net counts were negative has no magnitude and cannot
+    enter the mean, which biases it the same way; ``min_image_fraction`` is
+    what keeps such stars from getting an estimate, and ``min_snr`` keeps
+    out stars faint enough for that to happen often. The signal-to-noise ratio is
+    judged from the star's own measured flux, so a faint star whose
+    aperture holds light from a bright neighbour can pass the cut and get
+    a wrong color.
+
+    The relation in step 3 is exact for a transform with linear color and
+    magnitude terms, which is the default; with the quadratic terms ``"b"``
+    or ``"d"`` it is an approximation, and a poor one for a star well
+    outside the color range of the stars that define it. Only stars within
+    1.0 arcsec of their catalog entry define it, and a star whose images
+    scatter far more than those of stars as bright -- a variable, say -- is
+    left out of it. The fit is weighted by
+    the quoted errors and allows for the noise in the instrumental colors,
+    which would otherwise flatten the relation and bias the estimate for a
+    star bluer or redder than the rest. It judges that noise from the
+    scatter of each star's own images rather than from the quoted errors,
+    whose assumed read noise can be wrong for the night. The estimate is
+    on the catalog's own color scale, so any offset of the catalog's colors
+    in the field carries over to it.
+
+    Only the two passbands of the color itself are used. The relation
+    between a color in one pair of bands and a color in another holds for
+    stars and not for a supernova, so no other pair is substituted when one
+    of the two is missing.
+
+    ``color_est_error`` combines three things in quadrature: the
+    uncertainty of the instrumental color scaled by the slope of the
+    relation; the uncertainty of the relation itself at the star's color
+    and magnitude, which grows away from the stars that define it; and
+    ``error_floor``. The uncertainty of the instrumental color combines
+    those of the two bands' means, and each of those is the uncertainty of
+    the mean flux -- the larger of the scatter of the star's own fluxes
+    that night divided by the square root of their number, and what the
+    quoted errors give -- divided by the mean flux. The scatter of the
+    fitted stars about the relation is not added on its own: much of it is
+    the catalog's color errors, which say nothing about another star's
+    estimate.
+
+    ``error_floor`` exists because an error computed from the images
+    leaves out whatever is the same on every image: flat-field and other
+    position-dependent errors, and light from neighbouring stars. For B-V
+    on the Feder Observatory camera in the field of NGC 7790, with
+    ``error_floor=0`` the reported error was about 1.5 to 2.4 times too
+    small, worst for bright stars, whose images scatter by only a few
+    mmag. The floor that made the error match the differences from an
+    independent reference, on one night, depended on the star. Bright stars
+    (V < 15) without close neighbours that the catalog had a color for
+    needed about 0.007, or less if the reference's own errors are larger
+    than it quotes. Stars like them that the catalog had no color for --
+    the stars an estimate is for -- needed about 0.020, and stars at V 15
+    to 16 about 0.035 to 0.040. Those stars have brighter neighbours within
+    about 25 arcsec, which accounts for part of the difference but not all
+    of it. No single value suits every star. The default of zero builds no
+    camera's value into the result. The error does not include any real
+    scatter of objects about the relation, so it is too small for an object
+    whose spectrum is not like a star's, such as a supernova, by an amount
+    this function cannot know.
+
+    When `transform_to_catalog` propagates ``color_est_error`` into
+    ``mag_cal_error`` it treats the color as independent of the star's own
+    instrumental magnitude in that image, though that magnitude helped set
+    the color. The effect is the size of the color coefficient: with one
+    image per band and a coefficient of 0.3 the magnitude error is
+    understated by about 30 percent when the coefficient is positive and
+    overstated when it is negative, and by less with more images or a
+    smaller coefficient.
+
+    The two bands of a color are not observed at the same moment, so a star
+    whose brightness changes within a night gets a color blurred by that
+    change. An object whose spectrum is unlike a star's -- a supernova --
+    does not follow a transform derived from stars exactly even given its
+    true color; the estimate removes the first-order color dependence, not
+    that.
+    """
+    required = (
+        "file",
+        "passband",
+        "ra",
+        "dec",
+        "star_id",
+        "night",
+        obs_mag_col,
+        obs_error_column,
+    )
+    missing = [name for name in required if name not in observed_mags.colnames]
+    if missing:
+        raise ValueError(
+            f"The table has no column(s) {missing}, needed to estimate colors. "
+            "A night is what the instrumental magnitudes are averaged over, "
+            "and star_id is what identifies a star from one image to the next."
+        )
+
+    if isinstance(vary, str):
+        raise TypeError(
+            f"vary must be a sequence of term names, not the string {vary!r}. "
+            f"Did you mean {(vary,)!r}?"
+        )
+    _check_known_terms(vary, "vary")
+    magnitude_term = bool({"a", "b"} & set(vary))
+
+    # Written so that NaN fails each test.
+    if not min_snr >= 0:
+        raise ValueError(f"min_snr must be zero or more, not {min_snr}.")
+    if not 0 < min_image_fraction <= 1:
+        raise ValueError(
+            "min_image_fraction must be more than zero and at most one, "
+            f"not {min_image_fraction}."
+        )
+    if not (np.isfinite(error_floor) and error_floor >= 0):
+        raise ValueError(
+            f"error_floor must be a finite number, zero or more, not {error_floor}."
+        )
+
+    n_rows = len(observed_mags)
+    passbands = np.asarray(observed_mags["passband"]).astype(str)
+    mags = _to_float_array(observed_mags[obs_mag_col])
+    errors = _to_float_array(observed_mags[obs_error_column])
+
+    # The spellings in the table that mean each canonical passband, and the
+    # spellings whose transform uses each color.
+    spellings = {}
+    users = {}
+    # Plain `str`, not `numpy.str_`: the spellings become keys of the meta
+    # record, which has to survive being written to a file.
+    for spelling in sorted(str(passband) for passband in set(passbands)):
+        band = _canonical_passband(spelling)
+        spellings.setdefault(band, []).append(spelling)
+        if band in _CONVENTIONAL_COLOR:
+            users.setdefault(_CONVENTIONAL_COLOR[band], []).append(spelling)
+
+    # One group per star per night.
+    nights, night_index = np.unique(
+        np.asarray(observed_mags["night"]), return_inverse=True
+    )
+    stars, star_index = np.unique(
+        np.asarray(observed_mags["star_id"]), return_inverse=True
+    )
+    n_nights, n_stars = len(nights), len(stars)
+    group = night_index * n_stars + star_index
+    n_groups = n_nights * n_stars
+
+    estimates = np.full(n_rows, np.nan)
+    estimate_errors = np.full(n_rows, np.nan)
+    recorded = {}
+
+    for color_bands, user_spellings in users.items():
+        color_name = _COLOR_BAND_SEPARATOR.join(color_bands)
+        absent = [band for band in color_bands if band not in spellings]
+        if absent:
+            logger.warning(
+                f"The color {color_name} cannot be estimated for "
+                f"passband(s) {user_spellings}: there are no observations in "
+                f"{absent}."
+            )
+            continue
+
+        in_color = np.isin(passbands, [s for b in color_bands for s in spellings[b]])
+
+        # A plain table of just what the zero-point fits need, so that
+        # nothing they write reaches the caller's table. The rows are in
+        # the caller's order: grouping happens on a further copy below, and
+        # the row numbers carry the results back.
+        work = Table(
+            {
+                "file": np.asarray(observed_mags["file"])[in_color],
+                "passband": passbands[in_color],
+                "ra": _to_degree_array(observed_mags["ra"])[in_color],
+                "dec": _to_degree_array(observed_mags["dec"])[in_color],
+                "mag": mags[in_color],
+                "error": errors[in_color],
+                "row": np.flatnonzero(in_color),
+            }
+        ).group_by("file")
+
+        try:
+            for band in color_bands:
+                for spelling in spellings[band]:
+                    transform_to_catalog(
+                        work,
+                        spelling,
+                        obs_mag_col="mag",
+                        obs_error_column="error",
+                        cat_name=cat_name,
+                        cat_color=color_bands,
+                        vary=("z",),
+                        # The zero point is checked against the caller's
+                        # expectations when the transform itself is fit.
+                        expected={},
+                        search_radius=search_radius,
+                        # So that color_cat is filled only for stars matched
+                        # well enough to help define the relation.
+                        match_radius=_FIT_MATCH_RADIUS,
+                    )
+        except UnsupportedPassbandError as e:
+            logger.warning(
+                f"The color {color_name} cannot be estimated for "
+                f"passband(s) {user_spellings}: {e}"
+            )
+            continue
+
+        rows = np.asarray(work["row"])
+        zero_pointed = np.full(n_rows, np.nan)
+        zero_pointed[rows] = np.asarray(work["mag"]) + np.asarray(work["z"])
+        color_cat = np.full(n_rows, np.nan)
+        color_cat[rows] = np.asarray(work["color_cat"])
+
+        band_means = []
+        well_measured = np.ones(n_groups, dtype=bool)
+        for band in color_bands:
+            in_band = np.isin(passbands, spellings[band])
+            band_means.append(
+                _night_means(
+                    np.where(in_band, zero_pointed, np.nan), errors, group, n_groups
+                )
+            )
+            # Judged on the instrumental magnitudes, so that an image whose
+            # zero point could not be fit does not count against its stars.
+            well_measured &= _well_measured(
+                in_band,
+                mags,
+                errors,
+                group,
+                n_groups,
+                min_snr,
+                min_image_fraction,
+            )
+        # NaN, for a star that is not well measured, keeps it out of the fit
+        # as well as giving it no estimate.
+        band_means = [
+            tuple(np.where(well_measured, part, np.nan) for part in means)
+            for means in band_means
+        ]
+        first = band_means[0][0]
+        color_inst, color_inst_error, weighting = _instrumental_color(*band_means)
+
+        # The catalog color of a star is the same on every one of its rows,
+        # so any average of them will do.
+        star_color_cat, _ = _group_means(color_cat, group, n_groups)
+
+        color_est = np.full(n_groups, np.nan)
+        color_est_error = np.full(n_groups, np.nan)
+        any_night_fit = False
+        for night_number, night in enumerate(nights):
+            this_night = slice(night_number * n_stars, (night_number + 1) * n_stars)
+            estimate, error = _fit_color_relation(
+                color_inst[this_night],
+                color_inst_error[this_night],
+                first[this_night],
+                star_color_cat[this_night],
+                magnitude_term,
+                **{name: value[this_night] for name, value in weighting.items()},
+            )
+            if estimate is None:
+                logger.warning(
+                    f"The color {color_name} cannot be estimated "
+                    f"for night {night}: too few stars have both an "
+                    "instrumental and a catalog color, or the ones that do "
+                    "are too alike, or too noisy for how much their colors "
+                    "differ, to define a relation between the two."
+                )
+                continue
+
+            any_night_fit = True
+            color_est[this_night] = estimate
+            color_est_error[this_night] = np.hypot(error, error_floor)
+
+        if not any_night_fit:
+            continue
+
+        uses_color = np.isin(passbands, user_spellings)
+        estimates[uses_color] = color_est[group[uses_color]]
+        estimate_errors[uses_color] = color_est_error[group[uses_color]]
+        for spelling in user_spellings:
+            # A string rather than a list of the two bands: stacking tables
+            # merges their meta, and two equal lists are merged by joining
+            # them end to end, where two equal strings are left alone.
+            recorded[spelling] = color_name
+
+    result = observed_mags if in_place else observed_mags.copy()
+    result[_COLOR_EST_COLUMN] = estimates
+    result[_COLOR_EST_COLUMN + _COEFF_ERROR_SUFFIX] = estimate_errors
+    result.meta[_COLOR_EST_META_KEY] = recorded
+
+    return result
+
+
 def transform_to_catalog(
     observed_mags_grouped,
     obs_filter,
@@ -1078,6 +2013,7 @@ def transform_to_catalog(
     search_radius=None,
     match_radius=_CAL_MATCH_RADIUS,
     calibrate_unmatched=False,
+    color_fallback_column=None,
 ):
     """
     Transform a set of instrumental magnitudes to a standard system using either
@@ -1201,10 +2137,19 @@ def transform_to_catalog(
 
     calibrate_unmatched : bool, optional
         If ``True``, a star with no catalog entry within ``match_radius`` is
-        still given a ``mag_cal`` and ``mag_cal_error``, as long as no color
-        term (``"c"`` or ``"d"``) is being fit. The default ``vary`` fits
-        ``"c"``, so this has no effect unless ``vary`` is changed too. The
-        star's ``mag_cat`` and ``color_cat`` stay NaN. See Notes.
+        still given a ``mag_cal`` and ``mag_cal_error``, as long as its
+        calibrated magnitude needs nothing from the catalog: either no color
+        term (``"c"`` or ``"d"``) is being fit, or ``color_fallback_column``
+        supplies its color. The default ``vary`` fits ``"c"``, so on its own
+        this has no effect unless ``vary`` is changed too. The star's
+        ``mag_cat`` and ``color_cat`` stay NaN. See Notes.
+
+    color_fallback_column : str, optional
+        Name of a column of colors to calibrate a star with when the catalog
+        has no color for it, such as the ``color_est`` column written by
+        `estimate_catalog_colors`. If the table also has a column of that
+        name with ``_error`` added, it is taken as the uncertainty of those
+        colors. Only used when a color term is being fit. See Notes.
 
     Returns
     -------
@@ -1346,7 +2291,22 @@ def transform_to_catalog(
     because an unmatched detection is far more often a mismatched or
     spurious source than a real object the catalog lacks. When a color term
     is being fit the calibrated magnitude does need the star's color, which
-    an unmatched star does not have, so it stays NaN.
+    an unmatched star does not have, so it stays NaN unless
+    ``color_fallback_column`` supplies one.
+
+    The colors in ``color_fallback_column`` are used only for stars the
+    catalog has no color for: a star with no entry within ``match_radius``,
+    or one whose entry lacks a magnitude in one of the ``cat_color`` bands.
+    A catalog color always wins where there is one. Because the fit uses
+    only stars with a catalog color, fallback colors never influence the
+    coefficients; they are applied, not fit to. ``color_cat`` remains the
+    catalog's color and so stays NaN for a star calibrated this way. The
+    uncertainty of a fallback color, when the table gives one, reaches
+    ``mag_cal_error`` through the color terms; a catalog color is still
+    taken as exact (issue #691). The two keywords are independent: the
+    fallback supplies a color, and ``calibrate_unmatched`` decides whether
+    a star with no catalog entry is calibrated at all, so a supernova needs
+    both.
 
     How the fit is weighted, what the floor does and does not reach, how to
     read the diagnostics and the coefficient uncertainties, and what the
@@ -1495,6 +2455,42 @@ def transform_to_catalog(
         )
     # else: no color term is being fit, so the model never evaluates a color
     # and cat_color is left `None` -- nothing needs it, so nothing is guessed.
+
+    # A fallback color only matters when a color term is being fit, so that
+    # is the only time it is looked at -- or checked.
+    use_fallback_column = color_fallback_column is not None and fitting_color
+    fallback_error_column = None
+    if use_fallback_column:
+        if color_fallback_column not in observed_mags_grouped.colnames:
+            raise ValueError(
+                f"color_fallback_column {color_fallback_column!r} is not a "
+                "column of the table. Run estimate_catalog_colors first to "
+                f"add {_COLOR_EST_COLUMN!r}, or leave the keyword out."
+            )
+        if (
+            color_fallback_column + _COEFF_ERROR_SUFFIX
+            in observed_mags_grouped.colnames
+        ):
+            fallback_error_column = color_fallback_column + _COEFF_ERROR_SUFFIX
+
+        # `estimate_catalog_colors` records which color it estimated for each
+        # passband. A color in other bands than the ones this fit uses would
+        # be applied without complaint and be wrong, so it is refused here.
+        # A column that came from anywhere else has no record and is trusted.
+        recorded = observed_mags_grouped.meta.get(_COLOR_EST_META_KEY, {})
+        if color_fallback_column == _COLOR_EST_COLUMN and obs_filter in recorded:
+            estimated = tuple(
+                _canonical_passband(band)
+                for band in recorded[obs_filter].split(_COLOR_BAND_SEPARATOR)
+            )
+            if estimated != cat_color:
+                raise ValueError(
+                    f"The {_COLOR_EST_COLUMN} column holds the color "
+                    f"{estimated} for passband {obs_filter!r}, but this fit "
+                    f"uses the color {cat_color}. Leave cat_color out to use "
+                    "the conventional color, or leave color_fallback_column "
+                    "out."
+                )
 
     # Output is built at the length of the whole table, not of the rows in
     # this passband, and is written by row index below. Rows that are never
@@ -1669,6 +2665,32 @@ def transform_to_catalog(
         model_color = (
             color if fitting_color else np.where(np.isfinite(color), color, 0.0)
         )
+
+        # Whether each star's color really is that star's: its catalog entry
+        # is close enough to be the same star, and has a color. Any other
+        # star takes the fallback color if there is one. A star closer than
+        # the fit limit with a catalog color always has its own color, so
+        # nothing the fit uses changes here.
+        matched = d2d <= match_radius
+        has_catalog_color = matched & np.isfinite(color)
+        color_errors = None
+        if use_fallback_column:
+            fallback_color = _to_float_array(one_image[color_fallback_column])
+            from_fallback = ~has_catalog_color & np.isfinite(fallback_color)
+            model_color = np.where(from_fallback, fallback_color, model_color)
+            if fallback_error_column is not None:
+                fallback_error = _to_float_array(one_image[fallback_error_column])
+                # An uncertainty that is not a non-negative number is not
+                # known, and NaN is how that is carried through; see the
+                # same treatment of ``star_errors`` below.
+                fallback_error = np.where(
+                    np.isfinite(fallback_error) & (fallback_error >= 0),
+                    fallback_error,
+                    np.nan,
+                )
+                color_errors = np.where(from_fallback, fallback_error, 0.0)
+        else:
+            from_fallback = np.zeros(len(color), dtype=bool)
 
         # Impose some constraints on what is included in the fit
         good_cat = np.isfinite(cat_mag) & (d2d < _FIT_MATCH_RADIUS)
@@ -1875,6 +2897,7 @@ def transform_to_catalog(
             star_errors,
             fit_diff,
             diagnostics[_FIT_EXCESS_SCATTER_COLUMN],
+            color_errors=color_errors,
         )
 
         # One cut for everything that comes from the match: a star matched
@@ -1884,12 +2907,15 @@ def transform_to_catalog(
         # reporting an unrelated star's values. The comparison is ``<=`` so
         # that a match_radius equal to the fit limit still gives every fitted
         # star a finite mag_cat: the fit cut above is strict, this one is not.
-        matched = d2d <= match_radius
-
-        # An unmatched star can keep its mag_cal only when no color term
-        # would need a color from the match; see Notes.
-        if not calibrate_unmatched or fitting_color:
+        # ``matched`` was worked out above, where the colors were chosen.
+        #
+        # An unmatched star can keep its mag_cal only when it needs no color
+        # from the match: no color term is fit, or its color came from the
+        # fallback column; see Notes.
+        if not calibrate_unmatched:
             cal_mag[~matched] = np.nan
+        elif fitting_color:
+            cal_mag[~(matched | from_fallback)] = np.nan
 
         for name in _COEFF_NAMES:
             coefficients[name][rows] = values[name]

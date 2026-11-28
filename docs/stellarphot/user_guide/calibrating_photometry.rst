@@ -226,8 +226,42 @@ Notes explain why the fit's own, tighter limit is not a keyword.
 
 A target the catalog does not hold at all -- a supernova, say -- is NaN for
 the same reason, and no ``match_radius`` will find it. Pass
-``calibrate_unmatched=True`` to give it a ``mag_cal`` anyway. That works only
-when no color term (``c`` or ``d``) is being fit, and the default ``vary``
-fits ``c``, so the color term has to be turned off in the same call::
+``calibrate_unmatched=True`` to give it a ``mag_cal`` anyway. On its own
+that works only when no color term (``c`` or ``d``) is being fit, and the
+default ``vary`` fits ``c``, so the color term has to be turned off in the
+same call::
 
     transform_to_catalog(..., vary=("a", "z"), calibrate_unmatched=True)
+
+To keep the color term, the color can be estimated from the observations
+instead. Before transforming any passband, call
+:func:`~stellarphot.utils.magnitude_transforms.estimate_catalog_colors` on
+the table holding all of them. It adds a ``color_est`` column: for each
+star, each night, the catalog-system color implied by the star's own
+instrumental magnitudes in the two bands of the color. Then pass
+``color_fallback_column="color_est"`` to each
+:func:`~stellarphot.utils.magnitude_transforms.transform_to_catalog` call.
+The estimate is used only for stars the catalog has no color for and never
+enters the fit, and its uncertainty is carried into ``mag_cal_error``. A star
+needs observations in both bands of the color on the same night to get one;
+the bundled notebook does all of this when a color term is in ``vary``.
+
+Each band's magnitude for the night is that of the star's mean flux over
+the night's images, which, unlike an error-weighted mean of magnitudes, is
+not biased bright for faint stars. A star gets no estimate if, in either
+band, the median signal-to-noise ratio of its usable images is below
+``min_snr`` (default 5) or fewer than ``min_image_fraction`` (default 0.8) of
+the images it appears in are usable; with 2 to 4 images in a band, one bad
+image is enough. A whole night gets no estimates, with a warning, when too
+few of its stars have catalog colors, when those stars are too alike in color,
+or when their colors are too noisy for how much they differ.
+``color_est_error`` comes from the scatter of the star's own
+images, or their quoted errors when larger, and the uncertainty of the fitted
+relation. It leaves out errors that are the same on every image, such as
+flat-field errors and light from neighbours; ``error_floor`` adds a value in
+quadrature for those. On the Feder camera, in one field on one night, bright
+stars (V < 15) without close neighbours needed a B-V floor of at most about
+0.008 if the catalog had a color for them, but about 0.020 if it did not --
+and those are the stars an estimate is for. Fainter stars without a catalog
+color needed 0.035 to 0.040 at V 15 to 16. The error says
+nothing about how far a supernova sits from the relation stars follow.
