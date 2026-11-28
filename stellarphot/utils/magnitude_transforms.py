@@ -8,6 +8,7 @@ from astropy import units as u
 from astropy.coordinates import SkyCoord, UnitSphericalRepresentation
 from astropy.table import Table
 from astropy.utils.exceptions import AstropyUserWarning
+from numpy.lib.stride_tricks import sliding_window_view
 from numpy.linalg import LinAlgError
 from uncertainties import correlated_values, unumpy
 
@@ -82,6 +83,32 @@ _MIN_EXTRA_COLOR_STARS = 3
 # How far, in robust standard deviations, a star may sit from the color
 # relation and still help define it.
 _COLOR_RELATION_CLIP = 4.0
+
+# A fit star is left out of the color relation when the variance of its
+# instrumental color, judged from the scatter of its own images, is more than
+# this many times the median for the stars nearest it in magnitude. Such a
+# star -- a variable, or one hit by a cosmic ray -- would otherwise be
+# corrected for all of that noise at its full weight and steepen the slope
+# for everyone. The yardstick is other stars, not the quoted errors: those
+# can understate the scatter of every bright star several times over. With
+# two images in each band an ordinary star's variance estimate has a long
+# tail, and at 20 about one star in a thousand is left out by chance.
+_SCATTER_OUTLIER_FACTOR = 20.0
+
+# Number of stars, nearest in magnitude and counting the star itself, whose
+# median variance is the yardstick above.
+_SCATTER_NEIGHBOURS = 9
+
+# Fewest fit stars for which any is left out as above. With fewer, what is
+# ordinary for the night cannot be told.
+_MIN_SCATTER_STARS = 8
+
+# Largest fraction of the fit stars' weighted spread in instrumental color --
+# what is left after the constant and any magnitude term -- that the
+# correction for their noise may remove. Past this the slope rests on the
+# small difference of two noisy sums and swings wildly from night to night;
+# the night gets no relation instead.
+_MAX_NOISE_FRACTION = 0.5
 
 # A fractional flux error times this is a magnitude error, and a magnitude
 # error is this divided by the signal-to-noise ratio.
@@ -1202,10 +1229,10 @@ def _night_means(mags, errors, group, n_groups):
         scatter of the fluxes alone; for a group with one value, the square
         of ``quoted_error``.
 
-    All four are NaN for a group with nothing usable in it.
-
     Notes
     -----
+
+    All four returned arrays are NaN for a group with nothing usable in it.
 
     Each uncertainty is that of the mean flux, converted to magnitudes.
     ``error`` is the larger of two estimates of it: the sample standard
@@ -1339,6 +1366,48 @@ def _well_measured(in_band, mags, errors, group, n_groups, min_snr, min_fraction
     return (n_usable > 0) & (fraction >= min_fraction) & (snr >= min_snr)
 
 
+def _scatter_outliers(noise_variance, mag, candidates):
+    """
+    Which stars' images scatter far more than those of stars as bright.
+
+    Parameters
+    ----------
+
+    noise_variance : `numpy.ndarray`
+        Variance of each star's instrumental color, from the scatter of its
+        images.
+
+    mag : `numpy.ndarray`
+        Magnitude of each star.
+
+    candidates : `numpy.ndarray`
+        Whether each star is to be judged; the rest are neither judged nor
+        part of the yardstick.
+
+    Returns
+    -------
+    `numpy.ndarray`
+        ``True`` for each candidate whose ``noise_variance`` is more than
+        `_SCATTER_OUTLIER_FACTOR` times the median of the
+        `_SCATTER_NEIGHBOURS` candidates nearest it in magnitude. All
+        ``False`` when there are fewer than `_MIN_SCATTER_STARS` candidates
+        with a magnitude.
+    """
+    wild = np.zeros(len(noise_variance), dtype=bool)
+    judged = np.flatnonzero(candidates & np.isfinite(mag))
+    if len(judged) < _MIN_SCATTER_STARS:
+        return wild
+
+    order = judged[np.argsort(mag[judged], kind="stable")]
+    variance = noise_variance[order]
+    width = min(_SCATTER_NEIGHBOURS, len(order))
+    medians = np.median(sliding_window_view(variance, width), axis=1)
+    # Each star's window is centred on it where the ends allow.
+    start = np.clip(np.arange(len(order)) - width // 2, 0, len(order) - width)
+    wild[order] = variance > _SCATTER_OUTLIER_FACTOR * medians[start]
+    return wild
+
+
 def _fit_color_relation(
     color_inst,
     color_inst_error,
@@ -1380,8 +1449,9 @@ def _fit_color_relation(
     -------
     estimate : `numpy.ndarray` or None
         Color the relation gives for every star, whether or not it was
-        fit. `None` if no relation could be fit: too few stars, or stars
-        whose colors or magnitudes do not differ enough to define one.
+        fit. `None` if no relation could be fit: too few stars, stars
+        whose colors or magnitudes do not differ enough to define one, or
+        stars whose colors differ by too little next to their noise.
 
     error : `numpy.ndarray` or None
         Uncertainty of each estimate.
@@ -1393,7 +1463,11 @@ def _fit_color_relation(
     for the reason the transform fit floors its own, and is repeated after
     dropping stars more than `_COLOR_RELATION_CLIP` robust standard
     deviations away -- a variable, or a star whose catalog color is wrong
-    -- until none are dropped.
+    -- until none are dropped. On each pass a star whose ``noise_variance``
+    is far above that of the stars nearest it in magnitude is left out
+    (see `_scatter_outliers`): its mean color may sit on the relation, so
+    the clip keeps it, but the correction below would remove its noise at
+    its full weight and steepen the slope for every star.
 
     Noise in the instrumental colors, which are the independent variable
     here, flattens an ordinary least-squares slope, and a flattened slope
@@ -1402,9 +1476,16 @@ def _fit_color_relation(
     ``noise_variance`` is therefore subtracted from the color term of the
     normal equations, the standard moment correction for a regressor
     measured with known error. It has to be an unbiased estimate of the
-    variance: one biased high over-corrects and steepens the slope. Its
-    covariance with the magnitude term, whose regressor shares the first
-    band's noise, is left alone: that coefficient is close to zero.
+    variance: one biased high over-corrects and steepens the slope. The
+    noise's covariance with the magnitude term, whose regressor shares the
+    first band's noise, is left alone: it is small next to the spread of
+    the stars in magnitude.
+
+    When the correction would remove more than `_MAX_NOISE_FRACTION` of
+    the weighted spread in color that the other terms leave -- the colors
+    differ by little more than their noise -- the slope is the small
+    difference of two noisy sums and can be wildly wrong, so no relation
+    is returned.
 
     The uncertainty has two parts, added in quadrature: the star's own
     ``color_inst_error`` scaled by the slope, and the uncertainty of
@@ -1431,17 +1512,36 @@ def _fit_color_relation(
     )
     weights = 1 / np.maximum(weight_error, _MIN_FIT_SIGMA)
 
+    # The columns other than the color.
+    others = [0, *range(2, n_terms)]
+
     # Each pass either drops at least one star or ends the loop, so this
     # cannot run for longer than there are stars.
     while True:
-        if fit.sum() < n_terms + _MIN_EXTRA_COLOR_STARS:
+        # Judged afresh on each pass, against the stars still in the fit.
+        used = fit & ~_scatter_outliers(noise_variance, mag, fit)
+        if used.sum() < n_terms + _MIN_EXTRA_COLOR_STARS:
             return None, None
 
-        weighted_design = design[fit] * weights[fit, np.newaxis]
+        weighted_design = design[used] * weights[used, np.newaxis]
         normal = weighted_design.T @ weighted_design
         # The noise in each color adds its variance, times the square of
         # its weight, to this element of the weighted normal matrix.
-        normal[1, 1] -= np.sum(weights[fit] ** 2 * noise_variance[fit])
+        correction = np.sum(weights[used] ** 2 * noise_variance[used])
+
+        # The weighted spread in color that the other terms do not account
+        # for: the color element of the normal matrix less what the other
+        # columns explain of it.
+        try:
+            explained = normal[1, others] @ np.linalg.solve(
+                normal[np.ix_(others, others)], normal[others, 1]
+            )
+        except LinAlgError:
+            return None, None
+        if correction > _MAX_NOISE_FRACTION * (normal[1, 1] - explained):
+            return None, None
+
+        normal[1, 1] -= correction
 
         # Stars whose colors differ by no more than their noise, or whose
         # magnitudes are all the same, leave a matrix that is not positive
@@ -1455,27 +1555,27 @@ def _fit_color_relation(
             return None, None
 
         inverse = np.linalg.inv(normal)
-        coefficients = inverse @ (weighted_design.T @ (color_cat[fit] * weights[fit]))
+        coefficients = inverse @ (weighted_design.T @ (color_cat[used] * weights[used]))
 
         residuals = color_cat - design @ coefficients
-        center = np.median(residuals[fit])
+        center = np.median(residuals[used])
         # Scaled so that it estimates the standard deviation of a Gaussian,
         # and floored so that stars following the relation almost exactly
         # are not dropped over rounding error.
         spread = max(
-            1.4826 * np.median(np.abs(residuals[fit] - center)), _MIN_FIT_SIGMA
+            1.4826 * np.median(np.abs(residuals[used] - center)), _MIN_FIT_SIGMA
         )
         keep = fit & (np.abs(residuals - center) <= _COLOR_RELATION_CLIP * spread)
         if keep.sum() == fit.sum():
             break
         fit = keep
 
-    degrees_of_freedom = fit.sum() - n_terms
+    degrees_of_freedom = used.sum() - n_terms
 
     # The weights are not the true uncertainties of the residuals -- they
     # know nothing of the catalog's errors -- so the covariance is scaled
     # by the reduced chi-square to the scatter actually seen.
-    redchi = np.sum((residuals[fit] * weights[fit]) ** 2) / degrees_of_freedom
+    redchi = np.sum((residuals[used] * weights[used]) ** 2) / degrees_of_freedom
     relation_variance = np.einsum("ij,jk,ik->i", design, inverse * redchi, design)
 
     estimate = design @ coefficients
@@ -1549,7 +1649,7 @@ def estimate_catalog_colors(
         night that must have a usable measurement for it to get an
         estimate. Greater than zero and at most one. The fraction is of the
         images in which the star has a row, so a star with rows in only a
-        few of a night's images is judged on those. On a night with 3 or 4
+        few of a night's images is judged on those. On a night with 2 to 4
         images in a band, one unusable image drops the star at the default.
 
     error_floor : float, optional
@@ -1572,7 +1672,9 @@ def estimate_catalog_colors(
 
         They are also NaN for a night on which too few stars had both an
         instrumental and a catalog color to relate the two, or those stars
-        were too alike in color to define the relation.
+        were too alike in color to define the relation, or the noise in
+        their instrumental colors was too large next to their spread in
+        color.
 
         ``result.meta["color_est_bands"]`` records, for each passband that
         got an estimate, the color the estimate is, as a string such as
@@ -1602,8 +1704,7 @@ def estimate_catalog_colors(
     mean of the magnitudes of a faint star comes out too bright -- by about
     0.05 mag over many images that each have an error of 0.2 mag. An image
     on which a star's net counts were negative has no magnitude and cannot
-    enter the
-    mean, which biases it the same way; ``min_image_fraction`` is what keeps
+    enter the mean, which biases it the same way; ``min_image_fraction`` is what keeps
     such stars from getting an estimate, and ``min_snr`` keeps out stars
     faint enough for that to happen often. The signal-to-noise ratio is
     judged from the star's own measured flux, so a faint star whose
@@ -1614,7 +1715,9 @@ def estimate_catalog_colors(
     magnitude terms, which is the default; with the quadratic terms ``"b"``
     or ``"d"`` it is an approximation, and a poor one for a star well
     outside the color range of the stars that define it. Only stars within
-    1.0 arcsec of their catalog entry define it. The fit is weighted by
+    1.0 arcsec of their catalog entry define it, and a star whose images
+    scatter far more than those of stars as bright -- a variable, say -- is
+    left out of it. The fit is weighted by
     the quoted errors and allows for the noise in the instrumental colors,
     which would otherwise flatten the relation and bias the estimate for a
     star bluer or redder than the rest. It judges that noise from the
@@ -1855,7 +1958,8 @@ def estimate_catalog_colors(
                     f"The color {color_name} cannot be estimated "
                     f"for night {night}: too few stars have both an "
                     "instrumental and a catalog color, or the ones that do "
-                    "are too alike to define a relation between the two."
+                    "are too alike, or too noisy for how much their colors "
+                    "differ, to define a relation between the two."
                 )
                 continue
 
